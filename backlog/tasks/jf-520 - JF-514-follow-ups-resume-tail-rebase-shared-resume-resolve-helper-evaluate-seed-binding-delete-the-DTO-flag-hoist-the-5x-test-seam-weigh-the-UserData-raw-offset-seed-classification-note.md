@@ -48,6 +48,25 @@ JF-514 shipped the transcode-base rebase on the OFFER path only; ResumeIntentHan
 Shipped: BaseHandler.ResolveResumedAudioLaunch owns probe + ledger read + rebase-or-drop + single resolve, making the read-before-write ordering STRUCTURAL (was comment-enforced at call sites). The resume tail adopted the rebase (interim drop deleted): a paused-then-resumed transcode-routed item now continues from base+offset instead of restarting at 0, and each resolve records the new base so the next cycle composes. The device-last-played (UserData) seed classifies at seed time (ledger-has-base AND routes-to-transcode; ledger-first operand order gates the codec DB probe). Seed-binding REJECTED with a code-recorded refutation (event handlers resolve queue items without ending the session, so a wrapped queue can clobber an offered item's base inside the offer window - equivalence unprovable). knownAudioCodec threading removes the resolve's second media-streams DB read. Test seam hoisted to TestHelpers (5 copies removed). Gates: /simplify 2-agent combined (applied E1/E2/S1/S6; skipped with reasons R3 fixture-consolidation, S5 cosmetic dedup, S2 taste), code-review high SAFE TO MERGE (all three tail fallbacks walked clean, codec threading verified end-to-end incl. fail-open, concurrency cleared, the 4 new tests verified to fail under the old behavior; F1 residual filed as JF-521, F2 recorded there). Tests 3470/3470 on branch and main post-merge (364dd432, branch 32c1245e). Deployed to minix with JF-519 in the same DLL (symbols verified in the running binary, config intact, play + resume smoke paths clean, no errors). DoD 5-8 N/A.
 <!-- SECTION:FINAL_SUMMARY:END -->
 
+## Definition of Done
+<!-- DOD:BEGIN -->
+- [x] #1 dotnet build passes with 0 errors
+- [x] #2 dotnet test passes
+- [x] #3 No new compiler warnings introduced
+- [x] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
+- [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
+- [ ] #6 NLU test fixtures updated if interaction model changed
+- [ ] #7 E2E test added for new intent or handler logic
+- [ ] #8 Locale response strings added to all 17 locales
+- [x] #9 /simplify passed (no blocking cleanups remaining)
+- [x] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
+<!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
+
 ## Implementation Notes (2026-09-08, branch fix/jf520-resume-followups)
 
 Deliverables 1-5 implemented; suite 3470/3470 (baseline 3466 + 4 new tests), Release build
@@ -110,17 +129,4 @@ device-last-played offer seeds flag=true with a recorded base and composes end-t
 confirm (ResumeConfirmationTranscodeBaseTests), and stays flag=false without a base. The
 pre-existing tail tests (drop when no base, raw-static pass-through) keep passing
 unchanged: the no-base rule matches the old interim drop.
-
-## Definition of Done
-<!-- DOD:BEGIN -->
-- [x] #1 dotnet build passes with 0 errors
-- [x] #2 dotnet test passes
-- [x] #3 No new compiler warnings introduced
-- [x] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
-- [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
-- [ ] #6 NLU test fixtures updated if interaction model changed
-- [ ] #7 E2E test added for new intent or handler logic
-- [ ] #8 Locale response strings added to all 17 locales
-- [x] #9 /simplify passed (no blocking cleanups remaining)
-- [x] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
-<!-- DOD:END -->
+<!-- SECTION:NOTES:END -->

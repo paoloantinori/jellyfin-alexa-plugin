@@ -46,9 +46,8 @@ Two candidate causes to bisect: (a) the two new Zu-samples sharing the staffel/f
 
 <!-- SECTION:NOTES:BEGIN -->
 STABILITY CORRECTION (2026-09-13 01:12-01:15): NOT stable-red - INTERMITTENT. Direct profile-nlu probe at 01:12 (post-sync-completion): episode_number still None. In-suite run 3 minutes later (01:15): PASSED with all slots filled. Red-red-green across 4 observations over 25 minutes on two different model states (post-rebuild static, post-sync wired). The bisect in AC#1 stands, but weight NLU nondeterminism as a third candidate: borderline number-slot alignment on the series-last imperative form that flips per invocation.
-<!-- SECTION:NOTES:END -->
 
-## Implementation Notes
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
 
 BISECT COMPLETE 2026-09-13 (live A/B on the deployed skill, 10-probe batteries):
 - (a) JF-549 Zu samples: REFUTED. The de-DE model was rebuilt WITHOUT all three Zu episode samples and the drop persisted unchanged (0/10 with vs 0/10 without; template restored after the experiment).
@@ -57,6 +56,9 @@ BISECT COMPLETE 2026-09-13 (live A/B on the deployed skill, 10-probe batteries):
 FIX APPLIED (AC#2 second disjunct): the fixture row re-pinned with the full verdict as its skip_reason. No model change (the Zu samples stay; refuted as the cause).
 
 SIDE-FINDING FIXED IN-DIFF (filed nowhere else, tracked here): the bisect was initially BLOCKED because custom-model/deploy AND custom-model/restore both PUT EMPTY models (intents=0 samples=0 -> Amazon build FAILED; live evidence 2026-09-13 17:27/17:31). Root cause: CreateSkillInteractionModel deserialized the WRAPPED envelope into SkillInteraction, which binds the INNER model (languageModel/dialog). Fixed by unwrapping before deserialization; regression test CreateSkillInteractionModelTests covers both envelope shapes; verified live (the custom-URL deploy then PUT intents=60 samples=426 and built). This also un-broke the restore endpoint.
+<!-- SECTION:NOTES:END -->
+
+## Implementation Notes
 
 ## Definition of Done
 <!-- DOD:BEGIN -->

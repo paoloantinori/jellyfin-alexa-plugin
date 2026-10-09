@@ -30,8 +30,6 @@ NOT DONE in JF-673 because AlbumPlayService is the queue-continuation lifecycle 
 RELATED (code-review high on JF-673, findings tracked here 2026-10-04): (1) PlaybackNearlyFinishedEventHandler.cs:395 logs continuation.TotalCount raw, so end-unknown continuations render "2147483647" while FetchNextBatch renders "end-unknown" (pre-existing for artist continuations; fold into the same renderer discipline when touching that file). (2) The advance-or-mark idiom now exists in three fetcher variants (Album plain +=, Artist mark-on-short, Audiobook mark-only-when-unknown); this task's FetchAlbumTracks regime work is the documented revisit trigger to consolidate into one shared helper (JF-673 declined to churn the third variant first). (3) An exact-multiple-of-page-size source ends on a zero-item tail batch that trips the dispatcher's zero-page WARN once; accepted boundary noise, documented at the audiobook tail, same treatment for albums.
 <!-- SECTION:DESCRIPTION:END -->
 
-## Implementation Notes (closed 2026-10-04)
-
 <!-- SECTION:NOTES:BEGIN -->
 CLOSED with the full four-piece fix plus the three RELATED items (all assigned here by the filing):
 
@@ -50,6 +48,10 @@ RESIDUAL (code-review F2, accepted, documented at the retry arm): on a PARTIALLY
 FILED: JF-757 (the /simplify reuse observation out of scope here: the album-track query shape is hand-kept in four copies, head and tail x ParentId and AlbumIds; a BuildAlbumTracksQuery builder would own it).
 
 Gates: worker Skill simplify (4 angles: reuse 3 findings applied incl. the two shared head predicates; simplification 8 findings, comment-dedup + test hygiene applied, the Theory conversion skipped with the agent's own scope-creep reason; efficiency CLEAN; altitude endorsed the layer with the predicate hoist applied) + Skill code-review high (5 findings: F1 roster fact, F2 documented residual, F3 artist-head overload, F4 honest boundary doc, F5 playlist arms folded; all applied). Suites: 5162/5162 net9.0 AND net10.0 on the final state (main baseline 5155 + 7); Release --no-restore -warnaserror 0 warnings 0 errors.
+
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
+
+## Implementation Notes (closed 2026-10-04)
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done

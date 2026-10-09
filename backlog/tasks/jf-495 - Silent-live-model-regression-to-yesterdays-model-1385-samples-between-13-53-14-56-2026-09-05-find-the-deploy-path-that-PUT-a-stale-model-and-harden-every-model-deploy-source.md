@@ -38,6 +38,27 @@ REPRO/HARDENING GOALS: identify the exact code path; make every model deploy sou
 References: corr=2c86b74b, abf83007, 410614e6 (the Fallback storm); containment redeploy 15:05; CatalogManager.UpdateInteractionModelAsync; CustomModelDeployment; Controller rebuild endpoint.
 <!-- SECTION:DESCRIPTION:END -->
 
+## Definition of Done
+<!-- DOD:BEGIN -->
+- [ ] #1 dotnet build passes with 0 errors
+- [ ] #2 dotnet test passes
+- [ ] #3 No new compiler warnings introduced
+- [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
+- [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
+- [ ] #6 NLU test fixtures updated if interaction model changed
+- [ ] #7 E2E test added for new intent or handler logic
+- [ ] #8 Locale response strings added to all 17 locales
+- [ ] #9 /simplify passed (no blocking cleanups remaining)
+- [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
+<!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Formal review dispositions (2026-09-05, orchestrator): P2-85 APPLIED (ModelDeploymentManager now polls the locale's interactionModel build status to terminal under a bounded 30x2s budget via the new WaitForLocaleModelBuildAsync helper; healthy path reports SUCCEEDED again, FAILED derives Success=false, exhausted budget reports TIMEOUT); BT1 APPLIED (HttpRequestException during the update-request poll is caught as an observation failure: buildStatus UNVERIFIED, warning log, locale not marked failed and ledger entry kept); BT2 APPLIED (LocaleModelStatus doc lists TIMEOUT/UNVERIFIED/Skipped). BT3 SKIPPED (coverage-only, behavior unchanged). Coverage note: DeployCustomModelAsync has NO test coverage at any point (pre-existing); pinning the new poll requires making WaitForSkillStatusAsync virtual or a seam change, filed here as the follow-up rather than expanding this stream. Build 0 warnings, suite 3282/3282 after the fixes.
+
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
+
 ## Investigation write-up (2026-09-05, code forensics; status stays In Progress)
 
 ### Complete inventory of interaction-model PUT sites (verified by grep, no other exists)
@@ -98,25 +119,6 @@ SMAPI's documented GET-during-build semantics (returns last succeeded; asserted 
 - `dotnet build` (plugin + tests): 0 errors, 0 warnings.
 - Full suite green: 3282 passed, 0 failed, 0 skipped (baseline 3269 + 13 new: InjectCatalogReferences warnings x2 and UpdateInteractionModelAsync canary/status x6 + ExtractLocaleModelStatus x2 in CatalogManagerTests, redeployer canary x2 in InteractionModelRedeployerTests, ledger x2 + stale-pin guard x1 in LibrarySyncServiceSeriesTests).
 - Hardening NOT deployed to SMAPI or the live server (per task rules); the live skill remains the manually-contained 60/1427 state.
-
-## Definition of Done
-<!-- DOD:BEGIN -->
-- [ ] #1 dotnet build passes with 0 errors
-- [ ] #2 dotnet test passes
-- [ ] #3 No new compiler warnings introduced
-- [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
-- [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
-- [ ] #6 NLU test fixtures updated if interaction model changed
-- [ ] #7 E2E test added for new intent or handler logic
-- [ ] #8 Locale response strings added to all 17 locales
-- [ ] #9 /simplify passed (no blocking cleanups remaining)
-- [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
-<!-- DOD:END -->
-
-## Implementation Notes
-
-<!-- SECTION:NOTES:BEGIN -->
-Formal review dispositions (2026-09-05, orchestrator): P2-85 APPLIED (ModelDeploymentManager now polls the locale's interactionModel build status to terminal under a bounded 30x2s budget via the new WaitForLocaleModelBuildAsync helper; healthy path reports SUCCEEDED again, FAILED derives Success=false, exhausted budget reports TIMEOUT); BT1 APPLIED (HttpRequestException during the update-request poll is caught as an observation failure: buildStatus UNVERIFIED, warning log, locale not marked failed and ledger entry kept); BT2 APPLIED (LocaleModelStatus doc lists TIMEOUT/UNVERIFIED/Skipped). BT3 SKIPPED (coverage-only, behavior unchanged). Coverage note: DeployCustomModelAsync has NO test coverage at any point (pre-existing); pinning the new poll requires making WaitForSkillStatusAsync virtual or a seam change, filed here as the follow-up rather than expanding this stream. Build 0 warnings, suite 3282/3282 after the fixes.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary

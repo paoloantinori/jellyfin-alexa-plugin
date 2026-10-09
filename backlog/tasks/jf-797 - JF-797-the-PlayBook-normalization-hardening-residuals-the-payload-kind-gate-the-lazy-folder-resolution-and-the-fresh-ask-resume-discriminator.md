@@ -68,6 +68,13 @@ none a live defect today:
 - [x] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
 
+## Final Summary
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
+
 DoD notes (2026-10-07): #1/#3 verified by the Release build on the final tree,
 0 warnings 0 errors both TFMs (TreatWarningsAsErrors is on). #2 the full suite
 at the final state: 5484/5484 net9.0 AND net10.0 (baseline 5466 plus 18 new
@@ -84,8 +91,6 @@ the existing strings). #9 /simplify: 4 review agents (reuse, simplification,
 efficiency, altitude), 6 findings applied, 3 skips recorded in the commit.
 #10 /code-review high: 5 findings, F1/F2/F4/F5 applied, F3 documented in the
 code and filed as JF-812 same-turn.
-
-## Final Summary
 
 Landed in six commits (c8404ca9 red proofs, c0d48cab items 1+2, 86b5b3bb item 3,
 01f20b80 item 4, 188728b1 /simplify round, f6adaf8e code-review round).
@@ -173,3 +178,4 @@ the algorithm itself is filed separately as JF-803; implement the discriminator 
 inside the lifted helper.
 
 JF-796 GATE-MARKER ADDENDUM (2026-10-07): item 3 gains the MASKING SHAPE - the deep-resolution gate keys on startIndex == 0, so a PLAYED PREFIX on page 1 (after-last-played at index > 0, ticks 0) suppresses the deep scan even when a deeper in-progress track exists beyond the page; resume lands at the shallow prefix position instead of the full-list answer. The JF-793 book twin's guard in AudiobookPlayResolver shares the shape, so the fix (deep-scan whenever the page yields ticks == 0 AND more pages remain, regardless of the prefix index) must land mirrored on both paths with pins on both. The JF-796 block comment documents only the unstarted-album trade; extend it when fixing.
+<!-- SECTION:NOTES:END -->

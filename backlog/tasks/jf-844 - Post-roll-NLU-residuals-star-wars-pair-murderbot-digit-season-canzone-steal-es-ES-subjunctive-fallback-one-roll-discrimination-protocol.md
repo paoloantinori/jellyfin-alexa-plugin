@@ -49,6 +49,11 @@ PROTOCOL for whoever runs it (post-worker): deploy/roll the models, then re-prob
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
 
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
+
 ROLL-DISCRIMINATION VERDICT (2026-10-09 06:50, after the post-A/B roll: 17-locale
 rebuild + sync 2 of 16/16 canaries):
 
@@ -234,3 +239,4 @@ song-routing and needs the maintainer's call plus a live A/B. FILED as the
 open question below; the es fixtures stay red as the tracker.
 
 JF-844.1 follow-up pointer (orchestrator, 2026-10-09 22:40): the es-trio mirroring is now machine-checked (Phase 11 lint, merged bc804d7b). The code-review F3 residual lands HERE because its trigger is this task's own live-probe round: when the three 'que reproduzca' connector rows are mirrored to (or definitively removed from) the siblings, nothing mechanical forces the es-MX/es-US template-header prose bullet ('stay es-ES-only pending the probe') to update alongside the ES_TRIO_PLAY_EPISODE_DIVERGENCES whitelist (the lint fires on the model side; the header prose is fenced out by design). Whoever executes that mirror round updates both in the same change; the F3 finding itself stays rejected (comment-scraping guard would be fragile). [This note was first appended 22:40 via the backlog MCP, whose rewrite dropped this file's raw tail records (the ROLL-DISCRIMINATION VERDICT and everything after); both were restored from 362e6c94 in the same night's repair commit and this note re-appended by hand.]
+<!-- SECTION:NOTES:END -->

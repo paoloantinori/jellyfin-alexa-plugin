@@ -44,6 +44,25 @@ Also record from the same review, finding F2 (PLAUSIBLE, narrow, one-sentence no
 Shipped (reader-side, decision (b) with a three-point refutation of the writer shape recorded in the notes; the structural writer fix filed as JF-522): the device-last-played seed classifies stream-relative ONLY when the UserData position tick-EQUALS this device's own last recorded raw offset (DeviceQueueManager.GetItemPositionTicks, the new read-only accessor; the stop event writes identical ticks into both stores, so equality proves provenance; any other value came from another client and is item-absolute). All residual misclassification paths verified to fail CONSERVATIVE (restart earlier by the base, never the F1 forward skip): trim eviction reads null, a second Echo writes only its own queue, VideoApp plays write neither store, PlaybackFinished writes no ItemPositionState. ResolveResumedAudioLaunch gained a hard runtime clamp (composed ?start= at/beyond item runtime never mints; raw offset wins; ledger stays consistent with the minted stream; also bounds the F2 retry walk). F1 walk pinned red-verified: base 20:00 + phone 40:00 now mints 40:00, never 60:00; clamp pinned red-verified (35:00 composition -> 15:00); common-path regression guard green. Gates: /simplify (R1 accessor on the manager, S1 no-op removed, S2 doc dedup, S3 comment refresh; A1 -> JF-522), code-review high SAFE TO MERGE (equality gate verified against every writer; clamp math + ledger interaction traced). Tests 3473/3473 branch and main post-merge; deployed to minix (symbol verified in the running DLL, config intact, play+resume smoke clean, zero errors). DoD 4-8 N/A.
 <!-- SECTION:FINAL_SUMMARY:END -->
 
+## Definition of Done
+<!-- DOD:BEGIN -->
+- [x] #1 dotnet build passes with 0 errors
+- [x] #2 dotnet test passes
+- [x] #3 No new compiler warnings introduced
+- [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
+- [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
+- [ ] #6 NLU test fixtures updated if interaction model changed
+- [ ] #7 E2E test added for new intent or handler logic
+- [ ] #8 Locale response strings added to all 17 locales
+- [x] #9 /simplify passed (no blocking cleanups remaining)
+- [x] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
+<!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
+
 ## Implementation Notes (2026-09-08, branch fix/jf521-stale-base-cross-client)
 
 **AC#1 DECISION: (b) FIX THE READER**, implemented as a tick-exact provenance check at the
@@ -136,17 +155,4 @@ later advanced to 40:00 item-absolute by the phone.
 DoD 4/5 (DTO/BaseAddress): no new session-attribute fields, no HttpClient changes. DoD 6-8
 N/A (no interaction-model, no new strings). DoD 9-10 left to the orchestrator's gates per
 the dispatch.
-
-## Definition of Done
-<!-- DOD:BEGIN -->
-- [x] #1 dotnet build passes with 0 errors
-- [x] #2 dotnet test passes
-- [x] #3 No new compiler warnings introduced
-- [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
-- [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
-- [ ] #6 NLU test fixtures updated if interaction model changed
-- [ ] #7 E2E test added for new intent or handler logic
-- [ ] #8 Locale response strings added to all 17 locales
-- [x] #9 /simplify passed (no blocking cleanups remaining)
-- [x] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
-<!-- DOD:END -->
+<!-- SECTION:NOTES:END -->

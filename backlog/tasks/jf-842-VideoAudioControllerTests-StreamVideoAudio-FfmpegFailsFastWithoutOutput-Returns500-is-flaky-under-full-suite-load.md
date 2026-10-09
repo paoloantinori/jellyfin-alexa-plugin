@@ -11,6 +11,12 @@ priority: low
 
 ## Description
 
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
+
 Observed 2026-10-09 on the JF-814 worktree (agent-af77920eafddbeb3a): a full
 `dotnet test` run failed exactly this test on net10.0
 (`Jellyfin.Plugin.AlexaSkill.Tests/Controller/VideoAudioControllerTests.cs:638`),
@@ -122,4 +128,4 @@ NUGET_PACKAGES=/var/tmp/nuget-pkgs NUGET_HTTP_CACHE_PATH=/var/tmp/nuget-http.)
   retry (each attempt's slot releases within one 500ms exit-poll tick); fresh
   GUIDs keep cache keys, pins, and Moq setups disjoint; the CA3003 pragma
   matches the file idiom.
-
+<!-- SECTION:NOTES:END -->

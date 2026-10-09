@@ -194,7 +194,8 @@ elicit replies under elicitationRequired:false; the sound grounds for the
 no-cap re-elicit shape are the JF-549 series_name precedent plus the
 BuildCancelDuringOpenElicit escape hatch ONLY. No code change: the no-cap
 re-elicit stays the JF-549 house shape.
-<!-- SECTION:NOTES:END -->
+
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
 
 ## POST-A/B FIX: the NextUp article form (2026-10-09, post-A/B fix worker)
 
@@ -302,3 +303,4 @@ POST-A/B FIX /code-review HIGH (7 findings, all dispositioned same-turn):
   production map the arm's loader reads.
 - F7 APPLIED: the "word - word" parenthetical hyphens in newly authored
   comments rewritten to comma-separated clauses (the global prose rule).
+<!-- SECTION:NOTES:END -->

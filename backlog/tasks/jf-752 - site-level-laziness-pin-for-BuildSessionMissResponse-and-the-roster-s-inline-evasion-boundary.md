@@ -19,6 +19,15 @@ priority: low
 
 ## Description
 
+## Definition of Done
+
+## Final Summary
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
+
 Filed 2026-10-04 by the orchestrator from the JF-708 gate-marker (finding 2 of 4,
 low severity; the reserve number the JF-708 worker left unused).
 
@@ -149,8 +158,6 @@ family. The roster's second-boundary note now points here accordingly.
   pointer and the read-half contract (comment-only; no production behavior
   change in this task).
 
-## Definition of Done
-
 - [x] #1 dotnet build passes with 0 errors (Release -warnaserror --no-restore on the solution, final state: Build succeeded, 0 Warnings, 0 Errors)
 - [x] #2 dotnet test passes (full suite, both TFMs, ONE run on the final state: 5192/5192 net9.0 AND net10.0; the diff adds exactly 2 [Fact]s and touches no other test-bearing file, so the pre-change tree derives to 5190 - the 5171 recorded in the JF-645 merge message for this same tree does not reconcile, the same branch-tree-vs-merged-tree arithmetic caveat that message itself documents for prior merges; the measured run is the truth)
 - [x] #3 No new compiler warnings (the Release -warnaserror run is the proof)
@@ -163,8 +170,6 @@ family. The roster's second-boundary note now points here accordingly.
 - [x] #10 /code-review high passed (0 correctness bugs; 5 findings: 3 applied - the roster note's "compose eagerly" mechanism corrected to "build a pure single Tell" with the RequestPipeline lazy-Func fact verified at RequestPipeline.cs:109-111 and the same correction carried into this file's SCOPE REDUCTION, the IMPLEMENTATION bullet's overstated twin assertion surface fixed, the Final Summary evidence gap filled by this rewrite; 1 applied pre-commit - the untracked worker scratch script deleted; 1 declined with reason - the event pin's shape restatement is the dispatch-mandated self-containment, documented in-code, lockstep-edit cost accepted)
 - [x] #11 RED-PROOF executed (deep de-lazification sabotage flipped the event pin on both TFMs with the AccountRelink line in the failure capture; sabotage reverted, tree verified clean)
 - [x] #12 Design decision documented (the section above; log-only, with the empirical boundary probe)
-
-## Final Summary
 
 Two site-level side-effect pins landed in EventHandlerTests' JF-752 family
 (event leg: keep-alive shape restated in full AND no AccountRelink record
@@ -186,3 +191,4 @@ solution Release --no-restore -warnaserror Build succeeded 0 Warnings 0
 Errors; affected families 112/112 both TFMs on the restored post-probe state.
 Reserved filing number JF-762 (corrected from JF-760 mid-task) went UNUSED:
 no out-of-scope finding survived the gates unapplied.
+<!-- SECTION:NOTES:END -->

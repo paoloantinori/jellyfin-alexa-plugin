@@ -35,18 +35,6 @@ Minor cleanups surfaced by the /code-review high pass of commit a7a55961 (JF-544
 - [ ] #6 No behavior change beyond the doc/style/dedup edits; full unit suite passes
 <!-- AC:END -->
 
-## Verification (2026-09-14): ALL SIX items already landed in later commits
-
-Each item verified against the current tree (the JF-543/JF-552 rewrites of LibrarySyncService and neighbors absorbed them):
-1. SyncTokenBudgetMinutes block: 4-space member indentation, verified with cat -A.
-2. ResolveSyncLocalesAsync doc: now documents "*" as the CONFIG default and "Empty: it-IT only" as the empty-string behavior (the JF-543 CLAUDE.md correction era).
-3. SmapiTokenRefresher.cs: no "#nullable enable" (file starts with usings).
-4. TokenRefreshTask: the dead catch is GONE - the comment documents the never-throws contract and the code shape matches it (no catch, loud-surface on failure).
-5. DiagnosticsController: both expiry sites (lines ~55 and ~191) route through SmapiTokenRefresher.RemainingLifetime.
-6. accessToken: no class/method-level stale local remains - it exists only as a RunLegAsync parameter (per-leg re-read, the JF-544 fix itself) and method parameters downstream.
-
-No code change needed; closing as absorbed-by-later-work.
-
 ## Definition of Done
 <!-- DOD:BEGIN -->
 - [ ] #1 dotnet build passes with 0 errors
@@ -61,8 +49,26 @@ No code change needed; closing as absorbed-by-later-work.
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
 
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
+
+## Verification (2026-09-14): ALL SIX items already landed in later commits
+
+Each item verified against the current tree (the JF-543/JF-552 rewrites of LibrarySyncService and neighbors absorbed them):
+1. SyncTokenBudgetMinutes block: 4-space member indentation, verified with cat -A.
+2. ResolveSyncLocalesAsync doc: now documents "*" as the CONFIG default and "Empty: it-IT only" as the empty-string behavior (the JF-543 CLAUDE.md correction era).
+3. SmapiTokenRefresher.cs: no "#nullable enable" (file starts with usings).
+4. TokenRefreshTask: the dead catch is GONE - the comment documents the never-throws contract and the code shape matches it (no catch, loud-surface on failure).
+5. DiagnosticsController: both expiry sites (lines ~55 and ~191) route through SmapiTokenRefresher.RemainingLifetime.
+6. accessToken: no class/method-level stale local remains - it exists only as a RunLegAsync parameter (per-leg re-read, the JF-544 fix itself) and method parameters downstream.
+
+No code change needed; closing as absorbed-by-later-work.
+
 7. (from the final /simplify pass, 2026-09-12) The test project now carries FOUR private capturing-ILoggerProvider copies (SkillResponseLoggingTests, VideoAudioControllerTests, StructuredLoggingTests, and the JF-544 LibrarySyncServiceSeriesTests one, which already diverges as string-only vs (LogLevel, Message) tuples): promote one shared internal helper in TestHelpers.cs and migrate the four. Also note item 1 (indent) and item 4 (dead catch) were RESOLVED by the same pass; item 6 (accessToken local) was already moot after 8674ad84 - only a stale comment remained, also removed.
 
 PROGRESS (2026-09-12, commits 5513efc7 + 39b26f56): item 1 (indent) resolved in the JF-544 /simplify pass; the dead catch in TokenRefreshTask resolved in the same pass; the DiagnosticsController expiry-arithmetic item RESOLVED (adopts SmapiTokenRefresher.RemainingLifetime, commit 39b26f56); the shared TestCaptureLogger helper landed (5513efc7, first of four copies migrated). REMAINING: migrating the other two/three logger-capture copies (SkillResponseLoggingTests, VideoAudioControllerTests), the stale ResolveSyncLocales default doc, the redundant #nullable enable, the misplaced accessToken local (moot after 8674ad84), and the log-level reroute decision (JF-547 item 6).
 
 CLOSE-OUT (2026-09-12, commits 5513efc7/39b26f56/005ea14e): item 1 (indent) resolved in the JF-544 /simplify pass; item 3 (redundant #nullable) removed in 005ea14e; item 4 (dead catch) removed in the same /simplify pass; item 5 (DiagnosticsController expiry reuse) resolved in 39b26f56 (RemainingLifetime); item 6 (accessToken local) was moot after 8674ad84 (the local was already inlined; the stale comment was removed); item 2 (ResolveSyncLocales doc) corrected in 005ea14e (the '*' default + JF-543 exclusion). Item 7 (the four logger-capture copies) resolved: TestCaptureLogger landed and all copies migrated (1ff8b159). All items closed; task closable.
+<!-- SECTION:NOTES:END -->

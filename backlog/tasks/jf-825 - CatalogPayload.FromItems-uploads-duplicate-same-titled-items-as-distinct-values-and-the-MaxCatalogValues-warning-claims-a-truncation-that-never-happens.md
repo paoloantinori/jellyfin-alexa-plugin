@@ -11,6 +11,11 @@ labels: [catalog-sync]
 
 ## Description
 
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
+
 Filed by the JF-823 worker (2026-10-09) from the /code-review high gate,
 findings F2 and F3. Both live in the pre-existing payload-build path that
 JF-823 extended with a fourth type; both are filed rather than fixed in the
@@ -113,3 +118,4 @@ StoreCount across the wiring table is outside the fix); F5 APPLIED
 (CanonicalNameKey shared by FromItems and MergeSeeds makes the key coupling
 structural; subsumes the simplify-side hoist-on-third judgment because F3 made
 the key non-trivial).
+<!-- SECTION:NOTES:END -->

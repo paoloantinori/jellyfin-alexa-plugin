@@ -69,6 +69,11 @@ replication branch would have to thread the resume decision too. Red pin: confir
 
 ## Final Summary
 
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
+
 The confirm-must-match-ask invariant is now structural, not mirrored. The task's
 preferred ROUTING BRANCH was evaluated and TAKEN: the confirm context reaches the
 head's composition cleanly through the PodcastEpisodeResolver precedent (JF-599/JF-605,
@@ -124,3 +129,4 @@ lifetime all byte-equivalent or strictly better: one list allocation removed per
 chapter-leaf play).
 
 GATE-MARKER RECORD (2026-10-06): the extraction verified verbatim on the direct path (line-for-line, only locals-to-parameters renames); the ten-shape confirm==ask claim holds structurally; DI satisfied by the existing IUserDataManager registration plus auto-discovery. Findings: F1 (the deep-resume fetch on every first-ever ask, now doubled to the confirm) tracked via the JF-797 addendum; F2 (the payload-kind breadth interacting with the new gate) tracked via the same addendum; F3 APPLIED (the finally restores the CAPTURED pre-test flag value, not the literal false; the sweep found no other literal-restore siblings of this shape); F4 (the Mock.Of<IUserDataManager> fixture debt in ResumeOnRelaunch/ShowMore suites) left as the recorded JF-465-class skip, now noted as load-bearing; F5 APPLIED (the redundant null-forgiving dropped); F6 REFUTED with reason - the BooksEnabled gate cannot hoist above the item fetch because the payload TYPE (which requires the fetch) is what distinguishes a book confirm from an album confirm under the shared MediaTypeAlbum label; hoisting would answer FeatureDisabled for album confirms with books off, and the path is a rare stale-prompt interaction, not the hot ask path.
+<!-- SECTION:NOTES:END -->

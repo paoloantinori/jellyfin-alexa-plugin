@@ -49,14 +49,16 @@ Predicate ArtistSearch.IsCoincidentalContainmentMatch (stop-word-aware, locale p
 
 ## Implementation Notes
 
-JF-382 SCOPE NOTE (2026-09-27, from the JF-643 simplify round): consolidating the inline chain must also RETIRE the JF-643 romanization site at the inline chain's entry (PlayArtistSongsIntentHandler ~line 180); ArtistSearch.SearchAsync's entry already romanizes, so the consolidated path needs no per-handler copy.
-
 <!-- SECTION:NOTES:BEGIN -->
 2026-08-31 /code-review high (JF-418 session) surfaced two lower-ranked findings adjacent to this task's consolidation scope, recorded here so they are not lost:
 
 1. The JF-417 tier-2 partial-first-word deferral's fallback branch (accept the deferred match if tiers 3-4 find no different winner) is DEAD CODE in both search copies: tier 4's fuzzy pass over the superset always re-finds the deferred candidate, so the explicit fallback never changes the outcome.
 
 2. The JF-417 deferral logic + the JF-420 fair-score comparison now exist in BOTH copies of the 4-tier chain (ArtistSearch.SearchAsync and the inline PlayArtistSongs Thorough mode), deepening this task's duplication: any containment/discrimination fix must be written twice until the consolidation happens. When consolidating, fold the dead fallback branch out and keep one copy of both mechanisms.
+
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
+
+JF-382 SCOPE NOTE (2026-09-27, from the JF-643 simplify round): consolidating the inline chain must also RETIRE the JF-643 romanization site at the inline chain's entry (PlayArtistSongsIntentHandler ~line 180); ArtistSearch.SearchAsync's entry already romanizes, so the consolidated path needs no per-handler copy.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary

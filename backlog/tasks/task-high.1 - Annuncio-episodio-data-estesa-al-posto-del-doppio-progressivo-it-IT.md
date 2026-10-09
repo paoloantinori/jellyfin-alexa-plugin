@@ -48,7 +48,6 @@ Verifica: test SpeechBuilder con Episode item (con/senza PremiereDate, con/senza
 <!-- SECTION:IMPLEMENTATION_NOTES:END -->
 <!-- DOD:END -->
 
-## Implementation Notes (2026-09-18)
 <!-- SECTION:IMPLEMENTATION_NOTES:BEGIN -->
 - Helper: `SpeechBuilder.FormatEpisodeAnnounceTitle(BaseItem item, string locale)` (Alexa/Util/SpeechBuilder.cs). Returns the date-formatted title ONLY when item is an Episode, PremiereDate has a value, and locale is it-IT (OrdinalIgnoreCase); else null. Format: `PremiereDate.ToString("dddd d MMMM", CultureInfo("it-IT"))`, first letter capitalized, separator "–" (en-dash, from the task spec), title = item.Name minus a leading `Ep. N – `/`Ep. N - ` prefix (regex `^\s*ep\.?\s*\d+\s*[-–]\s*`, en-dash and hyphen, case/space tolerant); a name without the prefix gets the date prepended to the full name.
 - Call sites adopted (both cover the VideoApp and the JF-586/JF-589 audio-degrade routes because the speech is caller-composed):
@@ -66,3 +65,11 @@ Verifica: test SpeechBuilder con Episode item (con/senza PremiereDate, con/senza
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
 DONE (commit adbcb781). SpeechBuilder.FormatEpisodeAnnounceTitle(item, locale) -> string?: for an Episode with a PremiereDate and locale it-IT (OrdinalIgnoreCase), composes the announce title as 'Mercoledì 17 settembre - La diserzione...' (PremiereDate formatted "dddd d MMMM" via the framework-cached it-IT culture, first letter capitalized, title stripped of the leading 'Ep. N -/–' prefix via the static regex, en-dash join per the task spec's own separator); when the strip leaves an empty title, the FULL name is restored after the date (the helper never returns a bare date); every other shape (non-Episode, no PremiereDate, other locales) keeps item.Name byte-identically. ADOPTED at the two speech-composition points: PlaybackLaunchBuilder.BuildVideoLaunchSpeech (both resume and fresh arms - covering PlayVideo, SearchMedia, AplUserEvent, StartOver, ResumeIntent fallback-4, ContinueWatching, TvNextUp resume arm, and the JF-586/JF-589 audio-degrade routes for free since the speech is caller-composed before route selection) and the TvNextUpService fresh-play arm (PlayingNextEpisode/PlayingLatestEpisode wording). APL/card/VideoApp metadata keep the full item.Name (display untouched per the task). Regex verified against all requested edges (both dash variants, optional dot/space, 'Epp.'/'Epa.' non-matches, mid-title 'ep.' anchored out). GATES: /simplify 4-angle + adversarial combined pass - regex edges verified, accented weekday initials safe for it-IT (all Italian day/month names start ASCII), culture cached via GetCultureInfo (style), the empty-strip restore branch PINNED by test (the reviewer's flagged unexercised logic), the en-dash in the announce string is content per the task spec. Tests: 10 new red-first (formatted+strip both dashes, null arms, no-prefix date-prepend, culture assertion, both BuildVideoLaunchSpeech SSML/PlainText arms, the empty-strip restore pin). Suite 4084/4084 both TFMs, Release 0 warnings. On-device check with a real Il Post episode left for the user per the task notes.
 <!-- SECTION:FINAL_SUMMARY:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
+
+## Implementation Notes (2026-09-18)
+<!-- SECTION:NOTES:END -->

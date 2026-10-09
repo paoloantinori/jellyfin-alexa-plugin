@@ -92,15 +92,6 @@ or a server-side scope digest table (bounded token, new state + eviction).
       the digest table stays the tracked shape beyond)
 <!-- DOD:END -->
 
-LEG 3 (no DoD box of its own; the evidence): CLOSED by alignment. The endpoint's audiobook
-arm routes through the ONE chapters builder's new unpaged form, the queue's MediaTypes=Audio
-axis. RED on the unmodified tree, both TFMs: the Audio-typed folder pin hit the filed 404
-(Expected ContentResult / Actual NotFoundObjectResult) and the mixed-children pin's concat
-list dropped the Audio-typed sibling; plus the review-round F1 follow-up (the copy-compatibility
-gate extended to the audiobook arm, its pin red under the pre-fix hardcoded copy) and F3 (the
-monitor's completeness equality that warned INCOMPLETE on every healthy concat encode, its pin
-red under the pre-fix equality).
-
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
@@ -150,6 +141,20 @@ final state (the merged-tree baseline 5360 + 9 new Facts); Release --no-restore 
 0 warnings 0 errors; validators PASS at baseline. CODE/TEST/BACKLOG change, no locale, model,
 or speech surface: no model deploy needed. Not deployed (worker branch only).
 <!-- SECTION:FINAL_SUMMARY:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
+
+LEG 3 (no DoD box of its own; the evidence): CLOSED by alignment. The endpoint's audiobook
+arm routes through the ONE chapters builder's new unpaged form, the queue's MediaTypes=Audio
+axis. RED on the unmodified tree, both TFMs: the Audio-typed folder pin hit the filed 404
+(Expected ContentResult / Actual NotFoundObjectResult) and the mixed-children pin's concat
+list dropped the Audio-typed sibling; plus the review-round F1 follow-up (the copy-compatibility
+gate extended to the audiobook arm, its pin red under the pre-fix hardcoded copy) and F3 (the
+monitor's completeness equality that warned INCOMPLETE on every healthy concat encode, its pin
+red under the pre-fix equality).
 
 LEG 3 (the JF-767 gate-marker's F1): the endpoint's audiobook arm (IncludeItemTypes=[AudioBook]) and the ONE chapters builder (MediaTypes=Audio) now fed by PlayBook head/confirm/tail diverge on the KIND axis of the same endpoint-vs-paged seam JF-767 closed on the scope axis. A book parent with mixed children (AudioBook chapters plus Audio-typed siblings after a metadata remap) queues all chapters via MediaTypes=Audio but the concat endpoint enumerates only the AudioBook subset; a fully Audio-typed folder yields 0 rows at the endpoint (404) for a book the confirm just launched. Fix shape: align the kind axis (either the endpoint accepts both kinds for the audiobook arm or the builder narrows to AudioBook when the parent is a book) with a mixed-children red proof.
 
@@ -235,3 +240,4 @@ query's kind axis (rows only for the axis the server actually constrains): the F
 Audio-typed folder reproduces the filed 404 pre-fix, and the MIXED-children folder
 reproduces the shorter-than-the-queue subset concat pre-fix (chapters.txt missing the
 Audio-typed sibling).
+<!-- SECTION:NOTES:END -->

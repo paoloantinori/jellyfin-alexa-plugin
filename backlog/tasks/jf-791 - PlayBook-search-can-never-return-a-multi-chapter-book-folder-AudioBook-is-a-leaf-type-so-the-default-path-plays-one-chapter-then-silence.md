@@ -156,4 +156,10 @@ concern becomes real on this path the moment the folder resolves (it was unreach
 on the default path before this fix).
 <!-- SECTION:FINAL_SUMMARY:END -->
 
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
+
 CLOSE-OUT LEG EXECUTED (2026-10-06, post-deploy 0e810bcc): simulator PlayBook "measure what matters" on the deployed build - "checking resume ... with 5 tracks" (the corrected observable: trackItems.Count, the initial page, where the pre-fix build logged "with 1 tracks"), the card launched "#1 - Measure What Matters (Unabridged)" with the book name, the resume scan walked the page tracks (track[1]..track[4] rows) and started from the beginning (the filed JF-793 finding-4 shape live: deep progress beyond the page would be invisible; here the scanned tracks carry Played=True at 0). Config survived (1 user). The JF-790 untagged-order concern is now live on this path as documented.
+<!-- SECTION:NOTES:END -->

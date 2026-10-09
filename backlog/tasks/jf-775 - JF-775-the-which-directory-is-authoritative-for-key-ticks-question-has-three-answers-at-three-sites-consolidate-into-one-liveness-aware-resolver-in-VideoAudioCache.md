@@ -190,8 +190,11 @@ its honest containment+timing boundaries) and its behavioral half FILED as
 JF-782 leg 3 (the full-slot foreign-registration overwrite, PRE-EXISTING
 JF-774 containment design, not a JF-775 regression), F3/F4 confirmed as the
 JF-782 legs 1/2 this task filed from the simplify round (no double-file).
-<!-- SECTION:NOTES:END -->
+
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
+
 FLAKE ATTRIBUTION (the JF-775 gate-marker's F3, for future bisect/triage): two class-level reruns during development showed one-off MonitorHls-family Dispose-backstop flakes (a DIFFERENT test each run, all passing in isolation on both TFMs, the full suites eventually green with zero assertion failures of this change's own). This is the tracked JF-772/JF-731 load-dependent teardown family on this shared machine, NOT a JF-775 regression; committed here so a bisect hitting the range does not re-diagnose it.
+<!-- SECTION:NOTES:END -->
 
 ## Final Summary
 

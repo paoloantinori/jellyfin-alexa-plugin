@@ -93,18 +93,18 @@ PlayNextEpisode series forms) stay green.
 - [x] #3 Live probe matrix: library book titles route PlayBookIntent with slot filled; guards green
 <!-- AC:END -->
 
-Worker note (2026-10-09): AC#2 and AC#3 are the ORCHESTRATOR's (live SMAPI probes + a real
-catalog sync are out of the worker's no-deploy boundary). AC#1 is complete; the worker-scope
-detail is in the Implementation Notes addendum below.
-
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
 The 2026-10-08 probe matrix and the diagnosis live in JF-516's notes (the
 "JF-816 RESIDUAL CLOSED" section). The static-seed extension that shipped as the
 interim fix: templates/it-IT.yaml AudiobookTitle values.
-<!-- SECTION:NOTES:END -->
 
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
+
+Worker note (2026-10-09): AC#2 and AC#3 are the ORCHESTRATOR's (live SMAPI probes + a real
+catalog sync are out of the worker's no-deploy boundary). AC#1 is complete; the worker-scope
+detail is in the Implementation Notes addendum below.
 
 ## Implementation Notes (JF-823 worker addendum, 2026-10-09)
 
@@ -152,21 +152,6 @@ restored to the 3-line family shape; Reuse/Altitude/Efficiency angles clean, no 
 deployed build + a real catalog sync (the wiring goes live only when the next sync mints
 and pins a new catalog version, the JF-684 spike's revert-path lesson). The static seed
 stays as the fallback vocabulary either way (the seed arm above).
-
-## Definition of Done
-<!-- DOD:BEGIN -->
-- [x] #1 dotnet build passes with 0 errors
-- [x] #2 dotnet test passes (5540/5540 both TFMs, one command)
-- [x] #3 No new compiler warnings introduced (Release -warnaserror 0/0)
-- [x] #4 Session attributes use proper DTOs not raw ValueTuples for serialization (N/A: no session surface touched; the new User.AudiobookCatalogId is the plain string DTO, XmlSerializer roundtrip pinned)
-- [x] #5 HttpClient instances are not shared across calls that modify BaseAddress (N/A: no HttpClient surface touched)
-- [x] #6 NLU test fixtures updated if interaction model changed (N/A: committed models/templates untouched by this worker; the catalog sync edits the LIVE model, which is the orchestrator's live A/B)
-- [x] #7 E2E test added for new intent or handler logic (N/A: needs the live endpoint; AC#2/#3 are the orchestrator's probes)
-- [x] #8 Locale response strings added to all 17 locales (N/A: no strings surface touched)
-- [x] #9 /simplify passed (4 findings, all applied or dispositioned; see worker addendum)
-- [x] #10 /code-review high passed (no correctness bug; 5 low findings dispositioned same-turn: F4 applied in-scope, F1/F2/F3 filed as JF-826/JF-825 (F1 renumbered from its filing-time JF-824: the fourth same-window number race, main's ledger JF-824 merged first), F5 deliberate with the ownership note in the worker addendum)
-<!-- DOD:END -->
-
 
 **/code-review high disposition (2026-10-09):** no correctness bug found; the
 reviewer independently re-ran the affected classes (108/108 + siblings 29/29,
@@ -296,3 +281,20 @@ full-sync pins are unchanged and green (it-IT legs carry no word).
 Risk (a) (out-of-catalog tails misroute to sibling intents) stays the
 ACCEPTED JF-684 tradeoff per the verdict; the handler-side guard question is
 the separate open item the verdict filed.
+<!-- SECTION:NOTES:END -->
+
+
+## Definition of Done
+<!-- DOD:BEGIN -->
+- [x] #1 dotnet build passes with 0 errors
+- [x] #2 dotnet test passes (5540/5540 both TFMs, one command)
+- [x] #3 No new compiler warnings introduced (Release -warnaserror 0/0)
+- [x] #4 Session attributes use proper DTOs not raw ValueTuples for serialization (N/A: no session surface touched; the new User.AudiobookCatalogId is the plain string DTO, XmlSerializer roundtrip pinned)
+- [x] #5 HttpClient instances are not shared across calls that modify BaseAddress (N/A: no HttpClient surface touched)
+- [x] #6 NLU test fixtures updated if interaction model changed (N/A: committed models/templates untouched by this worker; the catalog sync edits the LIVE model, which is the orchestrator's live A/B)
+- [x] #7 E2E test added for new intent or handler logic (N/A: needs the live endpoint; AC#2/#3 are the orchestrator's probes)
+- [x] #8 Locale response strings added to all 17 locales (N/A: no strings surface touched)
+- [x] #9 /simplify passed (4 findings, all applied or dispositioned; see worker addendum)
+- [x] #10 /code-review high passed (no correctness bug; 5 low findings dispositioned same-turn: F4 applied in-scope, F1/F2/F3 filed as JF-826/JF-825 (F1 renumbered from its filing-time JF-824: the fourth same-window number race, main's ledger JF-824 merged first), F5 deliberate with the ownership note in the worker addendum)
+<!-- DOD:END -->
+

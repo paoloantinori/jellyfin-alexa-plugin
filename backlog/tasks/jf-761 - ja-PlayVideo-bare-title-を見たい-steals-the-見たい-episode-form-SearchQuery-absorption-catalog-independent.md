@@ -76,4 +76,10 @@ Run each utterance through `ask smapi profile-nlu --locale ja-JP`, 4 repeats, se
 CLOSED 2026-10-04 by the orchestrator after the full cycle: merged into main (worker commit a6e89d31, --no-ff; direct verification: the removal, the regenerated model, and the fixture pin), combined-tree suite 5205/5205 both TFMs; the ja model rebuild + the 7-step live-probe matrix follow the batched DLL deploy (the model JSONs embed in it). JF-766 filed by this task.
 <!-- SECTION:FINAL_SUMMARY:END -->
 
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
+
 LIVE-PROBE CLOSE EVIDENCE (2026-10-05, orchestrator, post DLL deploy + ja rebuild, skill discovered fresh): matrix green on every step. (1) the lead 'game of thrones のシーズン 1 エピソード 3 を見たい' routes PlayEpisodeIntent with CLEAN slots (series_name='game of thrones', season 1, episode 3) - the steal is closed; (2) the library variant 'the bear ...' likewise clean; (4) the bare movie guard passes (no PlayEpisode selection; the 'インセプション を見たい' reading went to PlayArtistSongs with musician='インセプション', the known non-catalog confidence class per the JF-551 reframe, a pre-existing competition outside this task, not filed as new); (5a) the qualified 映画 carrier stays PlayVideoIntent clean; (5b) the 再生して sibling stays PlayEpisodeIntent clean; (6) the 見せて survivor stays PlayVideoIntent. The ja fixture pin's routing is verified live; the canonical-value comparison is the NLU suite's business on its next run.
+<!-- SECTION:NOTES:END -->

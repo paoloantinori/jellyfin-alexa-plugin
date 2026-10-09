@@ -58,6 +58,17 @@ RELATION: blocks JF-643's completion (its artist-path bar rows); JF-642's ROUTIN
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
 
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Landed 2026-09-27 as merge a9c57451 (pushed; deployed to minix with config intact, active DLL verified): kana-origin acceptance calibration. A kana-derived query auto-plays an artist only on a REAL Double Metaphone code collision (encode-at-decision-point, uniform on every path including the cold-index database path; the misleading score-band helper was deleted after the altitude review proved plain 91-99 does not prove collision), a plain-fuzzy-only pick is the honest not-found with accurate failing-leg logs, and a near-tie (margin <= 5, the shared ArtistSearch.KanaOriginTieMargin) fires the multi-artist yes/no ask via the extracted DisambiguationHelper.AskMultipleArtists with the pair ordered score-descending (the delta review caught the outscoring-rival ordering defect; fixed and pinned both directions). Extraction cluster: FindNearTiedRunnerUp, ScoreBestWithCodes, PassesKanaOriginAcceptance own their shapes once (the JF-382 rule). Gates: /simplify four angles (worker applied the consolidated round incl. the real-DM replacement), code-review skill on the delta (8 findings, all applied in round 2), suites 4507/4507 both TFMs (orchestrator-verified on the final state, single-node under memory pressure). LIVE BATTERY (deployed): クイーン -> the disambiguation ask naming Keane and Queen (the silent tie now asks; the bar's row SATISFIED); ビートルズ -> refuses the wrong artist (the Sator-class artist false-accept is dead; the song-fallback gap it exposed is filed as JF-654); ジャズ genre control unchanged. This unblocks JF-643's completion.
+<!-- SECTION:FINAL_SUMMARY:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
+
 ## Implementation Notes (2026-09-27)
 
 FLAG PLUMB (score-detection shape, per the design's "your call" clause): `FuzzyMatcher.IsPhoneticFloorScore(int)` (internal, `score >= PhoneticFloorScore` i.e. >= 91) is the detectable floor exposure. Detection reads the score AT the acceptance decision points, which already hold the winner's score, so no flag plumb runs through the search chains and `ArtistSearch.SearchAsync` needed NO kanaOrigin parameter (deliberately not added; the design's optional-param option was for a flag-threaded plumb, which the score-detection choice makes dead weight). The kana-origin flag itself (`KatakanaRomanizer.ContainsKana` on the PRE-romanization raw slot) is captured at the three entry points that own acceptance decisions:
@@ -77,9 +88,4 @@ REVIEW ROUND (2026-09-27, same sitting as the commit): F1 removed the score-band
 TESTS: `Jellyfin.Plugin.AlexaSkill.Tests/Handler/KanaOriginAcceptanceTests.cs`, 7 cases pinning all four shapes: DM-colliding pair (Queen/Keane, production DoubleMetaphone codes) -> the disambiguation ask naming both, never auto-play (handler AND cross-media); plain-fuzzy-only ('ビートルズ' vs Sator) -> honest not-found / null (handler AND cross-media); single clear DM-collision winner -> auto-play; plus the Latin byte-identical control (`PassesArtistMatchAcceptance` containment 90 passes with kanaOrigin false, refused with true). No existing test modified (the full pre-existing suite is the Latin regression matrix).
 
 VERIFICATION (this worktree): `dotnet build Jellyfin.Plugin.AlexaSkill.sln` 0 errors 0 warnings; `dotnet test Jellyfin.Plugin.AlexaSkill.Tests`: `Passed!  - Failed: 0, Passed: 4505, Skipped: 0, Total: 4505` on BOTH net9.0 and net10.0 (4498 pre-existing + 7 new). No thresholds, config flags, or locale strings changed. Live re-verification battery (simulator: クイーン -> Queen or the disambiguation; ビートルズ -> Beatles or not-found, never Sator; genre rows unchanged) runs post-merge/deploy.
-
-## Final Summary
-
-<!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Landed 2026-09-27 as merge a9c57451 (pushed; deployed to minix with config intact, active DLL verified): kana-origin acceptance calibration. A kana-derived query auto-plays an artist only on a REAL Double Metaphone code collision (encode-at-decision-point, uniform on every path including the cold-index database path; the misleading score-band helper was deleted after the altitude review proved plain 91-99 does not prove collision), a plain-fuzzy-only pick is the honest not-found with accurate failing-leg logs, and a near-tie (margin <= 5, the shared ArtistSearch.KanaOriginTieMargin) fires the multi-artist yes/no ask via the extracted DisambiguationHelper.AskMultipleArtists with the pair ordered score-descending (the delta review caught the outscoring-rival ordering defect; fixed and pinned both directions). Extraction cluster: FindNearTiedRunnerUp, ScoreBestWithCodes, PassesKanaOriginAcceptance own their shapes once (the JF-382 rule). Gates: /simplify four angles (worker applied the consolidated round incl. the real-DM replacement), code-review skill on the delta (8 findings, all applied in round 2), suites 4507/4507 both TFMs (orchestrator-verified on the final state, single-node under memory pressure). LIVE BATTERY (deployed): クイーン -> the disambiguation ask naming Keane and Queen (the silent tie now asks; the bar's row SATISFIED); ビートルズ -> refuses the wrong artist (the Sator-class artist false-accept is dead; the song-fallback gap it exposed is filed as JF-654); ジャズ genre control unchanged. This unblocks JF-643's completion.
-<!-- SECTION:FINAL_SUMMARY:END -->
+<!-- SECTION:NOTES:END -->

@@ -61,6 +61,11 @@ AnswersMediaTypeNotAvailable pins the album leg.
 
 ## Final Summary
 
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
+
 Shipped 2026-10-07 on the JF-806 worktree (commits 9b369cde..031ef164, NOT
 merged: the orchestrator merges). Suites: 5452/5452 BOTH TFMs at the final
 state (baseline 5439 + 13 new pins); Release -warnaserror build 0 warnings /
@@ -128,3 +133,4 @@ against backlog/tasks before each filing (807 and 808 both free).
 JF-805 GATE-MARKER CORRECTIONS (2026-10-07, same-turn): (1) PREMISE FIX - the playlist leg's premise is WRONG: PlayPlaylistIntentHandler does NOT gate at entry on MusicEnabled (read end to end; zero IfMediaTypeDisabled/MusicEnabled hits in it, ShufflePlayIntentHandler, and BuildPlaylistPlayResponseAsync), and playlists are documented cross-type always-allowed (BaseHandler.IsTypeAllowed). Gating only the playlist CONFIRM arm would CREATE the confirm-vs-ask divergence the rule prohibits. RESCOPE: song+artist legs only (their asks do gate); the playlist leg needs the ask gated first if ever, as its own decision. (2) FOLDED AXIS (marker finding 2): the confirm path runs the ask's full cold-database surface with NO warming gate - the direct asks are Layer-1 gated (GuardIndexReady; WarmingGateCoverageTests), YesIntentHandler is absent from ExpectedGatedHandlers, and JF-805's routed composition widened the ungated work to the JF-796 deep fetch plus per-track UserData reads; the restart-mid-session confirm hits the cold DB inside the Alexa window (the JF-419 class). The confirm-leg seam round this task anticipates should carry the warming-gate axis for BOTH the book and album confirm legs (the JF-795 twin shares the shape).
 
 GATE-MARKER TAIL (2026-10-07): the closure claim that every warming-ungated leg 'recorded its decision in a comment' overstated for podcast and playlist - both legs NOW carry their in-code decision records (applied this tail); the song leg additionally gained its intersection pin (the documented F3 bounded divergence is now machine-locked like its siblings).
+<!-- SECTION:NOTES:END -->

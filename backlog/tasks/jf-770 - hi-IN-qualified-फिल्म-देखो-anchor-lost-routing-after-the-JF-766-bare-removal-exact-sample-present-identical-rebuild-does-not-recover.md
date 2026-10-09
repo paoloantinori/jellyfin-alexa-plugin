@@ -22,6 +22,15 @@ priority: high
 
 ## Description
 
+## Definition of Done
+
+## Final Summary
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
+
 Filed 2026-10-05 by the orchestrator from JF-766's post-deploy probe matrix (its
 DoD #3 regression guard FAILURE, the file-not-weaken discipline).
 
@@ -176,15 +185,11 @@ discovered fresh, 4 repeats, selectedIntent-first.
    above cannot outlive this task, the pin is the durable guard, and DoD #5
    does not close without it.
 
-## Definition of Done
-
 - [x] #1 Hypothesis probed probe-first: the other qualified PlayVideo forms, the single-member tails, and the ja 映画 control, 4 repeats each (10 hi-IN utterances + 3 ja controls; verdict: the failure is फिल्म-carried-short-form-specific apart from the JF-766-accepted bare-देखो NO_SELECTION cost, not single-tail-generic; the ja analog routes clean)
 - [x] #2 Remediation option (a) implemented: 3 QUALIFIED देखो variants, never bare (enumerated in CHOSEN SHAPE above); the "titled literal" skipped with the recorded reason; model regenerated (361 → 364, exactly 3 lines); mirrors regenerated via the generator (--check clean)
 - [x] #3 Validators at baseline (validate_interaction_models PASS, 294 warnings = the main baseline, no new warning; validate_locales PASS, no new locale gaps)
 - [x] #4 Full suite green once on the final state: 5207/5207 net9.0 AND net10.0, 0 failed (the true current baseline; the "~5205" figure predates JF-763's +2 endpoint pins, which merged 4 minutes before the JF-766 merge)
 - [ ] #5 Post-deploy matrix (orchestrator): the 8-leg instruction above; this DoD closes when leg 1 reads PlayVideo 4/4 with the leg 3-5 guards green and the leg 8 pin landed
-
-## Final Summary
 
 IMPLEMENTED 2026-10-05 by the worktree agent (template/model/mirrors only: no
 .cs, no fixtures, no deploy). Hypothesis verdict and probe map: the
@@ -196,3 +201,4 @@ steal). CLOSURE IS DEPENDENT on the post-deploy matrix and pin (DoD #5).
 ORCHESTRATOR MATRIX RESULT (2026-10-05, post DLL deploy 2fddf2be + hi-IN rebuild, skill fresh): PARTIAL, with the फिल्म anomaly now proven TRAINER-SIDE. L1 FAIL: the anchor 'फिल्म इंसेप्शन देखो' reads Fallback 4/4 AFTER the three new samples deployed; with the exact sample 'फिल्म {title} देखो' AND the word-order twin 'फिल्म देखो {title}' AND four other फिल्म-family samples (चलाओ, खोजो, मैं फिल्म...) present in the live model. L1b PASS: the NEW 'वीडियो इंसेप्शन देखो' routes PlayVideoIntent clean on first reading; the strengthened family DOES route, via the new carriers. L3/L5 PASS (the JF-766 steal fix holds on both episode forms), L4 PASS (the bare-movie guard). ENCODING RULED OUT: the probe's फिल्म codepoints byte-equal the live model's (0x92b 0x93f 0x932 0x94d 0x92e...). The discriminator chain now reads: not encoding, not family strength (वीडियो routes with one sample), not the JF-766 removal (pre-removal the form routed with the same samples minus three), persistent across TWO rebuilds; a trainer-state anomaly specific to the फिल्म token sequence that template changes demonstrably cannot reach (the first remediation attempt failed against it; per the two-failed-fixes rule no second template patch). DISPOSITION: the task stays OPEN (In Progress) pending either a trainer-side recovery (a future rebuild after unrelated content changes may unstick it; re-probe then) or Paolo's device round; the WORKING user-facing carriers are वीडियो/मूवी (live-proven). The durable NLU pin (DoD #5) authors on the वीडियो row + the steal-fix rows (the surface from today's probes per the JF-769 rule), NOT on the फिल्म row while the anomaly stands. JF-771's cross-locale sweep note gains this anomaly as a fourth data point.
 
 THIRD-REBUILD DATA POINT (2026-10-05, orchestrator): rebuild with the post-JF-755/JF-537.1 DLL (6e4fa345) - still Fallback 3/3. The anomaly now persists across THREE rebuilds and TWO DLL generations. Task stays parked on the device round / a future unrelated-content rebuild; the वीडियो/मूवी carriers remain the working path.
+<!-- SECTION:NOTES:END -->

@@ -43,6 +43,13 @@ FIX: a shared capability check (context.System.Device.SupportedInterfaces contai
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
 
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Orchestrator /simplify pass dispositions (2026-09-06): APPLIED the gate-first reorder in BuildChannelLaunchResponseAsync (capability check before the 5s resolver round-trip; the last-played record is unconditional-for-capable again since the refusal path cannot reach it); the shared IsVideoAppLaunchItem predicate (Movie/Episode/LiveTvChannel) replacing the drifted hand-written type lists at the resume-offer gate and the ResumeIntent router (ResumeIntent now correctly includes LiveTvChannel); the DELIBERATE comment pinning the screenless audiobook fallback to plain UserData ticks (no tracker/playlist on a plain AudioPlayer resume); the test-only/fail-open doc on the context-less BuildAudioPlayerResponse overload. SKIPPED (documented): the ~41-call-site removal of the dead overload (test churn), the assertion-triple and config-boilerplate consolidation in VideoAppCapabilityGateTests, the factory composition in ScreenlessResumeOfferTests.CreateContextWithAudioToken (all test-file polish, no production impact), and the double ResolveJellyfinUser in the screenless path (in-memory lookup, negligible).
+
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
+
 ## Implementation Notes (2026-09-06, first pass; status stays In Progress)
 
 ### Gate design (chosen: shared launch-response builders)
@@ -158,11 +165,6 @@ task's core phrase verbatim). de/es/fr follow those files' ASCII-safe convention
   verification on the Dot are still pending; subagent-dispatching review skills could
   not run in this worker's no-subagent session, so the external review remains to be
   executed by the coordinator before any Done transition.
-
-## Implementation Notes
-
-<!-- SECTION:NOTES:BEGIN -->
-Orchestrator /simplify pass dispositions (2026-09-06): APPLIED the gate-first reorder in BuildChannelLaunchResponseAsync (capability check before the 5s resolver round-trip; the last-played record is unconditional-for-capable again since the refusal path cannot reach it); the shared IsVideoAppLaunchItem predicate (Movie/Episode/LiveTvChannel) replacing the drifted hand-written type lists at the resume-offer gate and the ResumeIntent router (ResumeIntent now correctly includes LiveTvChannel); the DELIBERATE comment pinning the screenless audiobook fallback to plain UserData ticks (no tracker/playlist on a plain AudioPlayer resume); the test-only/fail-open doc on the context-less BuildAudioPlayerResponse overload. SKIPPED (documented): the ~41-call-site removal of the dead overload (test churn), the assertion-triple and config-boilerplate consolidation in VideoAppCapabilityGateTests, the factory composition in ScreenlessResumeOfferTests.CreateContextWithAudioToken (all test-file polish, no production impact), and the double ResolveJellyfinUser in the screenless path (in-memory lookup, negligible).
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary

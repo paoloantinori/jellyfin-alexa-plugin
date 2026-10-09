@@ -39,6 +39,119 @@ VERIFICATION: a red-green pin for the injection scenario (stale book continuatio
 OUT OF SCOPE: any change to the per-arm fetchers themselves (JF-666/JF-670 shapes stay); the JF-672 chapter-order and JF-673 fallback-total probes ride Paolo's device round separately.
 <!-- SECTION:DESCRIPTION:END -->
 
+## Definition of Done
+<!-- DOD:BEGIN -->
+- [x] #1 dotnet build passes with 0 errors (Release --no-restore -warnaserror: 0 warnings 0 errors on the final state; Debug builds clean throughout)
+- [x] #2 dotnet test passes (5155/5155 net9.0 AND net10.0 on the final merged state, after the gate-marker rework; 5136/5136 on the pre-merge final state)
+- [x] #3 No new compiler warnings introduced (Release -warnaserror 0 warnings)
+- [x] #4 Session attributes use proper DTOs not raw ValueTuples for serialization (no session-attribute or serialized shape change: the store is in-memory only, the new property is IReadOnlyList<Guid> on a non-persisted type)
+- [x] #5 HttpClient instances are not shared across calls that modify BaseAddress (no HttpClient touched)
+- [x] #6 NLU test fixtures updated if interaction model changed (N/A: no interaction-model change)
+- [x] #7 E2E test added for new intent or handler logic (N/A for the SMAPI e2e suite: no new intent/handler surface; the behavioral pins drive the REAL PlayBook/PlayAlbum mints end-to-end through the real PlaybackNearlyFinished fetch, which is this change's e2e)
+- [x] #8 Locale response strings added to all 17 locales (N/A: no user-facing string changed; the one new log line is operational, not spoken)
+- [x] #9 /simplify passed (4 angles; 2 applied, 1 skipped with reason, efficiency CLEAN)
+- [x] #10 /code-review high passed (two passes, 8 angles; 4 applied, 1 FILED as JF-750, 1 refuted with evidence, 0 open)
+<!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+DECISION: fetch-time queue-identity validation. `QueueContinuation` gained
+`MintedQueueItemIds` (the item-id SET of the queue page the mint installs into
+`session.NowPlayingQueue`, captured through the ONE `QueueIdsOf` projection at
+all five mint sites: PlayArtistSongs, CrossMediaFallback, AlbumPlayService
+album + playlist, PlayBook's ApplyBookPlaybackState) and
+`IsForLiveQueue(session)` (membership via `SessionQueue.IdSet`). The ONE
+validation site is `TryFetchContinuationBatch`, between the current-index guard
+and the threshold guard: a live queue missing any minted id discards the store
+entry (Information log, no causal claim) and skips the fetch. NO creator-side
+invalidation hook anywhere; NO ordering constraint.
+
+FAILURE-MODE TABLE (full reasoning in the Design Decision section): single
+anchor item (first: broken by PlayNext front-inserts; last: boundary hole where
+a single-song play OF the anchor serves the stale tail), full queue fingerprint
+(breaks on the fetch's own appends, queue edits, and the JF-574 rehydration
+rebuild), session generation token (no funnel for single-item plays; the one
+shared funnel, BuildAudioPlayerResponse(ReplaceAll), is shared with the resume
+paths so the first resume kills the JF-574 linger). Chosen set-membership:
+same-queue mutations all preserve the superset (fetch appends, inserts at any
+position, shuffle mirrors, rehydration, resume relaunches), different-queue
+takeovers all break it (single-item plays, fresh non-minting plays, confirm
+rebuilds, ClearQueue's trim). Residual hole: a size-1 page (InitialFetchSize
+configurable to 1) played as a single song; needs non-default config.
+
+ADDENDUM-2 SUB-CASE (do-not-mint-on-VideoApp): DECLINED with evidence; see the
+decision section (the cold-tracker chapter resume serves a VideoApp-minted entry
+legitimately; the identity validation already closes the injection harm).
+
+PIN DISPOSITIONS: the injection pin (book mint via the real PlayBook handler,
+single-song swap, NearlyFinished asserts queue-single + store-null) RED on the
+unmodified base on BOTH TFMs (queue held 6 items: the song plus 5 mid-book
+chapters), green after; runs as a Theory over finite and end-unknown totals
+(the JF-673 coordinator context). The music-arm twin pin (album continuation +
+single song) red under the disabled-guard sabotage. The linger pin (album mint
+via the real PlayAlbum handler with a DeviceQueueManager, JF-574 session-wipe +
+rehydration, then TWO fetch legs: rehydrated queue serves 15, extended tail
+serves to 20 and exhausts) red under an exact-equality predicate sabotage
+(set-membership is load-bearing). Three predicate unit pins (empty identity,
+superset/order-free, missing id). Two structural roster facts (construction
+sites must wire the identity: red proven by deleting one initializer, the
+roster named BuildArtistSongsResponseAsync; the fetch guard must call
+IsForLiveQueue) plus the resume-path setter roster (the five ReplaceAll-relaunch
+handlers never assign NowPlayingQueue; guards the flat-resume serve path the
+declined sub-case rests on).
+
+GATES: /simplify (4 angles) applied 2 (three byte-identical mint comments
+collapsed to a one-line pointer + the guard comment trimmed to site-local
+rationale; roster hand-composed handler scan replaced with
+HandlerChainMethods), skipped 1 with reason (the IsForLiveQueue `.All` rewrite:
+taste-level, the explicit loop keeps the documented empty short-circuit
+visible); efficiency CLEAN (HashSet per fetch judged acceptable: gated behind
+the index guard, one O(n) pass, no I/O). /code-review high (two passes, 8
+angles): applied 4 (the discard log no longer asserts an unobservable cause
+"later playback replaced the queue" and now carries deviceId; the empty-capture
+doc states the empty-page-slice shape honestly; the roster vacuity guard
+relaxed from a hardcoded 5 to > 0 with a message distinguishing consolidation
+from scan breakage; the resume-path unpinned invariant got its structural
+roster fact), FILED 1 as JF-750 (the pre-existing PlayArtistSongs
+artistsItems[0] wrong-item launch, verified in source and confirmed by both
+passes), REFUTED 1 (the claimed PlayBook startIndex==Count crash:
+ResumeMath.cs:397 guards `lastPlayedIndex + 1 < tracks.Count`, the
+fully-played-page shape returns (0,0); refutation recorded inside JF-750 so the
+next round does not re-derive it). ORCHESTRATOR GATE-MARKER (all seven axes
+PASS at source, red proofs and sabotages independently reproduced on both
+TFMs; JF-750 confirmed real, the PlayBook refutation confirmed correct): two
+rework findings APPLIED - GM-F2 the resume-path roster's coverage gap
+(ProgressReporter.ServeAdjacentQueueItem and YesIntentHandler
+.HandleResumeConfirmation, the two design-named ReplaceAll sites on types that
+cannot be type-scoped) closed with the METHOD-SCOPED roster fact
+MethodScopedResumeSites_NeverAssignNowPlayingQueueDirectly (logical-name scan
+over the declaring chain including nested closures, with a vacuity assert if
+the method disappears, and the type-scoping boundary + callee-IL limit
+documented on the fact); GM-F3 the ClearQueue stop-semantics got its pin
+PlaybackNearlyFinished_AfterClearQueue_FetchesNothingAndDiscardsContinuation
+(real PlayAlbum mint, the REAL ClearQueueIntentHandler trim, NearlyFinished
+asserts queue-single + store-null; red under the disabled-guard sabotage with
+the collection holding 5 items, the old regrow semantics; the JF-424.1
+precompute-invalidation precedent cited on the pin).
+
+COUNTS (final merged state: current main merged in AFTER the gate-marker, the
+JF-673 tail included, the UnknownTotal constant now used by the injection
+Theory): 5155/5155 net9.0 and net10.0 (the merged main's own additions plus
+this change's 12: the 8-case ProgressiveQueueTests additions counting the
+Theory's two legs, and 4 roster facts); Release --no-restore -warnaserror 0
+warnings 0 errors (documentation crefs compile-checked on the merged tree).
+Per-arm fetchers untouched (JF-666/JF-670 shapes unchanged). No locale, model,
+or speech surface changed; no deploy.
+
+CLOSED 2026-10-04 by the orchestrator after the full cycle: merged into main (implementation a8067fbd + rework d5322bff, --no-ff, on top of the main merge carrying the orchestrator's cref fix), combined-tree suite verifying, deployed in the wave's batched deploy. The gate-marker's seven axes PASS with every red proof independently reproduced; its two rework findings applied (the method-scoped resume roster fact by LogicalMethodName; the ClearQueue stop-semantics pin, red under the disabled guard). The gate-marker's finding 1 (the inherited CS1574 cref on main) was the orchestrator's own tail bug, fixed and Release-proven before this merge. JF-750 filed by this task.
+<!-- SECTION:FINAL_SUMMARY:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
+
 ## Design Decision (2026-10-04, written before implementation)
 
 **CHOSEN: fetch-time queue-identity validation (the description's candidate A).** Each
@@ -163,111 +276,4 @@ constant is referenced by name in the pin's doc and swapped in when the JF-673
 merge reaches this tree). JF-753 (the album path's engagement gap) is
 separately tracked; this change's AlbumPlayService edit is the mint initializer
 only and deliberately does not touch it.
-
-## Definition of Done
-<!-- DOD:BEGIN -->
-- [x] #1 dotnet build passes with 0 errors (Release --no-restore -warnaserror: 0 warnings 0 errors on the final state; Debug builds clean throughout)
-- [x] #2 dotnet test passes (5155/5155 net9.0 AND net10.0 on the final merged state, after the gate-marker rework; 5136/5136 on the pre-merge final state)
-- [x] #3 No new compiler warnings introduced (Release -warnaserror 0 warnings)
-- [x] #4 Session attributes use proper DTOs not raw ValueTuples for serialization (no session-attribute or serialized shape change: the store is in-memory only, the new property is IReadOnlyList<Guid> on a non-persisted type)
-- [x] #5 HttpClient instances are not shared across calls that modify BaseAddress (no HttpClient touched)
-- [x] #6 NLU test fixtures updated if interaction model changed (N/A: no interaction-model change)
-- [x] #7 E2E test added for new intent or handler logic (N/A for the SMAPI e2e suite: no new intent/handler surface; the behavioral pins drive the REAL PlayBook/PlayAlbum mints end-to-end through the real PlaybackNearlyFinished fetch, which is this change's e2e)
-- [x] #8 Locale response strings added to all 17 locales (N/A: no user-facing string changed; the one new log line is operational, not spoken)
-- [x] #9 /simplify passed (4 angles; 2 applied, 1 skipped with reason, efficiency CLEAN)
-- [x] #10 /code-review high passed (two passes, 8 angles; 4 applied, 1 FILED as JF-750, 1 refuted with evidence, 0 open)
-<!-- DOD:END -->
-
-## Final Summary
-
-<!-- SECTION:FINAL_SUMMARY:BEGIN -->
-DECISION: fetch-time queue-identity validation. `QueueContinuation` gained
-`MintedQueueItemIds` (the item-id SET of the queue page the mint installs into
-`session.NowPlayingQueue`, captured through the ONE `QueueIdsOf` projection at
-all five mint sites: PlayArtistSongs, CrossMediaFallback, AlbumPlayService
-album + playlist, PlayBook's ApplyBookPlaybackState) and
-`IsForLiveQueue(session)` (membership via `SessionQueue.IdSet`). The ONE
-validation site is `TryFetchContinuationBatch`, between the current-index guard
-and the threshold guard: a live queue missing any minted id discards the store
-entry (Information log, no causal claim) and skips the fetch. NO creator-side
-invalidation hook anywhere; NO ordering constraint.
-
-FAILURE-MODE TABLE (full reasoning in the Design Decision section): single
-anchor item (first: broken by PlayNext front-inserts; last: boundary hole where
-a single-song play OF the anchor serves the stale tail), full queue fingerprint
-(breaks on the fetch's own appends, queue edits, and the JF-574 rehydration
-rebuild), session generation token (no funnel for single-item plays; the one
-shared funnel, BuildAudioPlayerResponse(ReplaceAll), is shared with the resume
-paths so the first resume kills the JF-574 linger). Chosen set-membership:
-same-queue mutations all preserve the superset (fetch appends, inserts at any
-position, shuffle mirrors, rehydration, resume relaunches), different-queue
-takeovers all break it (single-item plays, fresh non-minting plays, confirm
-rebuilds, ClearQueue's trim). Residual hole: a size-1 page (InitialFetchSize
-configurable to 1) played as a single song; needs non-default config.
-
-ADDENDUM-2 SUB-CASE (do-not-mint-on-VideoApp): DECLINED with evidence; see the
-decision section (the cold-tracker chapter resume serves a VideoApp-minted entry
-legitimately; the identity validation already closes the injection harm).
-
-PIN DISPOSITIONS: the injection pin (book mint via the real PlayBook handler,
-single-song swap, NearlyFinished asserts queue-single + store-null) RED on the
-unmodified base on BOTH TFMs (queue held 6 items: the song plus 5 mid-book
-chapters), green after; runs as a Theory over finite and end-unknown totals
-(the JF-673 coordinator context). The music-arm twin pin (album continuation +
-single song) red under the disabled-guard sabotage. The linger pin (album mint
-via the real PlayAlbum handler with a DeviceQueueManager, JF-574 session-wipe +
-rehydration, then TWO fetch legs: rehydrated queue serves 15, extended tail
-serves to 20 and exhausts) red under an exact-equality predicate sabotage
-(set-membership is load-bearing). Three predicate unit pins (empty identity,
-superset/order-free, missing id). Two structural roster facts (construction
-sites must wire the identity: red proven by deleting one initializer, the
-roster named BuildArtistSongsResponseAsync; the fetch guard must call
-IsForLiveQueue) plus the resume-path setter roster (the five ReplaceAll-relaunch
-handlers never assign NowPlayingQueue; guards the flat-resume serve path the
-declined sub-case rests on).
-
-GATES: /simplify (4 angles) applied 2 (three byte-identical mint comments
-collapsed to a one-line pointer + the guard comment trimmed to site-local
-rationale; roster hand-composed handler scan replaced with
-HandlerChainMethods), skipped 1 with reason (the IsForLiveQueue `.All` rewrite:
-taste-level, the explicit loop keeps the documented empty short-circuit
-visible); efficiency CLEAN (HashSet per fetch judged acceptable: gated behind
-the index guard, one O(n) pass, no I/O). /code-review high (two passes, 8
-angles): applied 4 (the discard log no longer asserts an unobservable cause
-"later playback replaced the queue" and now carries deviceId; the empty-capture
-doc states the empty-page-slice shape honestly; the roster vacuity guard
-relaxed from a hardcoded 5 to > 0 with a message distinguishing consolidation
-from scan breakage; the resume-path unpinned invariant got its structural
-roster fact), FILED 1 as JF-750 (the pre-existing PlayArtistSongs
-artistsItems[0] wrong-item launch, verified in source and confirmed by both
-passes), REFUTED 1 (the claimed PlayBook startIndex==Count crash:
-ResumeMath.cs:397 guards `lastPlayedIndex + 1 < tracks.Count`, the
-fully-played-page shape returns (0,0); refutation recorded inside JF-750 so the
-next round does not re-derive it). ORCHESTRATOR GATE-MARKER (all seven axes
-PASS at source, red proofs and sabotages independently reproduced on both
-TFMs; JF-750 confirmed real, the PlayBook refutation confirmed correct): two
-rework findings APPLIED - GM-F2 the resume-path roster's coverage gap
-(ProgressReporter.ServeAdjacentQueueItem and YesIntentHandler
-.HandleResumeConfirmation, the two design-named ReplaceAll sites on types that
-cannot be type-scoped) closed with the METHOD-SCOPED roster fact
-MethodScopedResumeSites_NeverAssignNowPlayingQueueDirectly (logical-name scan
-over the declaring chain including nested closures, with a vacuity assert if
-the method disappears, and the type-scoping boundary + callee-IL limit
-documented on the fact); GM-F3 the ClearQueue stop-semantics got its pin
-PlaybackNearlyFinished_AfterClearQueue_FetchesNothingAndDiscardsContinuation
-(real PlayAlbum mint, the REAL ClearQueueIntentHandler trim, NearlyFinished
-asserts queue-single + store-null; red under the disabled-guard sabotage with
-the collection holding 5 items, the old regrow semantics; the JF-424.1
-precompute-invalidation precedent cited on the pin).
-
-COUNTS (final merged state: current main merged in AFTER the gate-marker, the
-JF-673 tail included, the UnknownTotal constant now used by the injection
-Theory): 5155/5155 net9.0 and net10.0 (the merged main's own additions plus
-this change's 12: the 8-case ProgressiveQueueTests additions counting the
-Theory's two legs, and 4 roster facts); Release --no-restore -warnaserror 0
-warnings 0 errors (documentation crefs compile-checked on the merged tree).
-Per-arm fetchers untouched (JF-666/JF-670 shapes unchanged). No locale, model,
-or speech surface changed; no deploy.
-
-CLOSED 2026-10-04 by the orchestrator after the full cycle: merged into main (implementation a8067fbd + rework d5322bff, --no-ff, on top of the main merge carrying the orchestrator's cref fix), combined-tree suite verifying, deployed in the wave's batched deploy. The gate-marker's seven axes PASS with every red proof independently reproduced; its two rework findings applied (the method-scoped resume roster fact by LogicalMethodName; the ClearQueue stop-semantics pin, red under the disabled guard). The gate-marker's finding 1 (the inherited CS1574 cref on main) was the orchestrator's own tail bug, fixed and Release-proven before this merge. JF-750 filed by this task.
-<!-- SECTION:FINAL_SUMMARY:END -->
+<!-- SECTION:NOTES:END -->

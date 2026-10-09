@@ -40,6 +40,11 @@ FIX DIRECTION: thread the resume offset into the single-chapter serve the way th
 - [x] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
 
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
+
 ## Fix notes (worker, 2026-10-01)
 
 CHOSEN SHAPE: controller-side threading, the episode path's exact precedent (`StreamHlsEpisodeCore(itemId, startTicks)`). The single-chapter branch of `StreamHlsAudiobook` now calls `StreamHlsVideoAudioCore(chapterId, chapterToken, startTicks ?? 0)`, and the core's four serve return paths (fast-path validated, concurrent validated, prewrite-during-encode, live-partial fallback) all route through a new slice-aware serve. The /simplify round consolidated that serve with its episode twin into ONE shared body, `ServePlaylistSlicedAsync(path, startTicks, segmentSeconds, overrideToken, preloadedContent)`, with `ServeEpisodePlaylistAsync` and `ServeVideoAudioPlaylistAsync` reduced to named one-line delegates binding `EpisodeHlsSegmentSeconds` / `SongHlsSegmentSeconds`. FACT CORRECTION to the task text: the song core cuts 4s segments (`SongHlsSegmentSeconds = 4`), not the 10s the description guessed; the delegate binds the actual const, and the slicer's EXTINF accumulation makes the flat divisor a fallback only (real per-segment durations win, so the geometry question shrinks to the on-device probe below).
@@ -67,3 +72,4 @@ Six findings, all landed in commit 2 of this task:
 - F4 (compile safety, applied): startTicks is REQUIRED on TryServePrewrittenVideoAudioPlaylist and TryServeOwnLiveVideoAudioPrewriteAsync (the core passes its own value explicitly; the core's own optional default stays for the public route and the JF-685 pin).
 - F5 (debug-logging policy, applied): ServePlaylistSlicedAsync logs slice-vs-full with path, startTicks, segmentSeconds, and the RESOLVED start segment (Debug-gated; the builder's resolution arithmetic extracted into AudiobookPlaylistBuilder.ResolveStartSegment so the log line shares the ONE computation instead of duplicating it). The itemId rides inside the logged cache path (the serve layer has no separate id).
 - F6 (fixture, applied): ArrangeSingleChapterBookAsync now plants the PRODUCTION shape (TARGETDURATION + MEDIA-SEQUENCE headers, so the slice drives the tag-REPLACE branch production takes, and full /alexaskill/api/video-audio/{chapterId}/segments/ URIs, the hls_base_url lines ffmpeg writes); segments=0 plants nothing (the cold-cache F1 shape). The no-tag insert branch keeps its own builder-level pin (F3's), which is where it is reachable.
+<!-- SECTION:NOTES:END -->

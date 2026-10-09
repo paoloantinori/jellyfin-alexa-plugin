@@ -178,9 +178,11 @@ and constants pins); `dotnet build Jellyfin.Plugin.AlexaSkill.sln -c
 Release` 0 warnings 0 errors (TreatWarningsAsErrors on). No interaction
 model, locale, NLU, session-attribute, HttpClient, or config surface touched
 (DoD 4/6/7/8 N/A).
-<!-- SECTION:NOTES:END -->
+
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
 
 GATE-MARKER PROMOTION (2026-10-08, the JF-817 marker F1): promoted into the 1.0 milestone with the blocker label. The marker's judgment: JF-817 is a 1.0-blocker for this same death on the concat path, so shipping 1.0 with the death alive on the single-file book shape (common per the JF-794 census) is the headline bug half-fixed; the 'maintainer must re-decide the pinned JF-675/JF-680 song behavior' argument is a reason to force that decision before release, not to leave the flag off. The scope note stands: the song-family prewrite serves are PINNED full-listing by JF-675/JF-680, so the fix must re-decide those pins deliberately, not drive-by flip them.
+<!-- SECTION:NOTES:END -->
 
 ## Final Summary
 

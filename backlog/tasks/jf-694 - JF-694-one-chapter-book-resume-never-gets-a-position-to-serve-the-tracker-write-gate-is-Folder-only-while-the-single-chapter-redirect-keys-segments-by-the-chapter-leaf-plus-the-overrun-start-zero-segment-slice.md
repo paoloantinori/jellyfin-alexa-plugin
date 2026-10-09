@@ -38,6 +38,17 @@ FIX DIRECTIONS (needs a design decision, NOT a drive-by):
 FINDING 2 (verified, pre-existing on all three resume routes, JF-686 only extends the exposure to the song serve): a ?start= beyond the playlist's total duration yields a ZERO-SEGMENT playlist. BuildSlicedPlaylist's EXTINF walk returns null for beyond-total (and for missing/unparseable durations), the flat-divisor fallback then computes a startSegment past the last segment, and the emitter keeps nothing: the device receives header + MEDIA-SEQUENCE:N + ENDLIST with no segments and fails playback. The route is [AllowAnonymous] with the token in the URL, so any URL holder can append &start=huge; a stale tracker position over a shortened item reaches the same shape. DESIGN CONSTRAINT the worker hit live: the obvious guard (zero-keep slice serves the base unsliced) CONTRADICTS two existing green pins, BuildResumePlaylist_Sliced_NoExtinf_FallsBackToFlatDivisor and BuildResumePlaylist_Sliced_UnparseableExtinf_FallsBackToFlatDivisor, which pin the flat fallback's zero-keep MEDIA-SEQUENCE rewrites on no-EXTINF / 2-segment playlists. The guard therefore needs to DISTINGUISH beyond-total (metadata proved the position unplayable) from metadata-missing (the fallback exists precisely for that), i.e. a richer TryResolveStartSegmentByExtinf result, not a silent re-pin of the fallback contract.
 <!-- SECTION:DESCRIPTION:END -->
 
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Status-sync closure during the 2026-10-02 backlog audit: landed and fully verified in its own cycle (merge 62185458, deployed to the box as build md5 ebc11459, later superseded by the 2026-10-02 morning deploy), status never flipped. The one-chapter book resume is reachable end to end: RecordPositionProgress is the one write gate (Folder arm byte-identical to JF-499 W1 with the protective try/catch delta; AudioBook leaf with non-empty ParentId records under GetAudiobookBookKey with RecordScaledSegment translating the 4s song-core index onto the 10s concat timeline; root-level leaf deliberately cold). Four red-green pins; the stale CLAUDE.md tracker bullet it surfaced was fixed as JF-701. Device-round item: the one-chapter book resume probe is now the definitive test (serve since JF-686, position since JF-694).
+<!-- SECTION:FINAL_SUMMARY:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
+
 ## Design note (worker, 2026-10-02, before implementation)
 
 THE GATE DECISION (final shape, after the code-review round): candidate (2), record-time canonicalization gated on `AudiobookItems.IsAudioBook(item) && item.ParentId != Guid.Empty` (an AudioBook leaf WITH a parent). `GetSegment`'s tracking block becomes one helper that resolves the READ-ALIGNED key: the Folder arm keeps the JF-499 W1 shape verbatim (record under the item's own id: the multi-chapter audiobook concat AND the JF-625 album concat, whose MusicAlbum parent is a Folder; see the FACT CORRECTION below for why album-key entries are load-bearing, not dead weight); the NEW AudioBook-leaf arm records under `ResumeMath.GetAudiobookBookKey(item)` (the ParentId), the identical expression all four mint sites read (ResumeIntent ~501, PlayBook ~282, LaunchRequest ~294, YesIntent via GetAudiobookStartTicks).
@@ -68,9 +79,4 @@ GATES: Skill simplify (4 agents). Applied: the call-site comment trimmed to a po
 SUITES: 4895/4895 BOTH TFMs on the final state (baseline at d05958e3: 4891 + the 4 new pins), recipe `env -u NUGET_PACKAGES -u NUGET_HTTP_CACHE_PATH dotnet test Jellyfin.Plugin.AlexaSkill.Tests -m:1`, never --no-build. The incremental test run emits 0 warnings; a forced --no-incremental rebuild shows only the 2 pre-existing xUnit1030 warnings at VideoAudioControllerTests.cs:1291, a line this diff does not touch.
 
 RESIDUALS: (a) the on-device probe the JF-686 task named is still open and now REACHABLE (the serve slices since JF-686, the position arrives since JF-694): the maintainer's next device round should resume a one-chapter book on hardware; (b) JF-701 (CLAUDE.md bullet sync); (c) the nested-chapter pre-existing record/read key mismatch on the MULTI-chapter path (records key = the URL parent folder, reads key = chapter.ParentId, which differs when chapters sit under subfolders) was noticed during analysis and deliberately left: it predates JF-694, is untouched by this diff, and changing it needs its own evidence round. DoD 4-8 N/A (no session attributes, no HttpClient, no interaction model, no new intent surface, no user-facing strings).
-
-## Final Summary
-
-<!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Status-sync closure during the 2026-10-02 backlog audit: landed and fully verified in its own cycle (merge 62185458, deployed to the box as build md5 ebc11459, later superseded by the 2026-10-02 morning deploy), status never flipped. The one-chapter book resume is reachable end to end: RecordPositionProgress is the one write gate (Folder arm byte-identical to JF-499 W1 with the protective try/catch delta; AudioBook leaf with non-empty ParentId records under GetAudiobookBookKey with RecordScaledSegment translating the 4s song-core index onto the 10s concat timeline; root-level leaf deliberately cold). Four red-green pins; the stale CLAUDE.md tracker bullet it surfaced was fixed as JF-701. Device-round item: the one-chapter book resume probe is now the definitive test (serve since JF-686, position since JF-694).
-<!-- SECTION:FINAL_SUMMARY:END -->
+<!-- SECTION:NOTES:END -->

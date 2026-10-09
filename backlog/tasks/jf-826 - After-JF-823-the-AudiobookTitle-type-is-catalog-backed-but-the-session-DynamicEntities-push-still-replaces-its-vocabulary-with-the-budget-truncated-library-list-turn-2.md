@@ -10,6 +10,12 @@ labels: [audiobooks, catalog-sync, dynamic-entities]
 
 ## Description
 
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
+
 Filed by the JF-823 worker (2026-10-09) from the /code-review high gate, finding F1.
 
 JF-823 made `AudiobookTitle` catalog-backed (valueSupplier in the saved model:
@@ -141,4 +147,4 @@ pin loudly instead of silently vacating the getter allowance.
 F6 APPLIED: the banned "word - word" separator removed from the new test's
 prose (pre-existing prose in the structure-test file left untouched, no
 drive-by edits).
-
+<!-- SECTION:NOTES:END -->

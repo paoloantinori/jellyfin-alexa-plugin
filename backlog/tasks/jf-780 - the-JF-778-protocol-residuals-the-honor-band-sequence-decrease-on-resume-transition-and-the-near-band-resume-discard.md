@@ -17,6 +17,11 @@ priority: medium
 
 ## Description
 
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
+
 Filed 2026-10-05 by the orchestrator from the JF-778 gate-marker (findings 1
 and 3; both are protocol-level residuals of the brand-new windowed serve that
 the unit pins cannot discriminate and the device round must).
@@ -88,3 +93,4 @@ representative probe is the SINGLE-FILE-BOOK resume: cold-cache, resume at a
 minutes-deep position on a single-chapter audiobook (the exact shape that
 motivated the 1.0 blocker), run alongside the episode and concat-book
 probes.
+<!-- SECTION:NOTES:END -->

@@ -114,8 +114,6 @@ carry (2026-10-06):
 - [x] #10 /code-review high passed (4 findings, all applied with red proofs, in the 191b7878 gate commit)
 <!-- DOD:END -->
 
-FINDING 4 (added by the JF-791 gate-marker, same-turn): the head-page-bounded resume on the flat book path. With the folder resolved, FindResumeTrackIndex scans only the 5-item initial page (ResumeMath iterates the argument list), so UserData/ItemPositionState progress on chapter 22 of 26 is invisible and a fresh ask relaunches from chapter 1 at 0:00 (pre-fix, the same ask played the matched chapter at its position, then silence; the net outcome still improves, and mid-book resume keeps working through the resume intent ledger, but the fresh-ask deep-progress corner regressed). The album precedent is NOT liftable (JF-625 criterion 3 is the video-route tracker override under the album GUID); the flat path needs its own shape: a bounded position-holding-chapter resolution before paging (e.g. query the folder children for the max UserData last-played timestamp when page 1 yields no position, map it onto the queue by chapter id, and offset the continuation accordingly), with its own red pin (deep progress, fresh ask, expect the position-holding chapter to launch at its position). Sequencing note: land AFTER findings 1-3 (the confirm-leg climb and the container probe change which queries exist).
-
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
@@ -131,3 +129,11 @@ FINDING 4 (head-page-bounded resume, landed, bounded shape held): when page 1 yi
 
 Gates and evidence: /simplify (4 angles: reuse clean; 4 applied, 4 reasoned skips) and code-review high (4 findings, 4 applied, 2 of them empirically probe-verified by the reviewer on this tree, probes reverted clean) both as literal Skill calls in the transcript, with apply commits. Suites: intermediate per-class runs on both TFMs after every leg (final touched-class state 60/60); ONE full-suite run at the final state 5401/5401 both TFMs (5391 baseline + 10 pins); Release -warnaserror 0 warnings 0 errors both TFMs. Files: Alexa/Handler/Intent/YesIntentHandler.cs, Alexa/Handler/Intent/PlayBookIntentHandler.cs, Alexa/Util/AudiobookItems.cs, Alexa/QueueContinuationFetcher.cs (doc only), and the three touched test classes. The task number reservation for follow-ups holds at JF-794/795/796.
 <!-- SECTION:FINAL_SUMMARY:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
+
+FINDING 4 (added by the JF-791 gate-marker, same-turn): the head-page-bounded resume on the flat book path. With the folder resolved, FindResumeTrackIndex scans only the 5-item initial page (ResumeMath iterates the argument list), so UserData/ItemPositionState progress on chapter 22 of 26 is invisible and a fresh ask relaunches from chapter 1 at 0:00 (pre-fix, the same ask played the matched chapter at its position, then silence; the net outcome still improves, and mid-book resume keeps working through the resume intent ledger, but the fresh-ask deep-progress corner regressed). The album precedent is NOT liftable (JF-625 criterion 3 is the video-route tracker override under the album GUID); the flat path needs its own shape: a bounded position-holding-chapter resolution before paging (e.g. query the folder children for the max UserData last-played timestamp when page 1 yields no position, map it onto the queue by chapter id, and offset the continuation accordingly), with its own red pin (deep progress, fresh ask, expect the position-holding chapter to launch at its position). Sequencing note: land AFTER findings 1-3 (the confirm-leg climb and the container probe change which queries exist).
+<!-- SECTION:NOTES:END -->

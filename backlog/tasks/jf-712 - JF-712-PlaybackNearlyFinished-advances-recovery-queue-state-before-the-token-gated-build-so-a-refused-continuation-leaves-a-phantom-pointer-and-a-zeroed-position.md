@@ -73,6 +73,31 @@ it). Affected classes 86/86 both TFMs after the tail; independent suite 4969/496
 TFMs on the worker commit; merged-tree follows the merge.
 <!-- SECTION:DESCRIPTION:END -->
 
+## Definition of Done
+<!-- DOD:BEGIN -->
+- [x] #1 dotnet build passes with 0 errors (plugin project 0 errors / 0 warnings on the final state, both TFMs)
+- [x] #2 dotnet test passes (final full suite `dotnet test Jellyfin.Plugin.AlexaSkill.Tests -m:1`: 4969/4969 net9.0 AND net10.0; baseline 4962 + 7 new pins)
+- [x] #3 No new compiler warnings introduced (grep-clean build/test output; the only warning ever seen was the pre-existing xUnit1030 in VideoAudioControllerTests)
+- [x] #4 Session attributes use proper DTOs not raw ValueTuples (N/A: no session-attribute shape touched)
+- [x] #5 HttpClient instances not shared across calls modifying BaseAddress (N/A: no HttpClient code touched)
+- [x] #6 NLU fixtures updated if interaction model changed (N/A: no interaction model change; the refusal reuses the JF-687 StreamTokenNotConfigured pipeline translation)
+- [x] #7 E2E added for new handler logic (N/A per the JF-699 precedent: the empty-secret refusal state is not safely reachable on the live server; the behavior is pinned by the 7 unit pins in PlaybackNearlyFinishedRefusalTests with red proofs)
+- [x] #8 Locale strings in all 17 locales (N/A: no user-facing strings; the event-request refusal is the speechless keep-alive the pipeline already owns)
+- [x] #9 /simplify passed (4 agents: reuse/simplification/efficiency/altitude; 6 findings applied incl. the derive-pair fold and the PendingContinuation record, 2 skipped-with-reason findings filed as JF-720, efficiency clean; dispositions in the Final Summary)
+- [x] #10 /code-review high passed (5 findings, ALL applied in-code incl. the double-append race fix + its new pin; dispositions in the Final Summary)
+<!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Closed by the orchestrator after the full cycle: worker commit 343c478f + gate-marker tail cdcfd283, merged as 35198e5b. The derive-then-commit reorder: both UpdateRecoveryPointer sites moved after the launch build (compensation rejected on three source-verified facts), the three exhaustion arms derive-only with a PendingContinuation record committed at one post-build point, and the pre-build exceptions marked with their true (not overclaimed) invariants. A refused continuation leaves the pointer naming the finishing item with position intact at every arm; the double-append race the reorder would have introduced was caught by the worker's own code review and fixed with commit-side re-dedup plus its race pin; the RadioModeTests fixture that had been passing via the phantom append was repaired to the real success path. 7 new pins, red proofs on both TFMs (pointer/commit/append sabotage each flipping their pins). Worker gates green (simplify 6 applied, 2 filed as JF-720; code-review high all 5 applied). Gate-marker verified all five scrutiny axes at source level; its 5 findings all landed (the false-invariant comment corrected, the lost-update KNOWN RACE note, the bounded derive-on-refire cost note, the success-path directive assert, and the AppendUnseen helper extraction folded into JF-720's scope). Suites: worker and orchestrator independent 4969/4969 both TFMs, merged-tree 4978/4978 both TFMs as concurrent split-TFM jobs. Production surface changed (PlaybackNearlyFinishedEventHandler): deployed in the post-closure deploy.
+<!-- SECTION:FINAL_SUMMARY:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
+
 ## Design Decision (written BEFORE coding, per the task mandate)
 
 **Chosen: (a) derive-then-commit.** Both arms (and the exhaustion arms feeding them) keep
@@ -146,23 +171,4 @@ with its position intact, CurrentIndex unmoved, no enqueue record, and (per arm)
 session queue not appended and radio mode not armed; a successful continuation still
 advances the pointer exactly once and records the enqueue; all existing continuation pins
 stay green unchanged.
-
-## Definition of Done
-<!-- DOD:BEGIN -->
-- [x] #1 dotnet build passes with 0 errors (plugin project 0 errors / 0 warnings on the final state, both TFMs)
-- [x] #2 dotnet test passes (final full suite `dotnet test Jellyfin.Plugin.AlexaSkill.Tests -m:1`: 4969/4969 net9.0 AND net10.0; baseline 4962 + 7 new pins)
-- [x] #3 No new compiler warnings introduced (grep-clean build/test output; the only warning ever seen was the pre-existing xUnit1030 in VideoAudioControllerTests)
-- [x] #4 Session attributes use proper DTOs not raw ValueTuples (N/A: no session-attribute shape touched)
-- [x] #5 HttpClient instances not shared across calls modifying BaseAddress (N/A: no HttpClient code touched)
-- [x] #6 NLU fixtures updated if interaction model changed (N/A: no interaction model change; the refusal reuses the JF-687 StreamTokenNotConfigured pipeline translation)
-- [x] #7 E2E added for new handler logic (N/A per the JF-699 precedent: the empty-secret refusal state is not safely reachable on the live server; the behavior is pinned by the 7 unit pins in PlaybackNearlyFinishedRefusalTests with red proofs)
-- [x] #8 Locale strings in all 17 locales (N/A: no user-facing strings; the event-request refusal is the speechless keep-alive the pipeline already owns)
-- [x] #9 /simplify passed (4 agents: reuse/simplification/efficiency/altitude; 6 findings applied incl. the derive-pair fold and the PendingContinuation record, 2 skipped-with-reason findings filed as JF-720, efficiency clean; dispositions in the Final Summary)
-- [x] #10 /code-review high passed (5 findings, ALL applied in-code incl. the double-append race fix + its new pin; dispositions in the Final Summary)
-<!-- DOD:END -->
-
-## Final Summary
-
-<!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Closed by the orchestrator after the full cycle: worker commit 343c478f + gate-marker tail cdcfd283, merged as 35198e5b. The derive-then-commit reorder: both UpdateRecoveryPointer sites moved after the launch build (compensation rejected on three source-verified facts), the three exhaustion arms derive-only with a PendingContinuation record committed at one post-build point, and the pre-build exceptions marked with their true (not overclaimed) invariants. A refused continuation leaves the pointer naming the finishing item with position intact at every arm; the double-append race the reorder would have introduced was caught by the worker's own code review and fixed with commit-side re-dedup plus its race pin; the RadioModeTests fixture that had been passing via the phantom append was repaired to the real success path. 7 new pins, red proofs on both TFMs (pointer/commit/append sabotage each flipping their pins). Worker gates green (simplify 6 applied, 2 filed as JF-720; code-review high all 5 applied). Gate-marker verified all five scrutiny axes at source level; its 5 findings all landed (the false-invariant comment corrected, the lost-update KNOWN RACE note, the bounded derive-on-refire cost note, the success-path directive assert, and the AppendUnseen helper extraction folded into JF-720's scope). Suites: worker and orchestrator independent 4969/4969 both TFMs, merged-tree 4978/4978 both TFMs as concurrent split-TFM jobs. Production surface changed (PlaybackNearlyFinishedEventHandler): deployed in the post-closure deploy.
-<!-- SECTION:FINAL_SUMMARY:END -->
+<!-- SECTION:NOTES:END -->

@@ -21,6 +21,11 @@ priority: medium
 
 ## Description
 
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
+
 Filed 2026-10-05 by the JF-770 worktree agent: two real routing failures its
 family-strength probe surfaced that are OUTSIDE JF-770's देखो scope (same-turn
 filing per the review-recommendation discipline).
@@ -104,3 +109,4 @@ family-strengthening play (qualified crossings of the thin tails, e.g.
 the other 14 locales for the same single-member-tail shape (the ja 映画
 3-tail family and hi-IN's post-JF-770 देखो family are the healthy
 counterparts to compare against).
+<!-- SECTION:NOTES:END -->

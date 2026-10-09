@@ -39,6 +39,13 @@ From Paolo's 2026-09-06 device test (item 4 of the verification card): seeking o
 - [x] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
 
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Formal review dispositions (2026-09-07, orchestrator): NO findings at threshold; all six lenses verified against the surrounding production code (the playlist-listing gate's grammar-anchored match, the zero-segment first-request shape, the pin/finally eviction interplay, the converted tests' assertion preservation, the audiobook disk-head boundary matching the documented contract, the FindHlsDirectory hoist behavior-preserving). Two below-threshold observations recorded here per the landing rule: SetEncodeActiveForTest leaks the static registry entry on assertion failure only (per-test random GUIDs, no cross-test interference) - acceptable; the two hold-appears tests carry a 5s/100ms timing bound consistent with the repo's other timing tests.
+
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
+
 ## Implementation Notes (2026-09-07)
 
 Implemented option (b) + observability + boundary documentation. Status stays In
@@ -115,11 +122,6 @@ are the mechanism probe).
 - On-device confirmation that a seek just past the encode head now plays through, and
   that the Debug miss/hold lines show the mechanism. The `/config/logging.default.json`
   override `"Jellyfin.Plugin.AlexaSkill": "Debug"` must be on for the session.
-
-## Implementation Notes
-
-<!-- SECTION:NOTES:BEGIN -->
-Formal review dispositions (2026-09-07, orchestrator): NO findings at threshold; all six lenses verified against the surrounding production code (the playlist-listing gate's grammar-anchored match, the zero-segment first-request shape, the pin/finally eviction interplay, the converted tests' assertion preservation, the audiobook disk-head boundary matching the documented contract, the FindHlsDirectory hoist behavior-preserving). Two below-threshold observations recorded here per the landing rule: SetEncodeActiveForTest leaks the static registry entry on assertion failure only (per-test random GUIDs, no cross-test interference) - acceptable; the two hold-appears tests carry a 5s/100ms timing bound consistent with the repo's other timing tests.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary

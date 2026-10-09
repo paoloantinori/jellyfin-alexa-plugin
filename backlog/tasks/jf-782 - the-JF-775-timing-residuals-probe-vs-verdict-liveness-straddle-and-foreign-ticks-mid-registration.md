@@ -20,6 +20,25 @@ priority: low
 
 ## Description
 
+## Definition of Done
+<!-- DOD:BEGIN -->
+- [x] #1 dotnet build passes with 0 errors
+- [x] #2 dotnet test passes
+- [x] #3 No new compiler warnings introduced
+- [x] #4 Session attributes use proper DTOs not raw ValueTuples for serialization (N/A: no session attributes touched)
+- [x] #5 HttpClient instances are not shared across calls that modify BaseAddress (N/A: no HttpClient touched)
+- [x] #6 NLU test fixtures updated if interaction model changed (N/A: no model change)
+- [x] #7 E2E test added for new intent or handler logic (N/A: no new intent/handler; controller-internal timing work, pinned at unit level)
+- [x] #8 Locale response strings added to all 17 locales (N/A: no response strings touched)
+- [x] #9 /simplify passed (no blocking cleanups remaining)
+- [x] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
+<!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
+
 Filed 2026-10-05: legs 1 and 2 from the JF-775 /simplify round (the altitude
 angle's finding 2, with the efficiency angle's F1 caveat converging on the
 same seam), leg 3 from the JF-775 /code-review high round (its finding 2,
@@ -201,20 +220,7 @@ VERIFICATION RECORD (implementation, 2026-10-05):
 - Production: not deployed (worker branch only); the pins are the
   regression guard for Paolo's device round.
 
-## Definition of Done
-<!-- DOD:BEGIN -->
-- [x] #1 dotnet build passes with 0 errors
-- [x] #2 dotnet test passes
-- [x] #3 No new compiler warnings introduced
-- [x] #4 Session attributes use proper DTOs not raw ValueTuples for serialization (N/A: no session attributes touched)
-- [x] #5 HttpClient instances are not shared across calls that modify BaseAddress (N/A: no HttpClient touched)
-- [x] #6 NLU test fixtures updated if interaction model changed (N/A: no model change)
-- [x] #7 E2E test added for new intent or handler logic (N/A: no new intent/handler; controller-internal timing work, pinned at unit level)
-- [x] #8 Locale response strings added to all 17 locales (N/A: no response strings touched)
-- [x] #9 /simplify passed (no blocking cleanups remaining)
-- [x] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
-<!-- DOD:END -->
-
 LEG-0 GUARD NOTE (the JF-775 gate-marker's F1): the prewrite probe's caller-gated literal `ownGenerationLiveOrRegistering: true` (VideoAudioController ~:1668) is enforced only by its comment; a future cleanup replacing it with a fresh liveness read (the locally more obvious shape) re-opens the shadow window without any pin failing. The discriminating pin this filing demands for legs 1/2 ALSO covers this shape (it pins the probe-vs-verdict straddle); until it lands, treat the literal as load-bearing and any change there as needing the pin first.
 
 CLOSED 2026-10-05 by the orchestrator after the full cycle: merged into main (worker 6b118b23, --no-ff; gate-marker seven axes PASS, red proofs reproduced, the new suites re-run in the review tree; five findings: F1 the transient fallback threads a FALSE probe answer, F2 the resolvedHlsDir required param, F3 the stale field doc, F5 the debris-hook log split, one filed as JF-783 the generation map growth), combined-tree suite verified, deployed (md5 2d611416 active). NOTE: the MCP status-flip hit the ENAMETOOLONG slug limit (the JF-724/JF-774 class) and the file was briefly lost; restored from the merge tree and closed by hand keeping the original filename.
+<!-- SECTION:NOTES:END -->

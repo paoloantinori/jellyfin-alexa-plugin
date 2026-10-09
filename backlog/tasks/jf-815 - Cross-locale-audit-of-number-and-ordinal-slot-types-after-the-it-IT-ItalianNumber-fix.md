@@ -67,9 +67,15 @@ where they belong (here as notes, JF-814 for the season-less family).
 - [x] #4 Residuals routed (R2 noted here, R3 in JF-814)
 <!-- DOD:END -->
 
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
+
 R2 RESOLVED (2026-10-08, verified): the GoToChapter samples carry both shapes
 ("Vai al capitolo {chapter_number}" and "Vai al capitolo {direction}"); the
 direction phrases users speak ("prossimo", "precedente", "successivo") arrive
 as the DIRECTION slot where the samples accept free direction words - the
 ItalianOrdinal type only gates ordinal-form directions (primo, secondo...), a
 bounded vocabulary with no compound exposure. No change needed.
+<!-- SECTION:NOTES:END -->

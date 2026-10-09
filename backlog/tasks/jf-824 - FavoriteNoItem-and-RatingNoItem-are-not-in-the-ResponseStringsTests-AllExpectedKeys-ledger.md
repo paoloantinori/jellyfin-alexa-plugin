@@ -17,6 +17,11 @@ priority: low
 
 ## Description
 
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
+
 Filed 2026-10-09 from the JF-821 /code-review high round (finding 3, same-turn
 filing rule). ResponseStringsTests.cs is outside the JF-821 worker's file
 surface, so it is filed, not fixed, on the same turn.
@@ -151,3 +156,4 @@ GATES (worker):
 - Post-review re-verification: clean baseline PASS exit 0 in --check and
   --full with zero direction findings; firing demos re-run green-red (see
   commit message).
+<!-- SECTION:NOTES:END -->
