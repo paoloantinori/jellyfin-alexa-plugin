@@ -124,3 +124,25 @@ l'episodio 54 di sailor moon" expects the 54th episode of the run.
   same-shaped query with a different order cannot pass the pins).
 - Scope kept: no model files, no fixtures (nothing routed differently at the NLU
   layer; the model side of the JF-814 flow is already live).
+
+LIVE FINDING (2026-10-09 ~13:10, the maintainer's device round): the absolute
+fallback WORKS on device (12:58:22: "per-season S2E54 miss ... resolved
+ABSOLUTELY to 'Il debutto di Rea' (S2E8)", VideoApp launch, the episode
+played), but the UNCONDITIONAL announce was NOT SPOKEN and is absent from the
+final response body (directive-only). Evidence chain: the handler log proves
+absoluteFallback=true and the announce construction is unconditional on that
+flag; the active DLL (md5 b5ffdea6, UTF-16 string heap verified) contains the
+Ssml key, the progressive log line, and the absolute-resolution line;
+SpeakVideoLaunchAnnounceAsync's gate (announce non-null, IntentRequest,
+context non-null, DeviceSupportsVideoApp true - the VideoApp path proves the
+last) requires the progressive send, whose seam logs at Debug BEFORE sending
+(the 12:38 e2e pings show BaseHandler Debug lines flowing) - yet NO
+SendProgressiveResponse line exists at 12:58:22. Static analysis exhausted:
+code and log contradict. The plain builder attaches OutputSpeech, so an
+early-gate return would have left the speech on the final response (also
+absent). NEXT STEP: one live repeat of the flow ("episodio 54 di sailor
+moon" -> "due") with a live log tail; if the progressive line appears and the
+speech still vanishes, the send returns true but the device drops it (a
+progressive-after-elicit platform behavior); if the line never appears, the
+gate has an environmental input the static read misses (dump the gate's four
+values at runtime with a temporary Debug line).
