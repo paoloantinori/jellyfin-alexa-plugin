@@ -296,7 +296,11 @@ public class LibrarySyncServiceStructureTests
     /// User.ArtistCatalogId / AlbumCatalogId / SeriesCatalogId /
     /// AudiobookCatalogId, JF-823) are each read
     /// and written from EXACTLY ONE place in the whole plugin assembly: a row
-    /// lambda of the JF-706 wiring table. Closes the seam the two pins above
+    /// lambda of the JF-706 wiring table. JF-826 amendment: the GETTERS carry
+    /// at most one additional sanctioned reader outside the sync,
+    /// DynamicEntityBuilder.ResolveCatalogWiredTypeNames (the session
+    /// dynamic-entities suppression predicate); the setters stay closed. Closes
+    /// the seam the two pins above
     /// cannot see: re-expanding the eight positional UpdateInteractionModelAsync
     /// arguments or the injection gate into hand per-type ternaries (the
     /// pre-JF-706 shape, which READS the getters at the call site), reverting
@@ -377,21 +381,59 @@ public class LibrarySyncServiceStructureTests
     }
 
     /// <summary>
-    /// Asserts the accessor's only call instruction in the whole plugin
-    /// assembly sits in one wiring-table row lambda, naming every offender and
-    /// count in the failure message.
+    /// Asserts the accessor's only call instructions in the whole plugin
+    /// assembly sit in the wiring-table row lambda (the sync's ONE read/write
+    /// site per accessor) plus, for GETTERS only, AT MOST one JF-826 runtime
+    /// read: DynamicEntityBuilder.ResolveCatalogWiredTypeNames, the session
+    /// dynamic-entities suppression predicate that must know whether a type's
+    /// catalog is live. At most, not exactly: the predicate deliberately reads
+    /// only the ids whose dynamic targets are catalog-wired names (Album's
+    /// AMAZON.Album target is not one, JF-332), and that per-type completeness
+    /// is pinned behaviorally in DynamicEntityBuilderCatalogSuppressionTests,
+    /// not here. Naming every offender and count in the failure message.
     /// </summary>
     private static void AssertOnlyCallerIsTableLambda(
         IReadOnlyList<(Type Type, MethodBase Method, int[] Tokens)> methodCalls,
         MethodInfo accessor)
     {
-        AssertExactlyOneCallSite(
-            CallSites(methodCalls, accessor.MetadataToken),
-            accessor.Name,
-            "a lambda compiled in LibrarySyncService.SyncUserLibraryAsync (the JF-706 wiring-table rows' shape)",
-            site => IsWiringTableLambda(site.Method),
-            "The single call site is not the wiring-table lambda shape. ");
+        var callSites = CallSites(methodCalls, accessor.MetadataToken);
+        int totalCalls = callSites.Sum(site => site.Count);
+        bool isGetter = accessor.Name.StartsWith("get_", StringComparison.Ordinal);
+        int lambdaCalls = callSites.Where(s => IsWiringTableLambda(s.Method)).Sum(s => s.Count);
+        int predicateCalls = callSites.Where(s => IsCatalogSuppressionPredicate(s.Method)).Sum(s => s.Count);
+
+        // Loud rename tripwire (JF-826 code-review F5): a renamed predicate would
+        // otherwise just reduce every getter's predicateCalls to 0 and the pin
+        // would keep passing with the documented reader gone unguarded.
+        Assert.NotNull(CatalogSuppressionPredicate);
+
+        Assert.True(
+            lambdaCalls == 1
+            && predicateCalls <= (isGetter ? 1 : 0)
+            && totalCalls == lambdaCalls + predicateCalls,
+            $"{accessor.Name} must be called from exactly one place: the JF-706 wiring-table lambda in LibrarySyncService.SyncUserLibraryAsync"
+            + (isGetter
+                ? ", plus (getters only, at most once) the JF-826 runtime reader DynamicEntityBuilder.ResolveCatalogWiredTypeNames"
+                : string.Empty)
+            + $". Found {totalCalls} call instructions ({lambdaCalls} lambda, {predicateCalls} predicate). "
+            + $"Call sites found: [{DescribeCallSites(callSites)}]");
     }
+
+    /// <summary>
+    /// The JF-826 sanctioned runtime reader of the stored catalog ids: the
+    /// session dynamic-entities suppression predicate (a catalog-wired type
+    /// must not have its vocabulary replaced by the Dialog.UpdateDynamicEntities
+    /// push). Resolved by REFLECTION to the exact MethodBase, and asserted
+    /// present, so a rename of the predicate fails THIS pin loudly instead of
+    /// silently vacating the getter allowance; the setters' closure above stays
+    /// untouched.
+    /// </summary>
+    private static readonly MethodBase? CatalogSuppressionPredicate =
+        typeof(Jellyfin.Plugin.AlexaSkill.Alexa.DynamicEntities.DynamicEntityBuilder)
+            .GetMethod("ResolveCatalogWiredTypeNames", BindingFlags.NonPublic | BindingFlags.Static);
+
+    private static bool IsCatalogSuppressionPredicate(MethodBase method) =>
+        CatalogSuppressionPredicate != null && method == CatalogSuppressionPredicate;
 
     /// <summary>
     /// A wiring-table row lambda: Roslyn compiles each row's accessors to a

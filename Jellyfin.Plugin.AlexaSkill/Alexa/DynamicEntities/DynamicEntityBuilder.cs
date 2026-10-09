@@ -161,13 +161,42 @@ public class DynamicEntityBuilder : IDisposable
         bool videosEnabled = config?.VideosEnabled != false;
         bool booksEnabled = config?.BooksEnabled != false;
 
+        // JF-415: the musician slot type is locale-dependent (JellyfinArtist on the
+        // catalog-backed locales, the AMAZON.Musician built-in elsewhere); the
+        // runtime target must match what that locale's model declares.
+        string musicianSlotType = CatalogSlotTypes.ResolveMusicianSlotType(locale);
+
+        // JF-826: slot-type names whose vocabulary this locale's saved model draws
+        // from the user's live catalog. The directive below carries
+        // updateBehavior REPLACE, so pushing any of these names would trade the
+        // catalog supplier (full library + seed + phonetic synonyms) for the
+        // shared-budget truncation, and catalog values outside the budget stop
+        // resolving for the rest of the session (the JF-684 selection-gating
+        // risk in-session). Suppression keys on the RESOLVED target names, so
+        // the built-in musician locales keep their push and a future
+        // ResolveMusicianSlotType flip joins here by construction. Album is
+        // deliberately absent: its dynamic target (AMAZON.Album) is not a
+        // catalog-wired name in any locale (JF-332). Computed inside the
+        // output-cache miss: a directive cached before a sync mints an id can
+        // outlive that state by at most the 2-minute TTL.
+        var catalogWiredTypes = ResolveCatalogWiredTypeNames(
+            config?.GetUserById(jellyfinUserId),
+            locale,
+            musicianSlotType);
+        if (catalogWiredTypes.Count > 0)
+        {
+            _logger.LogDebug(
+                "Dynamic entities: leaving catalog-wired types to the saved model (JF-826): {Types}",
+                string.Join(", ", catalogWiredTypes));
+        }
+
         int budget = MaxTotalValueCount;
 
         // Reserve budget for last-played items (5 slots)
         int baseBudget = budget - LastPlayedCount;
 
         List<DynamicSlotValue> artistValues = new();
-        if (musicEnabled)
+        if (musicEnabled && !catalogWiredTypes.Contains(musicianSlotType))
         {
             if (_artistIndex?.IsReady == true)
             {
@@ -186,25 +215,20 @@ public class DynamicEntityBuilder : IDisposable
         }
 
         List<DynamicSlotValue> seriesValues = new();
-        if (includeSeries && videosEnabled)
+        if (includeSeries && videosEnabled && !catalogWiredTypes.Contains(SlotTypeNames[CatalogType.Series]))
         {
             seriesValues = BuildSlotValues(user, BaseItemKind.Series, CatalogType.Series, locale, topParentIds, ref baseBudget);
         }
 
         List<DynamicSlotValue> audiobookValues = new();
-        if (includeAudiobooks && booksEnabled)
+        if (includeAudiobooks && booksEnabled && !catalogWiredTypes.Contains(SlotTypeNames[CatalogType.Audiobook]))
         {
             audiobookValues = BuildSlotValues(user, BaseItemKind.AudioBook, CatalogType.Audiobook, locale, topParentIds, ref baseBudget);
         }
 
-        // JF-415: the musician slot type is locale-dependent (JellyfinArtist on the
-        // catalog-backed locales, the AMAZON.Musician built-in elsewhere); the
-        // runtime target must match what that locale's model declares.
-        string musicianSlotType = CatalogSlotTypes.ResolveMusicianSlotType(locale);
-
         // Sync budget: whatever base queries didn't use plus the reserved last-played slots
         budget = baseBudget + LastPlayedCount;
-        var lastPlayedValues = BuildLastPlayedValues(user, locale, musicianSlotType, topParentIds, config, ref budget);
+        var lastPlayedValues = BuildLastPlayedValues(user, locale, musicianSlotType, catalogWiredTypes, topParentIds, config, ref budget);
 
         if (artistValues.Count == 0 && albumValues.Count == 0 && seriesValues.Count == 0
             && audiobookValues.Count == 0 && lastPlayedValues.Count == 0)
@@ -247,6 +271,64 @@ public class DynamicEntityBuilder : IDisposable
     /// Determines whether the given intent name suggests audiobook context.
     /// </summary>
     public static bool IsBookContext(string intentName) => BookIntents.Contains(intentName);
+
+    /// <summary>
+    /// JF-826: resolves the slot-type names whose vocabulary this locale's saved
+    /// model draws from the user's live catalog, so the dynamic push can leave
+    /// them alone (see the call site for why replacing them is the defect).
+    /// A type is wired when the user's stored catalog id for it exists (the
+    /// sync's per-type write-back) AND the locale can host catalog wiring at all
+    /// (the JF-543 ar-SA gate; the ids exist there too because catalogs are
+    /// type-scoped, minted by the other locales' sync legs). The musician entry
+    /// keys on the RESOLVED target: only the JF-415 catalog-backed locales push
+    /// onto JellyfinArtist, the one wired musician name.
+    /// Residual, accepted: a deliberately narrowed CatalogSyncLocales leaves the
+    /// unlisted locales static-seeded while their type ids still exist, so they
+    /// lose the push too; their sessions become consistent with their turn-1
+    /// (seed-only) vocabulary instead of turn-2-only library recall. Re-keying
+    /// on the sync's resolved locale scope would duplicate
+    /// LibrarySyncService.ResolveSyncLocalesAsync's parse in a second owner.
+    /// Same class, also accepted: in the window after a raw SMAPI model PUT
+    /// stripped the wiring (the documented gotcha; the next sync re-injects),
+    /// the ids still suppress the push, so the session runs on the static seed
+    /// until the sync heals the model; there is no runtime per-locale,
+    /// per-type wiring-present signal to key on instead (the sync ledger is a
+    /// build-status row, and nothing may parse ledger text again, JF-721).
+    /// Fifth-type obligation: this hand enumeration is one of the per-type edit
+    /// sites a new synced CatalogType must touch; adding one without extending
+    /// it leaves the new type's catalog vocabulary REPLACE-able again, which is
+    /// why CatalogSlotTypesTests's exact-set pin on CatalogSlotTypeNames is
+    /// kept loud: it fails on every addition, forcing that edit.
+    /// </summary>
+    private static HashSet<string> ResolveCatalogWiredTypeNames(
+        Jellyfin.Plugin.AlexaSkill.Entities.User? pluginUser,
+        string locale,
+        string musicianSlotType)
+    {
+        var wired = new HashSet<string>(StringComparer.Ordinal);
+        if (pluginUser == null || !CatalogManager.IsCatalogWiringSupported(locale))
+        {
+            return wired;
+        }
+
+        if (pluginUser.ArtistCatalogId != null
+            && musicianSlotType == CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Artist])
+        {
+            wired.Add(musicianSlotType);
+        }
+
+        if (pluginUser.SeriesCatalogId != null)
+        {
+            wired.Add(SlotTypeNames[CatalogType.Series]);
+        }
+
+        if (pluginUser.AudiobookCatalogId != null)
+        {
+            wired.Add(SlotTypeNames[CatalogType.Audiobook]);
+        }
+
+        return wired;
+    }
 
     /// <summary>
     /// Clears the full-output cache. Called automatically when library items are added or removed.
@@ -337,6 +419,7 @@ public class DynamicEntityBuilder : IDisposable
         Jellyfin.Database.Implementations.Entities.User user,
         string locale,
         string musicianSlotType,
+        HashSet<string> catalogWiredTypes,
         Guid[]? topParentIds,
         PluginConfiguration? config,
         ref int budget)
@@ -409,14 +492,24 @@ public class DynamicEntityBuilder : IDisposable
                 continue;
             }
 
-            // Deduplicate by name to avoid "Song X" appearing twice
-            if (!seenNames.Add(item.Name))
+            var (slotTypeName, catalogType) = GetSlotTypeForItem(item, musicianSlotType);
+            if (slotTypeName == null)
             {
                 continue;
             }
 
-            var (slotTypeName, catalogType) = GetSlotTypeForItem(item, musicianSlotType);
-            if (slotTypeName == null)
+            // JF-826: a wired type's recent item must neither push nor consume a
+            // slot, name, or budget, or wired-type recency crowds pushable
+            // recency out of the same query window (the 5 audiobooks then the
+            // one song shape). Skipped BEFORE the seenNames dedup: a discarded
+            // wired item's name must not block a pushable same-name item.
+            if (catalogWiredTypes.Contains(slotTypeName))
+            {
+                continue;
+            }
+
+            // Deduplicate by name to avoid "Song X" appearing twice
+            if (!seenNames.Add(item.Name))
             {
                 continue;
             }

@@ -7,8 +7,11 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.DynamicEntities;
 /// <summary>
 /// Dialog.UpdateDynamicEntities directive for injecting session-scoped
 /// slot type values into the Alexa NLU at runtime.
-/// These values supplement persistent catalog-based slot types with
-/// recently played items for the current session only.
+/// These values REPLACE the named types' vocabulary for the current session
+/// (updateBehavior REPLACE), not supplement it: a type the saved model wires to
+/// a catalog supplier loses that vocabulary while this directive is in effect,
+/// so catalog-wired type names must not ride here (JF-826; the builder
+/// suppresses them).
 /// </summary>
 public class DynamicEntitiesDirective : IDirective
 {
