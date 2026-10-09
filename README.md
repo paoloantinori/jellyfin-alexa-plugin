@@ -13,6 +13,7 @@ Play music, videos, playlists, search your library, manage favorites, and more â
 [![CI](https://github.com/paoloantinori/jellyfin-alexa-plugin/actions/workflows/ci.yml/badge.svg)](https://github.com/paoloantinori/jellyfin-alexa-plugin/actions/workflows/ci.yml)
 [![GitHub all releases](https://img.shields.io/github/downloads/paoloantinori/jellyfin-alexa-plugin/total?label=total%20downloads)](https://github.com/paoloantinori/jellyfin-alexa-plugin/releases)
 [![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
+[![built: AI-assisted, human-owned](docs/badges/ai-assisted.svg)](#how-this-project-is-built)
 
 <br/>
 
@@ -92,6 +93,14 @@ Full custom utterances in 11 languages: English (5 variants), Spanish (3), Frenc
 ## About
 
 A Jellyfin plugin that creates a personal Alexa skill to play and control media from your Jellyfin server using voice commands. Each Jellyfin user gets their own skill with a customizable invocation name, per-user library access controls, and configurable fuzzy matching. Supports custom interaction model deployment for advanced users who want to add their own intents or utterances.
+
+### How this project is built
+
+This plugin is developed with heavy AI assistance and human ownership: a coding agent executes, the maintainer designs, reviews, and owns every change, and one human signs every release. The badge above says it plainly and links here: AI-assisted, human-owned (blue = AI-assisted in the open [AI disclosure badge](https://disclosingai.com) convention).
+
+That is a deliberate choice for this project. The surface a change can break is unusually wide: 17 locale interaction models, two Jellyfin release lines (10.11 and 12), Amazon catalog-backed slot types that gate intent selection, and real-device speech recognition that hears Italian-accented English titles in ways no simulator reproduces. That matrix is too vast to validate the way a narrower domain could be.
+
+What keeps it honest is the verification bar: every change passes the automated test suite (5500+ tests across both target frameworks) and independent review gates, and behavior changes are verified against a real Echo device and the live Jellyfin server before release. The evidence behind the fixes, device logs, probe transcripts, and design decisions with their rationale, is public in the commit history and the task records. When the platform's documented behavior and the device disagree, the device wins, and the finding is recorded.
 
 ### Migrating from the discontinued Plex Alexa skill?
 
