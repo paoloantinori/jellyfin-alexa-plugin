@@ -607,36 +607,70 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
     /// JF-518 companion: when ffmpeg FAILS FAST (exits with a nonzero code before
     /// creating any output), the endpoint takes the same graceful 500 path through
     /// the exit-code diagnostic branch (the HasExited arm of the JF-518 guard).
+    /// JF-842 flake fix: WHICH arm the guard takes depends on whether the
+    /// just-spawned shell finished <c>exit 3</c> inside the controller's ~1s
+    /// startup-wait window; under full-suite memory pressure (swap exhausted,
+    /// concurrent agent suites) a freshly spawned shell can wait seconds for its
+    /// first CPU slice, the window then expires on a LIVE child, and the
+    /// still-running arm fires (same 500, wrong pin). The warm-up faults the
+    /// interpreter image in unobserved, and the attempt loop retries with fresh
+    /// items until the pinned arm fires, so the test reds only when the
+    /// exit-code arm is UNREACHABLE, not when the machine loses one race.
     /// </summary>
     [Fact]
     public async Task StreamVideoAudio_FfmpegFailsFastWithoutOutput_Returns500()
     {
-        var audioItem = new MediaBrowser.Controller.Entities.Audio.Audio
-        {
-            Name = "Test Song",
-            Id = Guid.NewGuid()
-        };
-
-        _libraryManagerMock.Setup(m => m.GetItemById(audioItem.Id)).Returns(audioItem);
-
         // Fake ffmpeg that exits immediately with a failure code and never creates
         // the output file.
         string fakeFfmpegPath = WriteFakeFfmpeg("fake-ffmpeg-fast-fail",
             "exit 3\n");
 
+        // JF-842: run the fake once, unobserved, so the interpreter's pages are
+        // hot before the timed attempt (bounded: a box too thrashed to finish a
+        // 3-builtin shell in 5s falls through to the attempt loop below, but
+        // the shell is killed on timeout so it can never trip the JF-731
+        // Dispose backstop as a phantom leaked encode).
+#pragma warning disable CA3003 // test-created path
+        using var warmup = Process.Start(new ProcessStartInfo(fakeFfmpegPath))!;
+#pragma warning restore CA3003
+        if (!warmup.WaitForExit(5000))
+        {
+            try { warmup.Kill(); }
+            catch { /* raced to exit, or kill failed; Dispose follows either way */ }
+        }
+
         var logRecords = new List<(LogLevel Level, string Message)>();
         using var loggerFactory = TestCaptureLogger.CreateCaptureLoggerFactory(logRecords);
-        var controller = CreateController(audioItem.Id.ToString(), loggerFactory);
-        controller.FfmpegPath = fakeFfmpegPath;
 
-        ActionResult result = await controller.StreamVideoAudio(audioItem.Id.ToString());
+        bool ExitCodeArmObserved() => TestCaptureLogger.Snapshot(logRecords).Any(r =>
+            r.Level == LogLevel.Warning && r.Message.Contains("exit code 3", StringComparison.Ordinal));
 
-        var error = Assert.IsType<ObjectResult>(result);
-        Assert.Equal(500, error.StatusCode);
+        const int MaxAttempts = 8;
+        for (int attempt = 1; attempt <= MaxAttempts && !ExitCodeArmObserved(); attempt++)
+        {
+            var audioItem = new MediaBrowser.Controller.Entities.Audio.Audio
+            {
+                Name = "Test Song",
+                Id = Guid.NewGuid()
+            };
+
+            _libraryManagerMock.Setup(m => m.GetItemById(audioItem.Id)).Returns(audioItem);
+
+            var controller = CreateController(audioItem.Id.ToString(), loggerFactory, ffmpegPath: fakeFfmpegPath);
+
+            ActionResult result = await controller.StreamVideoAudio(audioItem.Id.ToString());
+
+            // Whichever arm ran, the endpoint contract holds on EVERY attempt.
+            var error = Assert.IsType<ObjectResult>(result);
+            Assert.Equal(500, error.StatusCode);
+        }
 
         // Pin WHICH arm ran: the exit-code diagnostic with the fake's code 3.
-        Assert.Contains(logRecords, r =>
-            r.Level == LogLevel.Warning && r.Message.Contains("exit code 3", StringComparison.Ordinal));
+        Assert.True(ExitCodeArmObserved(),
+            $"the fails-fast exit-code arm never fired in {MaxAttempts} attempts; captured warnings: "
+            + string.Join(" | ", TestCaptureLogger.Snapshot(logRecords)
+                .Where(r => r.Level == LogLevel.Warning)
+                .Select(r => r.Message)));
     }
 
     /// <summary>
