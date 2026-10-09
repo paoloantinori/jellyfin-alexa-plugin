@@ -556,6 +556,10 @@
           "reproduce {episode_position} episodio de {series_name}",
           "reproduce {episode_position} episodio de la serie {series_name}",
           "pon {episode_position} episodio de {series_name}",
+          "reproduce el episodio {episode_position} de {series_name}",
+          "pon el episodio {episode_position} de {series_name}",
+          "ver el episodio {episode_position} de {series_name}",
+          "reproduzca el episodio {episode_position} de {series_name}",
           "continúa viendo {series_name}"
         ]
       },

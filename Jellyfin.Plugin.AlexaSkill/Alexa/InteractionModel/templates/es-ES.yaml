@@ -469,6 +469,13 @@ intents:
       - reproduce {episode_position} episodio de {series_name}
       - reproduce {episode_position} episodio de la serie {series_name}
       - pon {episode_position} episodio de {series_name}
+      # JF-814 competition steal audit: the articled noun-first twins claim
+      # "el episodio siguiente de X" back from the season-less PlayEpisode
+      # family (full rationale in the JF-814 notes; prossimo/siguiente fill).
+      - reproduce el episodio {episode_position} de {series_name}
+      - pon el episodio {episode_position} de {series_name}
+      - ver el episodio {episode_position} de {series_name}
+      - reproduzca el episodio {episode_position} de {series_name}
       - continúa viendo {series_name}
   - name: BrowseLibraryIntent
     slots:

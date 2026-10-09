@@ -195,3 +195,110 @@ no-cap re-elicit shape are the JF-549 series_name precedent plus the
 BuildCancelDuringOpenElicit escape hatch ONLY. No code change: the no-cap
 re-elicit stays the JF-549 house shape.
 <!-- SECTION:NOTES:END -->
+
+## POST-A/B FIX: the NextUp article form (2026-10-09, post-A/B fix worker)
+
+LIVE FINDING (the orchestrator's 2026-10-09 03:30 A/B battery, directional
+across two probe rounds): "l'episodio successivo di sailor moon" routed
+PlayEpisodeIntent. Statistical, not a word collision: all 15 new season-less
+samples carry the number slot, but the boosted family's shape "l'episodio
+{X} di {series}" matches the articled noun-first NextUp phrase, and
+PlayNextEpisodeIntent carried only the adjective-first carriers
+("{episode_position} episodio di {series_name}", the article riding the
+EpisodePosition values). The it-IT guard pin ("l'episodio successivo di
+sailor moon" -> PlayNextEpisodeIntent) was RED live.
+
+FIX (templates only, handler equivalent already correct: an empty/unresolved
+episode_position falls to the NextUp core):
+
+- it-IT: the article family through the vocabulary placeholders, mirroring
+  the non-article rows' structure - "{imperative} l'episodio
+  {episode_position} di {series_name}" + "{infinitive} l'episodio
+  {episode_position} di {series_name}" (10 samples via the 5-verb products).
+  The article-less position synonyms (prossimo/successivo/ultimo) fill the
+  slot; the ordinal still cannot fill PlayEpisode's AMAZON.NUMBER.
+- 16-locale audit (the two intents read side by side per template): the gap
+  exists ONLY where PlayEpisode's season-less family is articled noun-first
+  while PlayNextEpisode's position carriers are adjective-first -
+  es-ES/es-MX/es-US ("el episodio {episode_number} de" vs "{episode_position}
+  episodio de") and fr-FR/fr-CA ("l'épisode {episode_number} de" vs
+  "{episode_position} épisode de"). Added per locale, in that locale's own
+  grammar and carriers: es "reproduce/pon/reproduzca el episodio
+  {episode_position} de {series_name}" (the subjunctive row is the JF-551
+  one-shot twin; it also clears the three pre-existing "no one-shot wrapper
+  twin" validator warnings on es PlayNextEpisode); fr "joue/mets l'épisode
+  {episode_position} de" + the "De jouer/De mettre l'épisode" twins.
+- NO GAP (documented verdicts): en-*5 and nl and de - PlayEpisode's
+  season-less family is determinerless ("play episode {n} of"), so no
+  articled shape exists to steal; hi and ja - no article system and the
+  position word precedes the noun in both intents' shapes; pt-BR already
+  carries BOTH shapes ("tocar o episódio {episode_position} de", the exact
+  pattern added here); ar-SA already carries both shapes too.
+
+MODELS regenerated for the 6 touched locales only; validator PASS 0 errors,
+291 warnings = the 294 baseline minus exactly the three es wrapper-twin
+warnings the subjunctive rows clear (verbose-diffed against the pristine
+HEAD tree; no new warnings). Fixtures: the existing guard pin stays (comment
+updated with the live finding; must go GREEN on the redeployed model) plus
+the article-form position pin "l'episodio prossimo di sailor moon" (the new
+family's own verbless shape). Mirrors regenerated
+(generate_voice_reference.py; the mermaid mirrors are untouched - no docs md
+changed, the JF-814 precedent).
+
+LIVE VERIFICATION IS THE ORCHESTRATOR's (model PUT via the rebuild path +
+the profile-nlu battery over the article phrases and the competition guard;
+the worker's boundary is no-SMAPI).
+
+POST-A/B FIX GATES (/simplify 4-angle round, all findings dispositioned):
+APPLIED - the per-locale template comments shrunk to one 3-line form citing
+these notes (the 7-line rationale was copy-pasted across 5 templates);
+the drift-tripwire pin converted to the TestLocales.LocalesWithResourcePaths
+Theory (the established InteractionModelTests roster pattern, per-locale
+failure reporting); the BuildLibraryPayload (type, locale) overload replaced
+4x inline payload construction; the JF-823 narrative deduplicated inside
+CatalogSeedEnrichment (the table doc owns it); the pre-existing mis-indented
+warning block re-indented. REJECTED - deriving the generic words from the
+embedded models instead of the C# table (the live verdict explicitly
+prescribes "a 16-entry per-locale table ... not from a model block", and the
+derivation's implicit "block stays exactly one word" contract would silently
+disable the arm the day a title seed lands in a non-it block; the table+pin
+makes that a build failure - the EpisodePosition.LatestWords precedent).
+ORCHESTRATOR NOTE (out of the worker's boundary): the es-ES/es-MX/es-US and
+fr-FR/fr-CA fixtures carry no article-form NextUp pins (the worker's fixture
+surface was it-IT.yaml); adding one pin per touched locale would give the
+es/fr arms a fixture-level tripwire for the next battery run.
+
+POST-A/B FIX /code-review HIGH (7 findings, all dispositioned same-turn):
+
+- F1 RECORDED (reverse-steal risk, no code change): the articled NextUp
+  family is a surface twin of PlayEpisode's season-less family differing
+  only in slot type, and per the project's own JF-642 evidence custom slot
+  types do not gate NLU selection, so a number phrase ("metti l'episodio 54
+  di sailor moon") can in principle flip to PlayNextEpisode with an
+  unfilled episode_position, and the JF-583 NextUp-core fallback would then
+  play the next episode (the wrong-item class). This symmetry is inherent
+  to Italian (both phrases are "l'episodio X di Y" with disjoint fill
+  vocabularies: ordinal words vs AMAZON.NUMBER); the model-side guards are
+  the existing it-IT pins in BOTH directions ("metti l'episodio 54 di
+  sailor moon" -> PlayEpisodeIntent with slots; "l'episodio
+  successivo/prossimo di sailor moon" -> PlayNextEpisodeIntent). The
+  orchestrator's live battery MUST probe the number direction explicitly
+  after the model PUT (it is pinned; the pin must stay green).
+- F2 APPLIED: the watch-verb article rows added (it-IT "Guarda l'episodio
+  {episode_position} di" as the literal twin of the existing Guarda literal;
+  es "ver el episodio {episode_position} de"; fr "regarde l'épisode
+  {episode_position} de"), so the TV-natural phrasings no longer rest on
+  cross-verb statistical matching.
+- F3 RECORDED as the orchestrator note above (out of the worker's fixture
+  boundary; the orchestrator owns the live battery and the boundary call).
+- F4 APPLIED: the JF-541b log text now says "the TITLE-SEED enrichment is
+  disabled" (a leg kept alive by the generic word no longer logs a
+  falsehood).
+- F5 APPLIED: GenericAudiobookWords_KeySetMirrorsTheNonItLocaleRoster pins
+  the table's key set against the TestLocales roster (phantom or stale keys
+  are no longer invisible).
+- F6 APPLIED: the drift Theory reads the slot type name from
+  CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Audiobook], the same
+  production map the arm's loader reads.
+- F7 APPLIED: the "word - word" parenthetical hyphens in newly authored
+  comments rewritten to comma-separated clauses (the global prose rule).

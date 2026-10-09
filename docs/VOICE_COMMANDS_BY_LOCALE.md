@@ -5108,7 +5108,7 @@ Placeholder legend:
 | `<mots du titre de la chanson>` | `{titleKeywords}` |
 | `<nom d'utilisateur>` | `{username}` |
 
-Complete phrase list (451 phrases across 71 commands):
+Complete phrase list (456 phrases across 71 commands):
 
 #### Play music
 
@@ -5292,10 +5292,15 @@ Complete phrase list (451 phrases across 71 commands):
 - `joue <position (prochain, dernier)> épisode de <nom de la série>`
 - `joue <position (prochain, dernier)> épisode de la série <nom de la série>`
 - `mets <position (prochain, dernier)> épisode de <nom de la série>`
+- `joue l'épisode <position (prochain, dernier)> de <nom de la série>`
+- `mets l'épisode <position (prochain, dernier)> de <nom de la série>`
+- `regarde l'épisode <position (prochain, dernier)> de <nom de la série>`
 - `continue à regarder <nom de la série>`
 - `De jouer <position (prochain, dernier)> épisode de <nom de la série>`
 - `De jouer <position (prochain, dernier)> épisode de la série <nom de la série>`
 - `De mettre <position (prochain, dernier)> épisode de <nom de la série>`
+- `De jouer l'épisode <position (prochain, dernier)> de <nom de la série>`
+- `De mettre l'épisode <position (prochain, dernier)> de <nom de la série>`
 - `De continuer à regarder <nom de la série>`
 
 #### Podcasts
@@ -5807,7 +5812,7 @@ Placeholder legend:
 | `<mots du titre de la chanson>` | `{titleKeywords}` |
 | `<nom d'utilisateur>` | `{username}` |
 
-Complete phrase list (463 phrases across 71 commands):
+Complete phrase list (468 phrases across 71 commands):
 
 #### Play music
 
@@ -5999,10 +6004,15 @@ Complete phrase list (463 phrases across 71 commands):
 - `joue <position (prochain, dernier)> épisode de <nom de la série>`
 - `joue <position (prochain, dernier)> épisode de la série <nom de la série>`
 - `mets <position (prochain, dernier)> épisode de <nom de la série>`
+- `joue l'épisode <position (prochain, dernier)> de <nom de la série>`
+- `mets l'épisode <position (prochain, dernier)> de <nom de la série>`
+- `regarde l'épisode <position (prochain, dernier)> de <nom de la série>`
 - `continue à regarder <nom de la série>`
 - `De jouer <position (prochain, dernier)> épisode de <nom de la série>`
 - `De jouer <position (prochain, dernier)> épisode de la série <nom de la série>`
 - `De mettre <position (prochain, dernier)> épisode de <nom de la série>`
+- `De jouer l'épisode <position (prochain, dernier)> de <nom de la série>`
+- `De mettre l'épisode <position (prochain, dernier)> de <nom de la série>`
 - `De continuer à regarder <nom de la série>`
 
 #### Podcasts
@@ -7835,7 +7845,7 @@ Placeholder legend:
 | `<titolo del video o del film>` | `{title}` |
 | `<parole del titolo del brano>` | `{titleKeywords}` |
 
-Complete phrase list (1570 phrases across 71 commands):
+Complete phrase list (1581 phrases across 71 commands):
 
 #### Play music
 
@@ -9003,6 +9013,7 @@ Complete phrase list (1570 phrases across 71 commands):
 - `Riproduci <posizione (prossimo, ultimo)> episodio di <nome della serie>`
 - `Metti <posizione (prossimo, ultimo)> episodio di <nome della serie>`
 - `Guarda <posizione (prossimo, ultimo)> episodio di <nome della serie>`
+- `Guarda l'episodio <posizione (prossimo, ultimo)> di <nome della serie>`
 - `Continua a guardare <nome della serie>`
 - `Continua a guardare la serie <nome della serie>`
 - `Di riprodurre <posizione (prossimo, ultimo)> episodio di <nome della serie>`
@@ -9010,6 +9021,16 @@ Complete phrase list (1570 phrases across 71 commands):
 - `Di mettere <posizione (prossimo, ultimo)> episodio di <nome della serie>`
 - `Di pleiare <posizione (prossimo, ultimo)> episodio di <nome della serie>`
 - `Di ascoltare <posizione (prossimo, ultimo)> episodio di <nome della serie>`
+- `Riproduci l'episodio <posizione (prossimo, ultimo)> di <nome della serie>`
+- `Suona l'episodio <posizione (prossimo, ultimo)> di <nome della serie>`
+- `Metti l'episodio <posizione (prossimo, ultimo)> di <nome della serie>`
+- `Pleia l'episodio <posizione (prossimo, ultimo)> di <nome della serie>`
+- `Ascolta l'episodio <posizione (prossimo, ultimo)> di <nome della serie>`
+- `Di riprodurre l'episodio <posizione (prossimo, ultimo)> di <nome della serie>`
+- `Di suonare l'episodio <posizione (prossimo, ultimo)> di <nome della serie>`
+- `Di mettere l'episodio <posizione (prossimo, ultimo)> di <nome della serie>`
+- `Di pleiare l'episodio <posizione (prossimo, ultimo)> di <nome della serie>`
+- `Di ascoltare l'episodio <posizione (prossimo, ultimo)> di <nome della serie>`
 - `Di riprodurre la serie <nome della serie>`
 - `Di suonare la serie <nome della serie>`
 - `Di mettere la serie <nome della serie>`
@@ -10865,7 +10886,7 @@ Placeholder legend:
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (444 phrases across 66 commands):
+Complete phrase list (448 phrases across 66 commands):
 
 #### Play music
 
@@ -11052,6 +11073,10 @@ Complete phrase list (444 phrases across 66 commands):
 - `reproduce <posición (próximo, último)> episodio de <nombre de la serie>`
 - `reproduce <posición (próximo, último)> episodio de la serie <nombre de la serie>`
 - `pon <posición (próximo, último)> episodio de <nombre de la serie>`
+- `reproduce el episodio <posición (próximo, último)> de <nombre de la serie>`
+- `pon el episodio <posición (próximo, último)> de <nombre de la serie>`
+- `ver el episodio <posición (próximo, último)> de <nombre de la serie>`
+- `reproduzca el episodio <posición (próximo, último)> de <nombre de la serie>`
 - `continúa viendo <nombre de la serie>`
 
 #### Podcasts
@@ -11542,7 +11567,7 @@ Placeholder legend:
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (444 phrases across 66 commands):
+Complete phrase list (448 phrases across 66 commands):
 
 #### Play music
 
@@ -11731,6 +11756,10 @@ Complete phrase list (444 phrases across 66 commands):
 - `reproduce <posición (próximo, último)> episodio de <nombre de la serie>`
 - `reproduce <posición (próximo, último)> episodio de la serie <nombre de la serie>`
 - `pon <posición (próximo, último)> episodio de <nombre de la serie>`
+- `reproduce el episodio <posición (próximo, último)> de <nombre de la serie>`
+- `pon el episodio <posición (próximo, último)> de <nombre de la serie>`
+- `ver el episodio <posición (próximo, último)> de <nombre de la serie>`
+- `reproduzca el episodio <posición (próximo, último)> de <nombre de la serie>`
 - `continúa viendo <nombre de la serie>`
 
 #### Podcasts
@@ -12219,7 +12248,7 @@ Placeholder legend:
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (432 phrases across 66 commands):
+Complete phrase list (436 phrases across 66 commands):
 
 #### Play music
 
@@ -12401,6 +12430,10 @@ Complete phrase list (432 phrases across 66 commands):
 - `reproduce <posición (próximo, último)> episodio de <nombre de la serie>`
 - `reproduce <posición (próximo, último)> episodio de la serie <nombre de la serie>`
 - `pon <posición (próximo, último)> episodio de <nombre de la serie>`
+- `reproduce el episodio <posición (próximo, último)> de <nombre de la serie>`
+- `pon el episodio <posición (próximo, último)> de <nombre de la serie>`
+- `ver el episodio <posición (próximo, último)> de <nombre de la serie>`
+- `reproduzca el episodio <posición (próximo, último)> de <nombre de la serie>`
 - `continúa viendo <nombre de la serie>`
 
 #### Podcasts

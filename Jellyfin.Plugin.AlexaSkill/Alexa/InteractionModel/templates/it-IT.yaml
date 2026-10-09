@@ -1351,6 +1351,7 @@ templates:
       - Riproduci {episode_position} episodio di {series_name}
       - Metti {episode_position} episodio di {series_name}
       - Guarda {episode_position} episodio di {series_name}
+      - Guarda l'episodio {episode_position} di {series_name}
       - Continua a guardare {series_name}
       - Continua a guardare la serie {series_name}
       # JF-493: infinitive twins of the position families and of
@@ -1358,6 +1359,15 @@ templates:
       # a bare "{infinitive} {series_name}" would be a bare carrier competing
       # with the artist region.
       - "{infinitive} {episode_position} episodio di {series_name}"
+      # JF-814 competition steal (live 2026-10-09, directional across two probe
+      # rounds): the boosted season-less PlayEpisode family ("l'episodio
+      # {episode_number} di {series_name}") statistically absorbed "l'episodio
+      # successivo di sailor moon" because this intent had no article +
+      # noun-first form. The articled family claims it back: the article-less
+      # position synonyms (prossimo/successivo/ultimo) fill the slot, and the
+      # ordinal still cannot fill PlayEpisode's AMAZON.NUMBER episode slot.
+      - "{imperative} l'episodio {episode_position} di {series_name}"
+      - "{infinitive} l'episodio {episode_position} di {series_name}"
       # JF-583 NLU history: the infinitive family originally lost to PlayByGenre's
       # greedy "Di riprodurre {genre}"; JF-585 removed that greedy sibling and the
       # explicit literal carriers tried in 532159bc were removed again after the
