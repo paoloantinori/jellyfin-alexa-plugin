@@ -3,7 +3,7 @@ id: JF-824
 title: >-
   FavoriteNoItem and RatingNoItem are not in the ResponseStringsTests
   AllExpectedKeys ledger, so no locale walk guards them
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-09'
 labels:
@@ -64,3 +64,90 @@ and surfaced TWO more unguarded shapes in the same class. Disposition:
   bilingual required-word-pair table in validate_locales?). Size it before
   writing; if the table shape wins, validate_locales is the natural owner
   since it already walks all 17 files.
+
+## Direction-word guard: decision record (worker, 2026-10-09)
+
+SHAPE DECISION: the required-word-pair table in `scripts/validate_locales.py`
+(`FAVORITE_NO_ITEM_DIRECTION_WORDS`), NOT handler-test pins. Rationale:
+
+1. Ownership: the guarded artifact is the locale JSON VALUE. validate_locales
+   already walks all 17 files and is the CI gate for locale content; the
+   handler test guards handler behavior (key literals, en-US spoken
+   substrings), and 16 non-English wordings are not handler behavior.
+2. Drift frequency beats landing frequency (the sizing axis): a drifted
+   translation lands far more often than a new locale, and the validator is
+   the earliest and cheapest surface (no compile, no testhost; it also runs
+   as its own CI job). NON-BLOCKING, stated plainly (review F1): the finding
+   is warning-level, so the validate-locales CI job stays GREEN and only the
+   job log carries the WARN block; the guard makes the drift visible in
+   every run, it does not fail the build. Error-level was considered and
+   rejected on the check-10 precedent: a legitimate direction-neutral
+   rewording (it-IT "mettere o togliere") would break CI until the row
+   updates.
+3. Self-reminding completeness: a locale file present without a table row
+   fires its own finding ("add one in the same change"), so the once-per-new-
+   locale cost cannot be silently skipped; handler-test pins would need extra
+   machinery to get the same property.
+4. Severity follows the file's established value-content convention: empty
+   values and extra keys are WARNINGS today; errors are reserved for
+   structural/presence breaks (the runtime KeyNotFoundException class). The
+   direction check is exactly the validate_interaction_models check-10 class
+   (translation-content check where a LEGITIMATE rewording, e.g. it-IT
+   "mettere o togliere", fires until the row updates), which is
+   warning-level BY DESIGN so it can never break CI (the JF-556 note).
+   Unlike known-gap warnings, direction findings print IN FULL in every mode
+   (they have no baseline), so the firing is visible, not a count.
+
+The 17 word pairs are sourced verbatim from the committed values (grep, not
+invented): en-US/GB/AU/IN/CA add+remove; de-DE hinzufügen+entfernen;
+es-ES/MX/US añadir+quitar; fr-FR/CA ajouter+retirer; it-IT
+aggiungere+rimuovere; pt-BR adicionar+remover; nl-NL toevoegen+verwijderen;
+ja-JP 追加+削除; hi-IN जोड़ा+हटाया; ar-SA إضافته+إزالته. A deliberate
+rewording updates its row in the same change (the guard's own finding says
+so).
+
+PROOF (the validator has no pytest suite; the convention is the firing
+demonstration + the clean baseline run):
+
+- Clean baseline, guard live: PASS, exit 0, all 17 locales OK, zero
+  direction findings, in both --check and --full (output byte-shape
+  unchanged from the pre-guard run).
+- Firing demo (scratch copy under /var/tmp, real locale files untouched):
+  it-IT flipped add-only → "[it-IT] FavoriteNoItem lost direction wording:
+  missing rimuovere (must name both add and remove)"; flipped remove-only →
+  "missing aggiungere"; table row deleted → "[it-IT] FavoriteNoItem present
+  but no direction-word row in FAVORITE_NO_ITEM_DIRECTION_WORDS (add one in
+  the same change)". All three shapes fire; exit stays 0 (warning by
+  design). Scratch deleted after; git status shows only
+  scripts/validate_locales.py modified.
+
+GATES (worker):
+
+- /simplify (4 agents: reuse, simplification, efficiency, altitude):
+  efficiency/simplification/altitude clean; the reuse finding (fold
+  direction_findings into all_warnings per the validate_interaction_models
+  inline-print precedent) REJECTED with reasons: this file's summary labels
+  all_warnings as "known gap(s) / extra key(s)" so folding mislabels
+  direction drift in --check counts, --full would double-print the strings
+  (inline plus the first-10 listing), and one list per reporting class is
+  this file's own convention (all_errors vs all_warnings).
+- /code-review high (6 findings): F1 PARTIAL (the record now states the
+  non-blocking semantics plainly, point 2 above; severity stays warning,
+  reasons recorded). F2 APPLIED: matching is casefold + NFC on both sides,
+  so a capitalization-only or Unicode-normalization-only rewording no longer
+  fires falsely (reviewer-verified false positive "Aggiungere o Rimuovere").
+  F3 APPLIED: ASCII direction words match with ASCII-letter boundaries
+  (contains_direction_word) so 'add' inside 'address' can no longer satisfy
+  the guard for the five en locales; non-ASCII scripts keep substring
+  matching because \\b boundaries do not exist between CJK/Devanagari/Arabic
+  characters. Known cost, accepted: inflected forms ('added') do not match
+  and fire; a rewording that uses one updates its row in the same change
+  (warning-level, self-documenting). F4 APPLIED: a locale carrying a
+  direction finding now shows "direction wording" in its per-locale status
+  row instead of a contradictory OK. F5 APPLIED: the module docstring names
+  the value-content guard and its non-failing semantics. F6 APPLIED: a
+  whitespace-only FavoriteNoItem reports only the empty-value warning (the
+  direction check skips blank values), one finding per defect.
+- Post-review re-verification: clean baseline PASS exit 0 in --check and
+  --full with zero direction findings; firing demos re-run green-red (see
+  commit message).
