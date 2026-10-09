@@ -157,8 +157,22 @@ public class ParallelPhaseStaticSurfaceTests
                         && data.ConstructorArguments.Count == 1
                         && data.ConstructorArguments[0].Value is string name)
                     {
-                        map[name] = data.NamedArguments.Any(n =>
+                        bool exclusive = data.NamedArguments.Any(n =>
                             n.MemberName == "DisableParallelization" && n.TypedValue.Value is true);
+                        // A duplicate definition must fail loudly here, not
+                        // resolve order-dependently: last-writer-wins could
+                        // silently exempt (or roster) a name depending on
+                        // GetTypes() enumeration order. Same-flag duplicates
+                        // are semantically harmless; a flag CONFLICT is a
+                        // roster-integrity break this guard exists to catch.
+                        if (map.TryGetValue(name, out bool existing) && existing != exclusive)
+                        {
+                            throw new InvalidOperationException(
+                                $"Collection \"{name}\" is defined more than once with conflicting " +
+                                "DisableParallelization values; the parallel-phase roster cannot be resolved.");
+                        }
+
+                        map[name] = exclusive;
                     }
                 }
             }
@@ -349,9 +363,16 @@ public class ParallelPhaseStaticSurfaceTests
     /// or a derived VideoAudioController encode static.
     /// </summary>
     private static bool IsSharedStaticSurfaceMethod(MethodBase callee)
+        // Name-match only against the DERIVED sets would false-positive a
+        // future instance member whose name collides with a derived static
+        // name (the sets are open-world and grow automatically), so the
+        // derived arms require an actually-static member; the whole-type arm
+        // needs no check (the type itself is the surface). Same IsStatic
+        // shape DeriveSharedStaticMemberNames applies at its seed.
         => WholeTypeSharedStatics.Contains(callee.DeclaringType)
-            || (callee.DeclaringType == typeof(Plugin) && PluginStaticNames.Value.Contains(callee.Name))
-            || (callee.DeclaringType == typeof(VideoAudioController) && VideoAudioEncodeStaticNames.Value.Contains(callee.Name));
+            || (callee is MethodInfo { IsStatic: true }
+                && ((callee.DeclaringType == typeof(Plugin) && PluginStaticNames.Value.Contains(callee.Name))
+                    || (callee.DeclaringType == typeof(VideoAudioController) && VideoAudioEncodeStaticNames.Value.Contains(callee.Name))));
 
     /// <summary>
     /// The shared-static member names a type exposes through its own STATIC

@@ -7,6 +7,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-10-09 21:15'
+updated_date: '2026-10-09 23:04'
 labels:
   - tooling
   - test-coverage
@@ -40,3 +41,9 @@ Filed 2026-10-09 by the orchestrator from the JF-850 /code-review high round (tw
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Two more follow-ups landed here from the night batch's /code-review high round (2026-10-10 01:30): (F2) the lint's skip arm at the absent-trio-member return also swallows the unlisted-es-locale coverage warnings - a new es locale added in the same window as a missing/renamed trio model escapes the mirroring lint silently, the exact rot the JF-824 coverage arm exists to prevent; fix = emit (or accumulate) the coverage findings before/regardless of the skip return. (F6) cosmetic: Phase 11's label claims number 11 while main() prints it between Phases 7 and 8 (the JF-844.1 wiring position, kept by JF-850); renaming the label changes stdout, which is why it was not touched during the zero-behavior night - pick a quiet window and either renumber to the printed position or drop the numeric label, updating the byte-diff baselines in the same change.
+<!-- SECTION:NOTES:END -->

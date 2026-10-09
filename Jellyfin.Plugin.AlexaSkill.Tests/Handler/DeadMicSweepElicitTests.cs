@@ -32,8 +32,11 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 // JF-800: de-based. The PluginTestBase inheritance was unused ceremony (this
 // doc's own license: no dependency is touched), and the per-test static resets
 // it bought were equally inert. The class runs in the parallel phase;
-// ParallelPhaseStaticSurfaceTests now reds mechanically if a future edit makes
-// that untrue (a shared-static touch, direct or through TestHelpers).
+// ParallelPhaseStaticSurfaceTests reds mechanically on DIRECT shared-static
+// touches and test-assembly vectors (incl. through TestHelpers) - NOT on
+// production-internal indirection one level deep, which stays the guard doc's
+// licensed residual. A future test that reaches a shared static THROUGH a
+// production call needs [Collection("Plugin")] on its own judgment.
 public class DeadMicSweepElicitTests
 {
     private static IntentRequest Request(string intentName, params (string Slot, string? Value)[] slots)
