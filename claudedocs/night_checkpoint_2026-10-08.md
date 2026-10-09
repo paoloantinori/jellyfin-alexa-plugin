@@ -99,6 +99,47 @@ cleanup. The box was healthy at 00:15 (load 2.17 falling, no tasks running).
   task-id typo; the backdate alone triggers the sync at startup, no POST
   needed).
 
+## FINAL STATE 07:00 (2026-10-09): the night is closed
+
+MERGED/DEPLOYED/LIVE-VERIFIED tonight (box runs md5 2b34ae0b0f1c8aff69870c2ee18529d9,
+main at c26258c4, all pushed): JF-819, JF-813, JF-821, JF-823, JF-820,
+JF-814 (round 1 dossier + round 2 complete), the post-A/B round (generic-word
+seed arm + NextUp article form). The deployed skill's live model carries the
+season-less family, the article forms (6 locales), the fourth catalog type
+(AudiobookTitle, 383 books + 21 title seeds + per-locale generic words), and
+all catalog wiring (16/16 canaries on both syncs).
+
+LIVE-GREEN: the incident phrase both forms; the article competition both
+directions (no reverse steal); sapiens (library book, out-of-seed) routes
+PlayBook; the seed titles survive; the album guard; de-DE/en-GB generic-word
+carriers route PlayBook.
+
+OPEN FOR THE MORNING (all documented with evidence):
+- JF-844's content-caused residuals: murderbot digit-season (stable, needs a
+  sample-alignment fix) and es-ES subjunctive (strengthen the JF-551
+  wrappers); the suona-film phrase (DECIDE, semantically defensible as-is);
+  the canzone steal re-probe (handler blameless; the JF-420 tie prompt is
+  correct). Each needs a model roll to verify: budget 2 sync cycles.
+- JF-843 (absolute-vs-per-season episode numbering): the incident user says
+  "episodio 54" meaning ABSOLUTE 54; the elicited path queries per-season.
+- JF-841 (season-only gate + the unparseable-episode amendment), JF-818 (the
+  three-family hoist + 3 log items), JF-824 (per-locale direction guard),
+  JF-825, JF-826, JF-842 (flaky ffmpeg test).
+- THE DEVICE ROUND (Paolo): books cold after JF-817/819, FollowMe two-Echo,
+  T1 native transfer, T2 stream-kill, the "ultimo episodio" announce, and
+  the JF-780 probes (now including the single-file-book resume). Then JF-811
+  (the 1.0 tag; the runway is prepared, the manifest placeholders stay
+  uncommitted per issue #38).
+- minix's queued 1.0.0.0 install attempt keeps ERRing on the update task
+  until the catalog mirror drops the retracted entries: KNOWN, self-resolving.
+
+PROCESS NOTES for the next session: the deploy-gate hook blocks compound
+commands wholesale (append+commit+push in one call loses the append on
+block); do append / commit / push as SEPARATE commands. The sed-before-backup
+slip in the last deploy is recorded in the transcript (the only lost datum
+was the LastCatalogSync timestamp itself). The cron (15 min) is session-only
+and dies with this session; the mandate ends when Paolo is back.
+
 ## Queue after these (nothing dispatched)
 
 - JF-820 (foreign-generation stale prewrite, VideoAudioController; LOW priority;
