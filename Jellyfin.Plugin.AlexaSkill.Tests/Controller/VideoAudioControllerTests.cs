@@ -6445,24 +6445,86 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
         };
         _libraryManagerMock.Setup(m => m.GetItemById(itemId)).Returns(episode);
 
-        string hlsDir = _cache.GetHlsDirectoryPath(itemIdStr, 0);
-        Directory.CreateDirectory(hlsDir);
+        (string hlsDir, string prewritePath) = PlantLivePrewriteEncodeCore(
+            itemIdStr,
+            artTicks: 0,
+            headSegmentCount,
+            digitWidth: 4,
+            PlantedLivePlaylistShape.FixedTwoEntries,
+            path => VideoAudioController.WriteEpisodePlaylist(
+                path,
+                $"/alexaskill/api/video-audio/{itemIdStr}/segments/",
+                runtime.Ticks,
+                token: null));
+        return (itemIdStr, hlsDir, prewritePath);
+    }
 
-        File.WriteAllText(
-            Path.Combine(hlsDir, "stream.m3u8"),
-            "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:4\n#EXT-X-MEDIA-SEQUENCE:0\n#EXTINF:4.000,\nseg_0000.ts\n#EXTINF:4.000,\nseg_0001.ts\n");
+    /// <summary>
+    /// The shape of ffmpeg's live partial (stream.m3u8) a planted live-encode
+    /// fixture carries: NONE (the audiobook rows take the concurrent-encode
+    /// guard with no live playlist on disk), FIXED-TWO-ENTRIES (the episode
+    /// planter's historical shape, kept verbatim), or EVERY-PLANTED-SEGMENT
+    /// (the single-item planter's JF-819 shape: a fixture whose live playlist
+    /// disagrees with its segment files cannot satisfy the JF-503 hold's
+    /// listing check should a future pin built on this planter touch the hold
+    /// path; code-review F2).
+    /// </summary>
+    private enum PlantedLivePlaylistShape
+    {
+        None,
+        FixedTwoEntries,
+        AllPlantedSegments,
+    }
+
+    /// <summary>
+    /// The ONE planting core of the three live-encode fixture families (JF-818's
+    /// test half: the episode planter, the audiobook planter, and the single-item
+    /// planter each carried a copy of the planted cache-directory shape): create
+    /// the cache directory at the given generation's ticks, plant the head
+    /// segment files seg_0..seg_{headSegmentCount-1} at the family's digit width,
+    /// plant ffmpeg's live partial in the family's shape, and write the full
+    /// prewrite through the family's production emitter (so the EXTINF walk, the
+    /// truncation, and the token rewrite see real shapes). The caller owns the
+    /// item mocks. Returns the HLS dir (to advance the head mid-test) and the
+    /// prewrite path (to age the mtime, the window's growth anchor).
+    /// </summary>
+    private (string HlsDir, string PrewritePath) PlantLivePrewriteEncodeCore(
+        string cacheKeyId,
+        long artTicks,
+        int headSegmentCount,
+        int digitWidth,
+        PlantedLivePlaylistShape livePlaylist,
+        Action<string> writePrewrite)
+    {
+        string hlsDir = _cache.GetHlsDirectoryPath(cacheKeyId, artTicks);
+        Directory.CreateDirectory(hlsDir);
+        string digits = "D" + digitWidth;
         for (int i = 0; i < headSegmentCount; i++)
         {
-            File.WriteAllBytes(Path.Combine(hlsDir, $"seg_{i:D4}.ts"), new byte[16]);
+            File.WriteAllBytes(Path.Combine(hlsDir, $"seg_{i.ToString(digits, CultureInfo.InvariantCulture)}.ts"), new byte[16]);
+        }
+
+        if (livePlaylist == PlantedLivePlaylistShape.FixedTwoEntries)
+        {
+            File.WriteAllText(
+                Path.Combine(hlsDir, "stream.m3u8"),
+                "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:4\n#EXT-X-MEDIA-SEQUENCE:0\n#EXTINF:4.000,\nseg_0000.ts\n#EXTINF:4.000,\nseg_0001.ts\n");
+        }
+        else if (livePlaylist == PlantedLivePlaylistShape.AllPlantedSegments)
+        {
+            var livePartial = new System.Text.StringBuilder(
+                "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:4\n#EXT-X-MEDIA-SEQUENCE:0\n");
+            for (int i = 0; i < headSegmentCount; i++)
+            {
+                livePartial.Append("#EXTINF:4.000,\nseg_").Append(i.ToString(digits, CultureInfo.InvariantCulture)).Append(".ts\n");
+            }
+
+            File.WriteAllText(Path.Combine(hlsDir, "stream.m3u8"), livePartial.ToString());
         }
 
         string prewritePath = Path.Combine(hlsDir, "playlist-full.m3u8");
-        VideoAudioController.WriteEpisodePlaylist(
-            prewritePath,
-            $"/alexaskill/api/video-audio/{itemIdStr}/segments/",
-            runtime.Ticks,
-            token: null);
-        return (itemIdStr, hlsDir, prewritePath);
+        writePrewrite(prewritePath);
+        return (hlsDir, prewritePath);
     }
 
     /// <summary>
@@ -6535,37 +6597,32 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
     /// The planting core of the JF-817/JF-820 audiobook fixtures (the
     /// single-item planter's audiobook twin, extracted at JF-820 when the
     /// foreign-generation fixture needed the SAME shape at a non-zero
-    /// generation's ticks): the cache directory at the given generation's
-    /// ticks, the head segment files seg_0000..seg_{headSegmentCount-1}, and
-    /// the full prewrite via the production emitter
+    /// generation's ticks): the shared planting core at the audiobook
+    /// family's axes (D4 digits, NO live partial: these rows take the
+    /// concurrent-encode guard) with the prewrite via the production emitter
     /// (<see cref="VideoAudioController.WriteAudiobookPlaylist"/>).
     /// </summary>
     private (string HlsDir, string PrewritePath) PlantLiveAudiobookEncodeCore(
         string cacheKeyId, long artTicks, List<MediaBrowser.Controller.Entities.BaseItem> chapters, int headSegmentCount)
-    {
-        string hlsDir = _cache.GetHlsDirectoryPath(cacheKeyId, artTicks);
-        Directory.CreateDirectory(hlsDir);
-        for (int i = 0; i < headSegmentCount; i++)
-        {
-            File.WriteAllBytes(Path.Combine(hlsDir, $"seg_{i:D4}.ts"), new byte[16]);
-        }
-
-        string prewritePath = Path.Combine(hlsDir, "playlist-full.m3u8");
-        VideoAudioController.WriteAudiobookPlaylist(
-            prewritePath,
-            $"/alexaskill/api/video-audio/{cacheKeyId}/segments/",
-            chapters,
-            token: null);
-        return (hlsDir, prewritePath);
-    }
+        => PlantLivePrewriteEncodeCore(
+            cacheKeyId,
+            artTicks,
+            headSegmentCount,
+            digitWidth: 4,
+            PlantedLivePlaylistShape.None,
+            path => VideoAudioController.WriteAudiobookPlaylist(
+                path,
+                $"/alexaskill/api/video-audio/{cacheKeyId}/segments/",
+                chapters,
+                token: null));
 
     /// <summary>
     /// The shared planting core of the JF-819 single-item fixtures (the
-    /// JF-778/JF-817 planters' song twin): ffmpeg's own live partial on
-    /// disk listing exactly the planted segment files
-    /// seg_000..seg_{headSegmentCount-1} (3-digit single-item names; the
-    /// encoded head, head = headSegmentCount - 1), and the full prewrite
-    /// for the given runtime via the production single-item writer
+    /// JF-778/JF-817 planters' song twin): the shared planting core at the
+    /// single-item family's axes (D3 digit names, the live partial listing
+    /// EVERY planted segment so the JF-503 hold's listing check stays
+    /// satisfiable, code-review F2) with the full prewrite via the
+    /// production single-item writer
     /// (<see cref="VideoAudioController.WriteVideoAudioPlaylist"/>, 4s
     /// segments at the song path's own TARGETDURATION), so the EXTINF walk,
     /// the truncation, and the token rewrite see real shapes. Returns the
@@ -6574,33 +6631,17 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
     /// </summary>
     private (string HlsDir, string PrewritePath) PlantLiveSingleItemEncodeCore(
         string cacheKeyId, TimeSpan runtime, int headSegmentCount)
-    {
-        string hlsDir = _cache.GetHlsDirectoryPath(cacheKeyId, 0);
-        Directory.CreateDirectory(hlsDir);
-
-        // The live partial lists every planted segment (the encoded head is
-        // real): a fixture whose live playlist disagrees with its segment
-        // files cannot satisfy the JF-503 hold's listing check should a
-        // future pin built on this planter touch the hold path (code-review
-        // F2; the episode planter's fixed 2-entry shape predates this).
-        var livePartial = new System.Text.StringBuilder(
-            "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:4\n#EXT-X-MEDIA-SEQUENCE:0\n");
-        for (int i = 0; i < headSegmentCount; i++)
-        {
-            livePartial.Append("#EXTINF:4.000,\nseg_").Append(i.ToString("D3", System.Globalization.CultureInfo.InvariantCulture)).Append(".ts\n");
-            File.WriteAllBytes(Path.Combine(hlsDir, $"seg_{i:D3}.ts"), new byte[16]);
-        }
-
-        File.WriteAllText(Path.Combine(hlsDir, "stream.m3u8"), livePartial.ToString());
-
-        string prewritePath = Path.Combine(hlsDir, "playlist-full.m3u8");
-        VideoAudioController.WriteVideoAudioPlaylist(
-            prewritePath,
-            $"/alexaskill/api/video-audio/{cacheKeyId}/segments/",
-            runtime.Ticks,
-            token: null);
-        return (hlsDir, prewritePath);
-    }
+        => PlantLivePrewriteEncodeCore(
+            cacheKeyId,
+            artTicks: 0,
+            headSegmentCount,
+            digitWidth: 3,
+            PlantedLivePlaylistShape.AllPlantedSegments,
+            path => VideoAudioController.WriteVideoAudioPlaylist(
+                path,
+                $"/alexaskill/api/video-audio/{cacheKeyId}/segments/",
+                runtime.Ticks,
+                token: null));
 
     /// <summary>
     /// Shared arrange of a LIVE single-item (song-family) encode over a
@@ -6860,6 +6901,54 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
             Assert.Contains(
                 TestCaptureLogger.Snapshot(logRecords),
                 r => r.Message.Contains("outside the encode window's honor band", StringComparison.Ordinal));
+        }
+        finally
+        {
+            VideoAudioController.SetEncodeActiveForTest(itemIdStr, active: false);
+        }
+    }
+
+    /// <summary>
+    /// JF-818 drop-log latch pin: the player retains ?start= across the event
+    /// playlist's refreshes (the URL is unchanged), so a dropped-offset resume
+    /// re-fires the identical honor-band line once per poll for the whole
+    /// minutes-long encode window; the core's latch keeps exactly the FIRST
+    /// occurrence per prewrite generation at Information (the line triage
+    /// needs) and drops every later occurrence of the same message to Debug.
+    /// Shape: the JF-778 mid-window fixture driven TWICE with the same capture
+    /// logger (two polls of the same encode window; both drop, the window is
+    /// head-capped at 8 entries so test latency cannot move the verdict).
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsEpisode_WindowedPrewrite_MidWindowResume_DropLogInformationFiresOncePerGeneration()
+    {
+        (string itemIdStr, _, string prewritePath) = PlantLiveEncodeFixture("JF-818 Mid Window S01E01", headSegmentCount: 8, runtime: TimeSpan.FromSeconds(1420.25));
+
+        File.SetLastWriteTimeUtc(prewritePath, DateTime.UtcNow.AddSeconds(-40));
+
+        var logRecords = new List<(LogLevel Level, string Message)>();
+        using var loggerFactory = TestCaptureLogger.CreateCaptureLoggerFactory(logRecords);
+
+        VideoAudioController.SetEncodeActiveForTest(itemIdStr, active: true);
+        try
+        {
+            var controller = CreateController(itemIdStr, loggerFactory, ffmpegPath: WriteRecordingFakeFfmpeg("fake-ffmpeg-jf818-drop-latch"));
+
+            ActionResult first = await controller.StreamHlsEpisode(itemIdStr, TimeSpan.FromSeconds(8).Ticks);
+            ActionResult second = await controller.StreamHlsEpisode(itemIdStr, TimeSpan.FromSeconds(8).Ticks);
+
+            Assert.IsType<ContentResult>(first);
+            Assert.IsType<ContentResult>(second);
+            var snapshot = TestCaptureLogger.Snapshot(logRecords);
+            Assert.Equal(
+                1,
+                snapshot.Count(r => r.Level == LogLevel.Information && r.Message.Contains("outside the encode window's honor band", StringComparison.Ordinal)));
+            // The second poll still logs (at Debug), so the drop stays
+            // diagnosable with debug logging on; only the Information noise
+            // is latched.
+            Assert.Contains(
+                snapshot,
+                r => r.Level == LogLevel.Debug && r.Message.Contains("outside the encode window's honor band", StringComparison.Ordinal));
         }
         finally
         {

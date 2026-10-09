@@ -136,6 +136,72 @@ here instead):
   The hoist owns all three log bodies: log the drop ONCE per generation
   (or Debug after the first occurrence), keeping Information for the first
   line triage actually needs.
+
+LANDED 2026-10-09 (all four file items): the ONE shared core
+`ServeWindowedPrewriteAsync` now owns the orchestration next to
+`ComputePrewriteWindow`/`ResumeInsidePrewriteHonorBand`, parameterized by the
+`WindowedPrewriteServeFamily` record (segmentSeconds/floor/lead + the
+family's log label/noun/drop attribution/windowed rationale/serving-line
+template); episode and song keep only their prewrite probe plus the family
+record, the audiobook body collapsed to a one-line wrapper over the core.
+Sub-item 2: the in-band start segment threads from the honor-band walk
+through `ServePlaylistSlicedAsync(preloadedStartSegment)` into
+`BuildResumePlaylist`/`BuildSlicedPlaylist(resolvedStartSegment)`; the
+serve's second full EXTINF walk per playlist fetch is gone (the Debug
+segment log recompute went with it). Sub-item 3: the core owns the
+non-vanish degrade and serves the ALREADY-WINDOWED content
+(`ServeTokenizedPlaylistContent`, the token tail extracted to the one
+helper it now shares with `ServePlaylistWithTokenAsync` and
+`ServePlaylistSlicedAsync`); the audiobook prewrite rows left
+`ServeAudiobookPlaylistAsync` (whose catch degraded to PhysicalFile over
+the raw death listing) for `ServePlaylistSlicedAsync`, happy-path bytes and
+vanish propagation proven identical, warm ENDLIST rows untouched. Item (a):
+the episode and audiobook drop logs took the JF-819 regime-honest outcome
+sentence; the rendered per-family text is otherwise byte-identical (the
+structured log PROPERTY names are unified to {LogLabel}/{EntityNoun}/
+{EntityId}/..., recorded on the family record's doc). Item (b):
+`TruncateToFirstSegments` is now a span-based IndexOf line scan emitting
+only kept lines (zero per-line strings, breaks at the truncation point;
+`IsSegmentUriLine` gained the span twin so ONE predicate body serves both
+entry points; Split/Join byte-equality is pinned by the builder's exact-
+equality test). Item (c): the drop log latches once per prewrite
+generation (Information first, Debug after; keyed by the prewrite path,
+`HonorBandDropLoggedPrewrites`). Tests: the three planters folded into
+`PlantLivePrewriteEncodeCore` (+ `PlantedLivePlaylistShape`), one new latch
+pin; baseline 335 = post-hoist 335 with ZERO pin edits, final full suite
+5569/5569 both TFMs.
+
+FOLLOW-UPS FILED FROM THE /simplify ROUND (this file is the tracker):
+1. THE LATCH RESET (the altitude angle, dispositioned skip-with-filing:
+   touching `ActiveEncodeGenerations` is outside the hoist diff): the path
+   key has two flaws a registry-threaded flag would close: (i) a re-encode
+   at UNCHANGED art ticks recreates the same prewrite path, so that fresh
+   encode's first out-of-band drop logs at Debug (the doc on the latch
+   records the limit honestly); (ii) entries are never evicted (one short
+   string per dropped-generation path, process lifetime). The deeper fix
+   converges with the anchor follow-up already recorded on
+   `TryServePrewrittenEpisodePlaylist`'s doc: thread the real encode-start
+   anchor (and this latch's flag) through the encode registries, whose
+   generation entries already evict at encode end.
+2. THE EPISODE PLANTER'S LIVE PARTIAL (the same round's own F2 shape, kept
+   deliberately during the fold): the consolidated
+   `PlantLivePrewriteEncodeCore` preserves the episode planter's historical
+   FixedTwoEntries stream.m3u8 (2 entries beside headSegmentCount segment
+   files). The single-item planter moved OFF that disagreeing shape at
+   JF-819 (the F2 rationale); the episode twin still carries it, so a
+   future pin built on that planter that touches the JF-503 hold path will
+   fail on the fixture. Switching it to AllPlantedSegments (and deleting
+   the enum case) is a one-line follow-up whose net is a suite run.
+3. THE RESUME-POLL SPLIT RESIDUAL (the /code-review high gate's
+   allocation finding, half-rejected on the facts): after item (b) the
+   only remaining full-content allocation on a mid-encode poll is the
+   honor-band walk's `TryResolveStartSegmentByExtinf` Split, and only on
+   RESUME polls (startTicks > 0); the walk itself early-exits at the
+   in-band start segment, and `CountSegmentsInPlaylist` was already
+   allocation-free (an IndexOf loop; the reviewer's Split claim about it
+   is wrong). Converting the EXTINF walk to the same span-scan shape is a
+   builder-side rewrite touching every slice path, not just the prewrite
+   family: filed here rather than folded into the hoist.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Definition of Done
