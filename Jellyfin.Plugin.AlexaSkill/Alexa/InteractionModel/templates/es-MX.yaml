@@ -10,6 +10,11 @@
 #
 # Run: python3 scripts/generate_interaction_model.py es-MX
 #
+# JF-844 densification (2026-10-09): PlayEpisodeIntent's SEASON-ED family
+# densified 5 -> 12 rows, identical to es-ES's densification (see its
+# header note for the live steal evidence and register rationale); the
+# connector-row divergence is recorded in the list below.
+#
 # JF-551 (2026-10-04): PlayEpisodeIntent gained the SUBJUNCTIVE wrapper
 # family (reproduzca, both word orders), identical to es-ES's (see its
 # header note for the wrapper morphology and probe evidence); the
@@ -34,10 +39,19 @@
 # - FollowMe drops "transferir la música" (4 samples vs es-ES's 5).
 # - PlayPlaylist drops 4 samples, keeping 8 of es-ES's 12 (no
 #   "Reproduce la lista {playlist}", "Inicia mi playlist {playlist}",
-#   "Poner la playlist {playlist}", "Iniciar la playlist {playlist}").
+#   "Poner la playlist {playlist}", "Iniciar la playlist {playlist}"),
+#   and ADDS 6 es-MX-only openers (Escucha / Toca / Dame / Quiero
+#   escuchar crossed with the playlist nouns; the JF-399 note below) -
+#   not a subset of es-ES's.
 # - Recommend drops "sugiere {media_type}" (6 samples vs es-ES's 7).
 # - SeriesName's last entry is El Señor de los Cielos (es-ES: El
 #   Internado).
+# - PlayEpisodeIntent: es-ES additionally carries the three JF-844 "que
+#   reproduzca" connector rows; they stay es-ES-only pending the es-ES
+#   connector probe going green (the JF-844 task's recorded follow-up;
+#   es-ES stayed red in the 2026-10-09 morning battery, so the siblings
+#   inherit the rows after es-ES is solved). The JF-844 season-ed
+#   densification is shared by all three es locales.
 # Everything else (the AMAZON.Musician built-in musician slots with no
 # JellyfinArtist type and no JF-415 seed, the 8-type roster before JF-583, the
 # absent modelConfiguration, the no-prompts dialog) is verbatim
@@ -426,6 +440,15 @@ intents:
       - reproduce la temporada {season_number} episodio {episode_number} de {series_name}
       - reproduce {series_name} temporada {season_number} episodio {episode_number}
       - ver temporada {season_number} episodio {episode_number} de {series_name}
+      # JF-844 densification (see the header note): identical rows to
+      # es-ES's densification; all three slots on every row.
+      - ver la temporada {season_number} episodio {episode_number} de {series_name}
+      - ver {series_name} temporada {season_number} episodio {episode_number}
+      - pon la temporada {season_number} episodio {episode_number} de {series_name}
+      - pon {series_name} temporada {season_number} episodio {episode_number}
+      - quiero ver la temporada {season_number} episodio {episode_number} de {series_name}
+      - quiero ver {series_name} temporada {season_number} episodio {episode_number}
+      - el episodio {episode_number} de la temporada {season_number} de {series_name}
       # JF-551: the one-shot wrapper's subjunctive payload; both word
       # orders, mirroring the imperative carriers (see header).
       - reproduzca {series_name} temporada {season_number} episodio {episode_number}

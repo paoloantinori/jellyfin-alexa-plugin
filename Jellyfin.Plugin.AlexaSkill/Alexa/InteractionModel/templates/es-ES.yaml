@@ -19,6 +19,33 @@
 # additions displaced the JF-551 wrapper family's mass); the fixture
 # note had pre-recorded this path (the it-IT "Di" connector precedent).
 #
+# JF-844 densification (2026-10-09, same task): the SEASON-ED family was
+# 7 rows against the it-IT vocabulary-Cartesian dozens and lost the
+# trainer race to the generic music carriers on EVERY season-ed phrase
+# (live, stable across identical-content rebuilds, content-caused:
+# "reproduce/pon breaking bad temporada uno episodio tres" routed
+# PlaySongIntent with song="breaking bad temporada 1", "ver ..." fell to
+# Fallback; the season-less forms stayed green and the ablation cleared
+# the recent additions as the root cause). Densified to 14 rows with the
+# family's own register: the ver article twin plus the ver series-first
+# order, both word orders of pon (already the PlayNextEpisode verb) and
+# quiero ver (already the PlayVideo verb), and the combined episode-first
+# reorder. Steal evidence is live only for the reproduce/pon series-first
+# shapes; the other five rows are the ordered register completions, so
+# the post-roll battery must attribute them shape-by-shape (the JF-541
+# addition-discipline tension is accepted: the thin family needed
+# working mass in one roll).
+# mira/enséñame are in NO es template inventory and were not invented;
+# the infinitive "reproducir" stays OUT (the es one-shot payload is the
+# SUBJUNCTIVE per JF-551; the 2026-09-13 infinitive attempt was the
+# wrong morphology and was reverted); mete/busca stay PlayVideo-only
+# (video register, not the episode family). The en/de lever
+# (modelConfiguration fallbackIntentSensitivity LOW) is rejected: it
+# biases Fallback vs real intents but cannot address the steal half (a
+# competing real intent wins), and the es family is consistently
+# without it. The JF-551 subjunctive and JF-844 connector rows are
+# untouched; every new row carries all three slots (anti-pattern #1).
+#
 # JF-551 (2026-10-04): PlayEpisodeIntent gained the SUBJUNCTIVE wrapper
 # family (reproduzca, both word orders). The es one-shot wrapper is
 # "pide a {inv} que + subjunctive", so the payload arrives as
@@ -454,6 +481,15 @@ intents:
       - reproduce la temporada {season_number} episodio {episode_number} de {series_name}
       - reproduce {series_name} temporada {season_number} episodio {episode_number}
       - ver temporada {season_number} episodio {episode_number} de {series_name}
+      # JF-844 densification (rationale and live evidence in the header
+      # note); all three slots on every row (anti-pattern #1).
+      - ver la temporada {season_number} episodio {episode_number} de {series_name}
+      - ver {series_name} temporada {season_number} episodio {episode_number}
+      - pon la temporada {season_number} episodio {episode_number} de {series_name}
+      - pon {series_name} temporada {season_number} episodio {episode_number}
+      - quiero ver la temporada {season_number} episodio {episode_number} de {series_name}
+      - quiero ver {series_name} temporada {season_number} episodio {episode_number}
+      - el episodio {episode_number} de la temporada {season_number} de {series_name}
       # JF-551: the one-shot wrapper's subjunctive payload ("pide a X que
       # reproduzca ..."); both word orders, mirroring the imperative carriers.
       - reproduzca {series_name} temporada {season_number} episodio {episode_number}
