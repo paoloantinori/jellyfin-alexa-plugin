@@ -30,7 +30,11 @@ Shuffle, repeat and loop now confirm out loud when they take effect (before: sil
 
 ## Audiobooks, end to end
 
-Asking for a book now plays the whole book: before, a request could start a single chapter and then fall silent. Chapters play in the right order even when the files carry no track metadata (the skill reads the file names, the way a person would). Resuming works from any point, hours into a long book included, on any Echo device. Books that live as single files side by side in one folder no longer get merged into one giant queue.
+Asking for a book now plays the whole book: before, a request could start a single chapter and then fall silent. Chapters play in the right order even when the files carry no track metadata (the skill reads the file names, the way a person would). Resuming works from any point, hours into a long book included, on any Echo device. Books that live as single files side by side in one folder no longer get merged into one giant queue. You can name any book from your own library in one shot, not just famous titles, and the same works in every language the skill speaks. Starting a long book while the server is still preparing it no longer stalls: playback begins as soon as the first seconds are ready and the seek bar grows as preparation continues.
+
+## Episodes by number
+
+Asking for episode 54 of a series now works without naming the season. If the season matters for finding the right episode, the skill asks which one you mean instead of quietly playing something else.
 
 ## Confirmations you can trust
 
