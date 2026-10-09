@@ -2081,6 +2081,17 @@ public sealed class PlaybackLaunchBuilder
             || context is null // DeviceSupportsVideoApp fails OPEN on absent capability data; the send would NRE.
             || !Interface.VideoAppCapabilities.DeviceSupportsVideoApp(context))
         {
+            // JF-843 residual instrumentation (2026-10-09): the live device log
+            // showed the announce VANISHING on the capable post-elicit path with
+            // none of the branches this method can take explaining it; this line
+            // names the exact short-circuit so the next device session closes the
+            // question (remove once attributed; the task file carries the case).
+            _logger.LogDebug(
+                "VideoAnnounceGate short-circuited: announceNull={AnnounceNull} requestType={RequestType} contextNull={ContextNull} deviceSupportsVideoApp={DeviceSupportsVideoApp}",
+                announce is null,
+                request?.GetType().Name,
+                context is null,
+                context is not null && Interface.VideoAppCapabilities.DeviceSupportsVideoApp(context));
             return announce;
         }
 
@@ -2103,6 +2114,13 @@ public sealed class PlaybackLaunchBuilder
         // send falls back to the announce riding the final response (the pre-JF-501
         // shape) instead of being lost.
         bool sent = await _sendProgressiveResponse(context, request, progressiveSpeech).ConfigureAwait(false);
+        // JF-843 residual instrumentation (2026-10-09): the send's outcome at Debug
+        // (the seam logs the attempt; this logs whether Alexa accepted it), same
+        // removal clause as the gate line above.
+        _logger.LogDebug(
+            "VideoAnnounceGate progressive send result: sent={Sent} requestType={RequestType}",
+            sent,
+            request?.GetType().Name);
         return sent ? null : announce;
     }
 
