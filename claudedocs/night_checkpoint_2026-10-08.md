@@ -76,6 +76,29 @@ cleanup. The box was healthy at 00:15 (load 2.17 falling, no tasks running).
   JF-841 (season-only gate), JF-842 (flaky ffmpeg test), JF-843 (pending,
   numbering ambiguity).
 
+## State at 04:00 (2026-10-09)
+
+- The LIVE PASS ran: 17-locale rebuild (17/17 SUCCEEDED) + full catalog sync
+  (16/16 locales, 383 audiobooks, AudiobookTitle wired, 21 seed values
+  appended live) + the battery. The JF-814 incident pins are LIVE-GREEN
+  (both forms route PlayEpisodeIntent); season-ed forms green; the album
+  guard green; "metti l'audiolibro di sapiens" (library, out-of-seed) routes
+  PlayBook LIVE (AC#1 of JF-823 met).
+- The battery's 6 reds decompose: the NextUp article-form steal (fix IN
+  FLIGHT with the post-A/B worker), JF-844's four roll-residuals (star-wars
+  pair, murderbot digit season, canzone steal [mechanism solved: routes
+  PlayArtistSongs 'P!nk floyd', the JF-690 arbitration prompts on the tie,
+  handler blameless], es-ES subjunctive), and the known simulate outage
+  class. JF-823's AC#2 verdict recorded on its task file (commit 0cfe298a).
+- IN FLIGHT: the post-A/B worker (the 16-locale generic-word seed arm + the
+  NextUp article form across locales + fixture pins). After its gates:
+  my gate-marker, merge, suite, deploy, ONE more roll (rebuild + backdated
+  sync), then the JF-844 re-probe protocol + the A/B re-probes (generic
+  words, sapiens, xyzzyfoo) + the successivo pin.
+- The memory file smapi-model-put-strips-catalog-wiring was corrected (the
+  task-id typo; the backdate alone triggers the sync at startup, no POST
+  needed).
+
 ## Queue after these (nothing dispatched)
 
 - JF-820 (foreign-generation stale prewrite, VideoAudioController; LOW priority;

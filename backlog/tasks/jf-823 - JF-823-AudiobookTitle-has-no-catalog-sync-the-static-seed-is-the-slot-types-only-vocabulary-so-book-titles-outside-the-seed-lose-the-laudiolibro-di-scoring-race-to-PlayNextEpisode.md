@@ -250,3 +250,49 @@ unchanged]):
   {series}"). Fix: article-form PlayNextEpisode samples (it-IT now, audit
   the 16 mirrors); handler-equivalent meanwhile (empty numbers fall to the
   same NextUp core), but the guard pin is red until fixed.
+## POST-A/B FIX: the generic-word seed arm (2026-10-09, post-A/B fix worker)
+
+The live A/B verdict (2026-10-09 03:30) materialized risk (b): the 16 non-it
+locales' AudiobookTitle vocabulary (one generic word each, pre-wiring)
+vanished under the catalog replace, and generic-word fills degraded to
+NO_SELECTION live (de-DE "lies ein hörbuch" and en-GB "play an audiobook"
+NO_SELECTION; "spiel das hörbuch" -> MediaInfoIntent; en-US "play the
+audiobook" survives on its wider carriers).
+
+FIX (the marker finding-3 option, the Series-style skip REVERSED for the
+generic word): `CatalogSeedEnrichment.GenericAudiobookWords`, a 16-entry
+per-locale table (internal, test-visible for the drift pin), each entry the
+EXACT generic word that locale's template AudiobookTitle block carried -
+ar-SA كتاب صوتي, de-DE Hörbuch, en-AU/CA/GB/IN/US audiobook, es-ES/MX/US
+audiolibro, fr-CA/FR livre audio, hi-IN ऑडियोबुक, ja-JP オーディオブック,
+nl-NL luisterboek, pt-BR audiolivro (sourced from the templates, not
+invented; ar-SA is inert under the JF-543 gate but kept so the table mirrors
+the full 16-locale vocabulary). MergeInto appends the leg's OWN locale word
+to the audiobook payload leg only - never a union - through the shared
+MergeSeeds path (SlotValueHelper.Truncate, library-wins dedup, stable seed
+guid), so it is idempotent per sync and cannot duplicate a library value.
+The it-IT 22-value title block stays the shared seed authority; it-IT has
+no table entry (it never carried a generic word). The empty-model-seeds
+warning stays keyed on the it-IT block; the early return now gates on
+combined emptiness so a stripped block with the word present keeps the leg
+alive.
+
+The ItItSeedLocale comment reversal is applied in the same change (the skip
+rationale it recorded is now the arm's rationale, citing the live verdict).
+
+PINS (CatalogSeedEnrichmentTests): MergeInto_AudiobookPayload_DeLegGainsItsOwnGenericWordOnly
+(Hörbuch rides the de-DE leg; luisterboek/livre audio/audiolibro/audiolivro
+do NOT; the shared it-IT seed still rides; exact count = library + 22 + 1),
+MergeInto_AudiobookPayload_ItItLegCarriesNoGenericWord (byte-identical
+pre-arm shape),
+MergeInto_AudiobookPayload_GenericWordDoesNotDoubleAppend (idempotency),
+GenericAudiobookWords_MatchEachTemplatesAudiobookTitleValue (the drift
+tripwire: every non-it embedded model's AudiobookTitle block is exactly the
+table's word; a template edit without the table update fails here - the F5
+ownership-note pattern). Red-green: the two behavioral pins run red against
+the arm-disabled tree (2 failures), green restored (21/21 both TFMs). The
+full-sync pins are unchanged and green (it-IT legs carry no word).
+
+Risk (a) (out-of-catalog tails misroute to sibling intents) stays the
+ACCEPTED JF-684 tradeoff per the verdict; the handler-side guard question is
+the separate open item the verdict filed.

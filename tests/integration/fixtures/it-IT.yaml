@@ -564,8 +564,19 @@ tests:
 
   # JF-814 competition guard: the new number-carrying samples must not steal
   # PlayNextEpisode's phrases. The ordinal word cannot fill the AMAZON.NUMBER
-  # episode_number slot, so this stays NextUp.
+  # episode_number slot, so this stays NextUp. LIVE FINDING (2026-10-09 A/B
+  # battery, directional across two probe rounds): this guard FAILED live -
+  # the phrase routed PlayEpisodeIntent because PlayNextEpisode carried no
+  # article + noun-first family to claim "l'episodio {position} di {series}";
+  # the articled samples added to the it-IT template now own that shape.
   - utterance: "l'episodio successivo di sailor moon"
+    expected_intent: PlayNextEpisodeIntent
+    expected_slots: {}
+
+  # JF-814 article-form position pin: the new articled family's own shape
+  # (verbless "l'episodio {position} di {series}", the pre-fix steal surface;
+  # "prossimo" is the other article-less synonym of the "next" position).
+  - utterance: "l'episodio prossimo di sailor moon"
     expected_intent: PlayNextEpisodeIntent
     expected_slots: {}
 

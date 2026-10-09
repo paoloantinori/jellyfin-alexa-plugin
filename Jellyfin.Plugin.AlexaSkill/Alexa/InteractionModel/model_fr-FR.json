@@ -593,10 +593,15 @@
           "joue {episode_position} épisode de {series_name}",
           "joue {episode_position} épisode de la série {series_name}",
           "mets {episode_position} épisode de {series_name}",
+          "joue l'épisode {episode_position} de {series_name}",
+          "mets l'épisode {episode_position} de {series_name}",
+          "regarde l'épisode {episode_position} de {series_name}",
           "continue à regarder {series_name}",
           "De jouer {episode_position} épisode de {series_name}",
           "De jouer {episode_position} épisode de la série {series_name}",
           "De mettre {episode_position} épisode de {series_name}",
+          "De jouer l'épisode {episode_position} de {series_name}",
+          "De mettre l'épisode {episode_position} de {series_name}",
           "De continuer à regarder {series_name}"
         ]
       },
