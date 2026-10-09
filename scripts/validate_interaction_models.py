@@ -761,6 +761,13 @@ ES_TRIO_PLAY_EPISODE_DIVERGENCES: dict[str, frozenset[str]] = {
 ES_TRIO_REFERENCE_LOCALE = "es-ES"
 
 
+def _emit_coverage_on_skip(coverage_warnings: list[str]) -> None:
+    """Print the coverage findings at phase level on a skip (rationale in the
+    lint docstring, JF-852/F2)."""
+    for w in coverage_warnings:
+        print(f"  WARN (coverage, skipped parity): {w.strip()}")
+
+
 def lint_es_trio_play_episode_mirroring(all_models: dict[str, dict]) -> list[str] | None:
     """WARNING lint (JF-844.1): the es trio PlayEpisodeIntent sample mirroring.
 
@@ -780,37 +787,43 @@ def lint_es_trio_play_episode_mirroring(all_models: dict[str, dict]) -> list[str
     for an all-clear. The absence itself is only warning-covered elsewhere (a
     missing PlayEpisodeIntent warns in the cross-locale check; a missing model
     file is silent beyond this lint's own SKIP line), so the SKIP must print,
-    never return quietly.
+    never return quietly. The unlisted-es-locale coverage findings are
+    computed BEFORE the skip check and still emit on a skip (phase-level WARN
+    lines, not the summary sink): a new es locale added in the same window as
+    a missing trio member must not escape silently (JF-852).
     """
+    # JF-824 convention: an es locale present in the models but absent from
+    # the sibling table is silently outside the lint; fire so a new es locale
+    # gets its row (or an explicit exclusion) in the same change that adds it.
+    # Computed first so the findings survive the skip return below (JF-852).
+    coverage_warnings = [
+        f"  [{locale}] es locale present but no ES_TRIO_PLAY_EPISODE_DIVERGENCES "
+        "row; the PlayEpisode mirroring lint does not cover it "
+        "(add one in the same change) (JF-844.1)"
+        for locale in sorted(
+            loc
+            for loc in all_models
+            if loc.split("-")[0] == "es"
+            and loc != ES_TRIO_REFERENCE_LOCALE
+            and loc not in ES_TRIO_PLAY_EPISODE_DIVERGENCES
+        )
+    ]
     intents: dict[str, set[str]] = {}
     for locale in (ES_TRIO_REFERENCE_LOCALE, *ES_TRIO_PLAY_EPISODE_DIVERGENCES):
         lm = all_models.get(locale)
         if lm is None:
             print(f"  SKIP: [{locale}] model absent, es trio mirroring lint not run")
+            _emit_coverage_on_skip(coverage_warnings)
             return None
         intent = intent_by_name(lm, "PlayEpisodeIntent")
         if intent is None:
             print(f"  SKIP: [{locale}] has no PlayEpisodeIntent, es trio mirroring lint not run")
+            _emit_coverage_on_skip(coverage_warnings)
             return None
         intents[locale] = set(intent.get("samples", []))
 
     reference = intents[ES_TRIO_REFERENCE_LOCALE]
-    warnings: list[str] = []
-    # JF-824 convention: an es locale present in the models but absent from
-    # the sibling table is silently outside the lint; fire so a new es locale
-    # gets its row (or an explicit exclusion) in the same change that adds it.
-    for locale in sorted(
-        l
-        for l in all_models
-        if l.split("-")[0] == "es"
-        and l != ES_TRIO_REFERENCE_LOCALE
-        and l not in ES_TRIO_PLAY_EPISODE_DIVERGENCES
-    ):
-        warnings.append(
-            f"  [{locale}] es locale present but no ES_TRIO_PLAY_EPISODE_DIVERGENCES "
-            "row; the PlayEpisode mirroring lint does not cover it "
-            "(add one in the same change)"
-        )
+    warnings: list[str] = list(coverage_warnings)
     for sibling, expected_divergences in ES_TRIO_PLAY_EPISODE_DIVERGENCES.items():
         sibling_samples = intents[sibling]
         for sample in sorted(sibling_samples - reference):
@@ -1394,7 +1407,10 @@ def run_warning_phase(
     A None return is a SKIPPED check: the check printed its own SKIP line
     saying why, or is documented as a silent skip (every lint here that
     returns list | None states which in its docstring), so the phase
-    prints nothing more and never an all-clear over unchecked parity.
+    prints nothing more and never an all-clear over unchecked parity. A
+    check MAY print additional findings of its own alongside the SKIP
+    (the es-trio lint's coverage warnings do, JF-852); those are the
+    check's output, still not extended into the sink.
     """
     print(f"\n{title}:")
     warnings = check()
@@ -1516,7 +1532,10 @@ def main() -> int:
         else:
             print("  No sample carries {season_number} without {episode_number} in any locale")
 
-    # Phase 11: es trio PlayEpisodeIntent mirroring lint (JF-844.1 warning check)
+    # es trio PlayEpisodeIntent mirroring lint (JF-844.1 warning check). The
+    # former "Phase 11" label was dropped (JF-852/F6): main() prints this
+    # between the JF-549 and JF-550 phases, and the printed title itself never
+    # carried a number, so no stdout baseline changes with the label gone.
     if all_models:
         run_warning_phase(
             "PlayEpisode es-trio mirroring lint",

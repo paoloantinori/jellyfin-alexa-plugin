@@ -95,30 +95,60 @@ def test_findings_carry_the_task_marker():
     assert warnings and all("JF-844.1" in w for w in warnings), warnings
 
 
-def test_missing_sibling_locale_skips_not_all_clear():
+def test_coverage_finding_still_fires_when_parity_skips(capsys):
+    # JF-852/F2: a new es locale added in the same window as a missing trio
+    # member must not escape silently; the SKIP print stays AND the coverage
+    # finding prints at the phase level.
+    trio = _trio([SHARED] + CONNECTORS, [SHARED], [SHARED])
+    trio["es-AR"] = _lm([SHARED])
+    del trio["es-US"]
+    assert lint_es_trio_play_episode_mirroring(trio) is None
+    out = capsys.readouterr().out
+    assert "  SKIP: [es-US] model absent, es trio mirroring lint not run\n" in out
+    assert (
+        "  WARN (coverage, skipped parity): [es-AR] es locale present but no "
+        "ES_TRIO_PLAY_EPISODE_DIVERGENCES row; the PlayEpisode mirroring lint "
+        "does not cover it (add one in the same change) (JF-844.1)\n" in out
+    )
+
+
+def test_missing_sibling_locale_skips_not_all_clear(capsys):
     pair = {"es-ES": _lm([SHARED] + CONNECTORS), "es-MX": _lm([SHARED])}
     assert lint_es_trio_play_episode_mirroring(pair) is None
+    # JF-612: the SKIP print is the load-bearing honest signal; pin it exactly.
+    assert "  SKIP: [es-US] model absent, es trio mirroring lint not run\n" in capsys.readouterr().out
 
 
-def test_missing_reference_locale_skips_not_all_clear():
+def test_missing_reference_locale_skips_not_all_clear(capsys):
     pair = {"es-MX": _lm([SHARED]), "es-US": _lm([SHARED])}
     assert lint_es_trio_play_episode_mirroring(pair) is None
+    assert "  SKIP: [es-ES] model absent, es trio mirroring lint not run\n" in capsys.readouterr().out
 
 
-def test_missing_intent_skips_not_all_clear():
+def test_missing_intent_skips_not_all_clear(capsys):
     trio = _trio([SHARED] + CONNECTORS, [SHARED], [SHARED])
     trio["es-US"] = {"intents": []}
+    trio["es-AR"] = _lm([SHARED])
     assert lint_es_trio_play_episode_mirroring(trio) is None
+    out = capsys.readouterr().out
+    assert (
+        "  SKIP: [es-US] has no PlayEpisodeIntent, es trio mirroring lint not run\n"
+        in out
+    )
+    # The intent-None skip arm must ALSO emit the coverage finding (JF-852).
+    assert "  WARN (coverage, skipped parity): [es-AR]" in out
 
 
 def test_unlisted_es_locale_fires_coverage_finding():
     # JF-824 convention: a new es locale must join the sibling table in the
-    # same change, or it sits silently outside the lint.
+    # same change, or it sits silently outside the lint. Also guards the
+    # (JF-844.1) marker the coverage arm owes its convention (JF-852).
     trio = _trio([SHARED] + CONNECTORS, [SHARED], [SHARED])
     trio["es-AR"] = _lm([SHARED])
     warnings = lint_es_trio_play_episode_mirroring(trio)
     assert len(warnings) == 1, warnings
     assert "[es-AR]" in warnings[0] and "no ES_TRIO_PLAY_EPISODE_DIVERGENCES" in warnings[0], warnings
+    assert "JF-844.1" in warnings[0], warnings
 
 
 def test_non_es_locale_outside_lint_stays_quiet():
