@@ -882,7 +882,10 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
             // advance; the server's own next-up excludes them the same way
             // (TVSeriesManager: ParentIndexNumberNotEquals = 0), review JF-324 F1.
             ParentIndexNumberNotEquals = 0,
-            OrderBy = new[] { (ItemSortBy.ParentIndexNumber, SortOrder.Ascending), (ItemSortBy.IndexNumber, SortOrder.Ascending) },
+            // The ONE TV air-order composite (JF-845): the inline 2-axis twin
+            // migrated onto the named constant; the constant's trailing SortName
+            // axis only makes duplicate (season, episode) ties deterministic.
+            OrderBy = QueueContinuationFetcher.TvEpisodeAirOrder,
             Limit = EpisodeCandidateQueryLimit,
             DtoOptions = new DtoOptions(true)
         };
