@@ -45,9 +45,22 @@ session by design.
    (marker coverage + SKIP pins); the withdrawn-round jf-848 misquote claim
    ADJUDICATED FALSE (the sentence matches the recorded A/B verdict) and the
    four em-dashes left as pre-existing tracker-wide debt - not filed.
-4. JF-800 (IL roster guard, the JF-801 companion) RUNNING on /tmp/wt-jf800.
-5. Fold-sweep lane RUNNING on /tmp/wt-fold (markdown-only): all raw tails
-   across backlog/tasks folded into managed Implementation Notes sections.
+4. JF-800 MERGED 00:55 (worker 821c4439): ParallelPhaseStaticSurfaceTests
+   (626 lines, IlCallScanner idiom) mechanically enforces the parallel-phase
+   static-surface contract; roster = no EXCLUSIVE collection (review F1);
+   method-grained poison fixpoint (type-grain was 19 false positives);
+   DeadMicSweepElicitTests de-based, 12 tests back to the parallel phase;
+   6 sabotage shapes red with named chains; suite 5608/5608 both TFMs; cs
+   identity check empty. Follow-ups landed in JF-854 (write-facade residual).
+5. Fold sweep MERGED 01:00 as a2fb7e6d (worker 82608539): 95 files, 94
+   folded + jf-801 test-note deletion; EMPIRICAL gate through the real
+   backlog CLI: 34 files went from lossy-per-rewrite to 0-loss (jf-823
+   119->0, jf-844 169->0); 3 files REVERTED (fold would worsen: pathological
+   markers; hand treatment = JF-853); 4 ENAMETOOLONG files are a pre-existing
+   upstream hazard (MCP edit deletes them; upstream issue draft in JF-853).
+   ALL MCP edits are now lossless on 845/848 files. Scripts preserved at
+   /var/tmp/fold_sweep/ (census + rt_battery; JF-854 makes the census a repo
+   tool).
 
 ## INCIDENT (23:15-23:45): the MCP tail-truncation hit twice more
 
