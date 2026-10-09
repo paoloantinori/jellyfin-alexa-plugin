@@ -173,6 +173,13 @@ public class PlayEpisodeIntentHandlerTests : PluginTestBase
             new[] { "series_name", "season_number", "episode_number" }.OrderBy(s => s),
             elicit.UpdatedIntent.Slots.Keys.OrderBy(s => s));
 
+        // JF-814 gate-marker F1 (the JF-614 contract): the already-captured numbers
+        // must be echoed as slotValues or the value-less updatedIntent may be
+        // treated as dialog-state replacement and wipe them.
+        Assert.Null(elicit.UpdatedIntent.Slots["series_name"].Value);
+        Assert.Equal("4", elicit.UpdatedIntent.Slots["season_number"].Value);
+        Assert.Equal("10", elicit.UpdatedIntent.Slots["episode_number"].Value);
+
         Assert.NotNull(response.Response.Reprompt);
         Assert.Contains("series", TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
     }
@@ -233,6 +240,13 @@ public class PlayEpisodeIntentHandlerTests : PluginTestBase
         Assert.Equal(
             new[] { "series_name", "season_number", "episode_number" }.OrderBy(s => s),
             elicit.UpdatedIntent.Slots.Keys.OrderBy(s => s));
+
+        // JF-814 gate-marker F1 (the JF-614 contract): the captured series and
+        // episode number must ride the updatedIntent as slotValues; the elicited
+        // season stays value-less.
+        Assert.Equal("Sailor Moon", elicit.UpdatedIntent.Slots["series_name"].Value);
+        Assert.Null(elicit.UpdatedIntent.Slots["season_number"].Value);
+        Assert.Equal("54", elicit.UpdatedIntent.Slots["episode_number"].Value);
 
         Assert.NotNull(response.Response.Reprompt);
         // The elicit must precede any library work: no NextUp query, no episode search.

@@ -30,6 +30,17 @@ and slot), with the fully-numberless series-only request still keeping the
 NextUp fallback. Ship the gate extension in the SAME change that adds the first
 season-only sample.
 
+AMENDMENT (gate-marker F3, 2026-10-09): the same extension must also cover the
+UNPARSEABLE-BUT-FILLED episode_number shape. Today a non-empty episode_number
+delivery that ItalianNumberWords cannot parse ("episodio cinquantaquantesimo"
+arriving as a word the helper rejects, or a mangled ASR fragment) makes
+episodeParsed false, so the JF-814 gate does NOT fire and the request falls
+silently to the NextUp core, the same wrong-item substitution. When the gate is
+generalized, a non-empty-but-unparseable number slot must be treated as an
+elicit (the "quale stagione/episodio?" ask), never as a fall-through: empty and
+unparseable are different user intents (absent vs heard-but-garbled).
+
+
 Marker: a grep for `season_number}` inside PlayEpisodeIntent sample lists in
 `Alexa/InteractionModel/templates/*.yaml` (season-ed families carry it alongside
 `episode_number`, so the signal is a sample with season but without episode)

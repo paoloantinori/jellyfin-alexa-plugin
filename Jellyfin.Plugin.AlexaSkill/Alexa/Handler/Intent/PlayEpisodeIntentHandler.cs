@@ -79,6 +79,9 @@ public class PlayEpisodeIntentHandler : BaseHandler
             return elicitCancel;
         }
 
+        string? seasonRaw = intentRequest.Intent.Slots?.TryGetValue("season_number", out var seasonSlot) == true ? seasonSlot.Value : null;
+        string? episodeRaw = intentRequest.Intent.Slots?.TryGetValue("episode_number", out var episodeSlot) == true ? episodeSlot.Value : null;
+
         if (string.IsNullOrWhiteSpace(seriesName))
         {
             // JF-549 live incident 2026-09-12 17:45: this branch used to Tell the
@@ -88,16 +91,21 @@ public class PlayEpisodeIntentHandler : BaseHandler
             // reply is captured into series_name and the intent re-arrives complete.
             // Requires PlayEpisodeIntent in the model's dialog.intents (all 17 already
             // register it, anti-pattern #9).
-            return BuildDialogElicitResponse(
-                "DidNotCatchSeriesName",
-                locale,
-                "series_name",
+            // JF-814 gate-marker F1 (the JF-614 contract): echo the already-captured
+            // numbers as slotValues; a value-less updatedIntent may be treated as
+            // dialog-state replacement and wipe them.
+            return BuildElicitSlotResponse(
                 IntentNames.PlayEpisode,
-                Util.ElicitSlots.For(IntentNames.PlayEpisode));
+                "series_name",
+                Util.ElicitSlots.For(IntentNames.PlayEpisode),
+                ResponseStrings.Get("DidNotCatchSeriesName", locale),
+                slotValues: new Dictionary<string, string?>
+                {
+                    ["series_name"] = null,
+                    ["season_number"] = seasonRaw,
+                    ["episode_number"] = episodeRaw,
+                });
         }
-
-        string? seasonRaw = intentRequest.Intent.Slots?.TryGetValue("season_number", out var seasonSlot) == true ? seasonSlot.Value : null;
-        string? episodeRaw = intentRequest.Intent.Slots?.TryGetValue("episode_number", out var episodeSlot) == true ? episodeSlot.Value : null;
 
         Logger.LogDebug("PlayEpisode: seriesName='{SeriesName}', season={Season}, episode={Episode}, locale={Locale}", seriesName, seasonRaw, episodeRaw, locale);
 
@@ -127,12 +135,20 @@ public class PlayEpisodeIntentHandler : BaseHandler
                 "PlayEpisode: episode number present but season missing (season='{Season}', episode='{Episode}'), eliciting season_number",
                 seasonRaw,
                 episodeRaw);
-            return BuildDialogElicitResponse(
-                "DidNotCatchSeasonNumber",
-                locale,
-                "season_number",
+            // JF-614 contract (gate-marker F1): the captured series name and episode
+            // number ride the updatedIntent as slotValues so the round-trip cannot
+            // wipe them; the elicited season stays value-less.
+            return BuildElicitSlotResponse(
                 IntentNames.PlayEpisode,
-                Util.ElicitSlots.For(IntentNames.PlayEpisode));
+                "season_number",
+                Util.ElicitSlots.For(IntentNames.PlayEpisode),
+                ResponseStrings.Get("DidNotCatchSeasonNumber", locale),
+                slotValues: new Dictionary<string, string?>
+                {
+                    ["series_name"] = seriesName,
+                    ["season_number"] = null,
+                    ["episode_number"] = episodeRaw,
+                });
         }
 
         bool hasExplicitNumbers = seasonParsed && episodeParsed;

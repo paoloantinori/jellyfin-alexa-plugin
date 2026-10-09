@@ -547,6 +547,11 @@ tests:
   # series_name/episode_number is wiring-state dependent for a non-seed series
   # (JF-552 family), so the wrapper form pins intent-level only; the two-step
   # form below pins the slots.
+  # Gate-marker F6 correction: intent-level pinning does NOT protect against the
+  # JF-684 catalog NO_SELECTION shape (a value matching no catalog value can make
+  # the NLU select NO intent at all); this battery's safety today rests on the
+  # live catalog resolving "sailor moon" into the JellyfinArtist/SeriesName
+  # catalog values.
   - utterance: "chiedi a mia collezione di mettere l'episodio 54 di sailor moon"
     expected_intent: PlayEpisodeIntent
     expected_slots: {}

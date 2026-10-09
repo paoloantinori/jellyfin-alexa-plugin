@@ -1228,6 +1228,31 @@ def check_wrapper_coverage(all_models: dict[str, dict]) -> list[str]:
     return warnings
 
 
+def check_play_episode_season_without_episode(all_models: dict[str, dict]) -> list[str]:
+    """ERROR check (JF-841 invariant, JF-814 gate-marker F4): no PlayEpisodeIntent
+    sample may carry {season_number} without {episode_number} in ANY locale. The
+    JF-814 handler gate elicits the season only when the EPISODE side is present
+    (episodeParsed && !seasonParsed); a season-only sample family would deliver
+    the symmetric shape, which still falls silently to the NextUp core, the exact
+    wrong-item class JF-814 closes. Any locale gaining a season-only family must
+    extend the handler gate in the SAME change; this check makes the invariant
+    self-enforcing instead of memory-dependent."""
+    errors: list[str] = []
+    for locale, lm in sorted(all_models.items()):
+        intent = intent_by_name(lm, "PlayEpisodeIntent")
+        if intent is None:
+            continue  # a missing intent is a cross-locale error elsewhere
+        for sample in intent.get("samples", []):
+            if "{season_number}" in sample and "{episode_number}" not in sample:
+                errors.append(
+                    f"[{locale}] PlayEpisodeIntent sample '{sample}' carries "
+                    f"{{season_number}} without {{episode_number}}: a season-only ask "
+                    f"still falls silently to the NextUp core (the JF-814 wrong-item "
+                    f"class); extend the handler elicit gate in the same change (JF-841)"
+                )
+    return errors
+
+
 def main() -> int:
     verbose = "--verbose" in sys.argv[1:]
     model_files = sorted(MODELS_DIR.glob("model_*.json"))
@@ -1346,6 +1371,17 @@ def main() -> int:
     if all_models:
         wrapper_warnings = check_wrapper_coverage(all_models)
         all_warnings.extend(wrapper_warnings)
+
+    # Phase 10: PlayEpisode season-without-episode (JF-841 invariant, error check)
+    if all_models:
+        print("\nPlayEpisode season-only sample check:")
+        season_only_errors = check_play_episode_season_without_episode(all_models)
+        all_errors.extend(season_only_errors)
+        if season_only_errors:
+            for e in season_only_errors:
+                print(f"  ERROR: {e}")
+        else:
+            print("  No sample carries {season_number} without {episode_number} in any locale")
 
     # Phase 8: elicit-target dialog registration (JF-550 error check)
     if all_models:
