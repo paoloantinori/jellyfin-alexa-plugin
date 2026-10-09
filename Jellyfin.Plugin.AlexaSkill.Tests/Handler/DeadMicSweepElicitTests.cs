@@ -29,11 +29,12 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 /// The elicit branches return before any dependency is touched, so the handlers
 /// are constructed with bare mocks.
 /// </summary>
-// JF-792: PluginTestBase's ctor resets the shared statics (Plugin.Instance,
-// QueueContinuationStore, RadioModeState, PlaybackReportOrdering), so this class
-// must be serialized with every other static-touching class: Plugin collection.
-[Collection("Plugin")]
-public class DeadMicSweepElicitTests : PluginTestBase
+// JF-800: de-based. The PluginTestBase inheritance was unused ceremony (this
+// doc's own license: no dependency is touched), and the per-test static resets
+// it bought were equally inert. The class runs in the parallel phase;
+// ParallelPhaseStaticSurfaceTests now reds mechanically if a future edit makes
+// that untrue (a shared-static touch, direct or through TestHelpers).
+public class DeadMicSweepElicitTests
 {
     private static IntentRequest Request(string intentName, params (string Slot, string? Value)[] slots)
     {

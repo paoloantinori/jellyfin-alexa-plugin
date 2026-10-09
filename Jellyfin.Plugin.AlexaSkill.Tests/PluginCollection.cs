@@ -21,7 +21,11 @@ using RadioModeState = Jellyfin.Plugin.AlexaSkill.Alexa.RadioModeState;
 // and never overlaps the parallel phase. Classes WITHOUT a collection attribute must touch
 // none of those statics (the JF-792 audit of all previously-uncollected classes; benign
 // exceptions: PluginTempDirSweeper's ConcurrentBag registration, read-only IL/locale-file
-// scans, self-contained per-class statics).
+// scans, self-contained per-class statics). Enforced mechanically since JF-800 by
+// ParallelPhaseStaticSurfaceTests (an IL roster test over this assembly; the surface
+// derivation and the licensed exceptions live in that test's doc) for direct touches
+// and test-assembly helper vectors; production-internal indirection remains the
+// audit's documented residual.
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests;
 
