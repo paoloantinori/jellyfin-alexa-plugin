@@ -210,3 +210,25 @@ rebuild + sync 16/16 canaries; the JF-844 branch-only round live):
    red-marked.
 Standing guards all green in the same battery: the incident phrase, the
 article competition, sapiens.
+
+DENSIFICATION VERDICT (2026-10-09 16:40, after the surgery roll: three es
+PUTs + wiring sync, canaries green at the new counts 458/455/443):
+
+WON (the shapes the new rows cover): "que reproduzca breaking bad temporada
+uno episodio tres" -> PlayEpisodeIntent ALL SLOTS (the ORIGINAL residual,
+FallbackIntent across three builds, now green); "ver ..." -> PlayEpisodeIntent
+all slots. The season-less controls stay green.
+
+STILL STOLEN: "reproduce/pon breaking bad temporada uno episodio tres" (the
+series-first shapes whose exact samples pre-existed) -> PlaySongIntent with
+song="breaking bad temporada 1" in es-ES; in es-MX/es-US the same phrase goes
+to PlayNextIntent (a different thief; their families are 12 rows vs es-ES 14).
+
+CONCLUSION: densification wins exactly the shapes it adds rows for; the
+series-first reproduce/pon shapes remain dominated by the free-text music
+carriers regardless of episode-family mass. The remaining lever is the THIEF
+side: the PlaySong bare carriers ("reproduce {song}") in the es locales - the
+same class as the JF-459 bare-album trim, but the bare song carrier IS the
+song-ask design, so trimming or qualifying it trades episode-routing against
+song-routing and needs the maintainer's call plus a live A/B. FILED as the
+open question below; the es fixtures stay red as the tracker.
