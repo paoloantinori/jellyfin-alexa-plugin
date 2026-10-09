@@ -65,6 +65,7 @@ Exit code: 0 if all checks pass, 1 if any error found. Warnings alone exit 0.
 import json
 import re
 import sys
+from collections.abc import Callable
 
 import yaml
 from pathlib import Path
@@ -1367,6 +1368,41 @@ def check_play_episode_season_without_episode(all_models: dict[str, dict]) -> li
     return errors
 
 
+def print_phase_warnings(warnings: list[str], all_clear: str) -> None:
+    """Print one phase's findings: WARN lines, or the all-clear line when
+    empty. Caller contract: extend the sink BEFORE calling; a skipped
+    check never reaches here (the skip contract lives on
+    run_warning_phase, which this is the report half of).
+    """
+    if warnings:
+        for w in warnings:
+            print(f"  WARN: {w}")
+    else:
+        print(f"  {all_clear}")
+
+
+def run_warning_phase(
+    title: str,
+    check: Callable[[], list[str] | None],
+    all_clear: str,
+    sink: list[str],
+) -> None:
+    """Run one warning phase: print the title, run the check, extend the
+    sink, then report WARN lines or the all-clear.
+
+    A None return is a SKIPPED check: the check printed its own SKIP line
+    saying why, or is documented as a silent skip (every lint here that
+    returns list | None states which in its docstring), so the phase
+    prints nothing more and never an all-clear over unchecked parity.
+    """
+    print(f"\n{title}:")
+    warnings = check()
+    if warnings is None:
+        return  # skipped: nothing more to print (skip kinds in the docstring)
+    sink.extend(warnings)
+    print_phase_warnings(warnings, all_clear)
+
+
 def main() -> int:
     verbose = "--verbose" in sys.argv[1:]
     model_files = sorted(MODELS_DIR.glob("model_*.json"))
@@ -1405,81 +1441,59 @@ def main() -> int:
 
     # Phase 2: Cross-locale validation (only if all models parsed)
     if len(all_models) == len(model_files):
-        print("\nCross-locale consistency:")
-        cross_warnings = validate_cross_locale(all_models)
-        all_warnings.extend(cross_warnings)
-
-        type_warnings = validate_slot_types_cross_locale(all_models)
-        all_warnings.extend(type_warnings)
-
-        if not cross_warnings and not type_warnings:
-            print("  All locales have consistent intents and slot types")
-        else:
-            for e in cross_warnings + type_warnings:
-                print(f"  WARN: {e}")
+        run_warning_phase(
+            "Cross-locale consistency",
+            lambda: validate_cross_locale(all_models)
+            + validate_slot_types_cross_locale(all_models),
+            "All locales have consistent intents and slot types",
+            all_warnings,
+        )
 
     # Phase 3: NLU fixture carrier lint (heuristic warning check)
     if all_models:
-        print("\nNLU fixture carrier lint:")
-        fixture_warnings = lint_fixture_carriers(all_models)
-        if fixture_warnings is None:
-            pass  # skipped: the SKIP line above says why, never print all-clear
-        else:
-            all_warnings.extend(fixture_warnings)
-            if fixture_warnings:
-                for w in fixture_warnings:
-                    print(f"  WARN: {w}")
-            else:
-                print("  All linted fixture utterances match a current sample carrier")
+        run_warning_phase(
+            "NLU fixture carrier lint",
+            lambda: lint_fixture_carriers(all_models),
+            "All linted fixture utterances match a current sample carrier",
+            all_warnings,
+        )
 
     # Phase 4: BrowseCategory id-parity lint (JF-468 warning check)
     if all_models:
-        print("\nBrowseCategory id lint:")
-        id_warnings = lint_browse_category_ids(all_models)
-        all_warnings.extend(id_warnings)
-        if id_warnings:
-            for w in id_warnings:
-                print(f"  WARN: {w}")
-        else:
-            print("  All locales carry the shared English ids on the BrowseCategory concepts")
+        run_warning_phase(
+            "BrowseCategory id lint",
+            lambda: lint_browse_category_ids(all_models),
+            "All locales carry the shared English ids on the BrowseCategory concepts",
+            all_warnings,
+        )
 
     # Phase 5: template regen-equality check (JF-316 warning check)
-    print("\nTemplate regen equality:")
-    regen_warnings = check_template_regen_equality()
-    if regen_warnings is None:
-        pass  # skipped: the SKIP line above says why, never print all-clear
-    else:
-        all_warnings.extend(regen_warnings)
-        if regen_warnings:
-            for w in regen_warnings:
-                print(f"  WARN: {w}")
-        else:
-            print("  Every templated locale regenerates its committed model byte-identically")
+    run_warning_phase(
+        "Template regen equality",
+        check_template_regen_equality,
+        "Every templated locale regenerates its committed model byte-identically",
+        all_warnings,
+    )
 
-    # Phase 6: VOICE_COMMANDS.md row-vs-model lint (JF-513.1 item 7 warning check)
+    # Phase 6: VOICE_COMMANDS.md row-vs-model lint (JF-513.1 item 7 warning
+    # check); the absent-md None is a SILENT skip (no SKIP line), unlike the
+    # fixture and es-trio lints
     if all_models:
-        print("\nVOICE_COMMANDS row lint:")
-        vc_warnings = lint_voice_commands_rows(all_models)
-        if vc_warnings is None:
-            pass  # file absent: skip silently
-        else:
-            all_warnings.extend(vc_warnings)
-            if vc_warnings:
-                for w in vc_warnings:
-                    print(f"  WARN: {w}")
-            else:
-                print("  Every row maps to a model intent and lists only live utterances")
+        run_warning_phase(
+            "VOICE_COMMANDS row lint",
+            lambda: lint_voice_commands_rows(all_models),
+            "Every row maps to a model intent and lists only live utterances",
+            all_warnings,
+        )
 
     # Phase 7: PlayEpisodeIntent one-shot word-order lint (JF-549 warning check)
     if all_models:
-        print("\nPlayEpisode one-shot order lint:")
-        order_warnings = lint_play_episode_one_shot_order(all_models)
-        all_warnings.extend(order_warnings)
-        if order_warnings:
-            for w in order_warnings:
-                print(f"  WARN: {w}")
-        else:
-            print("  Every one-shot carrier family carries both word orders (series-first and series-last)")
+        run_warning_phase(
+            "PlayEpisode one-shot order lint",
+            lambda: lint_play_episode_one_shot_order(all_models),
+            "Every one-shot carrier family carries both word orders (series-first and series-last)",
+            all_warnings,
+        )
 
     # Phase 9: one-shot wrapper coverage (JF-614 warning check)
     if all_models:
@@ -1499,20 +1513,13 @@ def main() -> int:
 
     # Phase 11: es trio PlayEpisodeIntent mirroring lint (JF-844.1 warning check)
     if all_models:
-        print("\nPlayEpisode es-trio mirroring lint:")
-        trio_warnings = lint_es_trio_play_episode_mirroring(all_models)
-        if trio_warnings is None:
-            pass  # skipped: the SKIP line above says why, never print all-clear
-        else:
-            all_warnings.extend(trio_warnings)
-            if trio_warnings:
-                for w in trio_warnings:
-                    print(f"  WARN: {w}")
-            else:
-                print(
-                    "  every listed es sibling's PlayEpisode samples are a subset of "
-                    "es-ES's, surplus exactly matching the whitelisted divergences"
-                )
+        run_warning_phase(
+            "PlayEpisode es-trio mirroring lint",
+            lambda: lint_es_trio_play_episode_mirroring(all_models),
+            "every listed es sibling's PlayEpisode samples are a subset of "
+            "es-ES's, surplus exactly matching the whitelisted divergences",
+            all_warnings,
+        )
 
     # Phase 8: elicit-target dialog registration (JF-550 error check)
     if all_models:
@@ -1524,14 +1531,16 @@ def main() -> int:
         # discarded with `_`, so the never-silence policy had no output path.
         all_warnings.extend(reg_warnings)
         # Review round: the all-clear must never print over unverified parity.
+        # Errors keep priority: a co-occurring warning prints only in the
+        # summary block, never at the phase level.
         if reg_errors:
             for e in reg_errors:
                 print(f"  ERROR: {e}")
-        elif reg_warnings:
-            for w in reg_warnings:
-                print(f"  WARN: {w}")
         else:
-            print("  Every handler-elicited intent is dialog-registered with slot parity in all locales")
+            print_phase_warnings(
+                reg_warnings,
+                "Every handler-elicited intent is dialog-registered with slot parity in all locales",
+            )
 
     # Summary
     print(f"\n{'='*60}")
