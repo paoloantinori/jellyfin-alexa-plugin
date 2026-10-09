@@ -5,12 +5,18 @@ title: >-
   values (audiobooks are the shape that bites: single-file edition + chaptered
   edition), and the MaxCatalogValues warning claims a truncation that never
   happens
-status: In Progress
-labels: [catalog-sync]
+status: Done
+assignee: []
+created_date: ''
+updated_date: '2026-10-09 23:06'
+labels:
+  - catalog-sync
+dependencies: []
 ---
 
 ## Description
 
+<!-- SECTION:DESCRIPTION:BEGIN -->
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
@@ -119,3 +125,4 @@ StoreCount across the wiring table is outside the fix); F5 APPLIED
 structural; subsumes the simplify-side hoist-on-third judgment because F3 made
 the key non-trivial).
 <!-- SECTION:NOTES:END -->
+<!-- SECTION:DESCRIPTION:END -->

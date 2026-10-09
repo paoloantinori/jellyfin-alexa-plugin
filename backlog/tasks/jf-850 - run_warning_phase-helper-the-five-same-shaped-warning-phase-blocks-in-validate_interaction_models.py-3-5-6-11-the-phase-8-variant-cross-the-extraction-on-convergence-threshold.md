@@ -4,10 +4,10 @@ title: >-
   run_warning_phase helper: the five same-shaped warning-phase blocks in
   validate_interaction_models.py (3/5/6/11 + the phase-8 variant) cross the
   extraction-on-convergence threshold
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-10-09 20:35'
-updated_date: '2026-10-09 20:36'
+updated_date: '2026-10-09 23:06'
 labels:
   - tooling
   - tech-debt

@@ -2,11 +2,12 @@
 id: JF-847
 title: >-
   VideoApp pause is state-aware: AudioPlayer.Stop stops the video iff context
-  PlayerActivity is PLAYING (2026-10-09 live evidence), speak VideoStoppedByVoice
-  vs the honest cannot-pause line
-status: In Progress
+  PlayerActivity is PLAYING (2026-10-09 live evidence), speak
+  VideoStoppedByVoice vs the honest cannot-pause line
+status: Done
 assignee: []
 created_date: '2026-10-09 13:49'
+updated_date: '2026-10-09 23:06'
 labels:
   - videoapp
   - live-evidence
@@ -24,23 +25,29 @@ Live device evidence (2026-10-09, maintainer's tests, twice run): during VideoAp
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 PauseIntentHandler's VideoApp-medium arm branches on context.AudioPlayer?.PlayerActivity: PLAYING speaks VideoStoppedByVoice (session-ending Tell + AudioPlayer.Stop); any other activity keeps CannotPauseVideoByVoice, both with the stop directive
-- [ ] #2 VideoStoppedByVoice present in all 17 locale files, mirroring each locale's CannotPauseVideoByVoice voice, and carried on the ResponseStringsTests AllExpectedKeys ledger
-- [ ] #3 Red-green pins in VideoAppGapHonestResponseTests: the PLAYING shape spoke the old line before the fix (red, both TFMs) and the stopped line after; the stale-STOPPED and BUFFER_UNDERRUN shapes keep the honest line
-- [ ] #4 The repo-root CLAUDE.md Stop/Session Routing section records the 2026-10-09 evidence replacing the blanket claim
-- [ ] #5 Full suite green both TFMs; validate_locales passes
+- [x] #1 PauseIntentHandler's VideoApp-medium arm branches on context.AudioPlayer?.PlayerActivity: PLAYING speaks VideoStoppedByVoice (session-ending Tell + AudioPlayer.Stop); any other activity keeps CannotPauseVideoByVoice, both with the stop directive
+- [x] #2 VideoStoppedByVoice present in all 17 locale files, mirroring each locale's CannotPauseVideoByVoice voice, and carried on the ResponseStringsTests AllExpectedKeys ledger
+- [x] #3 Red-green pins in VideoAppGapHonestResponseTests: the PLAYING shape spoke the old line before the fix (red, both TFMs) and the stopped line after; the stale-STOPPED and BUFFER_UNDERRUN shapes keep the honest line
+- [x] #4 The repo-root CLAUDE.md Stop/Session Routing section records the 2026-10-09 evidence replacing the blanket claim
+- [x] #5 Full suite green both TFMs; validate_locales passes
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+COMPLETION RECORD (2026-10-10 01:40, orchestrator - the worker's change merged as a7d98849 + merge 4372f703 but this file's boxes were never ticked; all evidence cited from the commit and re-verified in tonight's tree): AC#1 the PauseIntentHandler PLAYING-branch is in the merged tree (the red-green pins ran BOTH TFMs against the unmodified handler first: the PLAYING pin failed speaking the old CannotPauseVideoByVoice line, green after; counterpart pins hold the honest line on the live stale-STOPPED shape and on BUFFER_UNDERRUN; the pause+cancel theory pair came from the review). AC#2 VideoStoppedByVoice minted in all 17 locale files + both it and CannotPauseVideoByVoice added to the AllExpectedKeys ledger (residual #1, the wider Cannot* family, is NOW JF-849). AC#4 the CLAUDE.md Stop/Session Routing reference carries the 2026-10-09 observed-states amendment. AC#5 suite 5585/5585 both TFMs at the merge; the night's final-tree gate re-proved 5608/5608. DoD 4-8 N/A per surface (no session DTOs, no HttpClient, no fixtures, no E2E beyond the AC#3 pins, locale strings ARE the AC#2 deliverable); DoD 9/10 ran in the worker session (simplify 4 agents: 2 applied 2 skipped with reasons; code-review high: 3 applied, 2 rejected with reasons recorded above) and again at night-batch level in the orchestrator session. Residual #2 (the PLAYING-compare named sibling at the third caller) stays a convention note, no task. Deploys with the next batch.
+<!-- SECTION:NOTES:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 dotnet build passes with 0 errors
-- [ ] #2 dotnet test passes
-- [ ] #3 No new compiler warnings introduced
-- [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
-- [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
-- [ ] #6 NLU test fixtures updated if interaction model changed
-- [ ] #7 E2E test added for new intent or handler logic
-- [ ] #8 Locale response strings added to all 17 locales
-- [ ] #9 /simplify passed (no blocking cleanups remaining)
-- [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
+- [x] #1 dotnet build passes with 0 errors
+- [x] #2 dotnet test passes
+- [x] #3 No new compiler warnings introduced
+- [x] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
+- [x] #5 HttpClient instances are not shared across calls that modify BaseAddress
+- [x] #6 NLU test fixtures updated if interaction model changed
+- [x] #7 E2E test added for new intent or handler logic
+- [x] #8 Locale response strings added to all 17 locales
+- [x] #9 /simplify passed (no blocking cleanups remaining)
+- [x] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->

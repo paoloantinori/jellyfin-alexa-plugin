@@ -3,10 +3,10 @@ id: JF-801
 title: >-
   JF-801 - wall-clock-asserting tests (RetryHelper budget pin first) now run
   contended under the JF-792 parallel phase; margins sized for solo execution
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-10-06 18:43'
-updated_date: '2026-10-09 21:14'
+updated_date: '2026-10-09 23:06'
 labels:
   - test-infrastructure
   - flakiness

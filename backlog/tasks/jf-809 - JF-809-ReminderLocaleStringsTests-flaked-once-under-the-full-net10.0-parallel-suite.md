@@ -3,10 +3,10 @@ id: JF-809
 title: >-
   JF-809 - ReminderLocaleStringsTests flaked once under the full net10.0
   parallel suite
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-07'
-updated_date: '2026-10-09 21:11'
+updated_date: '2026-10-09 23:06'
 labels:
   - tech-debt
   - testing

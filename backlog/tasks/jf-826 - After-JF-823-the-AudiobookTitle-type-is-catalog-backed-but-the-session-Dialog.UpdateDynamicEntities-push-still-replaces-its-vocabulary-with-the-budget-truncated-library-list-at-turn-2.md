@@ -4,13 +4,20 @@ title: >-
   After JF-823 the AudiobookTitle type is catalog-backed, but the session
   Dialog.UpdateDynamicEntities push still replaces its vocabulary with the
   budget-truncated library list at turn 2+
-status: To Do
-labels: [audiobooks, catalog-sync, dynamic-entities]
+status: Done
+assignee: []
+created_date: ''
+updated_date: '2026-10-09 23:06'
+labels:
+  - audiobooks
+  - catalog-sync
+  - dynamic-entities
+dependencies: []
 ---
 
 ## Description
 
-
+<!-- SECTION:DESCRIPTION:BEGIN -->
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
@@ -148,3 +155,4 @@ F6 APPLIED: the banned "word - word" separator removed from the new test's
 prose (pre-existing prose in the structure-test file left untouched, no
 drive-by edits).
 <!-- SECTION:NOTES:END -->
+<!-- SECTION:DESCRIPTION:END -->

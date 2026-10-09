@@ -4,9 +4,10 @@ title: >-
   Maintenance-window transparency: during catalog syncs and model deploys,
   spoken responses say the skill is updating and ask for patience (the
   SkillWarmingUp pattern extended)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-09 11:54'
+updated_date: '2026-10-09 23:06'
 labels:
   - ux
   - resilience
@@ -39,20 +40,6 @@ DELIVERABLES: the scope type + open/close at the sync task and the rebuild endpo
 - [x] #6 Full suite green both TFMs; validate_locales passes; no new warnings (Release build 0/0)
 - [x] #7 The warming-gate machinery (JF-419) untouched: response-side only, no new gated handler (WarmingGateCoverageTests roster unchanged)
 <!-- AC:END -->
-
-## Definition of Done
-<!-- DOD:BEGIN -->
-- [x] #1 dotnet build passes with 0 errors
-- [x] #2 dotnet test passes
-- [x] #3 No new compiler warnings introduced
-- [x] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
-- [x] #5 HttpClient instances are not shared across calls that modify BaseAddress
-- [x] #6 NLU test fixtures updated if interaction model changed
-- [x] #7 E2E test added for new intent or handler logic
-- [x] #8 Locale response strings added to all 17 locales
-- [x] #9 /simplify passed (no blocking cleanups remaining)
-- [x] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
-<!-- DOD:END -->
 
 ## Implementation Notes
 
@@ -136,6 +123,21 @@ DELIVERABLES: the scope type + open/close at the sync task and the rebuild endpo
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
+
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
 Landed 2026-10-09 on the agent worktree branch (feat(jf846); orchestrator merges): maintenance-window transparency ships as three pieces. (1) SkillMaintenanceScope (Alexa/Util): internal static, int-refcounted (Interlocked + Volatile), IDisposable Open token with an Interlocked double-dispose guard; open/close log at Information with the operation name. Opened by LibrarySyncService.SyncUserLibraryAsync after its no-work skip guards (using-scoped, every exit closes) and by ConfigurationController.RebuildModels around the RedeployAsync PUT loop; the invocation-name path stays unwired per the frozen two-opener boundary. (2) SkillMaintenanceInterceptor (Alexa/Pipeline), registered LAST so it executes FIRST in the reverse response chain, before ResponseBodyLoggingInterceptor's snapshot (the logged body shows the prefixed speech the user heard): while a window is open it prepends the SHORT localized SkillUpdatingPrefix to responses that already carry OutputSpeech (plain prepended, SSML inserted inside the speak tags, XML-escaped, keyed on the LEADING speak tag only); directive-only responses, the docs-mandated silent stop shape, and event requests never gain speech; reprompt untouched. (3) SkillUpdatingPrefix in all 17 locales (en "I'm updating the skill, one moment please...", it "Sto aggiornando la skill, un attimo di pazienza...", de/es/fr/pt/nl/ja/hi/ar in kind) + the AllExpectedKeys ledger row. RED-GREEN: the five prefix pins ran red against the guard-only interceptor skeleton on BOTH TFMs (5 failed/7 passed each), green after the mutation; the red round also caught a real bug (the refcount increment lived inside a null-conditional log call and never ran with a null logger; hoisted and later made moot by the required-logger simplify fix). Pins: 16 total (open prefixes plain/SSML/Ask/locale, closed byte-identical, directive-only, silent stop, event request, refcount nesting, double dispose, Information logging, 4-row PrefixIntoSsml theory). Gates: /simplify 4 agents (6 applied, 4 skipped with recorded reasons), /code-review high (5 findings: F1 scope/test parallelism race APPLIED via [Collection("Plugin")] on the two classes + the PluginCollection inventory, F3 nested-speak corruption APPLIED, F4 dispose hardening APPLIED, F2 per-skill keying and F5 progressive-prefix REJECTED with recorded reasons). Verifiers: validate_locales PASS; Release build 0 warnings 0 errors; full suite 5601/5601 BOTH TFMs on the final tree (baseline 5585 + 16). Not deploy-gated: rides the next batch deploy; the live device check is to invoke any spoken request during a manual "Rebuild models" and hear the prefix.
 <!-- SECTION:FINAL_SUMMARY:END -->
+
+## Definition of Done
+<!-- DOD:BEGIN -->
+- [x] #1 dotnet build passes with 0 errors
+- [x] #2 dotnet test passes
+- [x] #3 No new compiler warnings introduced
+- [x] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
+- [x] #5 HttpClient instances are not shared across calls that modify BaseAddress
+- [x] #6 NLU test fixtures updated if interaction model changed
+- [x] #7 E2E test added for new intent or handler logic
+- [x] #8 Locale response strings added to all 17 locales
+- [x] #9 /simplify passed (no blocking cleanups remaining)
+- [x] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
+<!-- DOD:END -->

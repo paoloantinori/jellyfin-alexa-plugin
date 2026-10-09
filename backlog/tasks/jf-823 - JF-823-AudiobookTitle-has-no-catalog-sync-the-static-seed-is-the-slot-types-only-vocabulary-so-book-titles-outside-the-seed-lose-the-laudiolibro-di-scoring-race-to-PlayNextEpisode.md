@@ -4,10 +4,10 @@ title: >-
   JF-823 - AudiobookTitle has no catalog sync: the static seed is the slot
   type's only vocabulary, so book titles outside the seed lose the "l'audiolibro
   di" scoring race to PlayNextEpisode
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-10-08'
-updated_date: '2026-10-08 21:54'
+updated_date: '2026-10-09 23:06'
 labels:
   - nlu
   - audiobooks
@@ -283,7 +283,6 @@ ACCEPTED JF-684 tradeoff per the verdict; the handler-side guard question is
 the separate open item the verdict filed.
 <!-- SECTION:NOTES:END -->
 
-
 ## Definition of Done
 <!-- DOD:BEGIN -->
 - [x] #1 dotnet build passes with 0 errors
@@ -297,4 +296,3 @@ the separate open item the verdict filed.
 - [x] #9 /simplify passed (4 findings, all applied or dispositioned; see worker addendum)
 - [x] #10 /code-review high passed (no correctness bug; 5 low findings dispositioned same-turn: F4 applied in-scope, F1/F2/F3 filed as JF-826/JF-825 (F1 renumbered from its filing-time JF-824: the fourth same-window number race, main's ledger JF-824 merged first), F5 deliberate with the ownership note in the worker addendum)
 <!-- DOD:END -->
-
