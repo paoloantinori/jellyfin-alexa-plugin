@@ -7845,7 +7845,7 @@ Placeholder legend:
 | `<titolo del video o del film>` | `{title}` |
 | `<parole del titolo del brano>` | `{titleKeywords}` |
 
-Complete phrase list (1581 phrases across 71 commands):
+Complete phrase list (1585 phrases across 71 commands):
 
 #### Play music
 
@@ -8987,6 +8987,10 @@ Complete phrase list (1581 phrases across 71 commands):
 - `Di mettere la stagione <numero della stagione> episodio <numero dell'episodio> di <nome della serie>`
 - `Di pleiare la stagione <numero della stagione> episodio <numero dell'episodio> di <nome della serie>`
 - `Di ascoltare la stagione <numero della stagione> episodio <numero dell'episodio> di <nome della serie>`
+- `riprodurre la stagione <numero della stagione> episodio <numero dell'episodio> di <nome della serie>`
+- `suonare la stagione <numero della stagione> episodio <numero dell'episodio> di <nome della serie>`
+- `mettere la stagione <numero della stagione> episodio <numero dell'episodio> di <nome della serie>`
+- `ascoltare la stagione <numero della stagione> episodio <numero dell'episodio> di <nome della serie>`
 - `Di riprodurre <nome della serie> stagione <numero della stagione> episodio <numero dell'episodio>`
 - `Di suonare <nome della serie> stagione <numero della stagione> episodio <numero dell'episodio>`
 - `Di mettere <nome della serie> stagione <numero della stagione> episodio <numero dell'episodio>`
@@ -10886,7 +10890,7 @@ Placeholder legend:
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (448 phrases across 66 commands):
+Complete phrase list (451 phrases across 66 commands):
 
 #### Play music
 
@@ -11067,6 +11071,9 @@ Complete phrase list (448 phrases across 66 commands):
 - `reproduce el episodio <número de episodio> de <nombre de la serie>`
 - `ver el episodio <número de episodio> de <nombre de la serie>`
 - `reproduzca el episodio <número de episodio> de <nombre de la serie>`
+- `que reproduzca <nombre de la serie> temporada <número de temporada> episodio <número de episodio>`
+- `que reproduzca la temporada <número de temporada> episodio <número de episodio> de <nombre de la serie>`
+- `que reproduzca el episodio <número de episodio> de <nombre de la serie>`
 
 **Play the next episode**
 

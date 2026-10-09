@@ -350,6 +350,11 @@ tests:
   # JF-493 numbers-first infinitive twin on an h264+eac3 series (the JF-498
   # remux class; see the section note above for why the URL itself is not
   # asserted here).
+  # JF-844 (2026-10-09): this DIGIT form is the red e2e pin behind the
+  # bare-infinitive template rows (live: season_number arrived EMPTY, episode
+  # filled, stable across two builds; the word form fills). Red until the
+  # JF-844 model roll; probe protocol in backlog JF-844 (the profile-nlu
+  # twin is in it-IT.yaml).
   - utterance: "mettere la stagione 1 episodio 3 di murderbot"
     expected_intent: PlayEpisodeIntent
     expected_slots:
