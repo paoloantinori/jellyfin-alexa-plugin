@@ -433,6 +433,176 @@ public class PlayEpisodeIntentHandlerTests : PluginTestBase
         response.Tells();
     }
 
+    /// <summary>
+    /// Builds a bare episode row (the harness's minimal playable Episode shape the
+    /// existing hit tests use) for the JF-843 absolute-resolution pins.
+    /// </summary>
+    private static global::MediaBrowser.Controller.Entities.TV.Episode BareEpisode(Guid seriesId, int season, int number)
+        => new()
+        {
+            Name = $"S{season}E{number}",
+            Id = Guid.NewGuid(),
+            ParentIndexNumber = season,
+            IndexNumber = number,
+            SeriesId = seriesId
+        };
+
+    /// <summary>
+    /// Recognizes the JF-843 absolute-resolution query shape: episode-typed,
+    /// season-unscoped via the specials exclusion, and carrying THE production
+    /// air-order constant BY REFERENCE (production assigns it verbatim), so a
+    /// same-shaped query with a different or reordered OrderBy cannot pass the
+    /// pins.
+    /// </summary>
+    private static bool IsAbsoluteEpisodeQuery(InternalItemsQuery q)
+        => q.IncludeItemTypes != null
+           && q.IncludeItemTypes.Any(t => t == BaseItemKind.Episode)
+           && q.ParentIndexNumber == null
+           && q.ParentIndexNumberNotEquals == 0
+           && ReferenceEquals(q.OrderBy, QueueContinuationFetcher.TvEpisodeAirOrder);
+
+    /// <summary>
+    /// JF-843 pin (the JF-814 gate-marker F5 incident; the full story lives on
+    /// TvNextUpService.GetEpisodeByAbsoluteNumberAsync): on the per-season MISS the
+    /// handler must fall back to ABSOLUTE resolution (the Nth episode of the series
+    /// in season-then-episode air order; 54 of a 46+8 run is S2E8) and play it with
+    /// an announce that NAMES the mapping (the asked number AND the resolved
+    /// season/episode), never a silent substitution. The request models the
+    /// post-elicit arrival (dialogState IN_PROGRESS, all three slots filled): the
+    /// JF-614 slotValues echo pinned in
+    /// HandleAsync_EpisodeNumberWithoutSeason_ElicitsSeasonNumber carries the
+    /// episode number through the season elicit, so this arrival lands on the same
+    /// explicit-numbers path a direct season-ed ask takes.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_PerSeasonMiss_AbsoluteIndexExists_PlaysAnnouncedAbsoluteEpisode()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(seriesName: "Sailor Moon", seasonNumber: "2", episodeNumber: "54", dialogState: "IN_PROGRESS");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SetupUserMock();
+
+        var series = new global::MediaBrowser.Controller.Entities.TV.Series { Name = "Sailor Moon", Id = Guid.NewGuid() };
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Series))))
+            .Returns(new List<BaseItem> { series });
+
+        // The answered season exists with 8 episodes (per-season IndexNumbers);
+        // none of them is episode 54, so the per-season resolution misses.
+        var season2 = Enumerable.Range(1, 8).Select(n => BareEpisode(series.Id, 2, n)).ToList();
+
+        // The whole run in air order: 46 season-1 episodes then season 2's 8, so
+        // the 54th episode of the series is S2E8.
+        var fullRun = Enumerable.Range(1, 46).Select(n => BareEpisode(series.Id, 1, n)).Concat(season2).ToList();
+
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(
+                q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Episode) && q.ParentIndexNumber == 2)))
+            .Returns(season2);
+        // The absolute query is DB-paged (StartIndex N-1, Limit 1), so the mock must
+        // honor the paging the way the server does or it would hand back the whole
+        // run and the FirstOrDefault pick would land on S1E1.
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => IsAbsoluteEpisodeQuery(q))))
+            .Returns((InternalItemsQuery q) => fullRun.Skip(q.StartIndex ?? 0).Take(q.Limit ?? fullRun.Count).ToList());
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        response.HasDirective<VideoAppLaunchDirective>();
+
+        // The announce must speak the mapping: the asked 54 AND where it resolved
+        // (season 2, episode 8). JF-501: the announce rides the progressive
+        // vehicle, so the final launch response carries the directive only.
+        Assert.True(handler.Progressive.Contains("54"), "the absolute announce must name the asked episode number");
+        Assert.True(handler.Progressive.Contains("season 2"), "the absolute announce must name the resolved season");
+        Assert.True(handler.Progressive.Contains("episode 8"), "the absolute announce must name the resolved episode");
+        Assert.Null(response.Response.OutputSpeech);
+    }
+
+    /// <summary>
+    /// JF-843 guard: when the per-season query HITS, the absolute fallback never
+    /// fires (no season-unscoped episode query is issued) and the launch keeps the
+    /// pinned shape (VideoApp directive, plain NowPlaying announce on the
+    /// progressive vehicle) byte-identical.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_PerSeasonHit_NeverRunsTheAbsoluteFallbackQuery()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(seriesName: "The Office", seasonNumber: "4", episodeNumber: "10");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SetupUserMock();
+
+        var series = new global::MediaBrowser.Controller.Entities.TV.Series { Name = "The Office", Id = Guid.NewGuid() };
+        var episode = new global::MediaBrowser.Controller.Entities.TV.Episode
+        {
+            Name = "Fun Run",
+            Id = Guid.NewGuid(),
+            ParentIndexNumber = 4,
+            IndexNumber = 10,
+            SeriesId = series.Id
+        };
+
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Series))))
+            .Returns(new List<BaseItem> { series });
+
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Episode))))
+            .Returns(new List<BaseItem> { episode });
+
+        _libraryManagerMock.Setup(l => l.GetItemById(episode.Id))
+            .Returns(episode);
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        response.HasDirective<VideoAppLaunchDirective>();
+        Assert.True(handler.Progressive.Contains("Fun Run"), "the hit path keeps the plain now-playing announce");
+
+        // The absolute-resolution query shape (season-unscoped, specials excluded)
+        // must never run when the per-season query already hit.
+        _libraryManagerMock.Verify(
+            l => l.GetItemList(It.Is<InternalItemsQuery>(q => IsAbsoluteEpisodeQuery(q))),
+            Times.Never);
+    }
+
+    /// <summary>
+    /// JF-843 guard: when the absolute index exceeds the series' total episode
+    /// count, the fallback resolves nothing and the existing NotFoundEpisode Tell
+    /// stands.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_PerSeasonMissAndBeyondTotalCount_KeepsTheNotFoundTell()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(seriesName: "The Office", seasonNumber: "1", episodeNumber: "99");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SetupUserMock();
+
+        var series = new global::MediaBrowser.Controller.Entities.TV.Series { Name = "The Office", Id = Guid.NewGuid() };
+        var season1 = Enumerable.Range(1, 10).Select(n => BareEpisode(series.Id, 1, n)).ToList();
+
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Series))))
+            .Returns(new List<BaseItem> { series });
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(
+                q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Episode) && q.ParentIndexNumber == 1)))
+            .Returns(season1);
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => IsAbsoluteEpisodeQuery(q))))
+            .Returns(new List<BaseItem>());
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        response.Tells();
+        Assert.Contains("couldn't find", TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task HandleAsync_EpisodeFound_ReturnsVideoDirective()
     {

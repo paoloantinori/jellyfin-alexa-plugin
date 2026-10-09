@@ -23,7 +23,7 @@ public class ResponseStringsTests
         "NoNewlyAddedItems", "NotFoundArtist", "NoSongsForArtist", "Welcome",
         "WelcomeReprompt", "NowPlaying", "NowPlayingWithPosition", "UnknownMedia",
         "HoursAndMinutes", "MinutesAndSeconds", "SecondsOnly", "PositionOfTotal",
-        "TrackByArtist", "TrackByArtistFromAlbum", "SeasonEpisode", "SeriesTitle",
+        "TrackByArtist", "TrackByArtistFromAlbum", "SeasonEpisode", "PlayingEpisodeByAbsoluteNumber", "SeriesTitle",
         "TitleWithYear", "SearchingMedia", "DisambiguatePrompt", "DisambiguateNext",
         "NoMoreMatches", "DisambiguateReprompt", "UnexpectedYes",
         "StreamTokenNotConfigured",
