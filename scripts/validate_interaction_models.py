@@ -40,6 +40,15 @@ CI validate-models job has been blocking on errors since JF-556):
     every locale other than it-IT must carry no ids beyond those three.
     it-IT also ids its extra it-IT-only concepts (film, serie, playlist,
     ...), which are deliberately not enumerated here.
+  - es trio PlayEpisodeIntent mirroring (JF-844.1): the es locales are
+    verbatim-transcription templates with no shared-include mechanism, so the
+    es-MX / es-US PlayEpisode sample sets are hand-mirrored subsets of es-ES's.
+    The lint warns when a sibling carries a row es-ES lacks, when the
+    es-ES-only surplus stops matching the divergence whitelist exactly (an
+    unlisted surplus row is unguarded single-locale drift; a listed row that is
+    no longer a divergence means the whitelist rotted), and when an es locale
+    present in the models has no sibling-table row (the JF-824 self-reminding
+    coverage finding).
   - Template regen equality (JF-316): every locale that has a YAML template
     (templates/<locale>.yaml) must regenerate its committed model JSON
     byte-identically. A mismatch means the committed JSON was hand-edited
@@ -721,6 +730,111 @@ def lint_play_episode_one_shot_order(all_models: dict[str, dict]) -> list[str]:
 
 
 
+# JF-844.1: the es trio PlayEpisodeIntent mirroring whitelist. The three es
+# locales are verbatim-transcription templates with no shared-include mechanism
+# (the JF-316 golden-master decision), so the PlayEpisodeIntent rows are
+# hand-mirrored across templates/es-ES.yaml, es-MX.yaml and es-US.yaml. Per
+# sibling locale, these are the ONLY permitted divergences: rows es-ES carries
+# that the sibling does not. The rows are sourced verbatim from the committed
+# models (json diff, not invented): the three 'que reproduzca' connector-residue
+# subjunctive twins landed es-ES-only in 22fed1ab (JF-844) pending the es-ES
+# connector probe going green; the siblings inherit them after es-ES is solved,
+# and that inheritance is exactly the change that empties these rows. Any other
+# single-locale edit (the drift class this lint exists for) fires until its row
+# lands here with provenance, so the whitelist cannot rot silently.
+ES_TRIO_CONNECTOR_TWINS = frozenset(
+    {
+        "que reproduzca {series_name} temporada {season_number} episodio {episode_number}",
+        "que reproduzca la temporada {season_number} episodio {episode_number} de {series_name}",
+        "que reproduzca el episodio {episode_number} de {series_name}",
+    }
+)
+
+# Per sibling: the day one sibling inherits a connector row ahead of the other
+# is a one-key edit here, never a mechanism change.
+ES_TRIO_PLAY_EPISODE_DIVERGENCES: dict[str, frozenset[str]] = {
+    "es-MX": ES_TRIO_CONNECTOR_TWINS,
+    "es-US": ES_TRIO_CONNECTOR_TWINS,
+}
+
+ES_TRIO_REFERENCE_LOCALE = "es-ES"
+
+
+def lint_es_trio_play_episode_mirroring(all_models: dict[str, dict]) -> list[str] | None:
+    """WARNING lint (JF-844.1): the es trio PlayEpisodeIntent sample mirroring.
+
+    es-MX and es-US must be subsets of es-ES, and the es-ES-only surplus per
+    sibling must equal ES_TRIO_PLAY_EPISODE_DIVERGENCES exactly. Three failure
+    shapes warn: a sibling row missing from es-ES (the mirroring broke in the
+    sibling), an es-ES-only row absent from the whitelist (unguarded
+    single-locale drift in the reference, the class commit 22fed1ab performed
+    deliberately for the connector rows), and a whitelisted row that is no
+    longer a divergence (the row was mirrored or deleted; the data is stale).
+    Warning-level per the check #10 / JF-824 convention: a deliberate trio
+    change fires until the whitelist row updates in the same change, so the
+    lint surfaces drift without ever breaking CI.
+
+    Returns the warning list, or None when the lint did NOT run (a trio model
+    or its PlayEpisodeIntent is absent), so the caller cannot mistake a skip
+    for an all-clear. The absence itself is only warning-covered elsewhere (a
+    missing PlayEpisodeIntent warns in the cross-locale check; a missing model
+    file is silent beyond this lint's own SKIP line), so the SKIP must print,
+    never return quietly.
+    """
+    intents: dict[str, set[str]] = {}
+    for locale in (ES_TRIO_REFERENCE_LOCALE, *ES_TRIO_PLAY_EPISODE_DIVERGENCES):
+        lm = all_models.get(locale)
+        if lm is None:
+            print(f"  SKIP: [{locale}] model absent, es trio mirroring lint not run")
+            return None
+        intent = intent_by_name(lm, "PlayEpisodeIntent")
+        if intent is None:
+            print(f"  SKIP: [{locale}] has no PlayEpisodeIntent, es trio mirroring lint not run")
+            return None
+        intents[locale] = set(intent.get("samples", []))
+
+    reference = intents[ES_TRIO_REFERENCE_LOCALE]
+    warnings: list[str] = []
+    # JF-824 convention: an es locale present in the models but absent from
+    # the sibling table is silently outside the lint; fire so a new es locale
+    # gets its row (or an explicit exclusion) in the same change that adds it.
+    for locale in sorted(
+        l
+        for l in all_models
+        if l.split("-")[0] == "es"
+        and l != ES_TRIO_REFERENCE_LOCALE
+        and l not in ES_TRIO_PLAY_EPISODE_DIVERGENCES
+    ):
+        warnings.append(
+            f"  [{locale}] es locale present but no ES_TRIO_PLAY_EPISODE_DIVERGENCES "
+            "row; the PlayEpisode mirroring lint does not cover it "
+            "(add one in the same change)"
+        )
+    for sibling, expected_divergences in ES_TRIO_PLAY_EPISODE_DIVERGENCES.items():
+        sibling_samples = intents[sibling]
+        for sample in sorted(sibling_samples - reference):
+            warnings.append(
+                f"  [{sibling}] PlayEpisodeIntent sample '{sample}' is not in "
+                f"{ES_TRIO_REFERENCE_LOCALE}; the es trio rows are hand-mirrored, "
+                f"mirror it in templates/{ES_TRIO_REFERENCE_LOCALE}.yaml (JF-844.1)"
+            )
+        surplus = reference - sibling_samples
+        for sample in sorted(surplus - expected_divergences):
+            warnings.append(
+                f"  [{sibling}] {ES_TRIO_REFERENCE_LOCALE}-only PlayEpisodeIntent sample "
+                f"'{sample}' is not in the divergence whitelist; mirror the row to "
+                f"templates/{sibling}.yaml or record it in ES_TRIO_PLAY_EPISODE_DIVERGENCES "
+                f"(JF-844.1)"
+            )
+        for sample in sorted(expected_divergences - surplus):
+            warnings.append(
+                f"  [{sibling}] whitelisted PlayEpisodeIntent divergence '{sample}' is "
+                f"no longer {ES_TRIO_REFERENCE_LOCALE}-only (mirrored or deleted); update "
+                f"ES_TRIO_PLAY_EPISODE_DIVERGENCES (JF-844.1)"
+            )
+    return warnings
+
+
 def check_elicit_dialog_registration(
     sources: dict[str, str] | None = None,
 ) -> tuple[list[str], list[str]]:
@@ -1382,6 +1496,23 @@ def main() -> int:
                 print(f"  ERROR: {e}")
         else:
             print("  No sample carries {season_number} without {episode_number} in any locale")
+
+    # Phase 11: es trio PlayEpisodeIntent mirroring lint (JF-844.1 warning check)
+    if all_models:
+        print("\nPlayEpisode es-trio mirroring lint:")
+        trio_warnings = lint_es_trio_play_episode_mirroring(all_models)
+        if trio_warnings is None:
+            pass  # skipped: the SKIP line above says why, never print all-clear
+        else:
+            all_warnings.extend(trio_warnings)
+            if trio_warnings:
+                for w in trio_warnings:
+                    print(f"  WARN: {w}")
+            else:
+                print(
+                    "  every listed es sibling's PlayEpisode samples are a subset of "
+                    "es-ES's, surplus exactly matching the whitelisted divergences"
+                )
 
     # Phase 8: elicit-target dialog registration (JF-550 error check)
     if all_models:
