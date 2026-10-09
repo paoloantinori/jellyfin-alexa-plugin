@@ -153,6 +153,18 @@ from film carriers; every natural film ask routes PlayVideo green). The
 MORNING PROTOCOL (roll then the ordered probes) is in the JF-844 task file.
 All worktrees cleaned; the repo is a single checkout at main.
 
+## ADDENDUM 08:30: tracker-status housekeeping left to the morning session
+
+JF-814, JF-820, JF-821, JF-823 are COMPLETE (merged, deployed, live-verified)
+and their task FILES carry the workers' Done records with gate evidence, but
+the MCP status fields still read In Progress: the dod-completion-gate hook
+matches Skill invocations in the MAIN session transcript only (the
+dod-gate-review-anchor memory), and the worker gates ran in worker sessions.
+Options for the morning: run the literal in-session /simplify per task (4 x 4
+agents over already-triple-reviewed diffs), or GATE_BLOCK_OFF with the
+stated justification (the gates ran; the matcher cannot see them), or leave
+as-is. Cosmetic only; the record is complete either way.
+
 ## Queue after these (nothing dispatched)
 
 - JF-820 (foreign-generation stale prewrite, VideoAudioController; LOW priority;
