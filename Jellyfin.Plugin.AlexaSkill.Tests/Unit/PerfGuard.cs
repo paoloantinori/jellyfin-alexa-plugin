@@ -19,21 +19,23 @@ internal static class PerfGuard
     {
         action(); // warmup: JIT + first-call cost outside the measured window
 
-        var sw = Stopwatch.StartNew();
+        var first = Stopwatch.StartNew();
         action();
-        sw.Stop();
-        if (sw.ElapsedMilliseconds < budgetMs)
+        first.Stop();
+        if (first.ElapsedMilliseconds < budgetMs)
         {
             return;
         }
 
         // One retry on breach: a scheduler hiccup passes here; a real regression
-        // breaches again and fails with both observations.
-        sw = Stopwatch.StartNew();
+        // breaches again and fails with both observations. Two stopwatches, so each
+        // attempt's elapsed is independently measurable (JF-851): do NOT collapse
+        // these back to one variable.
+        var retry = Stopwatch.StartNew();
         action();
-        sw.Stop();
+        retry.Stop();
         Assert.True(
-            sw.ElapsedMilliseconds < budgetMs,
-            $"{label} took {sw.ElapsedMilliseconds}ms on retry (first attempt {sw.ElapsedMilliseconds}ms class), expected < {budgetMs}ms on at least one of two attempts. A consistent breach means a real regression; a single-attempt breach was environment noise.");
+            retry.ElapsedMilliseconds < budgetMs,
+            $"{label} took {retry.ElapsedMilliseconds}ms on retry, first attempt {first.ElapsedMilliseconds}ms, expected < {budgetMs}ms on at least one of two attempts. A consistent breach means a real regression; a single-attempt breach was environment noise.");
     }
 }
