@@ -290,6 +290,7 @@
   "FlowCancelled": "Vale, he detenido la búsqueda.",
   "ElicitTrapEscaped": "Todavía esperaba la respuesta a una pregunta. He cancelado la solicitud; puedes repetir tu comando.",
   "SkillWarmingUp": "Todavía me estoy preparando. Inténtalo de nuevo en un minuto.",
+  "SkillUpdatingPrefix": "Estoy actualizando la skill, un momento de paciencia...",
   "PauseSessionSpeech": "En pausa.",
   "PauseSessionReprompt": "Dime cuando quieras continuar.",
   "AddedToPlaylist": "{0} añadido a la lista {1}.",

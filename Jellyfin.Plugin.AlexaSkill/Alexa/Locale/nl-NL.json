@@ -290,6 +290,7 @@
   "FlowCancelled": "Oké, ik heb het zoeken gestopt.",
   "ElicitTrapEscaped": "Ik wachtte nog op het antwoord op een vraag. Ik heb het verzoek geannuleerd; je kunt je commando herhalen.",
   "SkillWarmingUp": "Ik ben nog aan het opwarmen. Probeer het over een minuut opnieuw.",
+  "SkillUpdatingPrefix": "Ik werk de skill bij, even geduld...",
   "PauseSessionSpeech": "Gepauzeerd.",
   "PauseSessionReprompt": "Zeg het maar wanneer je wilt verdergaan.",
   "AddedToPlaylist": "{0} toegevoegd aan de afspeellijst {1}.",

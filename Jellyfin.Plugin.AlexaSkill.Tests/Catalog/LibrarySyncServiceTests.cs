@@ -25,7 +25,11 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Catalog;
 /// <summary>
 /// Integration tests verifying that LibrarySyncService applies per-user
 /// library filtering when querying Jellyfin items for catalog sync.
+/// Plugin collection (JF-846): every SyncUserLibraryAsync call now opens the
+/// process-global SkillMaintenanceScope, so this class must not run in the
+/// parallel phase beside scope-asserting tests.
 /// </summary>
+[Collection("Plugin")]
 public class LibrarySyncServiceTests
 {
     private readonly Mock<ILibraryManager> _libraryManagerMock;
