@@ -70,21 +70,8 @@ OUTCOME HANDLING:
 
 <!-- SECTION:NOTES:BEGIN -->
 DoD applicability (2026-09-07, creator note): this is a device-test + documentation task, no code changes expected. Items 1-3, 7-8 are N/A unless the outcomes reveal a code fix (then spin a separate task for the fix and keep this one to test+docs). Items 9-10 apply only to the README/CLAUDE.md edits if a future executor considers them substantive; doc-only edits are gate-exempt per project rules.
-<!-- SECTION:NOTES:END -->
 
-## Definition of Done
-<!-- DOD:BEGIN -->
-- [ ] #1 dotnet build passes with 0 errors
-- [ ] #2 dotnet test passes
-- [ ] #3 No new compiler warnings introduced
-- [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
-- [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
-- [ ] #6 NLU test fixtures updated if interaction model changed
-- [ ] #7 E2E test added for new intent or handler logic
-- [ ] #8 Locale response strings added to all 17 locales
-- [ ] #9 /simplify passed (no blocking cleanups remaining)
-- [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
-<!-- DOD:END -->
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
 
 AUTONOMOUS BELT RESULTS (2026-10-07, the orchestrator; simulator + server-side, no device needed):
 1. JF-790 LIVE on the real library: 'The Upside of Irrationality' (100 identical-name chapters, the fully-scrambled book) detects the untagged/tie shape (the JF-790 log line fired) and the first launch is 'The Upside of Irrationality 001.mp3' - the file order. 'Measure What Matters' (tagged) stays on the DB path (no JF-790 line) with the JF-797 gate decision log firing live ('released by a user-data probe hit').
@@ -114,3 +101,18 @@ DIAGNOSIS: the loss needs BOTH (a) the elided "l'audiolibro" carrier (weaker fea
 FIX (model-only, it-IT): extended the AudiobookTitle static seed with 14 famous English-language audiobook titles (incl. "The Upside of Irrationality" and "Measure What Matters"); template regenerated, validators PASS at baseline, deployed via ask set-interaction-model + the catalog-sync dance (backdated LastCatalogSync, restart, task 77cc..., canary OK 71 intents / 1555 samples, wiring restored at fresh versions 747/1317/1312).
 POST-FIX (live, all green): every previously-failing form routes PlayBookIntent with book filled (A-form 6/6, seven sibling forms 3/3 each, two other new titles 3/3 each); regression guards unchanged (il libro forms PlayBook, "suona la musica di pink floyd" PlaySong, "di mettere la serie sailor moon" and the position-episode form PlayNextEpisode); wrapper battery 4/4 profile-nlu rows (11 simulate rows skipped, the documented recurring per-locale outage signature); new NLU fixture pins live-green (2 PlayBook pins + 1 PlayNextEpisode guard).
 HONEST LIMITATION (measured, then corrected same day): the first write of this record claimed out-of-seed titles still misroute; the post-fix measurement REFUTED that. Five out-of-seed tails (three famous English titles not in the seed, "purple cow", and the "xyzzyfoo" nonsense control) all route PlayBookIntent 3/3 each: the 14 English values generalized the type's fill scoring to English-looking tails as a class, not per title. Residual scope on the live model: NO measured misroute remains in the probed space (the pre-fix loss shapes, both real books, out-of-seed titles, nonsense). The structural gap stands (per-user library titles never reach the saved model's type; the seed is hand-curated; attribution carries an untested rebuild-roll confound, since the fix changed content AND rebuilt): catalog-wiring AudiobookTitle like the artist/album/series types is FILED as JF-823, no longer blocking Paolo's forms.
+<!-- SECTION:NOTES:END -->
+
+## Definition of Done
+<!-- DOD:BEGIN -->
+- [ ] #1 dotnet build passes with 0 errors
+- [ ] #2 dotnet test passes
+- [ ] #3 No new compiler warnings introduced
+- [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
+- [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
+- [ ] #6 NLU test fixtures updated if interaction model changed
+- [ ] #7 E2E test added for new intent or handler logic
+- [ ] #8 Locale response strings added to all 17 locales
+- [ ] #9 /simplify passed (no blocking cleanups remaining)
+- [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
+<!-- DOD:END -->

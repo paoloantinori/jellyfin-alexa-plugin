@@ -71,6 +71,11 @@ foreign-ticks stale prewrite under a live encode must not serve.
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
 
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
+
 ## Resolution (JF-820, closed 2026-10-09)
 
 DESIGN DECISION (orchestrator, pre-assigned): option (a), resolve the
@@ -219,3 +224,4 @@ shared residual of every token consumer.
 REFUTATIONS: none; all six findings were read against the code and stand.
 
 BATTERY (tail): touched classes both TFMs, full counts in the commit message.
+<!-- SECTION:NOTES:END -->

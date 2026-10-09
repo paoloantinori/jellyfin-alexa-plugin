@@ -193,6 +193,11 @@ lands mid-walk, the fast path serves warm, the probe reds).
 Closed by the orchestrator after the full cycle including an API-death recovery and a rework round: worker commits 41142f65 + 2229f537, merged as 66b33a7f. The suite wall-clock lever delivered by attribution, not guesswork: the task's premise (the parks) was REFUTED by TRX measurement - the class's cost was ONE test blocked 299s on the encode gate behind two deliberately spared sleep-300 fakes. The SparesOtherDevices teardown now kills every live encode through the hoisted KillLiveEncode registry helper (the JF-668 twin unified) with a KillEncodeByPidFile backstop, drains in a re-arming kill-and-poll loop, and refills to the configured cap; a per-launch 30s tripwire converts the supersede-kill ordering regression from a silent ~300s green into a red; the park window 400ms -> ParkWindowMs=250 with measured margins (10/10 at 250 and 150, 6/6 at 100; no false-green mechanism; the slow-host false red documented with its remedy). Wall-clock: full suite 7m00s -> 1m54s net9 (-73%), 6m56s -> 1m55s net10 (-72%); class -88%. The worker survived a glm-route corrupted-thought-signature death (resumed from transcript), and its rework gate refresh then caught the tripwire's own zombie-window flaw (a one-shot kill pass before an abandoned zombie could spawn its own sleep) - fixed with the re-arming drain. JF-731 filed (the Dispose-level class backstop). Suites: worker 5014/5014 both TFMs at the new speed, class 265/265 twice per TFM, and the merged-tree run itself 5019/5019 both TFMs exit 0 at 1m57s/2m11s - the dividend compounding its own verification. Test-only: no production surface, no deploy.
 <!-- SECTION:FINAL_SUMMARY:END -->
 
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
+
 ## Re-measurement pass (2026-10-06, certification only; no code changes)
 
 Re-dispatched under the new selective-testing battery (the maintainer's standing
@@ -262,3 +267,4 @@ sequentially (DisableTestParallelization; summed 172.8s against 176s reported
 on net9 confirms ~3s of harness overhead). The relative attribution the
 conclusion rests on (this class is ~25x the next-largest class on both TFMs) is
 contention-tolerant.
+<!-- SECTION:NOTES:END -->

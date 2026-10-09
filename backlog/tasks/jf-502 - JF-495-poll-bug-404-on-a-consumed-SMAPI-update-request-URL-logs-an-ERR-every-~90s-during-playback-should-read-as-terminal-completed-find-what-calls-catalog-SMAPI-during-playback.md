@@ -47,6 +47,17 @@ Bug in the JF-495 hardening observed live 2026-09-06 (10:43-10:46, during episod
 - [x] #18 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
 
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Closed 2026-09-06 (commit c2e6095e + budget bump 7cf2a03e, deployed and live-verified over three full sync cycles). A 404 from the polled update-request URL (consumed/expired after completion) now reads as terminal-completed with a debug line; the settle-wait 404 is quiet. Caller identified with evidence: the startup catalog sync itself (one ERR per locale, the ~90s cadence was the per-locale iteration); no playback-cadence SMAPI caller exists. LIVE: the post-fix full sync emitted ZERO 'SMAPI request failed' lines across 12 locales (previously 12 ERRs).
+<!-- SECTION:FINAL_SUMMARY:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
+
 ## Implementation notes (2026-09-06)
 
 Items 4 to 8 are not applicable to this change: no session attributes, no HttpClient lifecycle change, no interaction-model/locale-string change (the catalog-manager fix is SMAPI error disposition only), and no on-device E2E is possible for it without calling SMAPI (explicitly out of scope for this task; the 404 paths are covered by unit tests with fake handlers).
@@ -81,9 +92,4 @@ Live evidence shows the observed ERRs were NOT on an update-request Location URL
 - `dotnet test Jellyfin.Plugin.AlexaSkill.Tests`: Passed! Failed: 0, Passed: 3340, Skipped: 0, Total: 3340 (baseline 3336 + 4 new: poll-404 terminal, settle-404 quiet, catalog poll-404 fallback version, poll-503 still errors).
 - /simplify pass applied (test verify helpers deduplicated; `NotFoundHtml` accessibility kept `internal` because the outer test class cannot reach nested private members). code-review (review-local methodology, high): no findings at or above the 80 threshold; two sub-threshold notes recorded (the `"1"` fallback delta on a catalog poll 404 is the instructed disposition and already warns via the JF-495 path; treating any poll-URL 404 as terminal is bounded by the Location always originating from SMAPI's own 202 response).
 - Log evidence gathered read-only from the minix container (`podman logs jellyfin`); no deploy, no SMAPI calls, no model files touched.
-
-## Final Summary
-
-<!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Closed 2026-09-06 (commit c2e6095e + budget bump 7cf2a03e, deployed and live-verified over three full sync cycles). A 404 from the polled update-request URL (consumed/expired after completion) now reads as terminal-completed with a debug line; the settle-wait 404 is quiet. Caller identified with evidence: the startup catalog sync itself (one ERR per locale, the ~90s cadence was the per-locale iteration); no playback-cadence SMAPI caller exists. LIVE: the post-fix full sync emitted ZERO 'SMAPI request failed' lines across 12 locales (previously 12 ERRs).
-<!-- SECTION:FINAL_SUMMARY:END -->
+<!-- SECTION:NOTES:END -->

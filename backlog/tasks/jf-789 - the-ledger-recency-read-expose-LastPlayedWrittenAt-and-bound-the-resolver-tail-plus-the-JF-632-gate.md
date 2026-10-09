@@ -17,6 +17,11 @@ priority: low
 
 ## Description
 
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
+
 Filed 2026-10-06 from the JF-785 root-fix consideration (the JF-627 altitude
 review's observation), same-turn filing rule: the fix was REJECTED inside
 JF-785 for blast radius, and this task carries the implementable shape now
@@ -81,3 +86,4 @@ idle-days-old shape acting on the tail) and a green pin on the bounded shape;
 the lockstep matrix (PlaybackLaunchBuilderMediumTests) and the JF-785 pins
 (the tail-refusal pair and the Leg B boundary pair) re-run and deliberately
 updated where the bound supersedes them.
+<!-- SECTION:NOTES:END -->

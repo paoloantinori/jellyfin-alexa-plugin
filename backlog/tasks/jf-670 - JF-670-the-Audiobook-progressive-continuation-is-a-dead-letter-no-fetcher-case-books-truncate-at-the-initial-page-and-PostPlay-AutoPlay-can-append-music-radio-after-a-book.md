@@ -56,4 +56,10 @@ Landed 2026-09-29 on main (two commits, 72e9f978 + the review round 5dd99996): t
 - [x] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
 
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
+
 DEPLOY PROBE CORRECTION (2026-09-29, post-deploy on the live box): "config-gated OFF" is precise for the MULTI-CHAPTER AudioPlayer path only; single-file books DO ride AudioPlayer under NativeControlsForBooks=true (the flag gates the concat path). Live probe on the deployed build: PlayBookIntent "measure what matters" launched the single-file book via AudioPlayer.Play with the correct announce, exercising the shared head builder query on production. The single-file-book radio gate (SingleFileBookExhausted pin) is therefore live-reachable today; the multi-chapter continuation and its end-of-book silence remain Paolo's device-round items with the flag flipped.
+<!-- SECTION:NOTES:END -->

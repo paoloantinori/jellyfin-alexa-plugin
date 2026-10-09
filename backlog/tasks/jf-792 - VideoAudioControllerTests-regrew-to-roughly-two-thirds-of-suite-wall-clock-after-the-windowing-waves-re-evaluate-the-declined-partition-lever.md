@@ -16,6 +16,15 @@ priority: medium
 
 ## Description
 
+## Definition of Done
+
+## Final Summary
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
+
 Filed 2026-10-06 by the JF-730 re-measurement worker (certification pass, no
 code changes; the full dated table lives in the re-measurement appendix of the
 JF-730 task file). The JF-730 close declined lever (c), the
@@ -336,8 +345,6 @@ do-not-take-alone per the filing):
 3. JF-800 (the mechanical roster guard) and JF-801 (the contended timing
    margins) are filed.
 
-## Definition of Done
-
 - [x] dotnet build passes with 0 errors (both TFMs, Debug; Release -warnaserror
       0 warnings 0 errors verified on the final state)
 - [x] dotnet test passes (5418/5418 both TFMs; flake gate 10/10 after the one
@@ -354,8 +361,6 @@ do-not-take-alone per the filing):
       commit; one filing JF-800)
 - [x] /code-review high passed (diff verified mechanically clean; 3 findings:
       1 filed as JF-801, 2 applied)
-
-## Final Summary
 
 JF-792 re-evaluated the declined partition lever with measurement and took it
 to its arrange-only ceiling. (1) The static-usage audit of all 125 uncollected
@@ -389,3 +394,4 @@ parallel-phase guard), JF-801 (contended timing margins). Commits in the
 worker worktree: 50aaad80 (In Progress), dd46b979 (toggle + split),
 6f0fbc72 (simplify round), 3d7696fd (code-review tail), 93a34711 (park-gate
 fix), plus this closure commit.
+<!-- SECTION:NOTES:END -->

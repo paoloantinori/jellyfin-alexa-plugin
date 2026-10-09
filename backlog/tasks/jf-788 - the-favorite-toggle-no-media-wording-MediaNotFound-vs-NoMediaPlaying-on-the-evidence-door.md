@@ -16,6 +16,11 @@ priority: low
 
 ## Description
 
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
+
 Filed 2026-10-06 from the JF-785 /code-review high round (its finding 5),
 same-turn filing rule.
 
@@ -51,8 +56,6 @@ HandleAsync_UnresolvableDtoStaleLedger_NoWrite_JF785) move with the decision.
 VERIFICATION BAR: whichever way it lands, the two branches (idle guard,
 resolver-null) must speak the SAME key, pinned in the favorite suite.
 
-## Implementation Notes
-
 Decision taken 2026-10-08: unify on NoMediaPlaying (the filing's first option,
 the milestone's consistency direction). Both evidence-door branches in
 FavoriteToggleIntentHandler (the JF-629 idle guard and the JF-785 Leg A
@@ -74,6 +77,7 @@ covered the two door branches. A boundary pin
 keep so a future unification sweep cannot flip it as "the family's last
 MediaNotFound" without a red test; the open wording question for that branch is
 JF-821.
+<!-- SECTION:NOTES:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->

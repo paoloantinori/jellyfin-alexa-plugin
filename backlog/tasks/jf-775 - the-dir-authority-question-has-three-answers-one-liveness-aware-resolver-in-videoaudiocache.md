@@ -18,6 +18,26 @@ priority: low
 
 ## Description
 
+## Definition of Done
+
+<!-- DOD:BEGIN -->
+- [ ] #1 dotnet build passes with 0 errors
+- [ ] #2 dotnet test passes
+- [ ] #3 No new compiler warnings introduced
+- [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
+- [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
+- [ ] #6 NLU test fixtures updated if interaction model changed
+- [ ] #7 E2E test added for new intent or handler logic
+- [ ] #8 Locale response strings added to all 17 locales
+- [ ] #9 /simplify passed (no blocking cleanups remaining)
+- [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
+<!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
+
 Filed 2026-10-05 from the JF-774 high code-review round (its finding 4, altitude
 class; dispositioned SKIP-with-reasons in that task, filed here per the
 same-turn landing rule).
@@ -66,21 +86,6 @@ or a second path gaining transient mode is that trigger). Do it as its own
 task with the pin battery re-baselined deliberately, not as a rider on an
 edge-fix task.
 
-## Definition of Done
-
-<!-- DOD:BEGIN -->
-- [ ] #1 dotnet build passes with 0 errors
-- [ ] #2 dotnet test passes
-- [ ] #3 No new compiler warnings introduced
-- [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
-- [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
-- [ ] #6 NLU test fixtures updated if interaction model changed
-- [ ] #7 E2E test added for new intent or handler logic
-- [ ] #8 Locale response strings added to all 17 locales
-- [ ] #9 /simplify passed (no blocking cleanups remaining)
-- [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
-<!-- DOD:END -->
-
 GATE-MARKER ADDENDUM (2026-10-05, from the JF-774 orchestrator review): the
 mid-registration window is NARROWED, not closed; a lock-free fast-path replay
 landing between the registry store and the first slot write inside
@@ -93,3 +98,4 @@ all CLOSED' sentence above is corrected by this addendum. The window is
 sub-second and requires the undeletable same-key shadow plus an oversize
 encode plus a replay in the gap; the liveness-aware resolver this task tracks
 is the shape that closes it.
+<!-- SECTION:NOTES:END -->

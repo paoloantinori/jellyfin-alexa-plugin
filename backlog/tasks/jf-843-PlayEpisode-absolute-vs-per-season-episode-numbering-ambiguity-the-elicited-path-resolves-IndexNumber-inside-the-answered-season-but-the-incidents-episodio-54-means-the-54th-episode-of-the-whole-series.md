@@ -13,6 +13,11 @@ priority: medium
 
 ## Description
 
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
+
 Filed from the JF-814 gate-marker (F5, 2026-10-09). The JF-814 fix elicits the
 season when the user gives an episode number without one ("l'episodio 54 di
 sailor moon"), and after the answer the handler resolves
@@ -146,3 +151,4 @@ speech still vanishes, the send returns true but the device drops it (a
 progressive-after-elicit platform behavior); if the line never appears, the
 gate has an environmental input the static read misses (dump the gate's four
 values at runtime with a temporary Debug line).
+<!-- SECTION:NOTES:END -->

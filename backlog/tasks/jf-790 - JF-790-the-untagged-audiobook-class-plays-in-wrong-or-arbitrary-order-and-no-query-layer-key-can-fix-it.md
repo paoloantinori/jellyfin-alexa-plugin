@@ -88,6 +88,11 @@ scope). The probe artifacts are listed in the JF-672 task record.
 
 ## Final Summary
 
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
+
 **The fix**: the DEFAULT paged AudioPlayer path now plays the untagged/tie audiobook class in FILE order. The initial chapters page runs through a new detection predicate (`ChapterFileNameOrder.PageDistrustsDbOrder`: every page row lacks IndexNumber, the untagged class whose order rests on lexicographic SortName alone; OR two rows share the full (SortName, Name) key, server whim). On detection the resolver fetches the book once unpaged (the deep scan's own scoped-unpaged shape; no second query when the page already carried the whole book), sorts it with the ONE shared trailing-filename comparator, and serves the queue and the continuation from the sorted list: the continuation carries `CachedTracks` (the playlist arm's in-memory paging, generalized into the ONE `SliceCachedTracks` idiom both arms share), so the tail never returns to the DB order that answered wrong.
 
 **The comparator extraction**: `VideoAudioController`'s private `_chapterNumberRegex` + OrderBy lambda became `Alexa/Util/ChapterFileNameOrder.cs`, and the endpoint now consumes the same helper (`SortByTrailingFileNameNumber`), so the seek-mode resume math over the concat timeline and the queue's next/previous navigation describe the same book. ONE deliberate deviation, documented on the class: the number parses through `int.TryParse`, not the endpoint's throwing `int.Parse` (an ISBN/timestamp-named file would otherwise crash the whole play request; the endpoint inherits the tolerance). Pinned from BOTH directions: helper behavior unit tests plus IL pins that the endpoint and the resolver each call the shared method (a fork reds structurally), plus the queue order tests.
@@ -103,3 +108,4 @@ scope). The probe artifacts are listed in the JF-672 task record.
 **Suites**: 5502/5502 both TFMs on the final state (5484 baseline + 18 new tests: 5 handler-level in PlayBookChapterFileNameOrderTests, 13 unit-level in Unit/ChapterFileNameOrderTests); Release -warnaserror 0 warnings 0 errors both TFMs. Three existing fixtures gained IndexNumber on their chapters (PlayBookResumeTests.SetupDeepResumeBook, ProgressiveQueueTests' JF-674 theory, PlayBookIntentHandlerTests' four book fixtures): they model tagged-class books (Measure What Matters is tagged in the live census) whose DB-path pins must keep testing the DB path.
 
 **Not deployed** (worker branch only; the orchestrator merges and batches deploys). No locale, model, or speech surface touched. One filing: JF-813.
+<!-- SECTION:NOTES:END -->

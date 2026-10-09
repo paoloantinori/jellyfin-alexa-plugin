@@ -11,6 +11,11 @@ priority: low
 
 ## Description
 
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
+
 Filed from the JF-814 simplify/altitude review (2026-10-09, worktree
 agent-af77920eafddbeb3a). The JF-814 guard in `PlayEpisodeIntentHandler.HandleAsync`
 is `if (episodeParsed && !seasonParsed) -> elicit season_number`. The SYMMETRIC
@@ -45,3 +50,4 @@ Marker: a grep for `season_number}` inside PlayEpisodeIntent sample lists in
 `Alexa/InteractionModel/templates/*.yaml` (season-ed families carry it alongside
 `episode_number`, so the signal is a sample with season but without episode)
 finds nothing today; that is the invariant this task protects.
+<!-- SECTION:NOTES:END -->

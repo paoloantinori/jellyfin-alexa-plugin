@@ -41,6 +41,13 @@ Two smaller findings from the 2026-09-06 Dot session. (A) Session pre-warm on La
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
 
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Formal review dispositions (2026-09-07, orchestrator): P3-88 APPLIED as REMOVAL - the reviewer proved the pre-warm can never fire in production (the only dispatch into handlers is RequestPipeline->HandleRequestAsync, which stores-or-fails BEFORE HandleAsync; the incident itself was intent-first with no LaunchRequest at all), so WarmSessionCacheFireAndForget + PreWarmSessionCacheAsync + the LaunchRequestHandler call site + SessionPreWarmLaunchTests are all removed (66 lines + the test class). KEPT: the StartSessionLookup extraction (the reviewer's own recommendation: real shared value for ResolveSessionAsync and the warm-fill). P4 APPLIED: TrySongTitleRetry's unused user parameter dropped and its misleading doc line corrected. Part B fully verified clean by the review (the strict carrier move, the retry's scope discipline and JF-466 hard-zero, the mirrors byte-consistent). Suite after the removals: 3391/3391 (3395 minus the 4 pre-warm tests).
+
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
+
 ## Implementation Notes (2026-09-07, worker session)
 
 ### Evidence pulled (minix log_20260906.log)
@@ -162,11 +169,6 @@ per task rules). Run ./scripts/run_nlu_tests.sh -k "it-IT" after deploying.
   not-found nesting flatten); code-review (review-local, in-session per the
   no-subagent rule) found nothing >= 80 (2 sub-80 notes: config-read idiom
   mirrors file precedent; fixture validation is inherently post-deploy).
-
-## Implementation Notes
-
-<!-- SECTION:NOTES:BEGIN -->
-Formal review dispositions (2026-09-07, orchestrator): P3-88 APPLIED as REMOVAL - the reviewer proved the pre-warm can never fire in production (the only dispatch into handlers is RequestPipeline->HandleRequestAsync, which stores-or-fails BEFORE HandleAsync; the incident itself was intent-first with no LaunchRequest at all), so WarmSessionCacheFireAndForget + PreWarmSessionCacheAsync + the LaunchRequestHandler call site + SessionPreWarmLaunchTests are all removed (66 lines + the test class). KEPT: the StartSessionLookup extraction (the reviewer's own recommendation: real shared value for ResolveSessionAsync and the warm-fill). P4 APPLIED: TrySongTitleRetry's unused user parameter dropped and its misleading doc line corrected. Part B fully verified clean by the review (the strict carrier move, the retry's scope discipline and JF-466 hard-zero, the mirrors byte-consistent). Suite after the removals: 3391/3391 (3395 minus the 4 pre-warm tests).
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary

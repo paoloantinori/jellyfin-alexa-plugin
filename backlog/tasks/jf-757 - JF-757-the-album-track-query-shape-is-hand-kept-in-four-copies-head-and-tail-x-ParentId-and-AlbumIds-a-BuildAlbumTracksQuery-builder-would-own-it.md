@@ -42,6 +42,11 @@ NOT DONE in JF-753 because the filing's assigned surface was the engagement/regi
 
 ## Final Summary
 
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
+
 The four hand-kept album-track query initializers collapsed into ONE builder,
 `QueueContinuationFetcher.BuildAlbumTracksQuery(jellyfinUser, albumId, startIndex, limit, byAlbumIds)`, placed
 next to its JF-670 audiobook twin. Verified identical modulo the scoping term and paging BEFORE extracting (User,
@@ -58,3 +63,4 @@ surface: AlbumPlayService.cs head (2 sites) + QueueContinuationFetcher.cs tail (
 ProgressiveQueueTests.cs (+1 Fact, 52/52 in-family). Out-of-scope findings filed same-turn as JF-763 (the
 concat-endpoint fold-in decision, the pre-existing head/tail library-scope asymmetry, the residual-shape
 inventory). No deploy: production query behavior byte-identical, test-adjacent change only.
+<!-- SECTION:NOTES:END -->

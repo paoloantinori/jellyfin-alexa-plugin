@@ -65,4 +65,10 @@ encode-starting tests against the sweep ordering.
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
 
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
+
 CLOSURE (2026-10-07, the JF-808 gate-marker): this filing is a DUPLICATE of JF-772 (the same JF-731 dispose-backstop flake class, already filed 2026-10-05 with base-reproducibility matrices and candidate mechanisms). The one genuinely new datum (the first net9.0 occurrence, weakening the net10.0-specific candidate) is folded into JF-772's addendum. Closed as a duplicate; no separate work.
+<!-- SECTION:NOTES:END -->

@@ -18,6 +18,25 @@ priority: low
 
 ## Description
 
+## Definition of Done
+<!-- DOD:BEGIN -->
+- [x] #1 dotnet build passes with 0 errors (Debug + Release --no-restore -warnaserror, 0 warnings 0 errors)
+- [x] #2 dotnet test passes (5319/5319 BOTH TFMs on the final state)
+- [x] #3 No new compiler warnings introduced (Release -warnaserror clean)
+- [x] #4 Session attributes use proper DTOs not raw ValueTuples for serialization (N/A: no session attributes touched)
+- [x] #5 HttpClient instances are not shared across calls that modify BaseAddress (N/A: no HttpClient touched)
+- [x] #6 NLU test fixtures updated if interaction model changed (N/A: no model change)
+- [x] #7 E2E test added for new intent or handler logic (N/A: cache-internal bookkeeping, no intent/handler change; pinned at unit level, 5 pins)
+- [x] #8 Locale response strings added to all 17 locales (N/A: no response strings touched)
+- [x] #9 /simplify passed (3 applied, 1 reasoned skip, recorded above)
+- [x] #10 /code-review high passed (3 findings, all 3 applied, recorded above)
+<!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
+
 Filed 2026-10-05 from the JF-782 /code-review high round (its finding 4),
 per the same-turn landing rule.
 
@@ -154,17 +173,4 @@ out of scope).
 Production: not deployed (worker branch only; cache-internal bookkeeping,
 no device-observable behavior change by the reader-observability argument
 above).
-
-## Definition of Done
-<!-- DOD:BEGIN -->
-- [x] #1 dotnet build passes with 0 errors (Debug + Release --no-restore -warnaserror, 0 warnings 0 errors)
-- [x] #2 dotnet test passes (5319/5319 BOTH TFMs on the final state)
-- [x] #3 No new compiler warnings introduced (Release -warnaserror clean)
-- [x] #4 Session attributes use proper DTOs not raw ValueTuples for serialization (N/A: no session attributes touched)
-- [x] #5 HttpClient instances are not shared across calls that modify BaseAddress (N/A: no HttpClient touched)
-- [x] #6 NLU test fixtures updated if interaction model changed (N/A: no model change)
-- [x] #7 E2E test added for new intent or handler logic (N/A: cache-internal bookkeeping, no intent/handler change; pinned at unit level, 5 pins)
-- [x] #8 Locale response strings added to all 17 locales (N/A: no response strings touched)
-- [x] #9 /simplify passed (3 applied, 1 reasoned skip, recorded above)
-- [x] #10 /code-review high passed (3 findings, all 3 applied, recorded above)
-<!-- DOD:END -->
+<!-- SECTION:NOTES:END -->

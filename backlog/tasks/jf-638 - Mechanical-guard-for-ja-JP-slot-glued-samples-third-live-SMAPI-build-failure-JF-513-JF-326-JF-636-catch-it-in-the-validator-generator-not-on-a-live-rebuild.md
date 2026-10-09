@@ -37,6 +37,17 @@ Third occurrence of the same mistake class: a new ja-JP intent shipped with slot
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
 
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Landed 2026-09-27 as merge ff77804b (CI green, run 36303022981): validator check #11 (error-level CJK slot-glue detection in validate_single_model, two contiguous ord spans U+3000-30FF + U+4E00-9FFF) + the 10-case pytest harness tests/scripts/test_cjk_slot_glue.py (reusing test_elicit_checker's cached _models loader). All four /simplify angles ran: three findings applied (span collapse, dead types scaffolding dropped, loader dedup), two skips recorded (loop-merge: numbered-check convention + efficiency no-restructure; pad-and-index: equal forms). Code-review high PASS with independent execution of all five priorities (clean sweep two ways, old-vs-new byte-identical, dirty-direction on the real model, SMAPI payload identity verified through ModelDeploymentManager). Review residuals landed same-turn: JF-644 filed (FF-range + Ext-A widening), the InvalidSample comment nit and the stale-symbol task-note nit fixed in the branch. Validator output on the real tree byte-identical pre/post; harness 16/16. This closes the third-incident class: the next glued ja sample now fails CI before SMAPI ever sees it.
+<!-- SECTION:FINAL_SUMMARY:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
+
 ## Implementation notes (2026-09-27)
 
 Python-only change; the dotnet DoD items above do not apply (no C#, no model JSON or YAML edits). Commit 9bbbc7e3 on worktree branch worktree-agent-a20ccd4a2a321ab9e.
@@ -49,9 +60,4 @@ Python-only change; the dotnet DoD items above do not apply (no C#, no model JSO
 - **Dirty direction (CLI level)**: ran the real `main()` against a doctored ja-JP model copy in /tmp (injected ` {musician}を再生` into PlayArtistSongsIntent; no repo file touched). Tail:
   `FAIL: 1 error(s) found:` / `  [ja-JP] Intent 'PlayArtistSongsIntent': sample ' {musician}を再生' glues a slot to CJK text (U+3092 directly after '}'); separate with a regular ASCII space (SMAPI rejects the build; JF-638)` / `DIRTY RUN EXIT = 1`.
 - **Sibling validators**: `validate_locales.py` PASS (no new locale gaps, exit 0); `validate_versions.py` PASS (1.0.0.0 across all three sources, exit 0). pytest `tests/scripts/` = 16 passed (10 new + 6 pre-existing elicit-checker).
-
-## Final Summary
-
-<!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Landed 2026-09-27 as merge ff77804b (CI green, run 36303022981): validator check #11 (error-level CJK slot-glue detection in validate_single_model, two contiguous ord spans U+3000-30FF + U+4E00-9FFF) + the 10-case pytest harness tests/scripts/test_cjk_slot_glue.py (reusing test_elicit_checker's cached _models loader). All four /simplify angles ran: three findings applied (span collapse, dead types scaffolding dropped, loader dedup), two skips recorded (loop-merge: numbered-check convention + efficiency no-restructure; pad-and-index: equal forms). Code-review high PASS with independent execution of all five priorities (clean sweep two ways, old-vs-new byte-identical, dirty-direction on the real model, SMAPI payload identity verified through ModelDeploymentManager). Review residuals landed same-turn: JF-644 filed (FF-range + Ext-A widening), the InvalidSample comment nit and the stale-symbol task-note nit fixed in the branch. Validator output on the real tree byte-identical pre/post; harness 16/16. This closes the third-incident class: the next glued ja sample now fails CI before SMAPI ever sees it.
-<!-- SECTION:FINAL_SUMMARY:END -->
+<!-- SECTION:NOTES:END -->

@@ -36,6 +36,17 @@ Audit 2026-09-14 (matrix intent x medium, code-verified): StartOverIntentHandler
 - [x] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked) (0 P1, 0 P2; P3-1/JF-568 + P3-2/JF-569 filed, P3-3 fixed same turn)
 <!-- DOD:END -->
 
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+CLOSED complete (2026-09-15). StartOver of LiveTvChannel rejoins the live stream through the shared channel launch (ILiveTvStreamResolver, LiveTvEnabled-gated, resolver-null = PlayChannel's not-available Tell). New BaseHandler.ResolvePlayingMedium classifier (ledger-first: JF-563's device last-played ledger + AudioPlayer token via StreamTokenCodec, then IsVideoAppLaunchItem; Unknown preserves every pre-JF-564 behavior - cold-handler music semantics pinned) feeding the honest per-medium responses: Next/Previous during Video/LiveTV speak CannotNavigateVideoByVoice / CannotNavigateLiveTvByVoice instead of the silent Empty (mutation pin: the stale-queue Next-during-video can no longer play a song mid-video); Pause/Cancel during video/live-TV/VideoApp-audiobook speak CannotPauseVideoByVoice (back button = the documented exit), session ending, AudioPlayer.Stop kept. Stop unchanged (docs-mandated silent). 3 string keys x 17 locales; 20 new tests; suite 3826/3826 both TFMs; Release -warnaserror 0 warnings; validators PASS. Gates: 4-agent simplify (all applied or consciously skipped) + code-review high (0 P1/P2; P3-3 fixed same-turn). Reviewer filed JF-568 (ledger video-kind misclassification on queue-advance-after-transcode-launch) and JF-569 (stale Repeat class doc) same-turn.
+<!-- SECTION:FINAL_SUMMARY:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
+
 ## Implementation notes (2026-09-15, complete, uncommitted)
 
 - UX DECISION (recorded in code): honest per-medium lines replace the silent no-ops.
@@ -68,9 +79,4 @@ Audit 2026-09-14 (matrix intent x medium, code-verified): StartOverIntentHandler
   twin extracted, ledger-first DB-read skip, test fixture dedup into TestHelpers) +
   code-review high dedicated reviewer (0 P1, 0 P2; P3-3 fixed, P3-1 -> JF-568,
   P3-2 -> JF-569). Suite 3826/3826 both TFMs, Release -warnaserror 0 warnings.
-
-## Final Summary
-
-<!-- SECTION:FINAL_SUMMARY:BEGIN -->
-CLOSED complete (2026-09-15). StartOver of LiveTvChannel rejoins the live stream through the shared channel launch (ILiveTvStreamResolver, LiveTvEnabled-gated, resolver-null = PlayChannel's not-available Tell). New BaseHandler.ResolvePlayingMedium classifier (ledger-first: JF-563's device last-played ledger + AudioPlayer token via StreamTokenCodec, then IsVideoAppLaunchItem; Unknown preserves every pre-JF-564 behavior - cold-handler music semantics pinned) feeding the honest per-medium responses: Next/Previous during Video/LiveTV speak CannotNavigateVideoByVoice / CannotNavigateLiveTvByVoice instead of the silent Empty (mutation pin: the stale-queue Next-during-video can no longer play a song mid-video); Pause/Cancel during video/live-TV/VideoApp-audiobook speak CannotPauseVideoByVoice (back button = the documented exit), session ending, AudioPlayer.Stop kept. Stop unchanged (docs-mandated silent). 3 string keys x 17 locales; 20 new tests; suite 3826/3826 both TFMs; Release -warnaserror 0 warnings; validators PASS. Gates: 4-agent simplify (all applied or consciously skipped) + code-review high (0 P1/P2; P3-3 fixed same-turn). Reviewer filed JF-568 (ledger video-kind misclassification on queue-advance-after-transcode-launch) and JF-569 (stale Repeat class doc) same-turn.
-<!-- SECTION:FINAL_SUMMARY:END -->
+<!-- SECTION:NOTES:END -->

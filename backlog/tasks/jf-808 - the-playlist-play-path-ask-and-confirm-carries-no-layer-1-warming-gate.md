@@ -65,6 +65,11 @@ arm's ordering.
 
 ## Final Summary
 
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
+
 Closed 2026-10-07, worktree branch (4 commits: red scaffolding, gates,
 simplify round, code-review round; not merged, per the task mandate).
 
@@ -139,3 +144,4 @@ runs real recursive-folder machinery needing server-injected statics
 drive a TestHelpers.TestItemsFolder double whose GetItemsInternal override
 bypasses the machinery; the resolvable-playlist fixture lives in
 TestHelpers.SetupPlaylist (hoisted from the shuffle suite's private copy).
+<!-- SECTION:NOTES:END -->

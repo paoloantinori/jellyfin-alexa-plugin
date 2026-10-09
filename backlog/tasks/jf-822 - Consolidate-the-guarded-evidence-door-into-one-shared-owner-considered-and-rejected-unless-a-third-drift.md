@@ -15,6 +15,11 @@ priority: low
 
 ## Description
 
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
+
 Filed 2026-10-08 from the JF-788 /code-review high round (its finding 3,
 same-turn filing rule), recording a REJECTED alternative so the decision is
 durable and re-openable, the JF-785 LEG 4 / JF-789 precedent.
@@ -54,3 +59,4 @@ copy-pasting the door. At that point weigh the forced rewrites above against
 the drift cost; the likely shape is a guarded-door helper returning a
 result discriminated union (item / refused-with-tell) rather than a tell
 emitter, so MediaInfo's DTO fallback survives.
+<!-- SECTION:NOTES:END -->

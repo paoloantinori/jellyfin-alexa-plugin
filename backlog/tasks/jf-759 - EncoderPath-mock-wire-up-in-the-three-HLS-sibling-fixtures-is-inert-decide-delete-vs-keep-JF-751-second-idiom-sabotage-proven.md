@@ -67,6 +67,11 @@ FIX DIRECTION (a decision, not a mechanical consolidation): either DELETE the wi
 
 ## Final Summary
 
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
+
 DECISION (2026-10-05): DELETE the EncoderPath wire-up from the three sibling fixtures; KEEP the one live inline
 consumer; the file-wide sweep of the 54 residual inline setups is REFUSED for this round and filed as JF-765,
 gated on first giving the consumer test an explicit fake.
@@ -106,3 +111,4 @@ One transient observation, not a regression: a single simultaneous dual-TFM clas
 MonitorHls_HungEncode_KilledAfterOneStallBudget (300ms stall-budget timing test); it passed alone on net10.0, in
 both sequential per-TFM class runs, and in both full-suite runs (the documented cross-test-sweep timing class,
 same family as JF-751's observation). TEST-ONLY change: no deploy.
+<!-- SECTION:NOTES:END -->

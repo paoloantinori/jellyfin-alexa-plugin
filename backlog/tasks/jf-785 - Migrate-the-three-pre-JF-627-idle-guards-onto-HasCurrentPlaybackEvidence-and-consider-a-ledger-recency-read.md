@@ -222,6 +222,10 @@ split predates JF-785 and unifying it is a user-facing change on two shapes
 that needs both favorite branches moved together, a product decision recorded
 in the filing).
 
+
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
+
+JF-627 GATE-MARKER FINDINGS (2026-10-06): LEG A (the unresolvable-evidence door, finding 1): the idle guard gates on evidence PRESENCE not RESOLVABILITY, so an unresolvable now-playing DTO (item deleted mid-play, or Id == Guid.Empty) lets the resolver's unbounded ledger tail through and 'add this to playlist' ADDS a days-old unrelated item where pre-JF-627 answered NoMediaPlaying; fix shape: guard on resolvable evidence or have guarded families reject ledger-tail answers (displacement-arm answers only). LEG B (the VideoApp-no-token parity, finding 2): HasCurrentPlaybackEvidence has no VideoApp leg, so a video-first device (no AudioPlayer history, no token ever) refuses 'add this' during movies while 'rate this' acts on the same ledger entry; not a regression but the parity boundary is undocumented and unpinned, and video-first 1.0 users hit it on every movie-time 'add this'.
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done
@@ -237,8 +241,6 @@ in the filing).
 - [x] #9 /simplify passed (4 angles: efficiency clean; applied the doc consolidation, the belt note, the factory repoints, the pin-doc cuts; 3 reasoned skips recorded)
 - [x] #10 /code-review high passed (5 findings: 4 applied, 1 filed as JF-788; recorded above)
 <!-- DOD:END -->
-
-JF-627 GATE-MARKER FINDINGS (2026-10-06): LEG A (the unresolvable-evidence door, finding 1): the idle guard gates on evidence PRESENCE not RESOLVABILITY, so an unresolvable now-playing DTO (item deleted mid-play, or Id == Guid.Empty) lets the resolver's unbounded ledger tail through and 'add this to playlist' ADDS a days-old unrelated item where pre-JF-627 answered NoMediaPlaying; fix shape: guard on resolvable evidence or have guarded families reject ledger-tail answers (displacement-arm answers only). LEG B (the VideoApp-no-token parity, finding 2): HasCurrentPlaybackEvidence has no VideoApp leg, so a video-first device (no AudioPlayer history, no token ever) refuses 'add this' during movies while 'rate this' acts on the same ledger entry; not a regression but the parity boundary is undocumented and unpinned, and video-first 1.0 users hit it on every movie-time 'add this'.
 
 ## Final Summary
 

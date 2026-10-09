@@ -46,12 +46,6 @@ Single checklist of everything that needs a REAL Echo/on-device verification and
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
 
-DEVICE-ROUND ADDITIONS (2026-09-29, from the JF-666/667/668/670 cycle):
-- JF-670 multi-chapter book (needs NativeControlsForBooks flipped OFF for the round): a book with more chapters than the initial page plays THROUGH all chapters (logs: "Progressive queue: fetched N items for Audiobook (offset 5/total)"); at true end-of-book with PostPlay=AutoPlay, silence and NO radio append (no "PostPlay AutoPlay: added" line).
-- JF-670 single-file book (no flag flip needed): ends in silence under AutoPlay, no music radio after the book.
-- JF-672 probe: a 15+ chapter book's play order vs folder/chapter numbering (default sort, no explicit order; the fix decision rides this probe).
-- JF-673 probe (NRE-class server only, likely N/A on 12.1.0): whether the PlayBook continuation store engages via the fallback executor.
-- JF-666/667 residuals: artist catalogue-burn beyond the initial page (the definitive device round for the Norah Jones fix, deployed 2026-09-29); confirm-artist "si" plays (the yes-path pin is unit-only).
 <!-- SECTION:NOTES:END -->
 
 ## Implementation Notes
@@ -68,6 +62,19 @@ Added to this checklist (2026-09-07, from JF-270's non-automatable remainder): F
 
 2026-09-23 census update (the 1.0 device-verification ledger): CLOSED this round with battery evidence - JF-269 (radio e2e), JF-277 (sleep timer), JF-279 (queue manipulation, 3.5/5), JF-284 (AutoPlay), JF-621 (FollowMe), JF-617 (resume; AC4 device half covered by the 13:54 battery's resume tests 4-5, the empty-context queue path unit-pinned), JF-618 (AC1-3 device-verified incl. the platform-truth follow-up; AC4 complete with the boundary-stop observation), JF-620 (the trap escape heard live: «Stavo ancora aspettando la risposta a una domanda...», corr 5da1c2f7), JF-614/JF-601 second-turn playlist (live: «Rapsodia su un tema di Paganini aggiunto alla playlist prova echo», corr c28c01be). REMAINING device items on this checklist: the residuals noted on the closed tasks (ListQueue voice probe, current-track-after-clear), JF-405's own original items (multi-turn JF-394-397, StopIntent JF-402, JF-399, JF-392 - many now incidentally covered by the batteries' observed behavior), JF-516 (video+chiudi), JF-280 (behavioral loop/shuffle effects), JF-271/272 (proactive events, reminders - or mark experimental in release notes), and the favorite-adding phrase Paolo reported failing (the common forms route per profile-nlu; his exact utterance unknown - needs his phrase).
 <!-- SECTION:NOTES:END -->
+
+DEVICE-ROUND ADDITIONS (2026-09-29, from the JF-666/667/668/670 cycle):
+- JF-670 multi-chapter book (needs NativeControlsForBooks flipped OFF for the round): a book with more chapters than the initial page plays THROUGH all chapters (logs: "Progressive queue: fetched N items for Audiobook (offset 5/total)"); at true end-of-book with PostPlay=AutoPlay, silence and NO radio append (no "PostPlay AutoPlay: added" line).
+- JF-670 single-file book (no flag flip needed): ends in silence under AutoPlay, no music radio after the book.
+- JF-672 probe: a 15+ chapter book's play order vs folder/chapter numbering (default sort, no explicit order; the fix decision rides this probe).
+- JF-673 probe (NRE-class server only, likely N/A on 12.1.0): whether the PlayBook continuation store engages via the fallback executor.
+- JF-666/667 residuals: artist catalogue-burn beyond the initial page (the definitive device round for the Norah Jones fix, deployed 2026-09-29); confirm-artist "si" plays (the yes-path pin is unit-only).
+<!-- SECTION:NOTES:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
 
 DEVICE-ROUND ADDITIONS (2026-09-29, from the JF-666/667/668/670 cycle):
 - JF-670 multi-chapter book (needs NativeControlsForBooks flipped OFF for the round): a book with more chapters than the initial page plays THROUGH all chapters (logs: "Progressive queue: fetched N items for Audiobook (offset 5/total)"); at true end-of-book with PostPlay=AutoPlay, silence and NO radio append (no "PostPlay AutoPlay: added" line).

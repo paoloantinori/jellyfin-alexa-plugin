@@ -57,14 +57,19 @@ the position-holding track to launch.
 - [x] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
 
+## Final Summary
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
+
 N/A justifications: #4 no session-attribute writes touched (the QueueContinuation
 DTO shape is unchanged, only its values); #5 no HttpClient touched; #6/#8 no
 interaction-model or speech changes (the fix is resume bookkeeping only); #7 E2E
 per the worker split (JF-793/JF-795 precedent: deep UserData progress beyond the
 initial page cannot be set up deterministically against the live server, so the
 defect class is pinned at the handler path, AlbumDeepResumeTests).
-
-## Final Summary
 
 THE DEFECT AND THE FIX. AlbumPlayService.BuildAlbumPlayResponseAsync's audio
 route ran ResumeMath.FindResumeTrackIndex over only the 5-track initial page, so
@@ -129,3 +134,4 @@ pre-existing JF-625 tracker-walk page bound, out of scope by this task's
 video-route-unchanged contract), F2 tracked via the JF-797 addendum (the
 contract-sanctioned trade, row-volume sharpening recorded). Filings: JF-803,
 JF-804, the JF-797 addendum. Production surface changed: deploys.
+<!-- SECTION:NOTES:END -->

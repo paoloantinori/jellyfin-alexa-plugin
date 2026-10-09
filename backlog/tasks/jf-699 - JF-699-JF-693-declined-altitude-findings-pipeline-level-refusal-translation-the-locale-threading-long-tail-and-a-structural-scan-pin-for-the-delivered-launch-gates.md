@@ -107,6 +107,31 @@ Independent suite 4931/4931 both TFMs on the worker commit; filtered classes 254
 after the tail edits.
 <!-- SECTION:DESCRIPTION:END -->
 
+## Definition of Done
+<!-- DOD:BEGIN -->
+- [x] #1 dotnet build passes with 0 errors (plugin + test projects, both TFMs, 0 errors 0 warnings on the final state)
+- [x] #2 dotnet test passes (full recipe, both TFMs: 4931/4931 net9.0 AND net10.0; baseline at the merge commit measured 4925/4925 via a tagged-stash run, so the delta is exactly +10 new pins − 4 moved builder ThreadedLocale twins)
+- [x] #3 No new compiler warnings introduced (grep-clean build output; the CS0168 in a REDPROOF shape was fixed before the final state)
+- [x] #4 Session attributes use proper DTOs not raw ValueTuples (N/A: no session-attribute shape touched)
+- [x] #5 HttpClient instances are not shared across calls that modify BaseAddress (N/A: no HttpClient code touched)
+- [x] #6 NLU fixtures updated if interaction model changed (N/A: no interaction model change; the refusal reuses the JF-687 key)
+- [x] #7 E2E added for new intent/handler logic (N/A: no new intent; pipeline translation + reorders pinned by unit pins, empty-secret state not safely reachable on the live server)
+- [x] #8 Locale strings in all 17 locales (N/A: reuses StreamTokenNotConfigured, already in all 17 from JF-687)
+- [x] #9 /simplify passed (4 agents: reuse/simplification/efficiency/altitude; dispositions in the Final Summary)
+- [x] #10 /code-review high passed (6 findings: 4 applied in-code, 1 applied as a documented boundary, 1 filed as JF-708; dispositions in the Final Summary)
+<!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Closed by the orchestrator after the full cycle: worker commit 65821618 (base corrected early by merging main per the coordinator's instruction) + gate-marker tail d45f2fb1, merged as f87c89d6, plus the simplify-round doc-home fix d5c691a1. The refusal contract re-architected: StreamTokenNotConfiguredException at the five builder delivery points plus the sleep-timer re-issue arm, translated once in RequestPipeline (locale from the request; event requests get the speechless keep-alive per JF-507, fixing a latent INVALID_RESPONSE in the old builder-returned Tell); handler tails never run on a refusal (the locale-threading seam, announce-overwrite gates, and phantom-state orderings deleted as code across 13+ reordered sites); HasVideoAppLaunchDirective folded beside HasLaunchDirective; the string-taking AttachAnnounceIfLaunched absorbed CrossMediaFallback.ApplyAnnouncement; two empty-allowlist roster pins. Worker gates green (simplify 13 applied; code-review high all 6 applied incl. the 13-site reorder extension and the RecordLastPlayed-after-delegation move; JF-708 filed). Orchestrator gate-marker verified all six scrutiny axes clean; 5 findings dispositioned same-turn (F3 gate restore + F4 classification note applied in tail d45f2fb1; JF-712 the NearlyFinished phantom pointer, JF-713 the shuffle commit, JF-714 the five screenless-Tell sites, all filed with fix directions and pin requirements). The closure-gate /simplify round over the tail applied the IsEventRequest doc-home fix. Suites: worker 4931/4931 both TFMs, orchestrator independent 4931/4931 on the worker commit, filtered 254/254 after the tail, merged-tree 4933/4933 both TFMs exit 0. Production surface changed (pipeline, builder, 13+ handlers): deploying in the post-closure deploy.
+<!-- SECTION:FINAL_SUMMARY:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
+
 ## Item 1 Design (written BEFORE coding, per the sequencing mandate)
 
 **Contract change.** The five builder delivery points (BuildVideoAppLaunchResponse sync,
@@ -233,23 +258,4 @@ ApplyAnnouncement's gate semantics ride into the item-4 string overload.
   pre-builder session writes (Recommend's queue/FullNowPlayingItem, PlayRadio's
   queue/FullNowPlayingItem/RadioModeState.Enable - RadioModeState.Enable is the worst
   phantom: a refused radio start must not arm radio continuation).
-
-## Definition of Done
-<!-- DOD:BEGIN -->
-- [x] #1 dotnet build passes with 0 errors (plugin + test projects, both TFMs, 0 errors 0 warnings on the final state)
-- [x] #2 dotnet test passes (full recipe, both TFMs: 4931/4931 net9.0 AND net10.0; baseline at the merge commit measured 4925/4925 via a tagged-stash run, so the delta is exactly +10 new pins − 4 moved builder ThreadedLocale twins)
-- [x] #3 No new compiler warnings introduced (grep-clean build output; the CS0168 in a REDPROOF shape was fixed before the final state)
-- [x] #4 Session attributes use proper DTOs not raw ValueTuples (N/A: no session-attribute shape touched)
-- [x] #5 HttpClient instances are not shared across calls that modify BaseAddress (N/A: no HttpClient code touched)
-- [x] #6 NLU fixtures updated if interaction model changed (N/A: no interaction model change; the refusal reuses the JF-687 key)
-- [x] #7 E2E added for new intent/handler logic (N/A: no new intent; pipeline translation + reorders pinned by unit pins, empty-secret state not safely reachable on the live server)
-- [x] #8 Locale strings in all 17 locales (N/A: reuses StreamTokenNotConfigured, already in all 17 from JF-687)
-- [x] #9 /simplify passed (4 agents: reuse/simplification/efficiency/altitude; dispositions in the Final Summary)
-- [x] #10 /code-review high passed (6 findings: 4 applied in-code, 1 applied as a documented boundary, 1 filed as JF-708; dispositions in the Final Summary)
-<!-- DOD:END -->
-
-## Final Summary
-
-<!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Closed by the orchestrator after the full cycle: worker commit 65821618 (base corrected early by merging main per the coordinator's instruction) + gate-marker tail d45f2fb1, merged as f87c89d6, plus the simplify-round doc-home fix d5c691a1. The refusal contract re-architected: StreamTokenNotConfiguredException at the five builder delivery points plus the sleep-timer re-issue arm, translated once in RequestPipeline (locale from the request; event requests get the speechless keep-alive per JF-507, fixing a latent INVALID_RESPONSE in the old builder-returned Tell); handler tails never run on a refusal (the locale-threading seam, announce-overwrite gates, and phantom-state orderings deleted as code across 13+ reordered sites); HasVideoAppLaunchDirective folded beside HasLaunchDirective; the string-taking AttachAnnounceIfLaunched absorbed CrossMediaFallback.ApplyAnnouncement; two empty-allowlist roster pins. Worker gates green (simplify 13 applied; code-review high all 6 applied incl. the 13-site reorder extension and the RecordLastPlayed-after-delegation move; JF-708 filed). Orchestrator gate-marker verified all six scrutiny axes clean; 5 findings dispositioned same-turn (F3 gate restore + F4 classification note applied in tail d45f2fb1; JF-712 the NearlyFinished phantom pointer, JF-713 the shuffle commit, JF-714 the five screenless-Tell sites, all filed with fix directions and pin requirements). The closure-gate /simplify round over the tail applied the IsEventRequest doc-home fix. Suites: worker 4931/4931 both TFMs, orchestrator independent 4931/4931 on the worker commit, filtered 254/254 after the tail, merged-tree 4933/4933 both TFMs exit 0. Production surface changed (pipeline, builder, 13+ handlers): deploying in the post-closure deploy.
-<!-- SECTION:FINAL_SUMMARY:END -->
+<!-- SECTION:NOTES:END -->

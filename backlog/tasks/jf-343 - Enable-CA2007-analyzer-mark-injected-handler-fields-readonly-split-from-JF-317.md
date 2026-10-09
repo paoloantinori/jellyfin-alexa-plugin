@@ -28,10 +28,14 @@ Independently small changes; group as one cleanup PR. Verify: dotnet build -warn
 
 ## Implementation Notes
 
+<!-- SECTION:NOTES:BEGIN -->
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
+
 COMPLETED 2026-09-13 (both parts verified against the CURRENT tree, three months after filing):
 1. CA2007 enabled as Error in jellyfin.ruleset. The filed "~87 non-compliant awaits" had already been fixed by the intervening months of ConfigureAwait discipline: with the rule live, the full solution builds -warnaserror with ZERO violations (verified by a deliberate bare-await probe file firing the error, then its removal). A statement-level grep for "missing ConfigureAwait" produces only FALSE positives from lambdas (the call's ConfigureAwait sits after inner semicolons) - the analyzer is the truth, not greps.
 2. Readonly fields: every injected DI field across the 61 intent handlers was ALREADY readonly (sweep: 0 non-readonly in handlers). The 7 remaining non-readonly private fields in the plugin (timers, CTS, running Task, nullable factory, test override) are all legitimately-reassigned mutable state and must stay writable. The one filed exception fixed here: BaseHandler._config (assigned once in the ctor, never reassigned - verified by grep) is now `private protected readonly`.
 Suite 3701/3701 both TFMs; full-solution -warnaserror build clean.
+<!-- SECTION:NOTES:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->

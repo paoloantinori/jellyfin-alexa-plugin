@@ -44,6 +44,13 @@ Unit tests: musician-only with a zero-artist miss + album-title hit plays the al
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
 
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Simplify dispositions (2026-09-05, orchestrator): the QueryAlbumsByTitleAsync local helper for the two retry sites (JF-489 + JF-492) was evaluated and SKIPPED: the two sites diverge in their logging (LogInformation vs LogDebug) which a query-only helper would not absorb, and the saving is about 8 lines in a 540-line handler. The shared-series-prelude extraction watch-item is recorded on JF-324 (apply it when part 2 adds a third series path, not before).
+
+FOLDED FROM RAW TAIL (2026-10-09, the truncation sweep; content verbatim, previously outside the managed sections):
+
 ## Implementation Notes (2026-09-05)
 
 **JF-492 handler fix** (`PlayAlbumIntentHandler.cs`): the retry lives at the top of
@@ -105,11 +112,6 @@ next edits BaseHandler should drop that sentence.
 with build) = Passed 3262 / Failed 0. No interaction-model or locale changes (no
 fixture updates needed). DoD items 9/10 (review gates) remain for the
 orchestrator's dispatch flow.
-
-## Implementation Notes
-
-<!-- SECTION:NOTES:BEGIN -->
-Simplify dispositions (2026-09-05, orchestrator): the QueryAlbumsByTitleAsync local helper for the two retry sites (JF-489 + JF-492) was evaluated and SKIPPED: the two sites diverge in their logging (LogInformation vs LogDebug) which a query-only helper would not absorb, and the saving is about 8 lines in a 540-line handler. The shared-series-prelude extraction watch-item is recorded on JF-324 (apply it when part 2 adds a third series path, not before).
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
