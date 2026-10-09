@@ -140,6 +140,19 @@ slip in the last deploy is recorded in the transcript (the only lost datum
 was the LastCatalogSync timestamp itself). The cron (15 min) is session-only
 and dies with this session; the mandate ends when Paolo is back.
 
+## ADDENDUM 07:45: JF-844's model-residuals round merged (212d0c6d, pushed)
+
+Branch-only by design (the live roll is the morning's single pass). The
+murderbot digit-season ROOT CAUSE: the wrapper tail had NO exact sample (the
+{infinitive} vocabulary is Di+verb only; the trainer does not generalize the
+bare infinitive for unanchored shapes - the 2026-09-24 PlaySong class, memory
+bare_infinitive_wrapper_remainder_needs_own_rows); fixed with four explicit
+bare-infinitive rows. The es-ES connector-residue subjunctive twins added.
+Suona-film DECIDED: re-pinned PlaySong (the JF-504 discipline excludes Suona
+from film carriers; every natural film ask routes PlayVideo green). The
+MORNING PROTOCOL (roll then the ordered probes) is in the JF-844 task file.
+All worktrees cleaned; the repo is a single checkout at main.
+
 ## Queue after these (nothing dispatched)
 
 - JF-820 (foreign-generation stale prewrite, VideoAudioController; LOW priority;
