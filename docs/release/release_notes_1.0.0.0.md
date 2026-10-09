@@ -34,7 +34,7 @@ Asking for a book now plays the whole book: before, a request could start a sing
 
 ## Episodes by number
 
-Asking for episode 54 of a series now works without naming the season. If the season matters for finding the right episode, the skill asks which one you mean instead of quietly playing something else.
+Asking for episode 54 of a series now works without naming the season. If the season matters for finding the right episode, the skill asks which one you mean instead of quietly playing something else. When your server numbers episodes per season and you ask for an absolute number, the skill finds the episode you meant by counting the whole run and tells you exactly which season and episode it landed on.
 
 ## Confirmations you can trust
 
