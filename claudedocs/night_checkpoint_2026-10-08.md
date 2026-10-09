@@ -20,25 +20,61 @@ git log.
 
 ## In flight (three parallel workers, disjoint surfaces)
 
-1. JF-814 part 2: season-less PlayEpisode sample family, all 17 templates.
-   Surface: templates/, model_*.json, fixtures/, validate_interaction_models.py,
-   generate_voice_reference.py. After merge, I own the LIVE deploy (model PUT +
-   catalog-sync dance, see memory smapi-model-put-strips-catalog-wiring) and the
-   profile-nlu battery on ALL slots.
+0. CLOSED since this checkpoint was written: JF-821 (merged d7494986 + tail,
+   pushed; the direction-neutral FavoriteNoItem apology; its deploy RIDES THE
+   BATCH), JF-813 (decisions round, closed inline, pushed), JF-814 round 1
+   (the dossier stop, merged and pushed). JF-824 filed + re-scoped (ledger
+   half FIXED at the JF-821 tail; remaining scope = the per-locale
+   direction-wording guard).
+1. JF-814 round 2: season-less PlayEpisode family, the COMPLETE fix
+   (handler elicit branch + DidNotCatchSeasonNumber in 17 locales + pin
+   re-decision + templates + fixtures + mirrors). Surface: templates/,
+   model_*.json, fixtures/, validate scripts, Locale/*.json,
+   PlayEpisodeIntentHandler + its tests. After merge, I own the LIVE deploy
+   (model PUT + catalog-sync dance, see memory
+   smapi-model-put-strips-catalog-wiring) and the profile-nlu battery on ALL
+   slots.
 2. JF-823: AudiobookTitle catalog wiring (4th catalog type + seed-survival arm).
    Surface: Alexa/Catalog/**, Entities/User.cs, CLAUDE.md anti-pattern #10.
    Decision already made in dispatch: ADD the seed arm (no Series-style skip).
    After merge, I own the DLL deploy + catalog sync + the LIVE A/B (AC#2, the
    JF-684 selection-gating risk: out-of-catalog titles must not degrade to
    NO_SELECTION) + probe matrix.
-3. JF-821: favorite-toggle data==null wording. Decision made: option (a), the
-   RatingNoItem-mirror dedicated key, all 17 locales. Surface: ResponseStrings.cs,
-   Locale/*.json, FavoriteToggle*.
+3. JF-820: the foreign-generation stale-prewrite fix; decision made: option
+   (a), resolve through the LIVE REGISTRATION's directory. Surface:
+   VideoAudioController.cs + its tests.
 
 Each lane: worker gates (simplify + code-review high), then my gate-marker,
-then tail, then merge --no-ff, then ONE full suite + Release build, then batch
-deploy (DLL changes batch together; model PUT only after the template worker
-lands), then push, then worktree cleanup.
+then tail, then merge --no-ff, then ONE full suite + Release build, then
+BATCH deploy (the DLL changes of JF-820 + JF-821 + JF-823 in one deploy;
+the model PUT only after the JF-814 worker lands), then push, then worktree
+cleanup. The box was healthy at 00:15 (load 2.17 falling, no tasks running).
+
+## State at 02:00 (2026-10-09)
+
+- BATCH DEPLOY DONE AND VERIFIED (md5 e5979454972e6dd63885d032b3460426,
+  users=1, route smoke OK, startup clean): JF-820 + JF-821 + JF-823 DLL
+  changes live on the box. Main at df8448de, pushed.
+- JF-823's LIVE FOLLOW-UPS still pending (AC#2/AC#3): the catalog sync (the
+  12h throttle WILL need the backdate dance: XML backup -> backdate
+  LastCatalogSync -> chown abc:abc -> restart -> POST
+  /ScheduledTasks/Running/77cc81a848fb7e84ccc51f052532e26 -> canary log) +
+  the A/B probes (out-of-catalog titles NO_SELECTION risk, the 16 non-it
+  generic-word fills, the guards). Runs TOGETHER with the JF-814 model PUT
+  in ONE pass once JF-814's tail lands and merges: PUT the merged embedded
+  models (rebuild endpoint, locale-scoped per locale) then ONE catalog sync
+  then the profile-nlu battery over BOTH changes.
+- JF-814 round 2: worker's tail IN FLIGHT (marker findings: F1 the JF-614
+  slotValues echo fix + the series elicit, F4 the validator season-without-
+  episode error check, F6 fixture rationale line, F7 the finalize commit,
+  F2 record correction, F3 -> JF-841 amendment, F5 -> NEW JF-843 the
+  absolute-vs-per-season ambiguity). After its report: my read of the tail,
+  merge, full suite + Release, then the model PUT pass above.
+- Filings tonight beyond the merges: JF-824 (re-scoped: per-locale direction
+  guard), JF-825 (+22 seeds on the unbounded side), JF-826 (renumbered from
+  the fourth collision; the mid-conversation dynamic-push overwrite),
+  JF-841 (season-only gate), JF-842 (flaky ffmpeg test), JF-843 (pending,
+  numbering ambiguity).
 
 ## Queue after these (nothing dispatched)
 

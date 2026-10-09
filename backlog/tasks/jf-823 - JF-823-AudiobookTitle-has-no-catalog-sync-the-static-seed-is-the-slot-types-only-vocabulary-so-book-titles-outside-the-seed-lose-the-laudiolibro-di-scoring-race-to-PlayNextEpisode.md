@@ -214,3 +214,39 @@ branch, five axes all verified clean, six findings dispositioned):
   push replaces the freshly synced catalog vocabulary MID-CONVERSATION, so
   catalog-wired titles outside the dynamic budget stop routing one-shot for
   the rest of the session).
+
+LIVE A/B VERDICT (2026-10-09 03:30, orchestrator, AC#2's probe matrix run after
+the first real sync with the wiring: 16/16 locales, 383 audiobooks, 21 seed
+values appended live [one of the 22 deduped against a library title, coverage
+unchanged]):
+
+- AC#1 MET: "metti l'audiolibro di sapiens" (library-held, out-of-seed) ->
+  PlayBookIntent. The seed titles survive ("il piccolo principe" routes). The
+  album guard holds. THE PRIMARY USE CASE WORKS LIVE.
+- AC#2 RISK MATERIALIZED, both shapes:
+  (a) OUT-OF-CATALOG tails misroute (not NO_SELECTION but sibling steals):
+  "xyzzyfoo" -> PlayArtistSongsIntent, "storia del tempo" (a real book NOT in
+  the library) -> PlayNextEpisodeIntent (the original JF-816 wrong-item
+  shape back for out-of-library titles). Tradeoff vs pre-wiring: in-library
+  titles were broken then and work now; out-of-library titles were a clean
+  handler not-found then and misroute now (both fail; neither plays wrong
+  content for nonsense, but storia-del-tempo class can fuzzy-launch).
+  (b) GENERIC-WORD fills degrade in non-it locales: de-DE "lies ein
+  hörbuch" -> NO_SELECTION, "spiel das hörbuch" -> MediaInfoIntent; en-GB
+  "play an audiobook" -> NO_SELECTION (en-US "play the audiobook" survives).
+  Pre-wiring the static generic word matched; the seed skip left nothing.
+- FIX DECIDED (the marker's finding-3 option): the generic-word seed arm
+  REVERSED from the Series-style skip - append each non-it locale's own
+  generic audiobook word as a catalog value (a 16-entry per-locale table in
+  CatalogSeedEnrichment, sourced like the position words, not from a model
+  block). Out-of-catalog misroute (a): recorded as the accepted JF-684
+  tradeoff for now; the handler-side guard for PlayNextEpisode's polluted
+  series fuzzy-match is the separate open question (the JF-816 handler
+  lesson), filed below.
+- ALSO CONFIRMED live in the same battery: the JF-814 competition steal -
+  "l'episodio successivo di sailor moon" -> PlayEpisodeIntent (statistical,
+  not a word-collision: all 15 new samples carry the number slot; the
+  NextUp intent simply lacks the ARTICLE form "l'episodio {position} di
+  {series}"). Fix: article-form PlayNextEpisode samples (it-IT now, audit
+  the 16 mirrors); handler-equivalent meanwhile (empty numbers fall to the
+  same NextUp core), but the guard pin is red until fixed.
