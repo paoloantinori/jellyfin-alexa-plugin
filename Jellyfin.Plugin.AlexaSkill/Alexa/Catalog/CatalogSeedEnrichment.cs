@@ -21,7 +21,10 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Catalog;
 /// The seeds are read from the EMBEDDED interaction model JSONs, which keeps the
 /// committed models the single copy of the seed data: a C# table would duplicate
 /// them (JF-316 tracks the generator-side consolidation; the values live in the
-/// it-IT YAML template and the per-locale model JSONs).
+/// it-IT YAML template and the per-locale model JSONs). The ONE deliberate C#
+/// duplication is <see cref="GenericAudiobookWords"/> (one generic word per
+/// non-it locale, JF-823 live A/B): the per-locale table matches how the word
+/// is consumed (per-leg, not union-merged) and is pinned against the templates.
 /// </summary>
 public static class CatalogSeedEnrichment
 {
@@ -30,14 +33,51 @@ public static class CatalogSeedEnrichment
     /// 16 locales use AMAZON.MusicRecording) and therefore the only one carrying
     /// the album seed list; also the only one carrying real audiobook titles
     /// (JF-823). The other 16 locales' entire AudiobookTitle vocabulary is a
-    /// single generic word ("audiobook", "Hörbuch", "audiolibro", ...) - not a
-    /// title list - so seeding them would add the generic words themselves as
-    /// catalog values: the Series-style per-locale skip decision, made
-    /// deliberately here (a locale union is not worth it for one word each).
-    /// The catalog content is shared across locales, so the it-IT seeds are
-    /// the seed authority for both types.
+    /// single generic word, and the original Series-style skip of those words
+    /// was REVERSED by the JF-823 live A/B verdict (2026-10-09: post-sync,
+    /// generic-word fills degraded to NO_SELECTION): each word now rides its
+    /// OWN locale's leg via <see cref="GenericAudiobookWords"/>, still not a
+    /// union. The catalog content is shared across locales, so the it-IT seeds
+    /// are the seed authority for the title lists.
     /// </summary>
     private const string ItItSeedLocale = "it-IT";
+
+    /// <summary>
+    /// JF-823 live A/B verdict (2026-10-09): each non-it locale's AudiobookTitle
+    /// vocabulary was exactly ONE generic word before the catalog wiring; the
+    /// replace-in-place sync (CatalogWiringGraft) left those locales with
+    /// library titles only, so the word vanished and bare generic-word requests
+    /// ("lies ein hörbuch", "play an audiobook") degraded to NO_SELECTION. This
+    /// table appends each locale's own word to the audiobook payload leg of that
+    /// locale ONLY. Sourced from each locale's template AudiobookTitle block
+    /// (do not invent; the sourcing is pinned by
+    /// GenericAudiobookWords_MatchEachTemplatesAudiobookTitleValue). it-IT has
+    /// no entry: its block is the 22-value title seed, not a generic word.
+    /// ar-SA is inert (the JF-543 gate excludes it from all catalog traffic)
+    /// but kept so the table mirrors the full 16-locale vocabulary. The key
+    /// set itself is pinned (no phantom entry) by
+    /// GenericAudiobookWords_KeySetMirrorsTheNonItLocaleRoster.
+    /// </summary>
+    internal static readonly IReadOnlyDictionary<string, string> GenericAudiobookWords =
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["ar-SA"] = "كتاب صوتي",
+            ["de-DE"] = "Hörbuch",
+            ["en-AU"] = "audiobook",
+            ["en-CA"] = "audiobook",
+            ["en-GB"] = "audiobook",
+            ["en-IN"] = "audiobook",
+            ["en-US"] = "audiobook",
+            ["es-ES"] = "audiolibro",
+            ["es-MX"] = "audiolibro",
+            ["es-US"] = "audiolibro",
+            ["fr-CA"] = "livre audio",
+            ["fr-FR"] = "livre audio",
+            ["hi-IN"] = "ऑडियोबुक",
+            ["ja-JP"] = "オーディオブック",
+            ["nl-NL"] = "luisterboek",
+            ["pt-BR"] = "audiolivro"
+        };
 
     private static readonly Lazy<IReadOnlyList<string>> AlbumSeeds =
         new(LoadAlbumSeeds);
@@ -67,22 +107,38 @@ public static class CatalogSeedEnrichment
         ILogger? logger = null)
     {
         IReadOnlyList<string> seeds = GetSeedNames(type);
-    if (seeds.Count == 0 && logger != null)
-    {
-        // One-time visibility for the silent-empty degradation (embedded model
-        // missing or unparseable): the enrichment disables itself for this type
-        // for the process lifetime (Lazy).
-        logger.LogWarning(
-            "Catalog seed enrichment for {Type}: no seed values extracted from the embedded interaction models; the enrichment is disabled for this process lifetime (JF-541b)",
-            type);
-    }
-        if (seeds.Count == 0)
+
+        // The per-locale generic-word arm (JF-823): the word rides THIS leg
+        // only, through the same MergeSeeds path, so it stays idempotent.
+        string? genericWord = type == CatalogType.Audiobook
+            && GenericAudiobookWords.TryGetValue(locale, out string? word)
+                ? word
+                : null;
+
+        if (seeds.Count == 0 && logger != null)
+        {
+            // One-time visibility for the silent-empty degradation (embedded model
+            // missing or unparseable): the title-seed enrichment disables itself
+            // for this type for the process lifetime (Lazy). Keyed on the MODEL
+            // seeds only: an empty it-IT block with the per-locale word still
+            // present is reported here even though the word keeps the leg alive.
+            logger.LogWarning(
+                "Catalog seed enrichment for {Type}: no seed values extracted from the embedded interaction models; the title-seed enrichment is disabled for this process lifetime (JF-541b)",
+                type);
+        }
+
+        if (seeds.Count == 0 && genericWord == null)
         {
             return;
         }
 
         int before = payload.Values.Count;
-        MergeSeeds(payload, type, seeds, synonymGenerator, locale);
+        MergeSeeds(
+            payload,
+            type,
+            genericWord == null ? seeds : seeds.Append(genericWord),
+            synonymGenerator,
+            locale);
 
         if (logger != null && payload.Values.Count > before)
         {
@@ -101,8 +157,9 @@ public static class CatalogSeedEnrichment
     /// shared across locales, so the union keeps every locale's seed vocabulary
     /// on the deployed model). Audiobook: the it-IT model's AudiobookTitle block
     /// (JF-823 - the 22-value seed that is the saved model's only vocabulary
-    /// before the first catalog sync lands; the other locales' skip decision
-    /// lives on <see cref="ItItSeedLocale"/>). Series is deliberately NOT
+    /// before the first catalog sync lands; the other locales' generic words
+    /// ride their own legs via <see cref="GenericAudiobookWords"/>, see
+    /// <see cref="ItItSeedLocale"/>). Series is deliberately NOT
     /// merged: its seeds are per-locale LOCALIZED titles (Juego de Tronos,
     /// Il Trono di Spade, ...) and the union-merge decision for them is out of
     /// JF-541 phase 2 scope. All other types have no seeds.

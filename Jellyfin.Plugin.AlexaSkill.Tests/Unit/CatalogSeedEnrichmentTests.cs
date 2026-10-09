@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Catalog;
 using Xunit;
@@ -25,9 +26,12 @@ public class CatalogSeedEnrichmentTests
     private static List<string> SingleSynonym(string name, string _) => new() { "syn-" + name };
 
     private static CatalogPayload BuildLibraryPayload(params string[] names)
+        => BuildLibraryPayload(CatalogType.Album, "it-IT", names);
+
+    private static CatalogPayload BuildLibraryPayload(CatalogType type, string locale, params string[] names)
     {
         var items = names.Select(n => (LibraryAlbumId, n));
-        return CatalogPayload.FromItems(CatalogType.Album, items, NoSynonyms, "it-IT");
+        return CatalogPayload.FromItems(type, items, NoSynonyms, locale);
     }
 
     // ---- ExtractSeedNames ----
@@ -319,5 +323,122 @@ public class CatalogSeedEnrichmentTests
         Assert.Equal(
             CatalogValue.FormatId(CatalogType.Audiobook, LibraryAlbumId),
             payload.Values.Single(v => v.Name.Value == "Sapiens").Id);
+    }
+
+    // ---- Audiobook generic-word arm (JF-823 live A/B verdict, 2026-10-09) ----
+
+    /// <summary>
+    /// The 16 non-it locales' AudiobookTitle vocabulary was exactly ONE generic
+    /// word pre-wiring; the replace-in-place catalog sync left them with
+    /// library titles only, so bare generic-word requests degraded to
+    /// NO_SELECTION live (de-DE "lies ein hörbuch", en-GB "play an audiobook").
+    /// The arm: each locale's own word rides ITS OWN leg only, never a union.
+    /// </summary>
+    [Fact]
+    public void MergeInto_AudiobookPayload_DeLegGainsItsOwnGenericWordOnly()
+    {
+        var payload = BuildLibraryPayload(CatalogType.Audiobook, "de-DE", "A Library-Only Book");
+
+        CatalogSeedEnrichment.MergeInto(payload, CatalogType.Audiobook, NoSynonyms, "de-DE");
+
+        // The leg's own generic word rides the payload.
+        Assert.Contains(payload.Values, v => v.Name.Value == "Hörbuch");
+
+        // The OTHER locales' generic words do not (per-locale arm, not a union).
+        Assert.DoesNotContain(payload.Values, v => v.Name.Value == "luisterboek");
+        Assert.DoesNotContain(payload.Values, v => v.Name.Value == "livre audio");
+        Assert.DoesNotContain(payload.Values, v => v.Name.Value == "audiolibro");
+        Assert.DoesNotContain(payload.Values, v => v.Name.Value == "audiolivro");
+
+        // The shared it-IT title seed still rides every leg, and the payload is
+        // exactly library + shared seeds + the one generic word.
+        Assert.Contains(payload.Values, v => v.Name.Value == "Il Piccolo Principe");
+        Assert.Equal(
+            2 + CatalogSeedEnrichment.GetSeedNames(CatalogType.Audiobook).Count,
+            payload.Values.Count);
+    }
+
+    /// <summary>
+    /// it-IT never carried a generic word (its AudiobookTitle block IS the
+    /// title seed), so its leg is byte-identical to the pre-arm shape.
+    /// </summary>
+    [Fact]
+    public void MergeInto_AudiobookPayload_ItItLegCarriesNoGenericWord()
+    {
+        var payload = BuildLibraryPayload(CatalogType.Audiobook, "it-IT", "A Library-Only Book");
+
+        CatalogSeedEnrichment.MergeInto(payload, CatalogType.Audiobook, NoSynonyms, "it-IT");
+
+        Assert.Equal(
+            1 + CatalogSeedEnrichment.GetSeedNames(CatalogType.Audiobook).Count,
+            payload.Values.Count);
+    }
+
+    /// <summary>
+    /// Idempotent per sync: a second MergeInto for the same payload must not
+    /// double-append the generic word (the shared MergeSeeds dedup).
+    /// </summary>
+    [Fact]
+    public void MergeInto_AudiobookPayload_GenericWordDoesNotDoubleAppend()
+    {
+        var payload = BuildLibraryPayload(CatalogType.Audiobook, "en-GB", "A Library-Only Book");
+
+        CatalogSeedEnrichment.MergeInto(payload, CatalogType.Audiobook, NoSynonyms, "en-GB");
+        int afterFirst = payload.Values.Count;
+
+        CatalogSeedEnrichment.MergeInto(payload, CatalogType.Audiobook, NoSynonyms, "en-GB");
+
+        Assert.Equal(afterFirst, payload.Values.Count);
+        Assert.Single(payload.Values.Where(v => v.Name.Value == "audiobook"));
+    }
+
+    /// <summary>
+    /// The table is SOURCED from each non-it template's AudiobookTitle block
+    /// (the live-verdict instruction: do not invent). This pin enforces the
+    /// sourcing both ways: every non-it locale with an AudiobookTitle block has
+    /// a table entry whose word equals the template's single value, so a
+    /// template edit that changes a locale's generic word without the table
+    /// update in the same change fails here (the JF-823 F5 drift-tripwire
+    /// pattern: a pin failure here reads "template edit without its table
+    /// update", not "JF-823 broke"). The slot type name comes from the same
+    /// production map the arm's loader reads, so a rename drifts this pin
+    /// together with production instead of hardcoding a stale literal.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(TestLocales.LocalesWithResourcePaths), MemberType = typeof(TestLocales))]
+    public void GenericAudiobookWords_MatchEachTemplatesAudiobookTitleValue(string locale, string resourcePath)
+    {
+        if (locale == "it-IT")
+        {
+            return;
+        }
+
+        using var resource = typeof(global::Jellyfin.Plugin.AlexaSkill.Util).Assembly.GetManifestResourceStream(resourcePath);
+        Assert.NotNull(resource);
+        using var reader = new StreamReader(resource!);
+        var values = CatalogSeedEnrichment.ExtractSeedNames(
+            reader.ReadToEnd(),
+            CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Audiobook]);
+
+        Assert.True(
+            CatalogSeedEnrichment.GenericAudiobookWords.TryGetValue(locale, out string? word),
+            $"locale {locale} carries an AudiobookTitle block but has no generic-word table entry");
+        Assert.Equal(new[] { word }, values);
+    }
+
+    /// <summary>
+    /// No phantom entry: the table's key set is exactly the roster of non-it
+    /// locales (the per-locale Theory above only visits locales that exist in
+    /// the embedded models, so a typo'd or stale extra key would otherwise be
+    /// invisible dead code).
+    /// </summary>
+    [Fact]
+    public void GenericAudiobookWords_KeySetMirrorsTheNonItLocaleRoster()
+    {
+        var expected = TestLocales.AllLocales()
+            .Where(l => !string.Equals(l, "it-IT", StringComparison.Ordinal))
+            .ToHashSet(StringComparer.Ordinal);
+
+        Assert.Equal(expected, CatalogSeedEnrichment.GenericAudiobookWords.Keys.ToHashSet(StringComparer.Ordinal));
     }
 }
