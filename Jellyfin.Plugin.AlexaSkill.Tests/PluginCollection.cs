@@ -78,8 +78,9 @@ public class PluginCollection;
 /// <summary>
 /// The JF-792 gate-marker tail exemption for wall-clock-sensitive tests: classes whose
 /// assertions carry real-time margins sized for a quiet machine (the RetryHelper
-/// timeout-budget pin, DoubleMetaphone's encode-throughput margin, the JF-449
-/// park-family's positive 2s waits). The parallel phase can starve a test continuation
+/// timeout-budget pin, DoubleMetaphone's encode-throughput margin, FuzzyMatcher's
+/// 10K phonetic-scan bound (JF-801), the JF-449 park-family's positive 2s waits).
+/// The parallel phase can starve a test continuation
 /// for seconds (demonstrated 2026-10-06: a parked callback outlived its 5s bound), and
 /// CI runners have 2-4 vCPU, so these classes run in a DisableParallelization
 /// collection: exclusively after every parallel collection, one at a time, beside the
