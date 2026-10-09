@@ -3,9 +3,10 @@ id: JF-800
 title: >-
   JF-800 - the parallel-phase contract needs a mechanical guard (IL roster test:
   uncollected classes must be static-free)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-10-06 18:18'
+updated_date: '2026-10-09 21:10'
 labels:
   - test-infrastructure
   - hardening

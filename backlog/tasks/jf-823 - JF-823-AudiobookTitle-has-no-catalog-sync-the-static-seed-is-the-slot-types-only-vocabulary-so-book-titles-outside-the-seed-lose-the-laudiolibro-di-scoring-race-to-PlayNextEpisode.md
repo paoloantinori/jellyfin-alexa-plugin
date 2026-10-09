@@ -7,7 +7,7 @@ title: >-
 status: In Progress
 assignee: []
 created_date: '2026-10-08'
-updated_date: '2026-10-08 21:54'
+updated_date: '2026-10-09 20:01'
 labels:
   - nlu
   - audiobooks
@@ -89,13 +89,9 @@ PlayNextEpisode series forms) stay green.
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
 - [x] #1 AudiobookTitle added to the static catalog family with the JF-727/JF-706 consistency points honored
-- [ ] #2 Live A/B on the JF-684 selection-gating risk (titles outside the catalog must not degrade to NO_SELECTION) before shipping the wiring
-- [ ] #3 Live probe matrix: library book titles route PlayBookIntent with slot filled; guards green
+- [x] #2 Live A/B on the JF-684 selection-gating risk (titles outside the catalog must not degrade to NO_SELECTION) before shipping the wiring
+- [x] #3 Live probe matrix: library book titles route PlayBookIntent with slot filled; guards green
 <!-- AC:END -->
-
-Worker note (2026-10-09): AC#2 and AC#3 are the ORCHESTRATOR's (live SMAPI probes + a real
-catalog sync are out of the worker's no-deploy boundary). AC#1 is complete; the worker-scope
-detail is in the Implementation Notes addendum below.
 
 ## Implementation Notes
 
@@ -105,6 +101,9 @@ The 2026-10-08 probe matrix and the diagnosis live in JF-516's notes (the
 interim fix: templates/it-IT.yaml AudiobookTitle values.
 <!-- SECTION:NOTES:END -->
 
+Worker note (2026-10-09): AC#2 and AC#3 are the ORCHESTRATOR's (live SMAPI probes + a real
+catalog sync are out of the worker's no-deploy boundary). AC#1 is complete; the worker-scope
+detail is in the Implementation Notes addendum below.
 
 ## Implementation Notes (JF-823 worker addendum, 2026-10-09)
 
@@ -166,133 +165,3 @@ stays as the fallback vocabulary either way (the seed arm above).
 - [x] #9 /simplify passed (4 findings, all applied or dispositioned; see worker addendum)
 - [x] #10 /code-review high passed (no correctness bug; 5 low findings dispositioned same-turn: F4 applied in-scope, F1/F2/F3 filed as JF-826/JF-825 (F1 renumbered from its filing-time JF-824: the fourth same-window number race, main's ledger JF-824 merged first), F5 deliberate with the ownership note in the worker addendum)
 <!-- DOD:END -->
-
-
-**/code-review high disposition (2026-10-09):** no correctness bug found; the
-reviewer independently re-ran the affected classes (108/108 + siblings 29/29,
-both TFMs). Findings: F1 (DynamicEntityBuilder's session dynamic push still
-replaces the now-catalog-backed AudiobookTitle vocabulary at turn 2+; Series
-shares the tolerated shape) FILED as JF-826 (renumbered, see its header); F2 (FromItems has no same-title
-dedup; single-file + chaptered editions of one book upload twice) and F3 (the
-"Truncated {Type} catalog" warning never truncates anything) FILED as JF-825;
-F4 (the LegIsolation fake's CatalogIdForName had no "Jellyfin Audiobooks" arm)
-APPLIED in-scope (one arm + the AudiobookCatalogId const); F5 (the exact-set
-seed pins couple to whoever owns templates/) is the deliberate drift tripwire:
-OWNERSHIP NOTE - any template-side edit to the it-IT AudiobookTitle values must
-update GetSeedNames_Audiobook_SourceIsItItModel and the two count-based asserts
-in LibrarySyncServiceAudiobookTests in the same change, because the seeds are
-SOURCED from the embedded model, so a pin failure there reads "template edit
-without its seed-pin update", not "JF-823 broke".
-
-GATE-MARKER AMENDMENT (2026-10-09, orchestrator /code-review high on the
-branch, five axes all verified clean, six findings dispositioned):
-
-- APPLIED AT THE TAIL: finding 1 (the settle-poll budget raised 90 -> 120
-  iterations for the fifth serialized build per locale, sized on queue depth
-  per the comment's own history); finding 4 (the stale "six positional" /
-  "three stored catalog ids" narratives corrected to eight/four in
-  LibrarySyncService and the JF-716 StructureTests doc).
-- REFUTED: finding 2 (silent-empty audiobook seed extraction) is unreachable
-  in a green build: the exact-set pin (LibrarySyncServiceAudiobookTests:197)
-  reads through the PRODUCTION GetSeedNames path, so a stripped block or
-  renamed resource goes red at build time; the runtime warning is a second
-  line of defense, not the only one.
-- FOLDED INTO AC#2's LIVE A/B (the orchestrator's post-deploy job): finding
-  3 sharpens the probe matrix. Beyond out-of-catalog titles in it-IT, the A/B
-  MUST cover the 16 non-it locales' GENERIC-WORD fill: post-sync their
-  AudiobookTitle vocabulary is catalog-only (library titles + nothing), so a
-  de-DE "spiel hörbuch" (no title) may select NO intent per the JF-684
-  selection-gating behavior where the static generic word used to match.
-  Probe: bare generic-word book requests in de-DE (and one more locale)
-  before/after the first sync; if they degrade to NO_SELECTION, the fix is
-  the Series-style skip REVERSED for a generic-word seed arm (add each
-  locale's own generic word as a catalog value) or a per-locale static-word
-  survival mechanism.
-- JF-825: finding 5 recorded there (the 22 seeds ride the unbounded side of
-  the MaxCatalogValues fetch).
-- JF-826: finding 6 confirms it with a sharper scenario (the session dynamic
-  push replaces the freshly synced catalog vocabulary MID-CONVERSATION, so
-  catalog-wired titles outside the dynamic budget stop routing one-shot for
-  the rest of the session).
-
-LIVE A/B VERDICT (2026-10-09 03:30, orchestrator, AC#2's probe matrix run after
-the first real sync with the wiring: 16/16 locales, 383 audiobooks, 21 seed
-values appended live [one of the 22 deduped against a library title, coverage
-unchanged]):
-
-- AC#1 MET: "metti l'audiolibro di sapiens" (library-held, out-of-seed) ->
-  PlayBookIntent. The seed titles survive ("il piccolo principe" routes). The
-  album guard holds. THE PRIMARY USE CASE WORKS LIVE.
-- AC#2 RISK MATERIALIZED, both shapes:
-  (a) OUT-OF-CATALOG tails misroute (not NO_SELECTION but sibling steals):
-  "xyzzyfoo" -> PlayArtistSongsIntent, "storia del tempo" (a real book NOT in
-  the library) -> PlayNextEpisodeIntent (the original JF-816 wrong-item
-  shape back for out-of-library titles). Tradeoff vs pre-wiring: in-library
-  titles were broken then and work now; out-of-library titles were a clean
-  handler not-found then and misroute now (both fail; neither plays wrong
-  content for nonsense, but storia-del-tempo class can fuzzy-launch).
-  (b) GENERIC-WORD fills degrade in non-it locales: de-DE "lies ein
-  hörbuch" -> NO_SELECTION, "spiel das hörbuch" -> MediaInfoIntent; en-GB
-  "play an audiobook" -> NO_SELECTION (en-US "play the audiobook" survives).
-  Pre-wiring the static generic word matched; the seed skip left nothing.
-- FIX DECIDED (the marker's finding-3 option): the generic-word seed arm
-  REVERSED from the Series-style skip - append each non-it locale's own
-  generic audiobook word as a catalog value (a 16-entry per-locale table in
-  CatalogSeedEnrichment, sourced like the position words, not from a model
-  block). Out-of-catalog misroute (a): recorded as the accepted JF-684
-  tradeoff for now; the handler-side guard for PlayNextEpisode's polluted
-  series fuzzy-match is the separate open question (the JF-816 handler
-  lesson), filed below.
-- ALSO CONFIRMED live in the same battery: the JF-814 competition steal -
-  "l'episodio successivo di sailor moon" -> PlayEpisodeIntent (statistical,
-  not a word-collision: all 15 new samples carry the number slot; the
-  NextUp intent simply lacks the ARTICLE form "l'episodio {position} di
-  {series}"). Fix: article-form PlayNextEpisode samples (it-IT now, audit
-  the 16 mirrors); handler-equivalent meanwhile (empty numbers fall to the
-  same NextUp core), but the guard pin is red until fixed.
-## POST-A/B FIX: the generic-word seed arm (2026-10-09, post-A/B fix worker)
-
-The live A/B verdict (2026-10-09 03:30) materialized risk (b): the 16 non-it
-locales' AudiobookTitle vocabulary (one generic word each, pre-wiring)
-vanished under the catalog replace, and generic-word fills degraded to
-NO_SELECTION live (de-DE "lies ein hörbuch" and en-GB "play an audiobook"
-NO_SELECTION; "spiel das hörbuch" -> MediaInfoIntent; en-US "play the
-audiobook" survives on its wider carriers).
-
-FIX (the marker finding-3 option, the Series-style skip REVERSED for the
-generic word): `CatalogSeedEnrichment.GenericAudiobookWords`, a 16-entry
-per-locale table (internal, test-visible for the drift pin), each entry the
-EXACT generic word that locale's template AudiobookTitle block carried -
-ar-SA كتاب صوتي, de-DE Hörbuch, en-AU/CA/GB/IN/US audiobook, es-ES/MX/US
-audiolibro, fr-CA/FR livre audio, hi-IN ऑडियोबुक, ja-JP オーディオブック,
-nl-NL luisterboek, pt-BR audiolivro (sourced from the templates, not
-invented; ar-SA is inert under the JF-543 gate but kept so the table mirrors
-the full 16-locale vocabulary). MergeInto appends the leg's OWN locale word
-to the audiobook payload leg only - never a union - through the shared
-MergeSeeds path (SlotValueHelper.Truncate, library-wins dedup, stable seed
-guid), so it is idempotent per sync and cannot duplicate a library value.
-The it-IT 22-value title block stays the shared seed authority; it-IT has
-no table entry (it never carried a generic word). The empty-model-seeds
-warning stays keyed on the it-IT block; the early return now gates on
-combined emptiness so a stripped block with the word present keeps the leg
-alive.
-
-The ItItSeedLocale comment reversal is applied in the same change (the skip
-rationale it recorded is now the arm's rationale, citing the live verdict).
-
-PINS (CatalogSeedEnrichmentTests): MergeInto_AudiobookPayload_DeLegGainsItsOwnGenericWordOnly
-(Hörbuch rides the de-DE leg; luisterboek/livre audio/audiolibro/audiolivro
-do NOT; the shared it-IT seed still rides; exact count = library + 22 + 1),
-MergeInto_AudiobookPayload_ItItLegCarriesNoGenericWord (byte-identical
-pre-arm shape),
-MergeInto_AudiobookPayload_GenericWordDoesNotDoubleAppend (idempotency),
-GenericAudiobookWords_MatchEachTemplatesAudiobookTitleValue (the drift
-tripwire: every non-it embedded model's AudiobookTitle block is exactly the
-table's word; a template edit without the table update fails here - the F5
-ownership-note pattern). Red-green: the two behavioral pins run red against
-the arm-disabled tree (2 failures), green restored (21/21 both TFMs). The
-full-sync pins are unchanged and green (it-IT legs carry no word).
-
-Risk (a) (out-of-catalog tails misroute to sibling intents) stays the
-ACCEPTED JF-684 tradeoff per the verdict; the handler-side guard question is
-the separate open item the verdict filed.
