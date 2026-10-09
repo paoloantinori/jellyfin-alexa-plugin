@@ -37,16 +37,40 @@ session by design.
    'que reproduzca' connector rows (es-ES-only). Follow-ups landed: F3
    residual -> JF-844 notes (fires at its live-probe round); the five
    warning-phase blocks -> JF-850.
-3. JF-850 (python helper extraction) RUNNING on /tmp/wt-jf850.
+3. JF-850 MERGED 23:50 as 6130161f (worker 1a4d6628). run_warning_phase +
+   print_phase_warnings own the seven same-shaped phase blocks; phases 9/10
+   stay bespoke with reasons. Zero-behavior-change proven TWICE (worker's
+   before/after diff incl. --verbose + 4 degraded skip paths; my independent
+   main-vs-candidate byte-identical run). pytest 35/35. Follow-ups: JF-852
+   (marker coverage + SKIP pins); the withdrawn-round jf-848 misquote claim
+   ADJUDICATED FALSE (the sentence matches the recorded A/B verdict) and the
+   four em-dashes left as pre-existing tracker-wide debt - not filed.
 4. JF-800 (IL roster guard, the JF-801 companion) RUNNING on /tmp/wt-jf800.
+5. Fold-sweep lane RUNNING on /tmp/wt-fold (markdown-only): all raw tails
+   across backlog/tasks folded into managed Implementation Notes sections.
 
-## Flip batch (all ride the orchestrator's final-diff gate pass)
+## INCIDENT (23:15-23:45): the MCP tail-truncation hit twice more
 
-JF-801, JF-844.1, JF-809 (closure-by-evidence: ResponseStrings.Reset race
-structurally closed at HEAD by 607b9466, zero other writers), JF-823,
+My own MCP edits (jf-823 AC ticks, jf-844 note append) dropped the raw
+tails: jf-823 lost 143 lines, jf-844 lost 187 (roll verdicts, morning
+protocol, worker notes). Caught via the JF-801 worker's F1 + the housekeeping
+commit's deletion audit. REPAIR: restore from 362e6c94, deltas reapplied by
+hand, repair commit 7bdbe380. ROOT-CAUSE MITIGATION: fold raw tails into
+managed sections (ROUNDTRIP VALIDATED live: a notesAppend on the folded
+jf-801 preserved all folded bytes verbatim); the sweep lane (5) does this
+repo-wide in backlog/tasks and MUST LAND BEFORE the batch flips, so the
+flip rewrites are lossless. Standing rule for the morning: NEVER
+append raw tails to a task file; use the Implementation Notes managed
+section (direct edit or MCP notesAppend).
+
+## Flip batch (all ride the orchestrator's final-diff gate pass, AFTER the
+fold sweep lands)
+
+JF-801, JF-844.1, JF-850, JF-809 (closure-by-evidence: ResponseStrings.Reset
+race structurally closed at HEAD by 607b9466, zero other writers), JF-823,
 JF-825, JF-826, JF-845, JF-846, JF-847. New tasks filed tonight: JF-849
-(Cannot* ledger), JF-850 (warning-phase helper), JF-851 (PerfGuard sw
-reuse).
+(Cannot* ledger), JF-850->filed+done, JF-851 (PerfGuard sw reuse), JF-852
+(es-trio marker + SKIP pins).
 
 ## Housekeeping state (reconciliation verdicts in, 20:01)
 
