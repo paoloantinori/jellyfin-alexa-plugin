@@ -25,12 +25,18 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// was closed by the platform with EXCEEDED_MAX_REPROMPTS). Alexa routes
 /// resume to AMAZON.ResumeIntent automatically when audio was recently stopped.
 /// JF-564: during a VideoApp-family medium (video, live TV, a NativeControlsForBooks
-/// audiobook) pause and CANCEL cannot be honored at all (there is no VideoApp.Stop
-/// and the video keeps playing), so instead of the silent no-op stop those cells
-/// speak the honest cannot-pause line (session still ends, AudioPlayer.Stop still
-/// sent for any displaced audio). Stop keeps the docs-mandated silent shape
+/// audiobook) pause and CANCEL cannot be honored as a PAUSE at all (there is no
+/// VideoApp.Stop and no pause directive), so instead of the silent no-op stop those
+/// cells speak an honest line (session still ends, AudioPlayer.Stop still sent for
+/// any displaced audio). Stop keeps the docs-mandated silent shape
 /// ("responses to StopIntent must end the session"); an empty ledger (cold device)
 /// keeps the music semantics unchanged.
+/// JF-847 (2026-10-09 device evidence): the line is STATE-AWARE: a PLAYING
+/// context speaks VideoStoppedByVoice (the AudioPlayer.Stop directive reaches the
+/// pipeline's active stream), every other activity keeps the honest cannot-pause
+/// line. The evidence narrative and the PLAYING-only rule are owned by the branch
+/// comment in HandleAsync; the verified platform model lives in the repo-root
+/// CLAUDE.md Stop/Session Routing reference.
 /// </summary>
 public class PauseIntentHandler : BaseHandler
 {
@@ -70,7 +76,9 @@ public class PauseIntentHandler : BaseHandler
     /// <summary>
     /// Pause or stop currently playing media.
     /// All paths send AudioPlayer.Stop. During a VideoApp-family medium (JF-564)
-    /// pause and cancel speak the honest cannot-pause line with the session ended.
+    /// pause and cancel speak an honest line with the session ended: the stopped
+    /// line when the context's playerActivity is PLAYING (JF-847: the directive
+    /// reaches the active stream), otherwise the cannot-pause line.
     /// Otherwise stop/cancel end the session; pause ends it unless PauseKeepsSession
     /// is on (JF-482), in which case the response also speaks a minimal pause word
     /// and carries a reprompt (JF-488; the silent open session timed out on-device).
@@ -102,20 +110,33 @@ public class PauseIntentHandler : BaseHandler
             return Task.FromResult(BuildPauseResponse());
         }
 
-        // JF-564: during a VideoApp-family medium pause/cancel cannot be honored (no
-        // VideoApp.Stop exists and the video keeps playing), so the skill says so
-        // instead of the old silent no-op stop. The response keeps the AudioPlayer.Stop
-        // directive (the audio-stop invariant; a displaced audio stream must still be
-        // told to stop) and ends the session as a Tell: these are IntentRequests, so
-        // the JF-299 event-response rules do not apply. An empty ledger (Unknown)
-        // falls through to the audio paths below unchanged.
+        // JF-564/JF-847: during a VideoApp-family medium pause/cancel cannot PAUSE
+        // (no VideoApp.Stop exists), so the skill says so instead of the old silent
+        // no-op stop. WHICH line is state-aware per the 2026-10-09 device evidence:
+        // the AudioPlayer.Stop directive reliably stops the video iff the request
+        // context's AudioPlayer.PlayerActivity is PLAYING (the video is the
+        // pipeline's active stream; with a non-PLAYING context the directive was
+        // observed inert, the stale-token relaunch shape), so PLAYING speaks the
+        // stopped line and everything else the honest cannot-pause line. The check
+        // is deliberately PLAYING-only, not IsActivelyPlaying: BUFFER_UNDERRUN is
+        // unobserved for a VideoApp stream and the honest refusal is the safe
+        // failure when the stop's reach is unproven (ResumeIntentHandler keeps its
+        // own narrower check for the same reason). The response keeps the
+        // AudioPlayer.Stop directive (the audio-stop invariant; a displaced audio
+        // stream must still be told to stop) and ends the session as a Tell: these
+        // are IntentRequests, so the JF-299 event-response rules do not apply. An
+        // empty ledger (Unknown) falls through to the audio paths below unchanged.
         PlaybackLaunchBuilder.PlayingMedium medium = Launch.ResolvePlayingMedium(context, _libraryManager, _queueManager);
         if (PlaybackLaunchBuilder.IsVideoAppMedium(medium))
         {
-            Logger.LogDebug("PauseIntent: {Medium} playing, speaking the honest cannot-pause line", medium);
+            bool pipelineOwnsStream = string.Equals(context.AudioPlayer?.PlayerActivity, "PLAYING", System.StringComparison.Ordinal);
+            string lineKey = pipelineOwnsStream ? "VideoStoppedByVoice" : "CannotPauseVideoByVoice";
+            Logger.LogDebug(
+                "PauseIntent: {Medium} playing, activity {Activity}, speaking {LineKey}",
+                medium, context.AudioPlayer?.PlayerActivity, lineKey);
             SkillResponse honest = BuildPauseResponse();
             honest.Response.OutputSpeech = new PlainTextOutputSpeech(
-                ResponseStrings.Get("CannotPauseVideoByVoice", GetLocale(request)));
+                ResponseStrings.Get(lineKey, GetLocale(request)));
             return Task.FromResult(honest);
         }
 

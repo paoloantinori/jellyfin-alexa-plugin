@@ -30,6 +30,10 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 /// a VideoApp-family medium never receives an AudioPlayer.Play directive (the
 /// stale-queue guard), and the music semantics stay byte-identical (a cold
 /// ledger or an audio-owned item keeps the pre-JF-564 behavior).
+/// JF-847 pins: the pause/cannot-pause branch is STATE-AWARE per the 2026-10-09
+/// device evidence (AudioPlayer.Stop stops a VideoApp video iff the context's
+/// playerActivity is PLAYING), so the honest line belongs to the non-playing
+/// states only.
 /// </summary>
 [Collection("Plugin")]
 public class VideoAppGapHonestResponseTests : PluginTestBase, IDisposable
@@ -280,6 +284,89 @@ public class VideoAppGapHonestResponseTests : PluginTestBase, IDisposable
         Assert.True(response.Response.ShouldEndSession);
         TestHelpers.AssertHasAudioPlayerStopDirective(response);
         TestHelpers.AssertNoAudioPlayDirective(response);
+    }
+
+    // === JF-847: the VideoApp pause/stop is state-aware (2026-10-09 device evidence) ===
+
+    [Theory]
+    [InlineData("AMAZON.PauseIntent")]
+    [InlineData("AMAZON.CancelIntent")]
+    public async Task PauseAndCancel_DuringVideo_PlayerActivityPlaying_SpeakStoppedLine(string intentName)
+    {
+        // The 2026-10-09 success shape: activity PLAYING, so the stop directive
+        // reaches the active stream and the line must say the video stopped
+        // (evidence narrative at the handler's JF-847 branch comment). Cancel
+        // shares the branch, so it shares the state-aware line.
+        var movie = Movie("Current Movie");
+
+        string deviceId = "jf847-pause-video-playing";
+        DeviceQueueManager ledger = CreateLedger(deviceId, movie);
+        var handler = CreatePauseHandler(ledger);
+
+        // The VideoApp launch never writes the AudioPlayer token (the JF-563
+        // doctrine), so a PLAYING activity with no token is the live shape.
+        var response = await handler.HandleAsync(
+            CreateIntent(intentName),
+            TestHelpers.CreateContextWithToken(null, deviceId, "PLAYING"),
+            TestHelpers.CreateTestUser(),
+            CreateSession(movie),
+            CancellationToken.None);
+
+        Assert.Contains("I've stopped the video", TestHelpers.GetSpeechText(response), StringComparison.OrdinalIgnoreCase);
+        Assert.True(response.Response.ShouldEndSession);
+        TestHelpers.AssertHasAudioPlayerStopDirective(response);
+        TestHelpers.AssertNoAudioPlayDirective(response);
+    }
+
+    [Fact]
+    public async Task Pause_DuringVideo_StaleStoppedContext_KeepsHonestLine()
+    {
+        // The failed live case: the context carried playerActivity STOPPED with a
+        // STALE token from a previously-stopped launch while the relaunched video
+        // played outside the pipeline the directive reaches, so the stop was inert
+        // and the honest cannot-pause line stays.
+        var stale = Movie("Previously Stopped Movie");
+        var movie = Movie("Relaunched Movie");
+
+        string deviceId = "jf847-pause-video-stale";
+        DeviceQueueManager ledger = CreateLedger(deviceId, movie, stale);
+        var handler = CreatePauseHandler(ledger);
+
+        var response = await handler.HandleAsync(
+            CreateIntent("AMAZON.PauseIntent"),
+            TestHelpers.CreateContextWithToken(stale.Id.ToString(), deviceId, "STOPPED"),
+            TestHelpers.CreateTestUser(),
+            CreateSession(movie),
+            CancellationToken.None);
+
+        Assert.Contains("can't pause video by voice", TestHelpers.GetSpeechText(response), StringComparison.OrdinalIgnoreCase);
+        Assert.True(response.Response.ShouldEndSession);
+        TestHelpers.AssertHasAudioPlayerStopDirective(response);
+    }
+
+    [Fact]
+    public async Task Pause_DuringVideo_BufferUnderrun_KeepsHonestLine()
+    {
+        // BUFFER_UNDERRUN deliberately rides the honest branch: the evidence names
+        // exactly PLAYING, an underrun-state VideoApp stream is unobserved, and the
+        // honest refusal is the safe failure when the stop's reach is unproven
+        // (IsActivelyPlaying's underrun arm is audio-path doctrine, not this one).
+        var movie = Movie("Current Movie");
+
+        string deviceId = "jf847-pause-video-underrun";
+        DeviceQueueManager ledger = CreateLedger(deviceId, movie);
+        var handler = CreatePauseHandler(ledger);
+
+        var response = await handler.HandleAsync(
+            CreateIntent("AMAZON.PauseIntent"),
+            TestHelpers.CreateContextWithToken(null, deviceId, "BUFFER_UNDERRUN"),
+            TestHelpers.CreateTestUser(),
+            CreateSession(movie),
+            CancellationToken.None);
+
+        Assert.Contains("can't pause video by voice", TestHelpers.GetSpeechText(response), StringComparison.OrdinalIgnoreCase);
+        Assert.True(response.Response.ShouldEndSession);
+        TestHelpers.AssertHasAudioPlayerStopDirective(response);
     }
 
     [Fact]

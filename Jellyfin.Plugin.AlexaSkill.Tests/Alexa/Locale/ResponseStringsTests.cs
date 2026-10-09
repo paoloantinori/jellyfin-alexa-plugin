@@ -27,7 +27,8 @@ public class ResponseStringsTests
         "TitleWithYear", "SearchingMedia", "DisambiguatePrompt", "DisambiguateNext",
         "NoMoreMatches", "DisambiguateReprompt", "UnexpectedYes",
         "StreamTokenNotConfigured",
-        "SkillWarmingUp"
+        "SkillWarmingUp",
+        "VideoStoppedByVoice", "CannotPauseVideoByVoice"
     };
 
     /// <summary>
