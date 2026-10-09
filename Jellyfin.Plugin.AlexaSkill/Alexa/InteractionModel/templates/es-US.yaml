@@ -416,6 +416,11 @@ intents:
       # orders, mirroring the imperative carriers (see header).
       - reproduzca {series_name} temporada {season_number} episodio {episode_number}
       - reproduzca la temporada {season_number} episodio {episode_number} de {series_name}
+      # JF-814: season-less family (with the subjunctive one-shot twin);
+      # the handler elicits the missing season.
+      - reproduce el episodio {episode_number} de {series_name}
+      - ver el episodio {episode_number} de {series_name}
+      - reproduzca el episodio {episode_number} de {series_name}
   # JF-583: the próximo/último carriers are slotted ({episode_position},
   # custom EpisodePosition type): próximo keeps NextUp, último resolves by
   # recency; 'continúa viendo' carries no position (NextUp by design).

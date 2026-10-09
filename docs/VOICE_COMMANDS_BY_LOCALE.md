@@ -69,7 +69,7 @@ Placeholder legend:
 | `<كلمات من عنوان الأغنية>` | `{titleKeywords}` |
 | `<اسم المستخدم>` | `{username}` |
 
-Complete phrase list (338 phrases across 66 commands):
+Complete phrase list (340 phrases across 66 commands):
 
 #### Play music
 
@@ -223,6 +223,8 @@ Complete phrase list (338 phrases across 66 commands):
 - `شغل <اسم المسلسل> الموسم <رقم الموسم> الحلقة <رقم الحلقة>`
 - `شاهد الموسم <رقم الموسم> الحلقة <رقم الحلقة> من <اسم المسلسل>`
 - `شاهد <اسم المسلسل> الموسم <رقم الموسم> الحلقة <رقم الحلقة>`
+- `شغل الحلقة <رقم الحلقة> من <اسم المسلسل>`
+- `شاهد الحلقة <رقم الحلقة> من <اسم المسلسل>`
 
 **Play the next episode**
 
@@ -641,7 +643,7 @@ Placeholder legend:
 | `<woorden uit de songtitel>` | `{titleKeywords}` |
 | `<gebruikersnaam>` | `{username}` |
 
-Complete phrase list (393 phrases across 66 commands):
+Complete phrase list (395 phrases across 66 commands):
 
 #### Play music
 
@@ -813,6 +815,8 @@ Complete phrase list (393 phrases across 66 commands):
 - `speel seizoen <seizoensnummer> aflevering <afleveringsnummer> van <naam van de serie>`
 - `speel <naam van de serie> seizoen <seizoensnummer> aflevering <afleveringsnummer>`
 - `kijk seizoen <seizoensnummer> aflevering <afleveringsnummer> van <naam van de serie>`
+- `speel aflevering <afleveringsnummer> van <naam van de serie>`
+- `kijk aflevering <afleveringsnummer> van <naam van de serie>`
 
 **Play the next episode**
 
@@ -1267,7 +1271,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (489 phrases across 66 commands):
+Complete phrase list (492 phrases across 66 commands):
 
 #### Play music
 
@@ -1461,6 +1465,9 @@ Complete phrase list (489 phrases across 66 commands):
 - `to watch season <season number> episode <episode number> of <series name>`
 - `to play <series name> season <season number> episode <episode number>`
 - `to watch <series name> season <season number> episode <episode number>`
+- `play episode <episode number> of <series name>`
+- `watch episode <episode number> of <series name>`
+- `to play episode <episode number> of <series name>`
 
 **Play the next episode**
 
@@ -1989,7 +1996,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (491 phrases across 66 commands):
+Complete phrase list (494 phrases across 66 commands):
 
 #### Play music
 
@@ -2189,6 +2196,9 @@ Complete phrase list (491 phrases across 66 commands):
 - `to watch season <season number> episode <episode number> of <series name>`
 - `to play <series name> season <season number> episode <episode number>`
 - `to watch <series name> season <season number> episode <episode number>`
+- `play episode <episode number> of <series name>`
+- `watch episode <episode number> of <series name>`
+- `to play episode <episode number> of <series name>`
 
 **Play the next episode**
 
@@ -2713,7 +2723,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (578 phrases across 66 commands):
+Complete phrase list (581 phrases across 66 commands):
 
 #### Play music
 
@@ -2981,6 +2991,9 @@ Complete phrase list (578 phrases across 66 commands):
 - `to watch season <season number> episode <episode number> of <series name>`
 - `to play <series name> season <season number> episode <episode number>`
 - `to watch <series name> season <season number> episode <episode number>`
+- `play episode <episode number> of <series name>`
+- `watch episode <episode number> of <series name>`
+- `to play episode <episode number> of <series name>`
 
 **Play the next episode**
 
@@ -3524,7 +3537,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (493 phrases across 66 commands):
+Complete phrase list (496 phrases across 66 commands):
 
 #### Play music
 
@@ -3724,6 +3737,9 @@ Complete phrase list (493 phrases across 66 commands):
 - `to watch season <season number> episode <episode number> of <series name>`
 - `to play <series name> season <season number> episode <episode number>`
 - `to watch <series name> season <season number> episode <episode number>`
+- `play episode <episode number> of <series name>`
+- `watch episode <episode number> of <series name>`
+- `to play episode <episode number> of <series name>`
 
 **Play the next episode**
 
@@ -4257,7 +4273,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (593 phrases across 68 commands):
+Complete phrase list (596 phrases across 68 commands):
 
 #### Play music
 
@@ -4530,6 +4546,9 @@ Complete phrase list (593 phrases across 68 commands):
 - `to watch season <season number> episode <episode number> of <series name>`
 - `to play <series name> season <season number> episode <episode number>`
 - `to watch <series name> season <season number> episode <episode number>`
+- `play episode <episode number> of <series name>`
+- `watch episode <episode number> of <series name>`
+- `to play episode <episode number> of <series name>`
 
 **Play the next episode**
 
@@ -5089,7 +5108,7 @@ Placeholder legend:
 | `<mots du titre de la chanson>` | `{titleKeywords}` |
 | `<nom d'utilisateur>` | `{username}` |
 
-Complete phrase list (448 phrases across 71 commands):
+Complete phrase list (451 phrases across 71 commands):
 
 #### Play music
 
@@ -5264,6 +5283,9 @@ Complete phrase list (448 phrases across 71 commands):
 - `De regarder la saison <numéro de saison> épisode <numéro d'épisode> de <nom de la série>`
 - `De jouer <nom de la série> saison <numéro de saison> épisode <numéro d'épisode>`
 - `De regarder <nom de la série> saison <numéro de saison> épisode <numéro d'épisode>`
+- `joue l'épisode <numéro d'épisode> de <nom de la série>`
+- `regarde l'épisode <numéro d'épisode> de <nom de la série>`
+- `De jouer l'épisode <numéro d'épisode> de <nom de la série>`
 
 **Play the next episode**
 
@@ -5785,7 +5807,7 @@ Placeholder legend:
 | `<mots du titre de la chanson>` | `{titleKeywords}` |
 | `<nom d'utilisateur>` | `{username}` |
 
-Complete phrase list (460 phrases across 71 commands):
+Complete phrase list (463 phrases across 71 commands):
 
 #### Play music
 
@@ -5968,6 +5990,9 @@ Complete phrase list (460 phrases across 71 commands):
 - `De regarder la saison <numéro de saison> épisode <numéro d'épisode> de <nom de la série>`
 - `De jouer <nom de la série> saison <numéro de saison> épisode <numéro d'épisode>`
 - `De regarder <nom de la série> saison <numéro de saison> épisode <numéro d'épisode>`
+- `joue l'épisode <numéro d'épisode> de <nom de la série>`
+- `regarde l'épisode <numéro d'épisode> de <nom de la série>`
+- `De jouer l'épisode <numéro d'épisode> de <nom de la série>`
 
 **Play the next episode**
 
@@ -6493,7 +6518,7 @@ Placeholder legend:
 | `<Wörter aus dem Songtitel>` | `{titleKeywords}` |
 | `<Benutzername>` | `{username}` |
 
-Complete phrase list (465 phrases across 71 commands):
+Complete phrase list (468 phrases across 71 commands):
 
 #### Play music
 
@@ -6675,6 +6700,9 @@ Complete phrase list (465 phrases across 71 commands):
 - `Zu schauen staffel <Staffelnummer> folge <Episodennummer> von <Name der Serie>`
 - `Zu spielen <Name der Serie> staffel <Staffelnummer> folge <Episodennummer>`
 - `Zu schauen <Name der Serie> staffel <Staffelnummer> folge <Episodennummer>`
+- `spiele folge <Episodennummer> von <Name der Serie>`
+- `schau folge <Episodennummer> von <Name der Serie>`
+- `Zu spielen folge <Episodennummer> von <Name der Serie>`
 
 **Play the next episode**
 
@@ -7207,7 +7235,7 @@ Placeholder legend:
 | `<गाने के नाम के शब्द>` | `{titleKeywords}` |
 | `<उपयोगकर्ता का नाम>` | `{username}` |
 
-Complete phrase list (364 phrases across 66 commands):
+Complete phrase list (366 phrases across 66 commands):
 
 #### Play music
 
@@ -7375,6 +7403,8 @@ Complete phrase list (364 phrases across 66 commands):
 - `<सीरीज़ का नाम> सीज़न <सीज़न नंबर> एपिसोड <एपिसोड नंबर> चलाओ`
 - `सीज़न <सीज़न नंबर> एपिसोड <एपिसोड नंबर> <सीरीज़ का नाम> का चलाओ`
 - `<सीरीज़ का नाम> सीज़न <सीज़न नंबर> एपिसोड <एपिसोड नंबर> देखो`
+- `<सीरीज़ का नाम> का एपिसोड <एपिसोड नंबर> चलाओ`
+- `<सीरीज़ का नाम> का एपिसोड <एपिसोड नंबर> देखो`
 
 **Play the next episode**
 
@@ -7805,7 +7835,7 @@ Placeholder legend:
 | `<titolo del video o del film>` | `{title}` |
 | `<parole del titolo del brano>` | `{titleKeywords}` |
 
-Complete phrase list (1555 phrases across 71 commands):
+Complete phrase list (1570 phrases across 71 commands):
 
 #### Play music
 
@@ -8952,6 +8982,21 @@ Complete phrase list (1555 phrases across 71 commands):
 - `Di mettere <nome della serie> stagione <numero della stagione> episodio <numero dell'episodio>`
 - `Di pleiare <nome della serie> stagione <numero della stagione> episodio <numero dell'episodio>`
 - `Di ascoltare <nome della serie> stagione <numero della stagione> episodio <numero dell'episodio>`
+- `Riproduci l'episodio <numero dell'episodio> di <nome della serie>`
+- `Suona l'episodio <numero dell'episodio> di <nome della serie>`
+- `Metti l'episodio <numero dell'episodio> di <nome della serie>`
+- `Pleia l'episodio <numero dell'episodio> di <nome della serie>`
+- `Ascolta l'episodio <numero dell'episodio> di <nome della serie>`
+- `Di riprodurre l'episodio <numero dell'episodio> di <nome della serie>`
+- `Di suonare l'episodio <numero dell'episodio> di <nome della serie>`
+- `Di mettere l'episodio <numero dell'episodio> di <nome della serie>`
+- `Di pleiare l'episodio <numero dell'episodio> di <nome della serie>`
+- `Di ascoltare l'episodio <numero dell'episodio> di <nome della serie>`
+- `Di riprodurre <nome della serie> episodio <numero dell'episodio>`
+- `Di suonare <nome della serie> episodio <numero dell'episodio>`
+- `Di mettere <nome della serie> episodio <numero dell'episodio>`
+- `Di pleiare <nome della serie> episodio <numero dell'episodio>`
+- `Di ascoltare <nome della serie> episodio <numero dell'episodio>`
 
 **Play the next episode**
 
@@ -9612,7 +9657,7 @@ Placeholder legend:
 | `<曲名のキーワード>` | `{titleKeywords}` |
 | `<ユーザー名>` | `{username}` |
 
-Complete phrase list (331 phrases across 66 commands):
+Complete phrase list (333 phrases across 66 commands):
 
 #### Play music
 
@@ -9759,6 +9804,8 @@ Complete phrase list (331 phrases across 66 commands):
 - `<シリーズ名> のシーズン <シーズン番号> エピソード <エピソード番号> を再生して`
 - `シーズン <シーズン番号> エピソード <エピソード番号> の <シリーズ名> を再生して`
 - `<シリーズ名> のシーズン <シーズン番号> エピソード <エピソード番号> を見たい`
+- `<シリーズ名> のエピソード <エピソード番号> を再生して`
+- `<シリーズ名> のエピソード <エピソード番号> を見たい`
 
 **Play the next episode**
 
@@ -10177,7 +10224,7 @@ Placeholder legend:
 | `<palavras do título da música>` | `{titleKeywords}` |
 | `<nome do usuário>` | `{username}` |
 
-Complete phrase list (406 phrases across 66 commands):
+Complete phrase list (408 phrases across 66 commands):
 
 #### Play music
 
@@ -10359,6 +10406,8 @@ Complete phrase list (406 phrases across 66 commands):
 - `tocar <nome da série> temporada <número da temporada> episódio <número do episódio>`
 - `assistir temporada <número da temporada> episódio <número do episódio> de <nome da série>`
 - `assistir <nome da série> temporada <número da temporada> episódio <número do episódio>`
+- `tocar episódio <número do episódio> de <nome da série>`
+- `assistir episódio <número do episódio> de <nome da série>`
 
 **Play the next episode**
 
@@ -10816,7 +10865,7 @@ Placeholder legend:
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (441 phrases across 66 commands):
+Complete phrase list (444 phrases across 66 commands):
 
 #### Play music
 
@@ -10994,6 +11043,9 @@ Complete phrase list (441 phrases across 66 commands):
 - `ver temporada <número de temporada> episodio <número de episodio> de <nombre de la serie>`
 - `reproduzca <nombre de la serie> temporada <número de temporada> episodio <número de episodio>`
 - `reproduzca la temporada <número de temporada> episodio <número de episodio> de <nombre de la serie>`
+- `reproduce el episodio <número de episodio> de <nombre de la serie>`
+- `ver el episodio <número de episodio> de <nombre de la serie>`
+- `reproduzca el episodio <número de episodio> de <nombre de la serie>`
 
 **Play the next episode**
 
@@ -11490,7 +11542,7 @@ Placeholder legend:
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (441 phrases across 66 commands):
+Complete phrase list (444 phrases across 66 commands):
 
 #### Play music
 
@@ -11670,6 +11722,9 @@ Complete phrase list (441 phrases across 66 commands):
 - `ver temporada <número de temporada> episodio <número de episodio> de <nombre de la serie>`
 - `reproduzca <nombre de la serie> temporada <número de temporada> episodio <número de episodio>`
 - `reproduzca la temporada <número de temporada> episodio <número de episodio> de <nombre de la serie>`
+- `reproduce el episodio <número de episodio> de <nombre de la serie>`
+- `ver el episodio <número de episodio> de <nombre de la serie>`
+- `reproduzca el episodio <número de episodio> de <nombre de la serie>`
 
 **Play the next episode**
 
@@ -12164,7 +12219,7 @@ Placeholder legend:
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (429 phrases across 66 commands):
+Complete phrase list (432 phrases across 66 commands):
 
 #### Play music
 
@@ -12337,6 +12392,9 @@ Complete phrase list (429 phrases across 66 commands):
 - `ver temporada <número de temporada> episodio <número de episodio> de <nombre de la serie>`
 - `reproduzca <nombre de la serie> temporada <número de temporada> episodio <número de episodio>`
 - `reproduzca la temporada <número de temporada> episodio <número de episodio> de <nombre de la serie>`
+- `reproduce el episodio <número de episodio> de <nombre de la serie>`
+- `ver el episodio <número de episodio> de <nombre de la serie>`
+- `reproduzca el episodio <número de episodio> de <nombre de la serie>`
 
 **Play the next episode**
 

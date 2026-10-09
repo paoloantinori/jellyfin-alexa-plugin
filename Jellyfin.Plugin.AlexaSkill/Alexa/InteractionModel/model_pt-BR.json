@@ -564,7 +564,9 @@
           "tocar temporada {season_number} episódio {episode_number} de {series_name}",
           "tocar {series_name} temporada {season_number} episódio {episode_number}",
           "assistir temporada {season_number} episódio {episode_number} de {series_name}",
-          "assistir {series_name} temporada {season_number} episódio {episode_number}"
+          "assistir {series_name} temporada {season_number} episódio {episode_number}",
+          "tocar episódio {episode_number} de {series_name}",
+          "assistir episódio {episode_number} de {series_name}"
         ]
       },
       {

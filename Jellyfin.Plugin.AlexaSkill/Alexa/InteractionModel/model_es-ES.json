@@ -540,7 +540,10 @@
           "reproduce {series_name} temporada {season_number} episodio {episode_number}",
           "ver temporada {season_number} episodio {episode_number} de {series_name}",
           "reproduzca {series_name} temporada {season_number} episodio {episode_number}",
-          "reproduzca la temporada {season_number} episodio {episode_number} de {series_name}"
+          "reproduzca la temporada {season_number} episodio {episode_number} de {series_name}",
+          "reproduce el episodio {episode_number} de {series_name}",
+          "ver el episodio {episode_number} de {series_name}",
+          "reproduzca el episodio {episode_number} de {series_name}"
         ]
       },
       {

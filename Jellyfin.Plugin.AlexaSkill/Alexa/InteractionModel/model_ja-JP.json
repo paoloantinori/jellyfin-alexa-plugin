@@ -520,7 +520,9 @@
         "samples": [
           "{series_name} のシーズン {season_number} エピソード {episode_number} を再生して",
           "シーズン {season_number} エピソード {episode_number} の {series_name} を再生して",
-          "{series_name} のシーズン {season_number} エピソード {episode_number} を見たい"
+          "{series_name} のシーズン {season_number} エピソード {episode_number} を見たい",
+          "{series_name} のエピソード {episode_number} を再生して",
+          "{series_name} のエピソード {episode_number} を見たい"
         ]
       },
       {

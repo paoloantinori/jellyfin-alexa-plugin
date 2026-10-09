@@ -95,6 +95,7 @@
   "InProgressList": "Du hast {0} laufende Medien: {1}",
   "InProgressItemWithPosition": "{0} bei {1}",
   "DidNotCatchSeriesName": "Ich habe den Seriennamen nicht verstanden. Welche Serie möchtest du schauen?",
+  "DidNotCatchSeasonNumber": "Ich habe die Staffelnummer nicht verstanden. Welche Staffel möchtest du schauen?",
   "NotFoundSeries": "Ich konnte keine Serie namens {0} finden.",
   "NotFoundEpisode": "Ich konnte Staffel {0} Episode {1} von {2} nicht finden.",
   "PlayingNextEpisode": "Spiele die nächste Folge: {0}",

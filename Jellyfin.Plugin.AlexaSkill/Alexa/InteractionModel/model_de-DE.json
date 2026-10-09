@@ -574,7 +574,10 @@
           "Zu spielen staffel {season_number} folge {episode_number} von {series_name}",
           "Zu schauen staffel {season_number} folge {episode_number} von {series_name}",
           "Zu spielen {series_name} staffel {season_number} folge {episode_number}",
-          "Zu schauen {series_name} staffel {season_number} folge {episode_number}"
+          "Zu schauen {series_name} staffel {season_number} folge {episode_number}",
+          "spiele folge {episode_number} von {series_name}",
+          "schau folge {episode_number} von {series_name}",
+          "Zu spielen folge {episode_number} von {series_name}"
         ]
       },
       {

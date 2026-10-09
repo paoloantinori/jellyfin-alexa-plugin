@@ -441,6 +441,9 @@ intents:
       - شغل {series_name} الموسم {season_number} الحلقة {episode_number}
       - شاهد الموسم {season_number} الحلقة {episode_number} من {series_name}
       - شاهد {series_name} الموسم {season_number} الحلقة {episode_number}
+      # JF-814: season-less family; the handler elicits the missing season.
+      - شغل الحلقة {episode_number} من {series_name}
+      - شاهد الحلقة {episode_number} من {series_name}
   # JF-583: the التالية/الأحدث carriers are slotted ({episode_position},
   # custom EpisodePosition type): التالية keeps NextUp, الأحدث resolves by
   # recency. Arabic postposes the definite adjective (الحلقة التالية); the

@@ -16,6 +16,7 @@ public class ResponseStringsTests
         "NoMediaPlaying", "FavoriteNoItem", "RatingNoItem",
         "PlaybackFailed", "SomethingWrong", "CouldNotUnderstand",
         "DidNotCatchVideoTitle", "DidNotCatchChannelName", "NotFoundVideo", "NotFoundChannel",
+        "DidNotCatchSeasonNumber",
         "NotFoundSongByArtist", "NotFoundSongByNameAndArtist", "NotFoundSongByName",
         "NotFoundAlbumByArtist", "NotFoundAlbumByNameAndArtist", "NotFoundAlbumByName",
         "NoSongsInAlbum", "NotFoundPlaylist", "PlaylistEmpty", "DidNotCatchPlaylistName", "NoFavoriteItems",

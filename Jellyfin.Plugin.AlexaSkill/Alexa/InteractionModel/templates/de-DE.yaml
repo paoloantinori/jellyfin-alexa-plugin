@@ -466,6 +466,10 @@ intents:
       # JF-549: series-first one-shot twins (series-last alone dropped series_name; it-IT live 2026-09-12).
       - Zu spielen {series_name} staffel {season_number} folge {episode_number}
       - Zu schauen {series_name} staffel {season_number} folge {episode_number}
+      # JF-814: season-less family; the handler elicits the missing season.
+      - spiele folge {episode_number} von {series_name}
+      - schau folge {episode_number} von {series_name}
+      - Zu spielen folge {episode_number} von {series_name}
   # JF-583: the nächste/neueste carriers are slotted ({episode_position},
   # custom EpisodePosition type): nächste keeps NextUp, neueste resolves by
   # recency; 'schau X weiter' carries no position (NextUp by design).

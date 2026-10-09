@@ -95,6 +95,7 @@
   "InProgressList": "आपके {0} आइटम प्रगति पर हैं: {1}",
   "InProgressItemWithPosition": "{0} पर {1}",
   "DidNotCatchSeriesName": "मुझे श्रृंगला का नाम स्पष्ट नहीं सुनाई दिया। आप कौन सी श्रृंगला देखना चाहेंगे?",
+  "DidNotCatchSeasonNumber": "मुझे सीज़न नंबर स्पष्ट नहीं सुनाई दिया। आप कौन सा सीज़न देखना चाहेंगे?",
   "NotFoundSeries": "मुझे {0} नाम की श्रृंगला नहीं मिली।",
   "NotFoundEpisode": "मुझे {2} का सीज़न {0} एपिसोड {1} नहीं मिला।",
   "PlayingNextEpisode": "अगला एपिसोड चला रहा हूँ: {0}",

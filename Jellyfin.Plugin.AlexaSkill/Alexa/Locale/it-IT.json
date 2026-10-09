@@ -95,6 +95,7 @@
   "InProgressList": "Hai {0} contenuti in corso: {1}",
   "InProgressItemWithPosition": "{0} a {1}",
   "DidNotCatchSeriesName": "Non ho capito il nome della serie. Quale serie vorresti guardare?",
+  "DidNotCatchSeasonNumber": "Non ho capito il numero della stagione. Quale stagione vorresti guardare?",
   "NotFoundSeries": "Non ho trovato una serie chiamata {0}.",
   "NotFoundEpisode": "Non ho trovato la stagione {0} episodio {1} di {2}.",
   "PlayingNextEpisode": "Riproduco il prossimo episodio: {0}",

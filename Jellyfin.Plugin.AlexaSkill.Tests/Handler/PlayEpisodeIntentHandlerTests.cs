@@ -173,6 +173,13 @@ public class PlayEpisodeIntentHandlerTests : PluginTestBase
             new[] { "series_name", "season_number", "episode_number" }.OrderBy(s => s),
             elicit.UpdatedIntent.Slots.Keys.OrderBy(s => s));
 
+        // JF-814 gate-marker F1 (the JF-614 contract): the already-captured numbers
+        // must be echoed as slotValues or the value-less updatedIntent may be
+        // treated as dialog-state replacement and wipe them.
+        Assert.Null(elicit.UpdatedIntent.Slots["series_name"].Value);
+        Assert.Equal("4", elicit.UpdatedIntent.Slots["season_number"].Value);
+        Assert.Equal("10", elicit.UpdatedIntent.Slots["episode_number"].Value);
+
         Assert.NotNull(response.Response.Reprompt);
         Assert.Contains("series", TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
     }
@@ -202,13 +209,85 @@ public class PlayEpisodeIntentHandlerTests : PluginTestBase
         _libraryManagerMock.VerifyNoOtherCalls();
     }
 
+    /// <summary>
+    /// JF-814 re-decision of the JF-324-era pin: when the EPISODE number parses but
+    /// the season does NOT ("l'episodio 54 di Sailor Moon", no season), the handler
+    /// must ELICIT the season (Dialog.ElicitSlot, open session) instead of silently
+    /// launching the series' next-up episode (the wrong-episode substitution the
+    /// incident report closed). Only the fully-numberless series-only request keeps
+    /// the NextUp fallback (pinned by HandleAsync_SeriesOnly_StillFallsBackToNextUp).
+    /// </summary>
     [Fact]
-    public async Task HandleAsync_MissingSeasonNumber_FallsBackToNextUp()
+    public async Task HandleAsync_EpisodeNumberWithoutSeason_ElicitsSeasonNumber()
     {
-        // JF-324: a series-only request no longer hard-fails with the episode-number
-        // prompt; partial or missing numbers fall back to the NextUp core.
         var handler = CreateHandler();
-        var request = CreateIntentRequest(seriesName: "The Office", episodeNumber: "10");
+        var request = CreateIntentRequest(seriesName: "Sailor Moon", episodeNumber: "54");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        TestHelpers.AssertSessionOpen(response, "a question must keep the session open or the mic never listens");
+
+        var elicit = response.Response.Directives?.FirstOrDefault(d => d.Type == "Dialog.ElicitSlot") as ElicitSlotDirective;
+        Assert.NotNull(elicit);
+        Assert.Equal("season_number", elicit.SlotToElicit);
+        Assert.Equal(IntentNames.PlayEpisode, elicit.UpdatedIntent.Name);
+        // Amazon rejects a partial updatedIntent (live INVALID_RESPONSE 2026-08-28):
+        // every PlayEpisode slot must be declared.
+        Assert.Equal(
+            new[] { "series_name", "season_number", "episode_number" }.OrderBy(s => s),
+            elicit.UpdatedIntent.Slots.Keys.OrderBy(s => s));
+
+        // JF-814 gate-marker F1 (the JF-614 contract): the captured series and
+        // episode number must ride the updatedIntent as slotValues; the elicited
+        // season stays value-less.
+        Assert.Equal("Sailor Moon", elicit.UpdatedIntent.Slots["series_name"].Value);
+        Assert.Null(elicit.UpdatedIntent.Slots["season_number"].Value);
+        Assert.Equal("54", elicit.UpdatedIntent.Slots["episode_number"].Value);
+
+        Assert.NotNull(response.Response.Reprompt);
+        // The elicit must precede any library work: no NextUp query, no episode search.
+        _libraryManagerMock.VerifyNoOtherCalls();
+    }
+
+    /// <summary>
+    /// JF-324's original case, preserved by the JF-814 re-decision: a fully-numberless
+    /// series-only request (no season AND no episode number) still falls back to the
+    /// NextUp core instead of prompting for numbers.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_SeriesOnly_StillFallsBackToNextUp()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(seriesName: "The Office");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SetupUserMock();
+        SetupNextUpEpisode("The Convention");
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        response.HasDirective<VideoAppLaunchDirective>();
+    }
+
+    /// <summary>
+    /// Code-review pin (JF-814 round): the season-WITHOUT-episode ask (season
+    /// parses, episode absent) is NOT covered by the JF-814 elicit gate, which keys
+    /// on the episode side; it still takes the NextUp fallback. No locale template
+    /// carries this sample shape today (JF-841), so this pins today's fall-through
+    /// against a future gate flip.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_SeasonNumberWithoutEpisode_FallsBackToNextUp()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(seriesName: "The Office", seasonNumber: "3");
         var context = CreateContext();
         var user = CreateUser();
         var session = CreateSession();

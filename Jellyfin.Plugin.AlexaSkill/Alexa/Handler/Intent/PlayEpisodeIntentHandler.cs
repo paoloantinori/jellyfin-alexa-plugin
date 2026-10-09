@@ -79,6 +79,9 @@ public class PlayEpisodeIntentHandler : BaseHandler
             return elicitCancel;
         }
 
+        string? seasonRaw = intentRequest.Intent.Slots?.TryGetValue("season_number", out var seasonSlot) == true ? seasonSlot.Value : null;
+        string? episodeRaw = intentRequest.Intent.Slots?.TryGetValue("episode_number", out var episodeSlot) == true ? episodeSlot.Value : null;
+
         if (string.IsNullOrWhiteSpace(seriesName))
         {
             // JF-549 live incident 2026-09-12 17:45: this branch used to Tell the
@@ -88,27 +91,67 @@ public class PlayEpisodeIntentHandler : BaseHandler
             // reply is captured into series_name and the intent re-arrives complete.
             // Requires PlayEpisodeIntent in the model's dialog.intents (all 17 already
             // register it, anti-pattern #9).
-            return BuildDialogElicitResponse(
-                "DidNotCatchSeriesName",
-                locale,
-                "series_name",
+            // JF-814 gate-marker F1 (the JF-614 contract): echo the already-captured
+            // numbers as slotValues; a value-less updatedIntent may be treated as
+            // dialog-state replacement and wipe them.
+            return BuildElicitSlotResponse(
                 IntentNames.PlayEpisode,
-                Util.ElicitSlots.For(IntentNames.PlayEpisode));
+                "series_name",
+                Util.ElicitSlots.For(IntentNames.PlayEpisode),
+                ResponseStrings.Get("DidNotCatchSeriesName", locale),
+                slotValues: new Dictionary<string, string?>
+                {
+                    ["series_name"] = null,
+                    ["season_number"] = seasonRaw,
+                    ["episode_number"] = episodeRaw,
+                });
         }
-
-        string? seasonRaw = intentRequest.Intent.Slots?.TryGetValue("season_number", out var seasonSlot) == true ? seasonSlot.Value : null;
-        string? episodeRaw = intentRequest.Intent.Slots?.TryGetValue("episode_number", out var episodeSlot) == true ? episodeSlot.Value : null;
 
         Logger.LogDebug("PlayEpisode: seriesName='{SeriesName}', season={Season}, episode={Episode}, locale={Locale}", seriesName, seasonRaw, episodeRaw, locale);
 
-        // ItalianNumberWords parses digits (every locale) AND the Italian number
-        // words the it-IT model delivers for the ItalianNumber-typed season_number /
-        // episode_number slots ("stagione due" arrives as "due", not "2"; JF-451
-        // adoption).
+        // The season_number / episode_number slots are AMAZON.NUMBER in ALL 17
+        // locales since JF-814 part 1 (the it-IT ItalianNumber custom type carried
+        // no compounds: "cinquantaquattro" arrived as 4), so answers normally
+        // arrive as digits; ItalianNumberWords keeps parsing Italian number words
+        // as a tolerance layer for word-shaped deliveries ("stagione due").
         int seasonNumber = 0;
         int episodeNumber = 0;
-        bool hasExplicitNumbers = Util.ItalianNumberWords.TryParse(seasonRaw, out seasonNumber)
-            && Util.ItalianNumberWords.TryParse(episodeRaw, out episodeNumber);
+        bool episodeParsed = Util.ItalianNumberWords.TryParse(episodeRaw, out episodeNumber);
+        bool seasonParsed = Util.ItalianNumberWords.TryParse(seasonRaw, out seasonNumber);
+
+        // JF-814: an explicit episode number WITHOUT a season must not fall through
+        // to the NextUp core (that silently substitutes the next-up episode for the
+        // requested one, the wrong-item class this task closes). Elicit the season;
+        // the re-arrived answer parses via ItalianNumberWords (digits from the
+        // AMAZON.NUMBER slot in every locale, Italian words in it-IT). The
+        // fully-numberless series-only request (JF-324's original case) still takes
+        // the NextUp fallback below. NOTE: a season-WITHOUT-episode ask still falls
+        // to NextUp (no locale template carries that sample shape today); a future
+        // season-only sample family must extend this gate or it re-opens the
+        // wrong-item class (simplify/altitude finding, 2026-10-09).
+        if (episodeParsed && !seasonParsed)
+        {
+            Logger.LogDebug(
+                "PlayEpisode: episode number present but season missing (season='{Season}', episode='{Episode}'), eliciting season_number",
+                seasonRaw,
+                episodeRaw);
+            // JF-614 contract (gate-marker F1): the captured series name and episode
+            // number ride the updatedIntent as slotValues so the round-trip cannot
+            // wipe them; the elicited season stays value-less.
+            return BuildElicitSlotResponse(
+                IntentNames.PlayEpisode,
+                "season_number",
+                Util.ElicitSlots.For(IntentNames.PlayEpisode),
+                ResponseStrings.Get("DidNotCatchSeasonNumber", locale),
+                slotValues: new Dictionary<string, string?>
+                {
+                    ["series_name"] = seriesName,
+                    ["season_number"] = null,
+                    ["episode_number"] = episodeRaw,
+                });
+        }
+
+        bool hasExplicitNumbers = seasonParsed && episodeParsed;
         if (!hasExplicitNumbers)
         {
             Logger.LogDebug(

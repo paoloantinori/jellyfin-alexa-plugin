@@ -477,6 +477,9 @@ intents:
       - '{series_name} のシーズン {season_number} エピソード {episode_number} を再生して'
       - シーズン {season_number} エピソード {episode_number} の {series_name} を再生して
       - '{series_name} のシーズン {season_number} エピソード {episode_number} を見たい'
+      # JF-814: season-less family; the handler elicits the missing season.
+      - '{series_name} のエピソード {episode_number} を再生して'
+      - '{series_name} のエピソード {episode_number} を見たい'
   # JF-583: the 次の/最新の carriers are slotted ({episode_position},
   # custom EpisodePosition type): 次の keeps NextUp, 最新の resolves by
   # recency; the continue-watching sample carries no position (NextUp by
