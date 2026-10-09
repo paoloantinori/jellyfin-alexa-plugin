@@ -29,8 +29,48 @@ public class ResponseStringsTests
         "StreamTokenNotConfigured",
         "SkillWarmingUp",
         "SkillUpdatingPrefix",
-        "VideoStoppedByVoice", "CannotPauseVideoByVoice"
+        "VideoStoppedByVoice", "CannotPauseVideoByVoice",
+        // JF-849: the rest of the Cannot* refusal family, enumerated from the
+        // production surface (grep Cannot* keys; note some literals sit in
+        // ternary-bound variables, e.g. PauseIntentHandler's lineKey, not
+        // directly inside ResponseStrings.Get).
+        "CannotRepeatContent", "CannotRepeatInSeekMode",
+        "CannotSetSleepTimerInSeekMode", "CannotSetSleepTimerOverVideo",
+        "CannotChangeSpeedOverVideo", "CannotChangeSpeedForBook",
+        "CannotNavigateVideoByVoice", "CannotNavigateLiveTvByVoice", "CannotNavigateMusicByVoice"
     };
+
+    /// <summary>
+    /// JF-849 (code-review finding): the ledger above is hand-maintained, so a
+    /// future Cannot* key minted in the locale files but never added here would
+    /// drift exactly the way this ledger exists to prevent. This pin makes the
+    /// family self-checking: the Cannot* key set in the en-US table (the parent
+    /// every other locale mirrors) and the Cannot* subset of AllExpectedKeys must
+    /// be identical. A new key added to the locale JSONs without a ledger row now
+    /// fails here with a message naming the row to add.
+    /// </summary>
+    [Fact]
+    public void CannotFamily_LocaleKeys_MatchTheLedger()
+    {
+        using var stream = typeof(Jellyfin.Plugin.AlexaSkill.Util).Assembly
+            .GetManifestResourceStream("Jellyfin.Plugin.AlexaSkill.Alexa.Locale.en-US.json");
+        Assert.NotNull(stream);
+        using var doc = System.Text.Json.JsonDocument.Parse(stream!);
+        var localeCannotKeys = doc.RootElement.EnumerateObject()
+            .Where(p => p.Name.StartsWith("Cannot", StringComparison.Ordinal))
+            .Select(p => p.Name)
+            .ToHashSet(StringComparer.Ordinal);
+        var ledgerCannotKeys = AllExpectedKeys
+            .Where(k => k.StartsWith("Cannot", StringComparison.Ordinal))
+            .ToHashSet(StringComparer.Ordinal);
+
+        Assert.True(localeCannotKeys.SetEquals(ledgerCannotKeys),
+            "Cannot* family drifted between the en-US locale table and the ledger: " +
+            "locale-only [" + string.Join(", ", localeCannotKeys.Except(ledgerCannotKeys)) +
+            "], ledger-only [" + string.Join(", ", ledgerCannotKeys.Except(localeCannotKeys)) +
+            "]. Add the missing row to AllExpectedKeys (and verify the key is spoken " +
+            "by a handler and present in all 17 locale files).");
+    }
 
     /// <summary>
     /// JF-708 (code-review finding): <see cref="ResponseStrings.Get"/> fails soft
