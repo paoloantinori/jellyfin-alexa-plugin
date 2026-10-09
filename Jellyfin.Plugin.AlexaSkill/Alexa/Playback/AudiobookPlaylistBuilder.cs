@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
 
@@ -47,8 +46,14 @@ public static class AudiobookPlaylistBuilder
     /// <c>#EXTINF</c> durations (the flat-divisor FALLBACK; the audiobook path
     /// passes its 10s const, the episode remux its 4s, JF-499 W2). Ignored by the
     /// StartHint strategy.</param>
+    /// <param name="resolvedStartSegment">The start segment a caller already
+    /// resolved on a listing whose kept prefix is verbatim-identical to
+    /// <paramref name="basePlaylist"/> (the windowed-prewrite serve's honor-band
+    /// walk, JF-818): spares the second full EXTINF walk here. The value must be
+    /// what a local resolution would return (an in-band start always resolves
+    /// inside the windowed prefix); null resolves as before.</param>
     /// <returns>A playlist configured to resume at the given position.</returns>
-    public static string BuildResumePlaylist(string basePlaylist, long startTicks, int segmentDurationSeconds)
+    public static string BuildResumePlaylist(string basePlaylist, long startTicks, int segmentDurationSeconds, int? resolvedStartSegment = null)
     {
         if (startTicks <= 0)
         {
@@ -58,7 +63,7 @@ public static class AudiobookPlaylistBuilder
         return ActiveStrategy switch
         {
             ResumeStrategy.StartHint => BuildStartHintPlaylist(basePlaylist, startTicks),
-            ResumeStrategy.Sliced => BuildSlicedPlaylist(basePlaylist, startTicks, segmentDurationSeconds),
+            ResumeStrategy.Sliced => BuildSlicedPlaylist(basePlaylist, startTicks, segmentDurationSeconds, resolvedStartSegment),
             _ => BuildStartHintPlaylist(basePlaylist, startTicks)
         };
     }
@@ -112,9 +117,15 @@ public static class AudiobookPlaylistBuilder
     /// first-play relies on). This is the active strategy because the Echo Show
     /// ignores <c>#EXT-X-START</c>.
     /// </summary>
-    internal static string BuildSlicedPlaylist(string basePlaylist, long startTicks, int segmentDurationSeconds)
+    internal static string BuildSlicedPlaylist(string basePlaylist, long startTicks, int segmentDurationSeconds, int? resolvedStartSegment = null)
     {
-        int startSegment = ResolveStartSegment(basePlaylist, startTicks, segmentDurationSeconds);
+        // JF-818: the windowed-prewrite serve resolves the segment on the FULL
+        // listing for its honor-band check and threads it here, dropping the
+        // second full EXTINF walk per playlist fetch; the threaded value is
+        // identical to a local resolution because the windowed listing's kept
+        // prefix is verbatim (the index-alignment contract below) and an
+        // in-band start segment always resolves within it.
+        int startSegment = resolvedStartSegment ?? ResolveStartSegment(basePlaylist, startTicks, segmentDurationSeconds);
         if (startSegment <= 0)
         {
             return basePlaylist;
@@ -196,7 +207,18 @@ public static class AudiobookPlaylistBuilder
     /// <param name="line">The trimmed playlist line.</param>
     /// <returns>True when the line is a segment URI.</returns>
     internal static bool IsSegmentUriLine(string line)
-        => !line.StartsWith('#') && line.Length > 0 && line.Contains("seg_", StringComparison.Ordinal);
+        => IsSegmentUriLine(line.AsSpan());
+
+    /// <summary>
+    /// The span twin of <see cref="IsSegmentUriLine(string)"/> (JF-818): the ONE
+    /// predicate body, so the string entry point and the span-walking transforms
+    /// (<see cref="TruncateToFirstSegments"/>'s allocation-free line scan) can
+    /// never drift apart on what a segment line is.
+    /// </summary>
+    /// <param name="line">The trimmed playlist line.</param>
+    /// <returns>True when the line is a segment URI.</returns>
+    internal static bool IsSegmentUriLine(ReadOnlySpan<char> line)
+        => !line.StartsWith("#") && line.Length > 0 && line.Contains("seg_", StringComparison.Ordinal);
 
     /// <summary>
     /// Truncate an HLS media playlist to its first <paramref name="maxSegments"/>
@@ -210,24 +232,33 @@ public static class AudiobookPlaylistBuilder
     /// truncated listing must stay an event playlist (the player keeps polling
     /// for growth). A <paramref name="maxSegments"/> at or above the listing's
     /// own count returns the content unchanged in shape.
+    /// ALLOCATION SHAPE (JF-818, the per-poll cost review): a span-based
+    /// IndexOf line scan emitting only kept lines, NOT a full
+    /// <c>Split('\n')</c> of the whole prewrite (a 5h single-file book is a
+    /// ~4500-entry / ~250KB listing this walk runs on once per mid-encode
+    /// playlist poll, only to emit a window of a few dozen entries). The scan
+    /// reproduces <c>Split('\n')</c> line semantics exactly: newline + 1
+    /// lines (a trailing newline yields one final empty line, an empty input
+    /// one), each CR-trimmed, joined with <c>\n</c>.
     /// </summary>
     /// <param name="playlistContent">The full playlist text.</param>
     /// <param name="maxSegments">The number of leading segment entries to keep.</param>
     /// <returns>The truncated playlist text.</returns>
     internal static string TruncateToFirstSegments(string playlistContent, int maxSegments)
     {
-        string[] lines = playlistContent.Split('\n');
-        var kept = new List<string>(Math.Min(lines.Length, (maxSegments * 2) + 8));
+        var output = new StringBuilder(Math.Min(playlistContent.Length, (maxSegments * 128) + 256));
         // Lines since the last kept segment URI (an EXTINF awaiting its URI, a
         // discontinuity tag): flushed only when the segment they belong to is
         // kept, so the first DROPPED segment's EXTINF never leaks into the
         // truncated listing as a phantom extra entry.
-        var pending = new List<string>();
+        var pending = new StringBuilder();
         int segmentCount = 0;
         bool truncated = false;
-        foreach (string rawLine in lines)
+        ReadOnlySpan<char> rest = playlistContent.AsSpan();
+        while (true)
         {
-            string line = rawLine.TrimEnd('\r');
+            int newline = rest.IndexOf('\n');
+            ReadOnlySpan<char> line = (newline < 0 ? rest : rest[..newline]).TrimEnd('\r');
             if (IsSegmentUriLine(line))
             {
                 if (segmentCount >= maxSegments)
@@ -236,15 +267,24 @@ public static class AudiobookPlaylistBuilder
                     break;
                 }
 
-                kept.AddRange(pending);
+                output.Append(pending);
                 pending.Clear();
-                kept.Add(line);
+                output.Append(line);
+                output.Append('\n');
                 segmentCount++;
             }
             else
             {
-                pending.Add(line);
+                pending.Append(line);
+                pending.Append('\n');
             }
+
+            if (newline < 0)
+            {
+                break;
+            }
+
+            rest = rest[(newline + 1)..];
         }
 
         // A walk that never truncated keeps the trailing non-URI lines (an
@@ -252,10 +292,15 @@ public static class AudiobookPlaylistBuilder
         // own count returns the content unchanged, per the contract above.
         if (!truncated)
         {
-            kept.AddRange(pending);
+            output.Append(pending);
         }
 
-        return string.Join('\n', kept);
+        // Every element carries its '\n' separator and the final one is
+        // dropped here, reproducing string.Join('\n', lines) byte-for-byte
+        // (including a trailing newline, which is the final EMPTY line's
+        // separator); an empty kept set returns the empty string, as Join of
+        // an empty list does.
+        return output.Length > 0 ? output.Remove(output.Length - 1, 1).ToString() : string.Empty;
     }
 
     /// <summary>
