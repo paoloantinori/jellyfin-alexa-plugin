@@ -76,14 +76,42 @@ flip rewrites are lossless. Standing rule for the morning: NEVER
 append raw tails to a task file; use the Implementation Notes managed
 section (direct edit or MCP notesAppend).
 
-## Flip batch (all ride the orchestrator's final-diff gate pass, AFTER the
-fold sweep lands)
+## DEPLOY PHASE COMPLETE (02:10)
 
-JF-801, JF-844.1, JF-850, JF-809 (closure-by-evidence: ResponseStrings.Reset
-race structurally closed at HEAD by 607b9466, zero other writers), JF-823,
-JF-825, JF-826, JF-845, JF-846, JF-847. New tasks filed tonight: JF-849
-(Cannot* ledger), JF-850->filed+done, JF-851 (PerfGuard sw reuse), JF-852
-(es-trio marker + SKIP pins).
+- Gates: /simplify (4 angles over bbfc01ff..HEAD: 3 applied = b973143b,
+  3 skipped with reasons incl. the factually-wrong Lazy premise) +
+  /code-review high (7 findings: 3 applied = 61014d0c [DeadMic comment
+  boundary, IsStatic on derived surface arms, CollectionDefinition duplicate
+  conflict throws], 2 tracked JF-852, 1 skipped [O(n^2) speculative, suite
+  at baseline], 1 filed JF-855 [generator mirror-directive]). Final-tree
+  full suite 5608/5608 BOTH TFMs; targeted re-runs after each fix round.
+- Flips: TEN tasks Done (JF-801, 844.1, 850, 809, 823, 825, 826, 845, 846,
+  847) - dod-gate passed on transcript evidence, and EVERY folded record
+  survived the MCP rewrites byte-intact (the mitigation proven under load).
+- Pushed: bbfc01ff..0f0a3c7d on origin/main.
+- Deploy: build 0e7e91e2 (Release net10.0, clean embed) hot-swapped into
+  AlexaSkill_0.12.1.0, chown'd, server up at boot attempt 12 (~36s), config
+  intact (1 user), active-DLL md5 == local build md5. Smoke: simulator
+  QueryArtistLibrary returns the full APL carousel + speech. The 01:10 ERRs
+  are the KNOWN queued 1.0.0.0 catalog install attempt (do not fix).
+- JF-846 LIVE CHECK PASSED: during a manual 17/17 locale rebuild (all
+  SUCCEEDED), a spoken MediaInfo request answered "Sto aggiornando la skill,
+  un attimo di pazienza..." prefixed; the window opened at Information with
+  the operation name; the interceptor's Debug line shows the prefix.
+- JF-770 fourth-rebuild data point: the film anchor still Fallback 4/4 on
+  the fresh model (4 rebuilds, 3 DLL generations). Stays parked.
+- JF-843's announce-vanish attribution: the diag build (3a9a4dc3) is NOW
+  deployed; the attribution needs a live device repeat with a log tail
+  (Paolo's device round or any real invocation of the affected path).
+
+## Final wave (dispatched 02:15)
+
+- JF-849 (Cannot* family -> AllExpectedKeys ledger, C#) lane.
+- JF-852 (es-trio marker coverage + SKIP pins + the two new review
+  follow-ups, python) lane.
+- These ride the transcript's gate markers; each gets worker-level gates +
+  orchestrator merge inspection (micro-diffs; a full second batch review is
+  disproportionate and will be stated in the merge messages).
 
 ## Housekeeping state (reconciliation verdicts in, 20:01)
 
