@@ -48,3 +48,40 @@ PROTOCOL for whoever runs it (post-worker): deploy/roll the models, then re-prob
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+ROLL-DISCRIMINATION VERDICT (2026-10-09 06:50, after the post-A/B roll: 17-locale
+rebuild + sync 2 of 16/16 canaries):
+
+1. STAR WARS PAIR: SPLIT. "riproduci il film star wars" -> PlayVideoIntent
+   title=star wars GREEN (the roll flipped it: roll-nondeterminism, exactly
+   the memory's class). "suona il film star wars" -> PlaySongIntent
+   song=star wars STILL RED: content-or-carrier-specific. NOTE the semantic
+   angle: "suona" is the it-IT MUSIC verb (JF-402 era); routing a film ask
+   on a music verb to PlaySong is defensible NLU. The fixture pins
+   PlayVideo; the next round should DECIDE (re-pin to PlaySong with a
+   rationale, or strengthen the film-noun carrier) rather than blind-fix.
+2. MURDERBOT DIGIT SEASON: CONTENT-CAUSED (stable red across two builds):
+   "mettere la stagione 1 episodio 3 di murderbot" -> PlayEpisodeIntent
+   episode_number=3 filled, season_number EMPTY; the word form fills. The
+   digit delivery after "la stagione" does not slot-align. Fix direction:
+   add a digit-friendly sample shape or check the alignment of "la stagione
+   {season_number} episodio" against digit input; re-probe both forms.
+3. CANZONE STEAL: not re-probed at profile-nlu level this round (the e2e
+   simulate would need the outage-free window); the mechanism record stands
+   (routes PlayArtistSongsIntent musician='P!nk floyd'; the JF-690
+   arbitration prompts on the P!nk/PinkFloyd tie, handler-side blameless).
+   Re-probe with the next e2e window.
+4. ES-ES SUBJUNCTIVE: CONTENT-CAUSED (stable red across two builds):
+   "que reproduzca breaking bad temporada uno episodio tres" ->
+   AMAZON.FallbackIntent. The es season-less additions displaced the
+   JF-551 subjunctive wrapper's mass. Fix: strengthen the wrapper samples
+   (the es-ES PlayEpisode one-shot family) in the same change style as the
+   NextUp article round.
+
+GENERIC-WORD POST-FIX VERIFICATION (the related JF-823 item, verified green
+in the same window, recorded here for one-stop reading): the real carriers
+route PlayBook live - de-DE "spiele hörbuch" / "hör hörbuch" / "spiele das
+buch hörbuch", en-GB "play audiobook". The earlier NO_SELECTION probes
+("lies ein hörbuch", "read audiobook") used verbs the PlayBook family never
+carried in those locales - NOT regressions. Probe-phrase lesson: probe the
+model's OWN carriers, not translated guesses.
