@@ -182,3 +182,31 @@ trigger: if it goes green, mirror the three "que reproduzca" rows (plus a
 connector pin each) into es-MX.yaml and es-US.yaml in the same change
 style; if es-ES stays red, solve es-ES first and the siblings inherit the
 fix.
+
+MORNING BATTERY VERDICT (2026-10-09 08:15, after the third roll: 17/17
+rebuild + sync 16/16 canaries; the JF-844 branch-only round live):
+
+1. SUONA RE-PIN: GREEN (PlaySongIntent song=star wars, exactly the
+   re-pinned fixture). Item closed.
+2. SERIES-FIRST BARE DIGIT: GREEN ("riprodurre breaking bad stagione 1
+   episodio 3" fills season_number=1 episode_number=3; the new
+   bare-infinitive rows work for their shape). The digit mechanism itself
+   CAN fill; the failure is positional to the stagione-first order.
+3. MURDERBOT STAGIONE-FIRST DIGIT: STILL season_number=None 3/3 (stable
+   three builds). MITIGATED BY DESIGN though: with episode parsed and
+   season empty, the JF-814 elicit branch now ASKS the season instead of
+   silently playing next-up, so the UX is correct-by-ask (one extra turn
+   for this digit order). Residual accepted unless a sample shape that
+   fills stagione-first digits is ever found; JF-843's absolute-numbering
+   fix will rework this path anyway.
+4. ES-ES SUBJUNCTIVE: STILL FallbackIntent 3/3, AND the bare control
+   "reproduce breaking bad temporada uno episodio tres" now routes
+   PlayNextIntent song=breaking bad (a music-next steal of a plain episode
+   ask - new adjacent breakage, possibly roll-instability). The es-SE
+   episode-intent mass is unstable; the day session should run the
+   identical-content rebuild protocol on es-ES BEFORE any sample surgery,
+   and audit the season-less family's interaction with the es episode
+   intents as a set. NOT a night-fixable shape; the fixtures stay
+   red-marked.
+Standing guards all green in the same battery: the incident phrase, the
+article competition, sapiens.
