@@ -69,6 +69,8 @@
   "TrackByArtistSsml": "{0}<break time=\"200ms\"/>（{1}）",
   "TrackByArtistFromAlbumSsml": "{0}<break time=\"200ms\"/>（{1}）<break time=\"150ms\"/>アルバム {2} より",
   "SeasonEpisode": "{0}、シーズン {1}、エピソード {2}: {3}",
+  "PlayingEpisodeByAbsoluteNumber": "エピソード {0} はシーズン {1} のエピソード {2} です。再生中: {3}",
+  "PlayingEpisodeByAbsoluteNumberSsml": "エピソード {0} はシーズン {1} のエピソード {2} です。再生中: {3}",
   "SeriesTitle": "{0}: {1}",
   "TitleWithYear": "{0} ({1})",
   "SearchingMedia": "音楽を検索中...",

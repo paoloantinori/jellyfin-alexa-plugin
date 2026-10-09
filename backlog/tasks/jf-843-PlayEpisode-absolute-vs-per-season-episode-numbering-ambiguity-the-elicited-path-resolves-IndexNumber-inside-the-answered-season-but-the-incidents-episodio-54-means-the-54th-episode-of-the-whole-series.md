@@ -39,3 +39,88 @@ library is the maintainer's own (it-IT household), Sailor Moon stored as one
 series with 200 continuously-numbered episodes across seasons; the user asked
 "chiedi a mia collezione di mettere l'episodio 54 di sailor moon" (live
 2026-10-08, profile-nlu confirmed) and expects the 54th episode of the run.
+
+## Implementation notes (2026-10-09, shape (a) shipped)
+
+Fix shape (a), the ABSOLUTE FALLBACK ON PER-SEASON MISS, as decided by the
+orchestrator. Live incident context preserved from the filing: it-IT household,
+one 200-episode continuous Sailor Moon run stored per-season in Jellyfin
+(absolute 54 = S2E8), the user's phrase "chiedi a mia collezione di mettere
+l'episodio 54 di sailor moon" expects the 54th episode of the run.
+
+- Resolution order in the season-ed path (both the direct season-ed ask and the
+  post-elicit arrival, which share the same explicit-numbers code path because
+  the JF-614 slotValues echo threads episode_number through the season elicit;
+  pinned by HandleAsync_EpisodeNumberWithoutSeason_ElicitsSeasonNumber):
+  (1) per-season IndexNumber==N query as today; (2) on a miss,
+  TvNextUpService.GetEpisodeByAbsoluteNumberAsync fetches the Nth episode of the
+  run with a DB-paged air-order query (StartIndex N-1, Limit 1; one row fetched);
+  (3) the launch announces the mapping UNCONDITIONALLY (PlayingEpisodeByAbsoluteNumber,
+  args: asked number, resolved season, resolved episode, title), never gated on
+  AnnounceNowPlaying, because a silent substitution is the wrong-item class this
+  task closes; (4) an empty page (index beyond the run) keeps the existing
+  NotFoundEpisode Tell. Guards: n < 1 resolves null; season-0 specials and
+  virtual items are excluded from the absolute count (same exclusion the episode
+  auto-advance applies; specials are not part of the aired run a viewer counts).
+- Ranking helper decision: NO shared helper existed to reuse. The task guessed
+  "the ordering the queue uses for audiobooks" but the audiobook queue
+  deliberately ranks by SortName (JF-672, the composite was probe-REFUTED for
+  chapters); the (ParentIndexNumber, IndexNumber) composite exists as
+  QueueContinuationFetcher.AlbumTrackOrder (disc/track-named, album docs) and
+  inline in PlaybackNearlyFinishedEventHandler's candidatesQuery. Per the
+  simplify/altitude gate round, a per-domain NAMED constant was created:
+  QueueContinuationFetcher.TvEpisodeAirOrder beside its twins, consumed by
+  GetEpisodeByAbsoluteNumberAsync; the auto-advance's inline twin migration is
+  filed same-turn as JF-845 (that file sat outside this task's surface, another
+  worker active). The coupling is user-visible: the announced mapping derives
+  from this order, so a tiebreak added at one site only would make the spoken
+  mapping diverge from next-episode succession.
+- Announce key: MINTED, not reused. SeasonEpisode ({series}, season, episode:
+  {title}) names the destination but not the asked number, so the user never
+  hears the 54 -> S2E8 mapping the filing calls load-bearing. New key
+  PlayingEpisodeByAbsoluteNumber in all 17 locale files (each mirrors that
+  locale's SeasonEpisode season/episode nouns + NowPlaying verb prefix), plus
+  the Ssml twin carrying the same text verbatim (added in the code-review
+  round: the sibling announce families all carry twins, and a missing Ssml key
+  logs a locale-key WARNING on every absolute play before degrading to plain),
+  ledger row added to ResponseStringsTests.AllExpectedKeys (the JF-821
+  convention). validate_locales.py PASS, no new gaps.
+- Red-green: HandleAsync_PerSeasonMiss_AbsoluteIndexExists_PlaysAnnouncedAbsoluteEpisode
+  run against the UNMODIFIED handler first, red on both TFMs
+  (DirectiveMissingException: No directives of type "VideoAppLaunchDirective",
+  the old not-found Tell); then green after the fix. Guards: the per-season HIT
+  path never issues the absolute query (Times.Never pin) and keeps the plain
+  NowPlaying announce; the beyond-total case keeps the NotFoundEpisode Tell.
+  Test-harness note: the absolute query is DB-paged, so its mock must honor
+  StartIndex/Limit (a naive full-list mock silently picks S1E1 and the announce
+  asserts caught it).
+- Gate round (simplify, 4 angles): applied the log-block fold into the fallback
+  branch (the compiler needs the null check on the item, not the flag, for
+  CS8602), the named IsAbsoluteEpisodeQuery predicate across the three test
+  sites, the incident-story de-triplication (service doc is the single home),
+  the announce switched from hand-rolled PlainTextOutputSpeech to
+  SpeechBuilder.BuildOutputSpeech with the episode-announce title contract
+  (FormatEpisodeAnnounceTitle ?? Name; byte-identical in the 16 non-it-IT
+  locales since the formatter is it-IT+PremiereDate-gated), and the
+  TvEpisodeAirOrder constant. Skipped with reason: the BareEpisode-to-TestHelpers
+  hoist (cross-file drive-by into test files outside this task's surface); no
+  Ssml twin key minted (the emphasis ban holds and BuildOutputSpeech makes it a
+  locale-file-only addition if ever wanted). Efficiency angle clean (zero
+  hit-path cost). Honest trade surface (decided semantics, disclosed by the
+  announce): the trigger fires on ANY per-season miss, so a deliberately
+  per-season ask beyond one season's span ("season 3 episode 5" of a 4-episode
+  season) jumps to S1E5 with the mapping spoken; tightening that would ADD
+  special cases against the decided shape.
+- Code-review gate (high, 5 findings): F1 REJECTED (trigger breadth on a
+  nonexistent season is the decided semantics, the announce speaks the
+  resolved season so the substitution is audible; tightening adds special
+  cases). F2 APPLIED as documentation (the ParentIndexNumberNotEquals
+  NULL-season exclusion documented on the constant + the core, the
+  AlbumTrackOrder known-limit pattern). F3 APPLIED (trailing SortName axis on
+  TvEpisodeAirOrder pins (season, episode) ties so a replay launches and
+  ANNOUNCES the same title). F4 APPLIED (Ssml twins in all 17 locales, same
+  text verbatim; the per-play locale-key WARNING is gone). F5 APPLIED
+  (IsAbsoluteEpisodeQuery now pins the air-order constant BY REFERENCE, so a
+  same-shaped query with a different order cannot pass the pins).
+- Scope kept: no model files, no fixtures (nothing routed differently at the NLU
+  layer; the model side of the JF-814 flow is already live).

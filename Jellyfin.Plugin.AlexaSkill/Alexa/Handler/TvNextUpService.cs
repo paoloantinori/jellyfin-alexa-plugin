@@ -30,7 +30,10 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// (<see cref="GetNextUpEpisodesAsync"/>), the next-up episode launch
 /// (<see cref="PlayNextUpEpisodeAsync"/> with the JF-324 latest-episode fallback),
 /// the JF-583 recency core (<see cref="PlayLatestEpisodeAsync"/>, the explicit
-/// "latest episode" phrasing), and the resume-aware episode launch tail both
+/// "latest episode" phrasing), the JF-843 absolute-episode resolution
+/// (<see cref="GetEpisodeByAbsoluteNumberAsync"/>, the Nth episode of the whole
+/// run in air order, the per-season-miss fallback), and the resume-aware
+/// episode launch tail both
 /// cores share (<see cref="LaunchEpisodeAsync"/>). Consumed by
 /// PlayEpisodeIntentHandler and PlayNextEpisodeIntentHandler, the two handlers
 /// whose payoff is TV episodes;
@@ -182,6 +185,64 @@ public sealed class TvNextUpService
             "NextUp: GetNextUp took {ElapsedMs}ms for series '{SeriesName}' ({ResultCount} results)",
             nextUpSw.ElapsedMilliseconds, seriesName, nextUp?.Items?.Count ?? 0);
         return nextUp?.Items ?? Array.Empty<BaseItem>();
+    }
+
+    /// <summary>
+    /// JF-843 absolute-episode resolution: the Nth episode of the series' whole run
+    /// in season-then-episode air order, the fallback PlayEpisodeIntentHandler
+    /// invokes when the per-season query inside the ANSWERED season misses (the
+    /// incident: "l'episodio 54 di sailor moon" on a 200-episode continuous run
+    /// stored per-season, where absolute 54 is S2E8, so the per-season query
+    /// S2E54 finds nothing). Ordering is <see cref="QueueContinuationFetcher.TvEpisodeAirOrder"/>,
+    /// the named per-domain constant (the episode auto-advance queries the same
+    /// order inline; its migration is tracked as JF-845). Season-0 specials and
+    /// virtual items are excluded exactly like the auto-advance query (specials
+    /// are not part of the aired run a viewer counts; a virtual placeholder must
+    /// not occupy an absolute slot; see the constant's KNOWN LIMIT for the
+    /// NULL-season edge the same exclusion carries). BOUNDED: one row fetched
+    /// (StartIndex N-1, Limit 1), so an EMPTY result means the index exceeds the
+    /// run and the caller keeps its not-found. No watch-state filter: the Nth
+    /// episode of the run is the ask regardless of what was watched.
+    /// </summary>
+    /// <param name="libraryManager">The library manager (episode query).</param>
+    /// <param name="jellyfinUser">The Jellyfin user (query context; NOT a watch filter).</param>
+    /// <param name="series">The already-resolved series item.</param>
+    /// <param name="absoluteNumber">The 1-based absolute episode position (values below 1 resolve null).</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The Nth episode of the run in air order, or null when the index exceeds the series' episode count.</returns>
+    public async Task<BaseItem?> GetEpisodeByAbsoluteNumberAsync(
+        ILibraryManager libraryManager,
+        Jellyfin.Database.Implementations.Entities.User jellyfinUser,
+        BaseItem series,
+        int absoluteNumber,
+        CancellationToken cancellationToken)
+    {
+        if (absoluteNumber < 1)
+        {
+            return null;
+        }
+
+        var absoluteQuery = new InternalItemsQuery
+        {
+            User = jellyfinUser,
+            Recursive = true,
+            AncestorIds = new[] { series.Id },
+            IncludeItemTypes = new[] { BaseItemKind.Episode },
+            IsVirtualItem = false,
+            ParentIndexNumberNotEquals = 0,
+            OrderBy = QueueContinuationFetcher.TvEpisodeAirOrder,
+            StartIndex = absoluteNumber - 1,
+            Limit = 1,
+            DtoOptions = new DtoOptions(true)
+        };
+        _logger.LogDebug(
+            "AbsoluteEpisode: querying episode {AbsoluteNumber} of series '{SeriesName}' ({SeriesId}) in season-then-episode order",
+            absoluteNumber, series.Name, series.Id);
+        IReadOnlyList<BaseItem> matches = await RetryAsync(
+            () => libraryManager.GetItemList(absoluteQuery),
+            "GetEpisodeByAbsoluteNumber",
+            cancellationToken).ConfigureAwait(false);
+        return matches.FirstOrDefault();
     }
 
     /// <summary>

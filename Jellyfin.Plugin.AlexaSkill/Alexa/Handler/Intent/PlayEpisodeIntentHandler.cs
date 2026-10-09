@@ -195,6 +195,31 @@ public class PlayEpisodeIntentHandler : BaseHandler
         Logger.LogDebug("PlayEpisode: Jellyfin returned {EpisodeCount} episodes for season {Season}", episodes.Count, seasonNumber);
 
         BaseItem? episode = episodes.FirstOrDefault(e => e.IndexNumber == episodeNumber);
+        bool absoluteFallback = false;
+
+        if (episode == null)
+        {
+            // JF-843: the per-season miss may be an ABSOLUTE-numbering ask (a
+            // continuous run stored per-season; the full incident story lives on
+            // TvNextUpService.GetEpisodeByAbsoluteNumberAsync). Fall back to the
+            // Nth episode of the whole run in air order; the launch below
+            // ANNOUNCES the mapping (asked number + resolved season/episode),
+            // never a silent substitution. Covers the direct season-ed ask and
+            // the post-elicit arrival alike: the JF-614 slotValues echo carries
+            // the episode number through the season elicit, so both land here
+            // with both numbers parsed.
+            Logger.LogDebug(
+                "PlayEpisode: episode S{Season}E{Episode} not found per-season for series='{SeriesName}', trying absolute resolution",
+                seasonNumber, episodeNumber, seriesName);
+            episode = await TvNextUp.GetEpisodeByAbsoluteNumberAsync(_libraryManager, jellyfinUser!, series, episodeNumber, cancellationToken).ConfigureAwait(false);
+            absoluteFallback = episode != null;
+            if (episode != null)
+            {
+                Logger.LogInformation(
+                    "PlayEpisode: per-season S{Season}E{Episode} miss for series='{SeriesName}' resolved ABSOLUTELY to '{EpisodeName}' (S{ResolvedSeason}E{ResolvedEpisode})",
+                    seasonNumber, episodeNumber, seriesName, episode.Name, episode.ParentIndexNumber, episode.IndexNumber);
+            }
+        }
 
         if (episode == null)
         {
@@ -216,6 +241,23 @@ public class PlayEpisodeIntentHandler : BaseHandler
         // the AudioPlayer audio-only route instead of the screen-required refusal;
         // resumeTicks stays 0 (the JF-565 fresh-play pin: an explicit season/episode
         // ask is a relaunch-from-scratch).
+        // JF-843: the absolute fallback's announce is UNCONDITIONAL, unlike the
+        // cosmetic now-playing readout the AnnounceNowPlaying toggle governs: the
+        // mapping (the asked number IS the played season/episode) is load-bearing,
+        // a silent substitution is exactly the wrong-item class this task closes.
+        // The title rides the episode-announce family contract
+        // (FormatEpisodeAnnounceTitle, the anti double-number-read formatter); the
+        // Ssml twin carries the same text as the plain key (no markup needed).
+        IOutputSpeech? announce = absoluteFallback
+            ? SpeechBuilder.BuildOutputSpeech(
+                "PlayingEpisodeByAbsoluteNumberSsml",
+                "PlayingEpisodeByAbsoluteNumber",
+                locale,
+                episodeNumber.ToString(CultureInfo.InvariantCulture),
+                episode.ParentIndexNumber.GetValueOrDefault().ToString(CultureInfo.InvariantCulture),
+                episode.IndexNumber.GetValueOrDefault().ToString(CultureInfo.InvariantCulture),
+                SpeechBuilder.FormatEpisodeAnnounceTitle(episode, locale) ?? episode.Name)
+            : SpeechBuilder.BuildNowPlayingSpeech(episode.Name, locale, Launch.GetAnnounceNowPlaying(user));
         SkillResponse response = await Launch.BuildEpisodeLaunchResponseAsync(
             context,
             request,
@@ -224,7 +266,7 @@ public class PlayEpisodeIntentHandler : BaseHandler
             user,
             Launch.GetVideoAppLaunchUrl(episode, user),
             resumeTicks: 0,
-            SpeechBuilder.BuildNowPlayingSpeech(episode.Name, locale, Launch.GetAnnounceNowPlaying(user))).ConfigureAwait(false);
+            announce).ConfigureAwait(false);
 
         // JF-718: the now-playing writes follow the launch build and ride the
         // delivered-launch gate; the rationale lives on AttachNowPlayingIfLaunched

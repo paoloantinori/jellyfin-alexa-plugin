@@ -207,6 +207,8 @@
   "SearchingMediaTime": "Searching for media added {0}...",
   "SearchingPodcast": "Searching for your podcast...",
   "SeasonEpisode": "{0}, season {1}, episode {2}: {3}",
+  "PlayingEpisodeByAbsoluteNumber": "Episode {0} is season {1}, episode {2}. Now playing: {3}",
+  "PlayingEpisodeByAbsoluteNumberSsml": "Episode {0} is season {1}, episode {2}. Now playing: {3}",
   "SecondsOnly": "{0} seconds",
   "SeriesTitle": "{0}: {1}",
   "ServerUnavailable": "I'm having trouble reaching your media server right now. Please try again in a moment.",

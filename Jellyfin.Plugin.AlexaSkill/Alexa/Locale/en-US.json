@@ -69,6 +69,8 @@
   "TrackByArtistSsml": "{0}<break time=\"200ms\"/>by {1}",
   "TrackByArtistFromAlbumSsml": "{0}<break time=\"200ms\"/>by {1}<break time=\"150ms\"/>from {2}",
   "SeasonEpisode": "{0}, season {1}, episode {2}: {3}",
+  "PlayingEpisodeByAbsoluteNumber": "Episode {0} is season {1}, episode {2}. Now playing: {3}",
+  "PlayingEpisodeByAbsoluteNumberSsml": "Episode {0} is season {1}, episode {2}. Now playing: {3}",
   "SeriesTitle": "{0}: {1}",
   "TitleWithYear": "{0} ({1})",
   "SearchingMedia": "Searching for your music...",

@@ -71,6 +71,38 @@ internal static class QueueContinuationFetcher
     };
 
     /// <summary>
+    /// Season-then-episode air order (ParentIndexNumber = season, IndexNumber =
+    /// episode) for TV-episode queries, named per the per-domain named-order
+    /// convention of the two twins above (an album disc/track order and an
+    /// audiobook chapter order are deliberately separate constants, never one
+    /// cross-domain composite). Consumed by TvNextUpService.GetEpisodeByAbsoluteNumberAsync
+    /// (JF-843: the Nth episode of a series' whole run, the absolute-numbering
+    /// fallback for PlayEpisode's per-season miss). The episode auto-advance
+    /// (PlaybackNearlyFinishedEventHandler) queries the SAME order inline; its
+    /// migration onto this constant is tracked as a follow-up (JF-845) because
+    /// that file sat outside JF-843's surface. The coupling is user-visible: the
+    /// absolute fallback ANNOUNCES the mapping it derives from this order, so a
+    /// tiebreak added to one site only would make the spoken mapping diverge
+    /// from next-episode succession within one session. The trailing SortName
+    /// axis pins rows tying on (season, episode) (remux duplicates, multi-part
+    /// files sharing a number): without it the DB emits them in engine order,
+    /// so the same ask could launch and ANNOUNCE a different title on a replay.
+    /// KNOWN LIMIT (code-review JF-843, same shape the album twin documents):
+    /// ParentIndexNumberNotEquals-style season filters exclude NULL-season rows
+    /// (SQL NULL &lt;&gt; 0 is not true), so unseasoned episodes occupy no
+    /// absolute slot; ASC NULLS FIRST on SQLite rules out simply dropping the
+    /// filter (a stray unseasoned row would front-load the run), so malformed
+    /// unseasoned libraries mis-map absolute asks. Consumers excluding season 0
+    /// carry this edge.
+    /// </summary>
+    internal static readonly (ItemSortBy, SortOrder)[] TvEpisodeAirOrder =
+    {
+        (ItemSortBy.ParentIndexNumber, SortOrder.Ascending),
+        (ItemSortBy.IndexNumber, SortOrder.Ascending),
+        (ItemSortBy.SortName, SortOrder.Ascending)
+    };
+
+    /// <summary>
     /// Renders a sentinel-capable total (a result total or a continuation total)
     /// for log lines: the end-unknown sentinel
     /// (<see cref="Util.SearchService.UnknownTotal"/>) renders "end-unknown" instead

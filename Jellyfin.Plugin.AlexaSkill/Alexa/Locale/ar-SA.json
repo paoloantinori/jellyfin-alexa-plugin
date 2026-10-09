@@ -69,6 +69,8 @@
   "TrackByArtistSsml": "{0}<break time=\"200ms\"/>لـ {1}",
   "TrackByArtistFromAlbumSsml": "{0}<break time=\"200ms\"/>لـ {1}<break time=\"150ms\"/>من {2}",
   "SeasonEpisode": "{0}، الموسم {1}، الحلقة {2}: {3}",
+  "PlayingEpisodeByAbsoluteNumber": "الحلقة {0} هي الموسم {1}، الحلقة {2}. يتم الآن تشغيل: {3}",
+  "PlayingEpisodeByAbsoluteNumberSsml": "الحلقة {0} هي الموسم {1}، الحلقة {2}. يتم الآن تشغيل: {3}",
   "SeriesTitle": "{0}: {1}",
   "TitleWithYear": "{0} ({1})",
   "SearchingMedia": "جاري البحث عن الموسيقى...",
