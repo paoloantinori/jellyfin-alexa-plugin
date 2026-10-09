@@ -57,15 +57,9 @@ public class DeadMicSweepElicitTests
     private static Entities.User User() => TestHelpers.CreateTestUser();
 
     private static void AssertElicit(SkillResponse response, string slot, string intent)
-    {
-        Assert.NotNull(response);
-        TestHelpers.AssertSessionOpen(response, "a question must keep the session open or the mic never listens");
-        Assert.NotNull(response.Response.Reprompt);
-        var elicit = response.Response.Directives?.FirstOrDefault(d => d.Type == "Dialog.ElicitSlot") as ElicitSlotDirective;
-        Assert.NotNull(elicit);
-        Assert.Equal(slot, elicit!.SlotToElicit);
-        Assert.Equal(intent, elicit.UpdatedIntent.Name);
-    }
+        // The assertion sequence itself lives once on the shared helper (was the
+        // ninth per-file copy); this local wrapper only adapts the act-runner.
+        => TestHelpers.AssertElicitsSlot(response, slot, intent);
 
     private static async Task AssertElicitsAsync(
         Func<Task<SkillResponse>> act,

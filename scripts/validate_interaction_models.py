@@ -1370,9 +1370,10 @@ def check_play_episode_season_without_episode(all_models: dict[str, dict]) -> li
 
 def print_phase_warnings(warnings: list[str], all_clear: str) -> None:
     """Print one phase's findings: WARN lines, or the all-clear line when
-    empty. Caller contract: extend the sink BEFORE calling; a skipped
-    check never reaches here (the skip contract lives on
-    run_warning_phase, which this is the report half of).
+    empty. Purely a reporter: it never touches the sink (the caller owns
+    extending all_warnings, and owns that extension's ordering for the
+    summary block). A skipped check never reaches here (the skip contract
+    lives on run_warning_phase, which this is the report half of).
     """
     if warnings:
         for w in warnings:
@@ -1496,6 +1497,10 @@ def main() -> int:
         )
 
     # Phase 9: one-shot wrapper coverage (JF-614 warning check)
+    # Deliberately NOT on run_warning_phase: it is a silent title-less
+    # extension (no phase header, no all-clear line; findings surface only in
+    # the summary block) - the same divergence Phase 6 documents, kept inline
+    # because adopting the helper would add console output the phase never had.
     if all_models:
         wrapper_warnings = check_wrapper_coverage(all_models)
         all_warnings.extend(wrapper_warnings)
