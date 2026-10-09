@@ -36,6 +36,13 @@ public class LibrarySyncService
     private const int SyncTokenBudgetMinutes = 45;
 
     private const int MaxCatalogValues = 50000;
+
+    /// <summary>
+    /// How many dropped value names ride the JF-825 truncation warning: enough
+    /// to identify both dropped categories (a library-tail name and a seed
+    /// title) without flooding the log when a huge library drops a huge tail.
+    /// </summary>
+    private const int DroppedNameSampleSize = 5;
     private const string DevelopmentStage = "development";
     private const string DefaultLocale = "it-IT";
     private const int InterLocaleDelayMs = 2000;
@@ -62,6 +69,19 @@ public class LibrarySyncService
     /// limiting. Zero disables the delay outright.
     /// </summary>
     internal int? InterLocaleDelayMsForTest { get; set; }
+
+    /// <summary>
+    /// Test seam (null in production, the TypeLegEntryProbeForTest pattern):
+    /// overrides the per-type catalog-value cap so the JF-825 truncation pins
+    /// can drive a full sync past the cap without materializing fifty
+    /// thousand library items. Read by BOTH cap sites through
+    /// <see cref="EffectiveMaxCatalogValues"/>: the fetch limit and the
+    /// final-payload truncation, so the pinned cap governs the whole leg.
+    /// </summary>
+    internal int? MaxCatalogValuesForTest { get; set; }
+
+    /// <summary>The cap the leg actually enforces: the test seam, else the const.</summary>
+    private int EffectiveMaxCatalogValues => MaxCatalogValuesForTest ?? MaxCatalogValues;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="LibrarySyncService"/> class.
@@ -1007,7 +1027,7 @@ public class LibrarySyncService
             Recursive = true,
             IncludeItemTypes = new[] { itemKind },
             DtoOptions = new DtoOptions(true),
-            Limit = MaxCatalogValues,
+            Limit = EffectiveMaxCatalogValues,
             OrderBy = new[] { (ItemSortBy.SortName, SortOrder.Ascending) }
         };
 
@@ -1054,22 +1074,77 @@ public class LibrarySyncService
             .Select(i => (i.Id, i.Name))
             .Where(t => !string.IsNullOrWhiteSpace(t.Name));
 
+        // JF-825 (code-review F2): the pre-fix >= warning was the ONLY signal
+        // that the fetch itself had silently capped a huge library, and the
+        // honest drop warning below cannot fire for that state (nothing is
+        // dropped when the payload lands exactly at the cap, e.g. a seedless
+        // type like Series), so the saturation signal stands on its own.
+        // Worded as "reached", never "exceeded": a library of exactly cap
+        // items reads identically to a capped larger one.
+        if (items.Count >= EffectiveMaxCatalogValues)
+        {
+            _logger.LogWarning(
+                "Catalog {Type} fetch reached the {Limit}-value cap for user {UserId}; library items beyond the cap in sort order were not fetched",
+                catalogType,
+                EffectiveMaxCatalogValues,
+                user.Id);
+        }
+
         CatalogPayload payload = CatalogPayload.FromItems(catalogType, itemTuples, PhoneticSynonymGenerator.GenerateSynonyms, locale);
+
+        // The dedup signal (debug-logging policy): the per-type count the sync
+        // reports stays the FETCH count, so this is the only line that says how
+        // many same-named items collapsed into existing values (two editions of
+        // one book, the same title in two libraries).
+        int namedItemCount = itemTuples.Count();
+        if (payload.Values.Count < namedItemCount)
+        {
+            _logger.LogDebug(
+                "Catalog {Type} collapsed {DuplicateCount} same-named library items into existing values for user {UserId} (JF-825 dedup)",
+                catalogType,
+                namedItemCount - payload.Values.Count,
+                user.Id);
+        }
 
         // JF-541 phase 2: merge the committed models' static seed values into the
         // upload. The catalog supplier replaces the static type block at deploy
         // time (CatalogManager.InjectCatalogReferences), so without this the seed
         // titles absent from the library (Thriller, Queen, ...) vanish from the
         // deployed model. Library entries win on collision; no-op for seed-less types.
+        int libraryValueCount = payload.Values.Count;
         CatalogSeedEnrichment.MergeInto(payload, catalogType, PhoneticSynonymGenerator.GenerateSynonyms, locale, _logger);
 
-        if (payload.Values.Count >= MaxCatalogValues)
+        // JF-825: the cap binds the FINAL payload (library values + appended
+        // seed titles + the locale's generic word, after the FromItems
+        // same-name dedup), not just the fetch: the pre-fix code fetched with
+        // Limit=cap but appended the seeds AFTER the bounded fetch, so the
+        // payload sailed past the cap and the old warning asserted a
+        // truncation that never happened. The tail cut drops the generic word
+        // and seed titles first, then the library tail in reverse fetch order
+        // (payload order IS priority order, see CatalogPayload.TruncateTo).
+        int staticAppendedCount = payload.Values.Count - libraryValueCount;
+        IReadOnlyList<CatalogValue> droppedValues = payload.TruncateTo(EffectiveMaxCatalogValues);
+        if (droppedValues.Count > 0)
         {
+            // The warning fires exactly because entries were dropped and names
+            // them (the debug-logging policy): the composition split is exact
+            // because the static entries occupy the final staticAppendedCount
+            // positions, and the sample bounds the line length when a huge
+            // library drops a huge tail. The library leg of the split reads 0
+            // in every production state (the fetch Limit equals the cap, so
+            // library values alone cannot exceed it); a nonzero value is the
+            // canary for a fetch bound bypassed or a value source inserted
+            // before this cut.
+            int droppedStaticCount = Math.Min(staticAppendedCount, droppedValues.Count);
             _logger.LogWarning(
-                "Truncated {Type} catalog to {Limit} items for user {UserId}",
+                "Truncated {Type} catalog to {Limit} values for user {UserId}: dropped {DroppedCount} lowest-priority entries ({DroppedStaticCount} static seed values, {DroppedLibraryCount} library values); first dropped: {DroppedSample}",
                 catalogType,
-                MaxCatalogValues,
-                user.Id);
+                EffectiveMaxCatalogValues,
+                user.Id,
+                droppedValues.Count,
+                droppedStaticCount,
+                droppedValues.Count - droppedStaticCount,
+                string.Join(", ", droppedValues.Take(DroppedNameSampleSize).Select(v => v.Name.Value)));
         }
 
         string catalogId;

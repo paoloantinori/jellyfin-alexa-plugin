@@ -7,7 +7,6 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Catalog;
@@ -256,6 +255,9 @@ public static class CatalogSeedEnrichment
     /// builds for library items: truncated value, truncated synonyms, catalog id
     /// from a deterministic seed guid. Library values win on case-insensitive
     /// name collision (dedup key), and seeds are deduplicated among themselves.
+    /// The key is <see cref="CatalogValueFactory.CanonicalNameKey"/> on BOTH
+    /// sides (JF-825: the same key FromItems dedups library items by, so the
+    /// two dedup sites cannot drift apart).
     /// </summary>
     internal static void MergeSeeds(
         CatalogPayload payload,
@@ -265,14 +267,14 @@ public static class CatalogSeedEnrichment
         string locale)
     {
         var existing = payload.Values
-            .Select(v => v.Name.Value)
+            .Select(v => CatalogValueFactory.CanonicalNameKey(v.Name.Value))
             .Where(v => !string.IsNullOrWhiteSpace(v))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         foreach (string seed in seeds)
         {
-            string value = SlotValueHelper.Truncate(seed);
-            if (string.IsNullOrWhiteSpace(value) || !existing.Add(value))
+            string key = CatalogValueFactory.CanonicalNameKey(seed);
+            if (string.IsNullOrWhiteSpace(key) || !existing.Add(key))
             {
                 // Library wins on collision (its entry keeps the real Jellyfin id).
                 continue;

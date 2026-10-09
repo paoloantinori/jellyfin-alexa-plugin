@@ -21,6 +21,22 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Catalog;
 internal static class CatalogValueFactory
 {
     /// <summary>
+    /// The ONE canonical-name key the payload builders dedup on (JF-825): the
+    /// value the entry would carry (the 140-char truncation) TRIMMED, so
+    /// 'Sapiens' from a single-file leaf and 'Sapiens ' from scraped metadata
+    /// collapse to one catalog value, and the upload side's notion of the same
+    /// name agrees with the ER read side (SlotValueHelper.GetCanonicalValues
+    /// already dedups authority names by Trim). Case-insensitivity lives in
+    /// the callers' set comparer, which stays OrdinalIgnoreCase. Shared by
+    /// CatalogPayload.FromItems (library-vs-library) and
+    /// CatalogSeedEnrichment.MergeSeeds (seed-vs-seed and seed-vs-library), so
+    /// the key cannot drift between the two dedup sites.
+    /// </summary>
+    /// <param name="name">The raw, untruncated display name.</param>
+    /// <returns>The trimmed canonical key for set membership.</returns>
+    internal static string CanonicalNameKey(string name) => SlotValueHelper.Truncate(name).Trim();
+
+    /// <summary>
     /// Builds one catalog entry under the shared construction contract. For the
     /// enriched types the JF-684 append is verified structurally (see
     /// AssertArtistEnrichment), so a drifted enrichment path fails the sync
