@@ -128,6 +128,11 @@ public class Registrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton<IResponseInterceptor, LoggingResponseInterceptor>();
         serviceCollection.AddSingleton<IResponseInterceptor, MetricsResponseInterceptor>();
         serviceCollection.AddSingleton<IResponseInterceptor, ResponseBodyLoggingInterceptor>();
+        // JF-846: registered LAST so it executes FIRST in the reverse-order
+        // response chain (see the interceptor's doc comment): the prefix must
+        // land before ResponseBodyLoggingInterceptor's snapshot so the logged
+        // body shows what the user heard.
+        serviceCollection.AddSingleton<IResponseInterceptor, SkillMaintenanceInterceptor>();
 
         // Request pipeline
         serviceCollection.AddSingleton<RequestPipeline>();

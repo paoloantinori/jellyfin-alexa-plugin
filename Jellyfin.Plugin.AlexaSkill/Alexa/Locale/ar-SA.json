@@ -290,6 +290,7 @@
   "FlowCancelled": "حسناً، أوقفت البحث.",
   "ElicitTrapEscaped": "كنت ما زلت أنتظر الإجابة على سؤال. لقد ألغيت الطلب؛ يمكنك تكرار أمرك.",
   "SkillWarmingUp": "لا أزال أستعد. حاول مرة أخرى بعد دقيقة.",
+  "SkillUpdatingPrefix": "أقوم بتحديث المهارة، لحظة من فضلك...",
   "PauseSessionSpeech": "تم الإيقاف المؤقت.",
   "PauseSessionReprompt": "أخبرني عندما تريد الاستئناف.",
   "AddedToPlaylist": "تمت إضافة {0} إلى قائمة التشغيل {1}.",

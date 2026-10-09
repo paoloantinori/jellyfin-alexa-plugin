@@ -15,8 +15,9 @@ using RadioModeState = Jellyfin.Plugin.AlexaSkill.Alexa.RadioModeState;
 // the sequential classes-within-collection foreach is
 // TestCollectionRunner.RunTestClassesAsync). The "Plugin" collection below is such an
 // exclusive collection: every class touching Plugin.Instance (static singleton), QueueContinuationStore,
-// RadioModeState, PlaybackReportOrdering, or the VideoAudioController encode-gate/registry
-// statics MUST carry [Collection("Plugin")] and is thereby serialized against all of them
+// RadioModeState, PlaybackReportOrdering, the VideoAudioController encode-gate/registry
+// statics, or SkillMaintenanceScope (JF-846: opened by every real
+// SyncUserLibraryAsync call) MUST carry [Collection("Plugin")] and is thereby serialized against all of them
 // and never overlaps the parallel phase. Classes WITHOUT a collection attribute must touch
 // none of those statics (the JF-792 audit of all previously-uncollected classes; benign
 // exceptions: PluginTempDirSweeper's ConcurrentBag registration, read-only IL/locale-file

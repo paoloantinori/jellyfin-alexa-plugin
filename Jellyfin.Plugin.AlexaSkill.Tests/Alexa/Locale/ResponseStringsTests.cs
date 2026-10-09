@@ -28,6 +28,7 @@ public class ResponseStringsTests
         "NoMoreMatches", "DisambiguateReprompt", "UnexpectedYes",
         "StreamTokenNotConfigured",
         "SkillWarmingUp",
+        "SkillUpdatingPrefix",
         "VideoStoppedByVoice", "CannotPauseVideoByVoice"
     };
 

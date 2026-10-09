@@ -290,6 +290,7 @@
   "FlowCancelled": "Okay, ich habe die Suche abgebrochen.",
   "ElicitTrapEscaped": "Ich habe noch auf die Antwort auf eine Frage gewartet. Ich habe die Anfrage abgebrochen; du kannst den Befehl wiederholen.",
   "SkillWarmingUp": "Ich bin noch beim Vorbereiten. Bitte versuche es in einer Minute erneut.",
+  "SkillUpdatingPrefix": "Ich aktualisiere den Skill, einen Moment Geduld...",
   "PauseSessionSpeech": "Pausiert.",
   "PauseSessionReprompt": "Sag mir einfach, wann du weiterhören möchtest.",
   "AddedToPlaylist": "{0} zur Playlist {1} hinzugefügt.",

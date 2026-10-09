@@ -956,6 +956,14 @@ public class ConfigurationController : ControllerBase
         try
         {
             using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(10));
+
+            // JF-846: the model PUT loop below is a maintenance window (the
+            // pipeline's SkillUpdatingPrefix reads it); the using closes it on
+            // every exit path of the rebuild.
+            using var maintenanceScope = SkillMaintenanceScope.Open(
+                $"custom-model rebuild ({localeFilter ?? "all locales"})",
+                _logger);
+
             var result = await _redeployer.RedeployAsync(
                 pluginUser!,
                 pluginUser!.UserSkill!.InvocationName,

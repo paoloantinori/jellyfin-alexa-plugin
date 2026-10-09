@@ -138,6 +138,15 @@ public class LibrarySyncService
             return result;
         }
 
+        // JF-846: the maintenance window this sync opens (and every later exit
+        // path closes via the using) drives the pipeline's SkillUpdatingPrefix:
+        // spoken responses during the sync say the skill is updating. Opened
+        // after the no-work skip guards so a window exists only while real
+        // SMAPI maintenance is in flight; in a multi-user run the window
+        // therefore closes during the task's inter-user delay gaps (nothing is
+        // being maintained there, so the prefix honestly rests too).
+        using var maintenanceScope = SkillMaintenanceScope.Open($"catalog sync (user {user.Id})", _logger);
+
         // JF-544: refresh up front unless comfortably more than the whole-sync budget
         // remains; the per-leg re-read and 401 retry below are the second and third
         // lines of defense.
