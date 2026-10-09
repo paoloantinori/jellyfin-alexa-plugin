@@ -10890,7 +10890,7 @@ Placeholder legend:
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (451 phrases across 66 commands):
+Complete phrase list (458 phrases across 66 commands):
 
 #### Play music
 
@@ -11066,6 +11066,13 @@ Complete phrase list (451 phrases across 66 commands):
 - `reproduce la temporada <número de temporada> episodio <número de episodio> de <nombre de la serie>`
 - `reproduce <nombre de la serie> temporada <número de temporada> episodio <número de episodio>`
 - `ver temporada <número de temporada> episodio <número de episodio> de <nombre de la serie>`
+- `ver la temporada <número de temporada> episodio <número de episodio> de <nombre de la serie>`
+- `ver <nombre de la serie> temporada <número de temporada> episodio <número de episodio>`
+- `pon la temporada <número de temporada> episodio <número de episodio> de <nombre de la serie>`
+- `pon <nombre de la serie> temporada <número de temporada> episodio <número de episodio>`
+- `quiero ver la temporada <número de temporada> episodio <número de episodio> de <nombre de la serie>`
+- `quiero ver <nombre de la serie> temporada <número de temporada> episodio <número de episodio>`
+- `el episodio <número de episodio> de la temporada <número de temporada> de <nombre de la serie>`
 - `reproduzca <nombre de la serie> temporada <número de temporada> episodio <número de episodio>`
 - `reproduzca la temporada <número de temporada> episodio <número de episodio> de <nombre de la serie>`
 - `reproduce el episodio <número de episodio> de <nombre de la serie>`
@@ -11574,7 +11581,7 @@ Placeholder legend:
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (448 phrases across 66 commands):
+Complete phrase list (455 phrases across 66 commands):
 
 #### Play music
 
@@ -11752,6 +11759,13 @@ Complete phrase list (448 phrases across 66 commands):
 - `reproduce la temporada <número de temporada> episodio <número de episodio> de <nombre de la serie>`
 - `reproduce <nombre de la serie> temporada <número de temporada> episodio <número de episodio>`
 - `ver temporada <número de temporada> episodio <número de episodio> de <nombre de la serie>`
+- `ver la temporada <número de temporada> episodio <número de episodio> de <nombre de la serie>`
+- `ver <nombre de la serie> temporada <número de temporada> episodio <número de episodio>`
+- `pon la temporada <número de temporada> episodio <número de episodio> de <nombre de la serie>`
+- `pon <nombre de la serie> temporada <número de temporada> episodio <número de episodio>`
+- `quiero ver la temporada <número de temporada> episodio <número de episodio> de <nombre de la serie>`
+- `quiero ver <nombre de la serie> temporada <número de temporada> episodio <número de episodio>`
+- `el episodio <número de episodio> de la temporada <número de temporada> de <nombre de la serie>`
 - `reproduzca <nombre de la serie> temporada <número de temporada> episodio <número de episodio>`
 - `reproduzca la temporada <número de temporada> episodio <número de episodio> de <nombre de la serie>`
 - `reproduce el episodio <número de episodio> de <nombre de la serie>`
@@ -12255,7 +12269,7 @@ Placeholder legend:
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (436 phrases across 66 commands):
+Complete phrase list (443 phrases across 66 commands):
 
 #### Play music
 
@@ -12426,6 +12440,13 @@ Complete phrase list (436 phrases across 66 commands):
 - `reproduce la temporada <número de temporada> episodio <número de episodio> de <nombre de la serie>`
 - `reproduce <nombre de la serie> temporada <número de temporada> episodio <número de episodio>`
 - `ver temporada <número de temporada> episodio <número de episodio> de <nombre de la serie>`
+- `ver la temporada <número de temporada> episodio <número de episodio> de <nombre de la serie>`
+- `ver <nombre de la serie> temporada <número de temporada> episodio <número de episodio>`
+- `pon la temporada <número de temporada> episodio <número de episodio> de <nombre de la serie>`
+- `pon <nombre de la serie> temporada <número de temporada> episodio <número de episodio>`
+- `quiero ver la temporada <número de temporada> episodio <número de episodio> de <nombre de la serie>`
+- `quiero ver <nombre de la serie> temporada <número de temporada> episodio <número de episodio>`
+- `el episodio <número de episodio> de la temporada <número de temporada> de <nombre de la serie>`
 - `reproduzca <nombre de la serie> temporada <número de temporada> episodio <número de episodio>`
 - `reproduzca la temporada <número de temporada> episodio <número de episodio> de <nombre de la serie>`
 - `reproduce el episodio <número de episodio> de <nombre de la serie>`

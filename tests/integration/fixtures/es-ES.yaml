@@ -281,6 +281,31 @@ tests:
       season_number: {}
       episode_number: {}
 
+  # JF-844 densification pins (2026-10-09): the STOLEN SHAPES that motivated
+  # the season-ed family's densification (see the template header). Live,
+  # stable across identical-content rebuilds, content-caused: "reproduce
+  # breaking bad temporada uno episodio tres" routed PlaySongIntent with
+  # song="breaking bad temporada 1" and later PlayNextIntent (the music-next
+  # steal of the 2026-10-09 morning battery), "pon ..." had no anchored
+  # sample at all. Both pin the SPOKEN text for series_name (the pinning
+  # convention) and presence-pin both numbers (the murderbot class, see the
+  # connector pin above). Red until the JF-844 densification model roll.
+  - utterance: "reproduce breaking bad temporada uno episodio tres"
+    expected_intent: PlayEpisodeIntent
+    expected_slots:
+      series_name:
+        value: "breaking bad"
+      season_number: {}
+      episode_number: {}
+
+  - utterance: "pon breaking bad temporada uno episodio tres"
+    expected_intent: PlayEpisodeIntent
+    expected_slots:
+      series_name:
+        value: "breaking bad"
+      season_number: {}
+      episode_number: {}
+
   # -------------------------------------------------------------------------
   # 19. BrowseLibraryIntent (browse_category)
   # -------------------------------------------------------------------------

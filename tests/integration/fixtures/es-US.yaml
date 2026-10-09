@@ -60,3 +60,20 @@ tests:
         value: "breaking bad"
       season_number: {}
       episode_number: {}
+
+  # JF-844 densification pin (2026-10-09): the STOLEN SHAPE class that
+  # motivated the season-ed family's densification in all three es locales
+  # (see the es-ES template header for the live steal evidence). Mirrors
+  # es-ES's series-first pin with both numbers presence-pinned (the
+  # murderbot class, see the es-ES fixture). CAVEAT: if the numbers read
+  # inconsistently after the roll (the JF-406 class, see the JF-551 note
+  # above), apply this locale's imperative-not-pinned convention
+  # (skip_reason with the probe evidence), never a silent weakening. Red
+  # until the roll.
+  - utterance: "reproduce breaking bad temporada uno episodio tres"
+    expected_intent: PlayEpisodeIntent
+    expected_slots:
+      series_name:
+        value: "breaking bad"
+      season_number: {}
+      episode_number: {}

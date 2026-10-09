@@ -10,6 +10,11 @@
 #
 # Run: python3 scripts/generate_interaction_model.py es-US
 #
+# JF-844 densification (2026-10-09): PlayEpisodeIntent's SEASON-ED family
+# densified 5 -> 12 rows, identical to es-ES's densification (see its
+# header note for the live steal evidence and register rationale); the
+# connector-row divergence is recorded in the list below.
+#
 # JF-551 (2026-10-04): PlayEpisodeIntent gained the SUBJUNCTIVE wrapper
 # family (reproduzca, both word orders), identical to es-ES's (see its
 # header note for the wrapper morphology and probe evidence). es-US's own
@@ -18,7 +23,7 @@
 # it (live-observed; the five-way divergence list below is unchanged).
 #
 # es-US diverges from es-ES (otherwise identical: intent sequence,
-# key orders, types, dialog, Mood block) in exactly five ways:
+# key orders, types, dialog, Mood block) in exactly six ways:
 # - FindSongIntent (12 samples) and FindSongByArtistIntent (12 since
 #   the JF-399 2026-09-26 parity pass) carry the ENGLISH sample sets,
 #   byte-equal to en-GB's, not Spanish.
@@ -32,12 +37,20 @@
 # - BrowseLibrary drops the three leading samples "{browse_category}"
 #   / "solo {browse_category}" / "quiero {browse_category}", keeping
 #   the five verb-carried ones (es-ES keeps all 8, including the bare
-#   "{browse_category}" sample).
+#   "{browse_category}" sample), and swaps the genre-filter carrier:
+#   "muéstrame géneros {filter}" (es-ES) is "lista géneros {filter}"
+#   here.
 # - FollowMe drops "transferir la música" (4 samples); PlayPlaylist
 #   drops 5, keeping 7 of es-ES's 12; Recommend drops
 #   "sugiere {media_type}" (6 samples).
 # - SeriesName's last entry is El Señor de los Cielos (es-ES: El
 #   Internado).
+# - PlayEpisodeIntent: es-ES additionally carries the three JF-844 "que
+#   reproduzca" connector rows; they stay es-ES-only pending the es-ES
+#   connector probe going green (the JF-844 task's recorded follow-up;
+#   es-ES stayed red in the 2026-10-09 morning battery, so the siblings
+#   inherit the rows after es-ES is solved). The JF-844 season-ed
+#   densification is shared by all three es locales.
 # Everything else is verbatim es-ES: the AMAZON.Musician built-in
 # musician slots (no JellyfinArtist type, no JF-415 seed), the 8-type
 # roster, the absent modelConfiguration, the no-prompts dialog. See
@@ -412,6 +425,15 @@ intents:
       - reproduce la temporada {season_number} episodio {episode_number} de {series_name}
       - reproduce {series_name} temporada {season_number} episodio {episode_number}
       - ver temporada {season_number} episodio {episode_number} de {series_name}
+      # JF-844 densification (see the header note): identical rows to
+      # es-ES's densification; all three slots on every row.
+      - ver la temporada {season_number} episodio {episode_number} de {series_name}
+      - ver {series_name} temporada {season_number} episodio {episode_number}
+      - pon la temporada {season_number} episodio {episode_number} de {series_name}
+      - pon {series_name} temporada {season_number} episodio {episode_number}
+      - quiero ver la temporada {season_number} episodio {episode_number} de {series_name}
+      - quiero ver {series_name} temporada {season_number} episodio {episode_number}
+      - el episodio {episode_number} de la temporada {season_number} de {series_name}
       # JF-551: the one-shot wrapper's subjunctive payload; both word
       # orders, mirroring the imperative carriers (see header).
       - reproduzca {series_name} temporada {season_number} episodio {episode_number}
