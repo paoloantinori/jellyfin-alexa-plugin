@@ -12,6 +12,13 @@
 #
 # Run: python3 scripts/generate_interaction_model.py es-ES
 #
+# JF-844 (2026-10-09): PlayEpisodeIntent gained the CONNECTOR-RESIDUE
+# subjunctive twins ("que reproduzca ...", both word orders + the
+# season-less twin). Live verdict after the JF-814 roll: the residue
+# form fell to AMAZON.FallbackIntent across two builds (the season-less
+# additions displaced the JF-551 wrapper family's mass); the fixture
+# note had pre-recorded this path (the it-IT "Di" connector precedent).
+#
 # JF-551 (2026-10-04): PlayEpisodeIntent gained the SUBJUNCTIVE wrapper
 # family (reproduzca, both word orders). The es one-shot wrapper is
 # "pide a {inv} que + subjunctive", so the payload arrives as
@@ -456,6 +463,12 @@ intents:
       - reproduce el episodio {episode_number} de {series_name}
       - ver el episodio {episode_number} de {series_name}
       - reproduzca el episodio {episode_number} de {series_name}
+      # JF-844: the connector-residue subjunctive twins ("que reproduzca ...",
+      # both word orders + the season-less twin, mirroring the bare subjunctive
+      # family); live verdict and rationale in the header's JF-844 note.
+      - que reproduzca {series_name} temporada {season_number} episodio {episode_number}
+      - que reproduzca la temporada {season_number} episodio {episode_number} de {series_name}
+      - que reproduzca el episodio {episode_number} de {series_name}
   # JF-583: the próximo/último carriers are slotted ({episode_position},
   # custom EpisodePosition type): próximo keeps NextUp, último resolves by
   # recency; 'continúa viendo' carries no position (NextUp by design).

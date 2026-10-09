@@ -208,11 +208,21 @@ tests:
   # JF-541 (2026-09-11): steal gone on the deployed catalog-supplied model;
   # probe 2/2 'suona star wars' -> PlaySongIntent song='star wars' (same
   # pre-JF-470 class as 'Riproduci star wars' above). Pin updated.
-  # trainer re-roll 2026-09-20 (skill recreation): same steal class; qualified video form
+  # trainer re-roll 2026-09-20 (skill recreation): the qualified film form
+  # routed PlayVideoIntent then; pinned so.
+  # JF-844 DECISION (2026-10-09, stable red across two builds while the
+  # 'riproduci il film star wars' twin flipped green on the roll): re-pinned
+  # to PlaySongIntent. 'Suona' is the it-IT music-performance verb; the
+  # JF-504 film-noun carriers deliberately exclude it (Riproduci/Metti only,
+  # "unidiomatic with a film object") and the JF-436 probes show PlayVideo is
+  # never selected on Suona. Every natural film ask routes PlayVideo green
+  # ('riproduci il film star wars' above, 'metti il film matrix', the
+  # guardare family), so the music-verb + film-noun cross is the JF-436
+  # non-endorsement class (section note above), not a carrier gap to
+  # strengthen.
   - utterance: "suona il film star wars"
-    expected_intent: PlayVideoIntent
+    expected_intent: PlaySongIntent
     expected_slots:
-      title: {}
       song: {}
 
   # -------------------------------------------------------------------------
@@ -517,6 +527,34 @@ tests:
     expected_intent: PlayEpisodeIntent
     expected_slots:
       series_name: {}
+      season_number: {}
+      episode_number: {}
+
+  # JF-844: the DIGIT delivery of the BARE-infinitive numbers-first form (the
+  # wrapper remainder the e2e speaks; live 2026-10-09, stable across two
+  # builds: PlayEpisodeIntent selected, episode_number=3 filled, season_number
+  # EMPTY; the digit after "la stagione" does not slot-align on the
+  # generalized verb prefix, while the word form fills all slots). The
+  # template now carries explicit bare-infinitive rows (the PlaySong
+  # aggiungere-class anchor precedent). Red until the JF-844 model roll;
+  # probe protocol in backlog JF-844. series_name left unpinned: catalog
+  # fill is wiring-state dependent for a non-seed series (JF-552 family);
+  # the two NUMBER slots are the incident surface, and episode_number is
+  # pinned too so a fix that lands the season while breaking the episode
+  # still fails here.
+  - utterance: "mettere la stagione 1 episodio 3 di murderbot"
+    expected_intent: PlayEpisodeIntent
+    expected_slots:
+      season_number: {}
+      episode_number: {}
+
+  # JF-844 word-form contrast twin (live-green in the 2026-10-09 03:50
+  # probes): the diagnosis rests on word-fills vs digit-does-not, so the
+  # word form is pinned beside the digit pin to catch a fix that lands the
+  # digits while breaking the words.
+  - utterance: "mettere la stagione uno episodio tre di murderbot"
+    expected_intent: PlayEpisodeIntent
+    expected_slots:
       season_number: {}
       episode_number: {}
 

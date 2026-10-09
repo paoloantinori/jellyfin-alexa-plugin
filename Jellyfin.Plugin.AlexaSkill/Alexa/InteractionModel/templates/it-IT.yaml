@@ -1313,6 +1313,21 @@ templates:
       # ("chiedi a mia collezione di mettere la stagione 1 episodio 1 di X").
       - "{imperative} la stagione {season_number} episodio {episode_number} di {series_name}"
       - "{infinitive} la stagione {season_number} episodio {episode_number} di {series_name}"
+      # JF-844: BARE-infinitive twins of the numbers-first family. Live
+      # 2026-10-09, stable across two builds: the wrapper-remainder tail
+      # "mettere la stagione 1 episodio 3 di murderbot" selected PlayEpisodeIntent
+      # with episode_number filled but season_number EMPTY; the digit delivery
+      # after "la stagione" does not slot-align on the generalized verb prefix
+      # (the word form "stagione uno episodio tre" fills all slots). Same class
+      # as the PlaySong noun-less bare infinitive (live battery 2026-09-24: the
+      # trainer does not generalize riproduci->riprodurre for an unanchored
+      # shape): explicit rows give the trainer the alignment anchor. Four verbs,
+      # the PlaySong/PlayBook bare-infinitive set (pleiare rides only the
+      # vocabulary products).
+      - riprodurre la stagione {season_number} episodio {episode_number} di {series_name}
+      - suonare la stagione {season_number} episodio {episode_number} di {series_name}
+      - mettere la stagione {season_number} episodio {episode_number} di {series_name}
+      - ascoltare la stagione {season_number} episodio {episode_number} di {series_name}
       # JF-549: series-FIRST infinitive twin; the one-shot wrapper presents the
       # series up front and the series-last forms alone dropped series_name (live 2026-09-12).
       - "{infinitive} {series_name} stagione {season_number} episodio {episode_number}"

@@ -267,11 +267,19 @@ tests:
   # glued "que reproduzca {series}" (live-observed); if it stays red after
   # the bare-family deploy, the connector form needs its own sample (the
   # it-IT "Di" precedent), decided on a healthy simulate window.
+  # JF-844 (2026-10-09): that pre-recorded path is taken; the connector
+  # "que reproduzca" twins landed in the template (rationale in its header
+  # note). Red until the JF-844 model roll; probe protocol in backlog JF-844.
+  # The number slots are pinned like the bare-form sibling above: the
+  # murderbot incident class is "intent selected, numbers empty", which a
+  # series-only pin would read green through.
   - utterance: "que reproduzca breaking bad temporada uno episodio tres"
     expected_intent: PlayEpisodeIntent
     expected_slots:
       series_name:
         value: "breaking bad"
+      season_number: {}
+      episode_number: {}
 
   # -------------------------------------------------------------------------
   # 19. BrowseLibraryIntent (browse_category)
