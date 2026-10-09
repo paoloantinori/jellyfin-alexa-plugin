@@ -104,14 +104,39 @@ section (direct edit or MCP notesAppend).
   deployed; the attribution needs a live device repeat with a log tail
   (Paolo's device round or any real invocation of the affected path).
 
-## Final wave (dispatched 02:15)
+## Final wave COMPLETE (03:00) - NIGHT CLOSED
 
-- JF-849 (Cannot* family -> AllExpectedKeys ledger, C#) lane.
-- JF-852 (es-trio marker coverage + SKIP pins + the two new review
-  follow-ups, python) lane.
-- These ride the transcript's gate markers; each gets worker-level gates +
-  orchestrator merge inspection (micro-diffs; a full second batch review is
-  disproportionate and will be stated in the merge messages).
+- JF-852 merged f62de841 (the four es-trio lint follow-ups incl. the F2
+  behavior fix, sabotage-demoed; validator 291 unchanged; pytest 36/36).
+- JF-849 merged 1d6954f8 (the 10-key Cannot* family ledgered 17/17, ZERO
+  locale gaps, plus the self-checking subset fact; suite 5609/5609 both
+  TFMs twice). The derive-the-whole-ledger idea recorded as record-only
+  (JF-822 convention) in the task.
+- JF-851 merged ebf728e3 (PerfGuard two-stopwatch message + 3 review-hardened
+  pins; filtered runs green both TFMs; scope argument stated).
+- All three flipped Done.
+
+## What remains and why (the honest wind-down)
+
+- PAOLO: the 1.0 device round (gates JF-811's tag), JF-405's checklist,
+  JF-399's three product calls, JF-844's es-steal maintainer call, JF-619/
+  623/625 device confirmations, JF-843's announce attribution (diag build
+  IS now deployed; needs one live repeat with a log tail), JF-624's
+  tap-list items (unstarted by choice, out of critical path).
+- EXTERNAL: JF-595 (Amazon's Q3 fix watch).
+- PARKED PENDING TRIGGER: JF-848 (cap saturation; largest synced type at
+  2.3% of cap), JF-770 (trainer anomaly, 4 rebuilds / 3 DLL generations).
+- DISPATCHABLE REMAINDERS left for fresh sessions ON PURPOSE: the
+  video-audio refactor LOWs (JF-648/775/787/789/798/799/803/812 - each is
+  a real design-bearing refactor, not a 3am micro-task), JF-772 (the hard
+  swap-thrash flake), JF-529 (SDK 9 toolchain drop), JF-853 (pathological
+  marker hand-treatment), JF-854 (census script as a tool), JF-855 (the
+  generator mirror-directive design), JF-771 (hi-IN, needs live probe
+  waves), JF-818's three in-file follow-ups, JF-800's follow-ups. The
+  cron is deleted at close; these are the morning's menu.
+
+Deployed on minix: 0e7e91e2 (the night's main through the flip batch;
+the final three micro-merges ride the NEXT deploy - they are test-only).
 
 ## Housekeeping state (reconciliation verdicts in, 20:01)
 

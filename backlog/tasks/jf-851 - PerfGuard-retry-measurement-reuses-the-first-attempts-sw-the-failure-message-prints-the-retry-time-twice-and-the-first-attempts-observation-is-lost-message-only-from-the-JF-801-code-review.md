@@ -4,9 +4,10 @@ title: >-
   PerfGuard retry measurement reuses the first attempt's sw: the failure message
   prints the retry time twice and the first attempt's observation is lost
   (message-only, from the JF-801 code review)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-09 21:11'
+updated_date: '2026-10-09 23:50'
 labels:
   - diagnostics
   - tech-debt

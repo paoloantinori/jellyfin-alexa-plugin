@@ -4,10 +4,10 @@ title: >-
   es-trio lint follow-ups: the unlisted-es-locale coverage warning lacks its
   JF-844.1 marker (and the marker test doesn't cover that arm), and the three
   skip tests never pin the load-bearing SKIP print
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-09 21:15'
-updated_date: '2026-10-09 23:04'
+updated_date: '2026-10-09 23:28'
 labels:
   - tooling
   - test-coverage

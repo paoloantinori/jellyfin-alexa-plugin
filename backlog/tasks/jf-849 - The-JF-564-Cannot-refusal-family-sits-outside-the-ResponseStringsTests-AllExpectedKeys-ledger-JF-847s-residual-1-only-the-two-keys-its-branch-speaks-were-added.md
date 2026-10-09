@@ -4,9 +4,10 @@ title: >-
   The JF-564 Cannot* refusal family sits outside the ResponseStringsTests
   AllExpectedKeys ledger (JF-847's residual #1: only the two keys its branch
   speaks were added)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-09 20:03'
+updated_date: '2026-10-09 23:41'
 labels:
   - test-coverage
   - locales
@@ -42,3 +43,9 @@ Deliverable: enumerate the full Cannot* family actually spoken by handlers, veri
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+MERGE NOTE (2026-10-10 02:45, orchestrator): merged as 1d6954f8 after independent verification. The worker's considered-and-deferred alternative (deriving the WHOLE AllExpectedKeys ledger from the en-US resource walk, a JF-821-mechanism refactor) is recorded here as the JF-822-convention record-only row: the ledger is a curated roster by convention, the acute Cannot* family is NOW mechanically derived via the new self-checking fact, and the generalization becomes due only if a second family shows the same drift shape.
+<!-- SECTION:NOTES:END -->
