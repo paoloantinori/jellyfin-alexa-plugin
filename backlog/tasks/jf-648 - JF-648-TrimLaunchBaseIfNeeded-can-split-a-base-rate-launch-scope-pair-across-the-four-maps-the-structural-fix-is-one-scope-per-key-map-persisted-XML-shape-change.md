@@ -4,9 +4,10 @@ title: >-
   JF-648 - TrimLaunchBaseIfNeeded can split a base/rate launch-scope pair across
   the four maps; the structural fix is one scope-per-key map (persisted XML
   shape change)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-27 08:16'
+updated_date: '2026-10-10 17:18'
 labels:
   - device-queue
   - tech-debt

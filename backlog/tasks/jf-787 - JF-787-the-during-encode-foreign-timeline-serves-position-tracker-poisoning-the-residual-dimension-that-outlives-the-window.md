@@ -1,15 +1,21 @@
 ---
 id: JF-787
 title: >-
-  JF-787 - the during-encode foreign-timeline serves' position-tracker poisoning:
-  the residual dimension that outlives the window
-status: To Do
+  JF-787 - the during-encode foreign-timeline serves' position-tracker
+  poisoning: the residual dimension that outlives the window
+status: Done
 assignee: []
 created_date: '2026-10-06'
+updated_date: '2026-10-10 17:18'
 labels: []
+dependencies: []
 references:
-  - backlog/tasks/jf-784 - the-concat-caches-scope-blindness-and-the-unbounded-token-scope-rendering-the-two-JF-767-code-review-residuals.md
-  - backlog/tasks/jf-767 - JF-763-review-round-out-of-scope-findings-the-YesIntent-confirmation-path-siblings-and-the-userless-concat-endpoint-vs-the-scoped-paged-path.md
+  - >-
+    backlog/tasks/jf-784 -
+    the-concat-caches-scope-blindness-and-the-unbounded-token-scope-rendering-the-two-JF-767-code-review-residuals.md
+  - >-
+    backlog/tasks/jf-767 -
+    JF-763-review-round-out-of-scope-findings-the-YesIntent-confirmation-path-siblings-and-the-userless-concat-endpoint-vs-the-scoped-paged-path.md
 priority: low
 ---
 

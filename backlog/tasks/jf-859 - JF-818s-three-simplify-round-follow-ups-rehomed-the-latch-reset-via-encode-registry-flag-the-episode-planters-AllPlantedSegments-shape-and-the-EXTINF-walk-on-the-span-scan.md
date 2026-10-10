@@ -4,10 +4,10 @@ title: >-
   JF-818's three simplify-round follow-ups rehomed: the latch reset via
   encode-registry flag, the episode planter's AllPlantedSegments shape, and the
   EXTINF walk on the span-scan
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-10-10 12:58'
-updated_date: '2026-10-10 15:14'
+updated_date: '2026-10-10 17:18'
 labels:
   - tech-debt
   - videoaudio

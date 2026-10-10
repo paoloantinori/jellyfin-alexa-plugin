@@ -1,12 +1,12 @@
 ---
 id: JF-798
 title: >-
-  JF-798 - the multi-part book altitude: the outermost-book-ancestor resolution (both
-  paths stop at the part folder today)
+  JF-798 - the multi-part book altitude: the outermost-book-ancestor resolution
+  (both paths stop at the part folder today)
 status: To Do
 assignee: []
 created_date: '2026-10-06'
-updated_date: '2026-10-06'
+updated_date: '2026-10-10 15:34'
 labels:
   - bug
   - audiobooks
@@ -20,6 +20,7 @@ priority: low
 ---
 
 ## Description
+
 <!-- SECTION:DESCRIPTION:BEGIN -->
 Filed from the JF-794 round (2026-10-06), same-turn per the review-recommendation
 rule: the gate-marker addendum on JF-794 (the JF-793 marker F3) ordered the
@@ -80,3 +81,9 @@ ACCEPTANCE CRITERIA (when picked up):
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+PARKED ON A PERMISSION GATE (2026-10-10 18:50, orchestrator): the task's own first acceptance criterion demands a LIVE multi-part fixture ('a real Book/Part1+Part2 layout in the test library') captured BEFORE designing the walk. No test library separate from the household install is known to exist, and creating Book/Part folders in the household's media library is a change to the maintainer's data layout, not an autonomous-lane decision. UNBLOCK: Paolo either points at a test library / blesses a scratch folder in the household library (a disposable 'ZZZ Test Book/Part1+2' the census can then re-run against), or the task stays parked. This is a user-input gate per the standing rules, not a weight call; everything else in the task is design-ready.
+<!-- SECTION:NOTES:END -->
