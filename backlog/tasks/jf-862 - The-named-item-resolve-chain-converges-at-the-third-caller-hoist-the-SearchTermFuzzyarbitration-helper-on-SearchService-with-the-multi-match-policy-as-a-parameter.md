@@ -4,9 +4,10 @@ title: >-
   The named-item resolve chain converges at the third caller: hoist the
   SearchTerm+Fuzzy+arbitration helper on SearchService with the multi-match
   policy as a parameter
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-10 22:39'
+updated_date: '2026-10-10 23:54'
 labels:
   - refactor
   - tech-debt
