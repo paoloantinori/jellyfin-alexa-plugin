@@ -1397,6 +1397,27 @@ public class DeviceQueueManagerTests : IDisposable
     }
 
     /// <summary>
+    /// JF-812 code-review F2 pin: a re-stop whose item resolution fails (null
+    /// kind) keeps the entry's earlier truthful stamp; the doc-promised
+    /// preservation clause ("a failed lookup is not evidence the item changed
+    /// kind") is pinned behavior, not comment.
+    /// </summary>
+    [Fact]
+    public void RecordStoppedPositionAndTrim_UnresolvedReStop_KeepsEarlierTruthfulKindStamp()
+    {
+        Guid itemId = Guid.NewGuid();
+        DeviceQueue queue = _manager.GetOrCreateQueue("dev-kinds");
+        _manager.RecordStoppedPositionAndTrim("dev-kinds", queue, itemId, TimeSpan.FromMinutes(3).Ticks, bookShaped: true);
+
+        // The transient-resolution re-stop: the position updates, the stamp
+        // survives it.
+        _manager.RecordStoppedPositionAndTrim("dev-kinds", queue, itemId, TimeSpan.FromMinutes(4).Ticks, bookShaped: null);
+
+        Assert.Equal(DeviceQueueManager.PositionKindBook, queue.ItemPositionKinds[itemId.ToString("N")]);
+        Assert.Equal(TimeSpan.FromMinutes(4).Ticks, _manager.GetStoredPositionTicks("dev-kinds", itemId.ToString()));
+    }
+
+    /// <summary>
     /// JF-812 mixed pin: one song-shaped entry does not mask a book-shaped
     /// sibling; the valve is an any-predicate over releasable entries.
     /// </summary>

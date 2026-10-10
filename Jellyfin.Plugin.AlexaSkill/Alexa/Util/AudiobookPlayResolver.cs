@@ -396,7 +396,7 @@ public static class AudiobookPlayResolver
         // entries, so a household's plain-song playback no longer permanently
         // releases the fetch; KINDLESS entries (a pre-JF-812 store, or a write
         // whose item could not be resolved) still release, keeping the JF-581
-        // guarantee for old stores - the conservative side of the trade, an
+        // guarantee for old stores; the conservative side of the trade, an
         // under-keyed valve would drop a real resume.
         // The single-file shapes never reach here (their page is
         // the whole book by construction). The in-memory positioned-entry check

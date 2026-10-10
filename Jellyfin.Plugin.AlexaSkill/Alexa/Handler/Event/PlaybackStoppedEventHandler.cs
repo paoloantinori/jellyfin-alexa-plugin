@@ -228,6 +228,15 @@ public class PlaybackStoppedEventHandler : BaseHandler
             // here. A failed resolution stores the position KINDLESS (the valve's
             // conservative release) and skips the self-verify: both are best-effort
             // decorations of the position write, which proceeds regardless.
+            // RECALL BOUND (code-review F1): IsAudioBookOrChapter is the ONE book
+            // discriminator (the JF-670 end-of-book gate), and every book this
+            // plugin plays is DISCOVERED through an IncludeItemTypes=AudioBook
+            // search (PlayBook's primary and fuzzy queries), so its chapters are
+            // AudioBook-typed leaves, or Audio-typed chapters with AudioBook
+            // ancestry (the JF-784 remap shape); exactly what the classifier
+            // reads. A broader rule (any Audio under any Folder) would stamp
+            // every folder-structured music library's songs as Book, re-opening
+            // the permanent release JF-812 exists to close.
             BaseItem? stoppedItem = null;
             bool? stoppedItemBookShaped = null;
             try

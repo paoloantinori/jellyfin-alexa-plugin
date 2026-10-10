@@ -239,7 +239,7 @@ public class StoppedSaveSelfVerificationTests : PluginTestBase, IDisposable
     /// <summary>
     /// JF-812 conservative default: an item that does not resolve (no
     /// LibraryManager row for the stopped id) still writes the position but
-    /// stores it KINDLESS - the entry keeps the valve's conservative release,
+    /// stores it KINDLESS; the entry keeps the valve's conservative release,
     /// never a song-shaped skip the failed lookup could not justify
     /// (IsAudioBookOrChapter answers false for null, which alone would have
     /// stamped it Other).

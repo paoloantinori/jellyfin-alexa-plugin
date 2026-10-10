@@ -780,7 +780,7 @@ public sealed class DeviceQueueManager : IDisposable
         }
 
         // Gate-marker tail F2: the read takes _launchScopeLock like the aggregate
-        // sibling HasAnyStoredPosition - an unlocked TryGetValue can race the locked
+        // sibling HasAnyBookShapedStoredPosition - an unlocked TryGetValue can race the locked
         // structural write/trim in RecordStoppedPositionAndTrim mid-resize (Dictionary
         // is not thread-safe for concurrent read plus write; the die-before-the-ack
         // JF-425/JF-447/JF-738 class this store's contract names).
@@ -830,7 +830,7 @@ public sealed class DeviceQueueManager : IDisposable
         lock (_launchScopeLock)
         {
             // Ordinal string != (null-safe): a missing stamp reads null, and
-            // null != "Other" releases - the kindless semantics live right here.
+            // null != "Other" releases; the kindless semantics live right here.
             return _queues.TryGetValue(deviceId, out DeviceQueue? queue)
                 && queue.ItemPositionState.Any(kvp =>
                     kvp.Value > 0
@@ -1250,7 +1250,7 @@ public sealed class DeviceQueueManager : IDisposable
             StampRecentRecord(deviceId, key);
             if (queue.ItemPositionState.Count > cap)
             {
-                List<string> evictedKeys = TrimPositionMap(
+                IReadOnlyList<string> evictedKeys = TrimPositionMap(
                     queue.ItemPositionState, BuildTrimMembershipSet(deviceId, queue, key), cap);
                 foreach (string evictedKey in evictedKeys)
                 {
@@ -1305,12 +1305,14 @@ public sealed class DeviceQueueManager : IDisposable
     /// "any key format" matches.</param>
     /// <param name="cap">The maximum entry count.</param>
     /// <typeparam name="T">The map's value type (position ticks, launch bases, per-mille rates).</typeparam>
-    /// <returns>The keys this call evicted, in eviction order (empty when the map was at or under the cap).</returns>
-    internal static List<string> TrimPositionMap<T>(Dictionary<string, T> map, IEnumerable<string> queuedItems, int cap)
+    /// <returns>The keys this call evicted, in eviction order (the shared empty
+    /// array when the map was at or under the cap, so the four launch-map call
+    /// sites that ignore the return pay no allocation).</returns>
+    internal static IReadOnlyList<string> TrimPositionMap<T>(Dictionary<string, T> map, IEnumerable<string> queuedItems, int cap)
     {
         if (map.Count <= cap)
         {
-            return new List<string>();
+            return Array.Empty<string>();
         }
 
         HashSet<string> queued = queuedItems as HashSet<string> ?? new HashSet<string>(queuedItems, StringComparer.OrdinalIgnoreCase);
@@ -1323,15 +1325,22 @@ public sealed class DeviceQueueManager : IDisposable
             }
         }
 
-        // Remove oldest non-queued entries until under cap
+        // Remove oldest non-queued entries until under cap; the truncated
+        // keysToRemove list IS the evicted set (fewer evictable keys than
+        // toRemove is the tolerated over-cap shape, so the truncation is
+        // guarded, not assumed).
         int toRemove = map.Count - cap;
-        List<string> evictedKeys = keysToRemove.Take(toRemove).ToList();
-        foreach (string key in evictedKeys)
+        if (keysToRemove.Count > toRemove)
+        {
+            keysToRemove.RemoveRange(toRemove, keysToRemove.Count - toRemove);
+        }
+
+        foreach (string key in keysToRemove)
         {
             map.Remove(key);
         }
 
-        return evictedKeys;
+        return keysToRemove;
     }
 
     /// <summary>
