@@ -203,6 +203,19 @@ intents:
       - Zu spielen den Film {title}
       - Ich möchte den Film {title} sehen
       - Suche nach dem Film {title}
+      # JF-857: strong-carrier crossings for the single-member tails (search,
+      # anschauen, schauen, zeigen), all four probe-failing 2026-10-10 (4x;
+      # full map in task JF-857). The JF-771 L1b precedent: strong carrier +
+      # sample routes. NO Film-carried additions ('Film Inception
+      # anschauen/schauen' NO_SELECTION 4/4): weak loanword carrier stays
+      # accept-and-document (JF-770/JF-771 trainer-anomaly rule,
+      # two-failed-fixes). de-DE is the single representative fix of a
+      # 13-locale (a)-class map (the dispatch rule); the JF-855
+      # generator-level question owns the rest.
+      - Suche nach dem Video {title}
+      - Video {title} anschauen
+      - Video {title} schauen
+      - Video {title} zeigen
     slots:
       - name: title
         type: AMAZON.SearchQuery

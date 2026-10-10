@@ -6528,7 +6528,7 @@ Placeholder legend:
 | `<Wörter aus dem Songtitel>` | `{titleKeywords}` |
 | `<Benutzername>` | `{username}` |
 
-Complete phrase list (468 phrases across 71 commands):
+Complete phrase list (472 phrases across 71 commands):
 
 #### Play music
 
@@ -6698,6 +6698,10 @@ Complete phrase list (468 phrases across 71 commands):
 - `Zu spielen den Film <Titel des Videos oder Films>`
 - `Ich möchte den Film <Titel des Videos oder Films> sehen`
 - `Suche nach dem Film <Titel des Videos oder Films>`
+- `Suche nach dem Video <Titel des Videos oder Films>`
+- `Video <Titel des Videos oder Films> anschauen`
+- `Video <Titel des Videos oder Films> schauen`
+- `Video <Titel des Videos oder Films> zeigen`
 
 #### Episodes and series
 
