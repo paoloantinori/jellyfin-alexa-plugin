@@ -1936,6 +1936,14 @@ public sealed class DeviceQueueManager : IDisposable
 
     private void PersistToDisk(string deviceId, DeviceQueue queue)
     {
+        // JF-648 (code-review F4): the extension-data buffer's "never
+        // re-serialized" promise is STRUCTURAL, not comment-enforced: nulling
+        // it here means even a future deserialization path that forgets the
+        // fold cannot resurrect captured legacy/unknown members into a
+        // persisted file (the both-shapes hybrid this migration declares
+        // unwritable).
+        queue.LegacyAndUnknownMembers = null;
+
         string filePath = GetQueueFilePath(deviceId);
         try
         {

@@ -172,7 +172,14 @@ public sealed class DeviceQueue
     /// CONFLICT BY INSPECTION (a file carrying BOTH shapes, only possible from a
     /// hand-edited or foreign-written file: the plugin writes exactly one shape
     /// per version): where both shapes name a key, the SCOPE entry wins, because
-    /// it was written by strictly newer code than the half-map members. An
+    /// it was written by strictly newer code than the half-map members. BOUNDED
+    /// RESIDUAL on the same hybrid files (code-review F1, JF-648): the win is
+    /// per-key VALUE preference only; the folded legacy keys append at LATER
+    /// insertion slots than the deserialized scope entries, so a cap-pressure
+    /// trim on a hybrid file may evict scope entries before folded legacy ones
+    /// (the trust order inverted by eviction order). Not worth machinery for a
+    /// shape no plugin writes; the readers never see a SPLIT either way (both
+    /// halves of any surviving entry stay paired). An
     /// orphan legacy RATE (a rate key with no base key; the invariant's
     /// forbidden direction, which no plugin writer produced but a torn file
     /// could carry) is DROPPED: the fold is where the half-map convention
@@ -195,38 +202,62 @@ public sealed class DeviceQueue
         }
 
         FoldLegacyLaunchFamily(
-            ReadLegacyHalfMap(LegacyAndUnknownMembers, "activeLaunchBaseMs", value => value.GetInt64()),
-            ReadLegacyHalfMap(LegacyAndUnknownMembers, "activePlaybackRatePerMille", value => value.GetInt32()),
+            ReadLegacyBaseMap(LegacyAndUnknownMembers, "activeLaunchBaseMs"),
+            ReadLegacyRateMap(LegacyAndUnknownMembers, "activePlaybackRatePerMille"),
             ActiveLaunchScopes);
         FoldLegacyLaunchFamily(
-            ReadLegacyHalfMap(LegacyAndUnknownMembers, "pendingLaunchBaseMs", value => value.GetInt64()),
-            ReadLegacyHalfMap(LegacyAndUnknownMembers, "pendingPlaybackRatePerMille", value => value.GetInt32()),
+            ReadLegacyBaseMap(LegacyAndUnknownMembers, "pendingLaunchBaseMs"),
+            ReadLegacyRateMap(LegacyAndUnknownMembers, "pendingPlaybackRatePerMille"),
             PendingLaunchScopes);
         LegacyAndUnknownMembers = null;
     }
 
     /// <summary>
-    /// Reads one legacy half-map member out of the extension-data buffer (null
-    /// when the member is absent or not an object; non-number entries are
-    /// skipped). The camelCase member names are the manager's
-    /// <c>JsonNamingPolicy.CamelCase</c> persistence contract.
+    /// Reads one legacy base half-map member out of the extension-data buffer
+    /// (null when the member is absent or not an object). TOTAL BY DESIGN
+    /// (code-review F2, JF-648): an entry that does not parse as a whole
+    /// long (a torn file's fraction or overflow; the pre-JF-648 reader let
+    /// the bind exception drop the WHOLE queue file at load) is SKIPPED, so
+    /// one bad launch-scope entry can no longer cost the device its items,
+    /// positions, and last-played record. The camelCase member names are the
+    /// manager's <c>JsonNamingPolicy.CamelCase</c> persistence contract.
     /// </summary>
-    private static Dictionary<string, TValue>? ReadLegacyHalfMap<TValue>(
-        Dictionary<string, JsonElement> data,
-        string memberName,
-        Func<JsonElement, TValue> readValue)
+    private static Dictionary<string, long>? ReadLegacyBaseMap(Dictionary<string, JsonElement> data, string memberName)
     {
         if (!data.TryGetValue(memberName, out JsonElement member) || member.ValueKind != JsonValueKind.Object)
         {
             return null;
         }
 
-        var halfMap = new Dictionary<string, TValue>();
+        var halfMap = new Dictionary<string, long>();
         foreach (JsonProperty entry in member.EnumerateObject())
         {
-            if (entry.Value.ValueKind == JsonValueKind.Number)
+            if (entry.Value.ValueKind == JsonValueKind.Number && entry.Value.TryGetInt64(out long value))
             {
-                halfMap[entry.Name] = readValue(entry.Value);
+                halfMap[entry.Name] = value;
+            }
+        }
+
+        return halfMap;
+    }
+
+    /// <summary>
+    /// The rate half of <see cref="ReadLegacyBaseMap"/> (per-mille ints, same
+    /// total-by-design skip of unconvertible entries; see that doc).
+    /// </summary>
+    private static Dictionary<string, int>? ReadLegacyRateMap(Dictionary<string, JsonElement> data, string memberName)
+    {
+        if (!data.TryGetValue(memberName, out JsonElement member) || member.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        var halfMap = new Dictionary<string, int>();
+        foreach (JsonProperty entry in member.EnumerateObject())
+        {
+            if (entry.Value.ValueKind == JsonValueKind.Number && entry.Value.TryGetInt32(out int value))
+            {
+                halfMap[entry.Name] = value;
             }
         }
 

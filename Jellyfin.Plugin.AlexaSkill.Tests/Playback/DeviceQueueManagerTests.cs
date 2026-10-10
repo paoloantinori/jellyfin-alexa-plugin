@@ -1717,11 +1717,41 @@ public class DeviceQueueManagerTests : IDisposable
     }
 
     /// <summary>
+    /// JF-648 migration pin, the fold is TOTAL (code-review F2): a torn legacy
+    /// entry whose number does not parse as a whole long (a fraction; the
+    /// pre-JF-648 deserializer let the bind exception drop the WHOLE queue
+    /// file at load) is SKIPPED by the fold, and every other member of the
+    /// file (the good launch-scope entry, the queue items, the last-played
+    /// record) survives the load.
+    /// </summary>
+    [Fact]
+    public void LoadAllFromDisk_TornLegacyNumberEntry_SkippedNotFileDropping_JF648()
+    {
+        Guid goodId = Guid.NewGuid();
+        Guid lastPlayedId = Guid.NewGuid();
+        File.WriteAllText(
+            Path.Combine(_tempDir, "queue_dev-jf648-torn.json"),
+            "{\"itemIds\":[\"track-1\"],\"lastPlayedItemId\":\"" + lastPlayedId + "\","
+                + "\"activeLaunchBaseMs\":{\"" + goodId.ToString("N") + "\":" + MinutesToMs(20) + ",\"torn-entry\":1.5}}");
+        _manager.Dispose();
+
+        using var loaded = new DeviceQueueManager(_tempDir, _logger);
+
+        // The good entry folded; the torn one skipped; nothing else lost.
+        Assert.Equal(MinutesToMs(20), loaded.GetActiveLaunchScope("dev-jf648-torn", goodId.ToString()).BaseMs);
+        Assert.Equal(new List<string> { "track-1" }, loaded.GetQueue("dev-jf648-torn")!.ItemIds);
+        Assert.Equal(lastPlayedId.ToString(), loaded.GetLastPlayedItemId("dev-jf648-torn"));
+    }
+
+    /// <summary>
     /// JF-648 migration pin, conflict BY INSPECTION: a file carrying BOTH the
     /// legacy half-map members and the scope members (only possible from a
     /// hand-edited or foreign-written file; the plugin writes exactly one
     /// shape per version) resolves per key toward the SCOPE entry, written by
-    /// strictly newer code than the half-map members.
+    /// strictly newer code than the half-map members, in BOTH families. The
+    /// pending family is observed through the promote (its only public read;
+    /// code-review F5: without this leg a regression in the pending fold leg's
+    /// scope-wins skip could not redden any pin).
     /// </summary>
     [Fact]
     public void LoadAllFromDisk_BothShapesPresent_ScopeEntryWinsPerKey_JF648()
@@ -1737,12 +1767,16 @@ public class DeviceQueueManagerTests : IDisposable
                 [contestedId.ToString("N")] = MinutesToMs(20),
                 [legacyOnlyId.ToString("N")] = MinutesToMs(4),
             },
-            activeRate: null,
-            pendingBase: null,
-            pendingRate: null,
+            activeRate: new Dictionary<string, int> { [contestedId.ToString("N")] = 1500 },
+            pendingBase: new Dictionary<string, long> { [contestedId.ToString("N")] = MinutesToMs(30) },
+            pendingRate: new Dictionary<string, int> { [contestedId.ToString("N")] = 2000 },
             activeScopes: new Dictionary<string, LaunchScope>
             {
                 [contestedId.ToString("N")] = new LaunchScope { BaseMs = MinutesToMs(7), RatePerMille = 1750 },
+            },
+            pendingScopes: new Dictionary<string, LaunchScope>
+            {
+                [contestedId.ToString("N")] = new LaunchScope { BaseMs = MinutesToMs(8), RatePerMille = 1250 },
             });
         _manager.Dispose();
 
@@ -1752,6 +1786,13 @@ public class DeviceQueueManagerTests : IDisposable
         (long? contestedBase, int? contestedRate) = loaded.GetActiveLaunchScope("dev-jf648-conflict", contestedId.ToString());
         Assert.Equal(MinutesToMs(7), contestedBase);
         Assert.Equal(1750, contestedRate);
+
+        // ...in the PENDING family too: the promote carries the pending SCOPE's
+        // base and rate, never the legacy half-maps' (30min/2000).
+        loaded.PromotePendingLaunchBase("dev-jf648-conflict", contestedId.ToString());
+        (long? promotedBase, int? promotedRate) = loaded.GetActiveLaunchScope("dev-jf648-conflict", contestedId.ToString());
+        Assert.Equal(MinutesToMs(8), promotedBase);
+        Assert.Equal(1250, promotedRate);
 
         // ...and a key only the legacy members name still folds in (no data loss
         // on the legacy-only tail of a hybrid file).
@@ -1811,9 +1852,10 @@ public class DeviceQueueManagerTests : IDisposable
     /// <summary>
     /// Seeds the JF-648 legacy four-map queue file (the red-proof fixture's
     /// writer, parameterized): writes the OLD persisted shape's members (plus
-    /// optional pre-populated scope members, the both-shapes conflict pin's
-    /// hybrid) through the manager's own persistence options, so the fixtures'
-    /// member naming can never drift from the loader's contract.
+    /// optional pre-populated scope members per family, the both-shapes
+    /// conflict pin's hybrid) through the manager's own persistence options,
+    /// so the fixtures' member naming can never drift from the loader's
+    /// contract.
     /// </summary>
     private static void WriteLegacyFourMapQueueFile(
         string dir,
@@ -1822,7 +1864,8 @@ public class DeviceQueueManagerTests : IDisposable
         Dictionary<string, int>? activeRate,
         Dictionary<string, long>? pendingBase,
         Dictionary<string, int>? pendingRate,
-        Dictionary<string, LaunchScope>? activeScopes = null)
+        Dictionary<string, LaunchScope>? activeScopes = null,
+        Dictionary<string, LaunchScope>? pendingScopes = null)
     {
         File.WriteAllText(
             Path.Combine(dir, $"queue_{deviceId}.json"),
@@ -1834,7 +1877,8 @@ public class DeviceQueueManagerTests : IDisposable
                     activePlaybackRatePerMille = activeRate,
                     pendingLaunchBaseMs = pendingBase,
                     pendingPlaybackRatePerMille = pendingRate,
-                    activeLaunchScopes = activeScopes
+                    activeLaunchScopes = activeScopes,
+                    pendingLaunchScopes = pendingScopes
                 },
                 DeviceQueueManager.JsonOptions));
     }
