@@ -4,10 +4,10 @@ title: >-
   Backlog marker pathologies: normalize jf-637/643/781 then fold (fold-first
   PROVEN destructive), guard the 4 ENAMETOOLONG files, draft the upstream
   Backlog.md issue
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-10-09 22:44'
-updated_date: '2026-10-10 05:25'
+updated_date: '2026-10-10 08:02'
 labels:
   - tooling
   - tech-debt

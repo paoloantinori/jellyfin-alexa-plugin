@@ -3,10 +3,10 @@ id: JF-854
 title: >-
   Orphan-census script becomes a repo tool with --check + test (the only
   raw-tail detector); JF-800's production write-facade residual recorded
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-10-09 22:45'
-updated_date: '2026-10-10 07:56'
+updated_date: '2026-10-10 08:02'
 labels:
   - tooling
   - test-coverage
