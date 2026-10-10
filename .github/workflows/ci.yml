@@ -94,6 +94,25 @@ jobs:
       - name: Validate locale strings
         run: python3 scripts/validate_locales.py
 
+  validate-backlog:
+    runs-on: ubuntu-latest
+    # JF-854: the backlog MCP drops content that sits outside its managed
+    # marker regions on rewrite (seven-occurrence gotcha); this --check run
+    # is the enforcing gate (the validate-models pytest step additionally
+    # carries the allowlist-aware real-tree guard for the parked files).
+    # The three JF-853-parked files (jf-637, jf-643, jf-781) keep this job
+    # red BY DESIGN until JF-853 normalizes their marker pathologies and
+    # folds them; the job goes green on its own afterwards.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Audit backlog task files for orphan content
+        run: python3 scripts/audit_backlog_orphans.py --check
+
   validate-versions:
     runs-on: ubuntu-latest
     steps:
