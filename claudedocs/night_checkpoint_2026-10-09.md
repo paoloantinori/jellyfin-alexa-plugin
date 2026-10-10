@@ -278,3 +278,15 @@ FINAL DAY TALLY: 15 tasks closed (JF-772/853/854/856/859/787/648/860A in
 this second stretch + 771/803/812/857/789 + reconciliations 775/818),
 7 merges to main, 3 verified deploys, CI green all day after the manifest
 fix, main advanced bbfc01ff..a0443f46-equivalent (all pushed).
+
+## CORRECTION to the final close (23:15): the enumeration had two holes
+
+The "provably exhausted" claim was made without examining every To Do row.
+Fixed: JF-780 is PROBE-GATED BY ITS OWN DESIGN ("FIX SHAPES only if a probe
+fires"; the device round must discriminate) - correctly blocked, but it held
+by luck until named. JF-329 (Photo slideshow) was a TRUE MISS - a real
+feature task, never examined, now DISPATCHED. The verify-family (JF-271/
+274/276/280/281/282/283/378/516) is device-blocked by nature and title.
+Lesson recorded: an exhaustion claim requires the full-list pass, not the
+remembered-list pass - the exact failure mode the morning challenge named,
+resurfacing at the enumeration layer.
