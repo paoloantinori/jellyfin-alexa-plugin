@@ -4,10 +4,10 @@ title: >-
   The ledger recency read: expose LastPlayedWrittenAt on the snapshot, bound the
   resolver tail and the JF-632 gate, and dissolve the per-family idle guard
   layer
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-10-06'
-updated_date: '2026-10-10 11:11'
+updated_date: '2026-10-10 12:42'
 labels:
   - tech-debt
   - playback
