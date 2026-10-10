@@ -4,10 +4,10 @@ title: >-
   Cross-locale single-member search-tail audit: de-DE's Film-carried 'Suche nach
   dem Film' reads NO_SELECTION, the same weak-loanword-on-single-member-tail
   class as hi-IN (14 locales to map)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-10-10 12:14'
-updated_date: '2026-10-10 13:14'
+updated_date: '2026-10-10 15:27'
 labels:
   - nlu
   - interaction-model
@@ -45,3 +45,9 @@ SCOPE GUARDS: probe-first only after the hi-IN rebuild verifies (the JF-771 post
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+POST-DEPLOY MATRIX OUTCOME (2026-10-10 18:20, orchestrator; deploy b5801c88 + de-DE rebuild SUCCEEDED): 10/10 legs exactly as predicted. LEG1-4 (the fix bar): 'Suche nach dem Video Inception' and 'Video Inception anschauen/schauen/zeigen' ALL route PlayVideoIntent 4/4 - the strong-carrier crossing fix works LIVE. LEG5-8 (guards): the exact Film-carried 'Suche nach dem Film Inception' still routes 4/4 (no regression), the native control 'Ich will Inception anschauen' routes, both SearchMedia neighbors ('Suche nach einem Video/Film') hold SearchMediaIntent 4/4. LEG9-10 (record-only): the Film-carried crossings 'Film Inception anschauen/schauen' stay NO_SELECTION 4/4 - the trainer-anomaly disposition confirmed (the same class as hi-IN film, do not template-patch per the two-failed-fixes rule). The 4 red-until-deploy fixture pins are live-green by construction. TASK CLOSED on the full bar; the 12-locale (a)-class wave remains the maintainer's JF-855 decision, recorded above.
+<!-- SECTION:NOTES:END -->
