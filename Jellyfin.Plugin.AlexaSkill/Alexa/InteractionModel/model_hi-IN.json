@@ -946,6 +946,24 @@
             "type": "AMAZON.SearchQuery"
           }
         ]
+      },
+      {
+        "name": "ShowPhotoAlbumIntent",
+        "samples": [
+          "मेरी फ़ोटो दिखाओ",
+          "मुझे मेरी फ़ोटो दिखाओ",
+          "{photoAlbum} की फ़ोटो दिखाओ",
+          "{photoAlbum} की तस्वीरें दिखाओ",
+          "{photoAlbum} का फ़ोटो एल्बम दिखाओ",
+          "मेरी फ़ोटो की स्लाइडशो शुरू करो",
+          "{photoAlbum} की स्लाइडशो शुरू करो"
+        ],
+        "slots": [
+          {
+            "name": "photoAlbum",
+            "type": "AMAZON.SearchQuery"
+          }
+        ]
       }
     ],
     "types": [

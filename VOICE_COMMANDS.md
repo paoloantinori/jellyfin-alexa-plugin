@@ -67,6 +67,7 @@ Invocation name: **"jellyfin player"**
 | Set Playback Speed | `بسرعة {speed}` · `السرعة {speed}` · `اجعل السرعة {speed}` |
 | Set Reminder | `ذكرني بعد {reminder_duration}` · `ذكرني الساعة {reminder_time}` · `اضبط منبها بعد {reminder_duration}` · `اضبط منبها الساعة {reminder_time}` |
 | Show More | `أظهر المزيد` · `المزيد` · `الصفحة التالية` · `استمر` · `ماذا أيضا` · `المزيد من النتائج` |
+| Show Photo Album | `أرني صوري` · `أرني صور {photoAlbum}` · `اعرض صوري` · `اعرض صور {photoAlbum}` · `افتح صور {photoAlbum}` · `ابدأ عرض شرائح لصوري` |
 | Shuffle Play | `شغل قائمة التشغيل {playlist} بشكل عشوائي` · `اخلط قائمة التشغيل {playlist}` · `شغل قائمة التشغيل {playlist} في وضع الخلط` |
 | Sleep Timer | `أوقف التشغيل بعد {sleep_duration}` · `اضبط مؤقت النوم لـ {sleep_duration}` · `مؤقت نوم {sleep_duration}` · `أوقف بعد {sleep_duration}` |
 | Turn Radio Off | `أوقف وضع الراديو` · `عطّل وضع الراديو` · `وضع الراديو متوقف` · `أوقف الراديو` |
@@ -127,6 +128,7 @@ Invocation name: **"jellyfin player"**
 | Set Playback Speed | `mit geschwindigkeit {speed}` · `geschwindigkeit {speed}` · `setze die geschwindigkeit auf {speed}` · `spiele mit geschwindigkeit {speed}` · `mach {speed}` |
 | Set Reminder | `erinnere mich in {reminder_duration}` · `erinnere mich um {reminder_time}` · `stelle eine erinnerung für {reminder_duration}` · `setze eine erinnerung auf {reminder_time}` |
 | Show More | `zeig mehr` · `noch mehr` · `weiter` · `nächste seite` · `mehr ergebnisse` · `was gibt es noch` |
+| Show Photo Album | `zeig meine Fotos` · `zeig Fotos von {photoAlbum}` · `zeig mir meine Fotos` · `zeig die Fotos von {photoAlbum}` · `zeig mir Fotos von {photoAlbum}` · `zeig Fotos aus {photoAlbum}` |
 | Shuffle All Off | `zufallswiedergabe ausschalten` · `zufällige wiedergabe aus` |
 | Shuffle All On | `zufallswiedergabe aktivieren` · `zufallswiedergabe einschalten` · `musik zufällig abspielen` · `zufällige wiedergabe an` |
 | Shuffle Play | `spiele die Playlist {playlist} in zufälliger Reihenfolge` · `mische die Playlist {playlist}` · `spiele die Playlist {playlist} im Zufallsmodus` |
@@ -186,6 +188,7 @@ Invocation name: **"jellyfin player"**
 | Set Playback Speed | `at speed {speed}` · `speed {speed}` · `set the speed to {speed}` · `set speed {speed}` · `play at speed {speed}` · `go {speed}` |
 | Set Reminder | `remind me in {reminder_duration}` · `remind me at {reminder_time}` · `set a reminder for {reminder_duration}` · `set a reminder for {reminder_time}` |
 | Show More | `show more` · `next page` · `more results` · `see more` · `more` · `what else` |
+| Show Photo Album | `show my photos` · `show my {photoAlbum} photos` · `show me my photos` · `show photos of {photoAlbum}` · `show photos from {photoAlbum}` · `show me photos of {photoAlbum}` |
 | Shuffle Play | `shuffle the playlist {playlist}` · `play the playlist {playlist} in shuffle mode` · `play the playlist {playlist} on shuffle` · `play {playlist} shuffled` |
 | Sleep Timer | `stop playing in {sleep_duration}` · `set a sleep timer for {sleep_duration}` · `sleep timer {sleep_duration}` · `stop after {sleep_duration}` · `turn off in {sleep_duration}` · `set sleep timer {sleep_duration}` |
 | Turn Radio Off | `turn off radio mode` · `disable radio mode` · `radio mode off` · `turn off radio` · `disable radio` · `stop radio mode` |
@@ -243,6 +246,7 @@ Invocation name: **"jellyfin player"**
 | Set Playback Speed | `at speed {speed}` · `speed {speed}` · `set the speed to {speed}` · `set speed {speed}` · `play at speed {speed}` · `go {speed}` |
 | Set Reminder | `remind me in {reminder_duration}` · `remind me at {reminder_time}` · `set a reminder for {reminder_duration}` · `set a reminder for {reminder_time}` |
 | Show More | `show more` · `next page` · `more results` · `see more` · `more` · `what else` |
+| Show Photo Album | `show my photos` · `show my {photoAlbum} photos` · `show me my photos` · `show photos of {photoAlbum}` · `show photos from {photoAlbum}` · `show me photos of {photoAlbum}` |
 | Shuffle Play | `shuffle the playlist {playlist}` · `play the playlist {playlist} in shuffle mode` · `play the playlist {playlist} on shuffle` · `play {playlist} shuffled` |
 | Sleep Timer | `stop playing in {sleep_duration}` · `set a sleep timer for {sleep_duration}` · `sleep timer {sleep_duration}` · `stop after {sleep_duration}` · `turn off in {sleep_duration}` · `set sleep timer {sleep_duration}` |
 | Turn Radio Off | `turn off radio mode` · `disable radio mode` · `radio mode off` · `turn off radio` · `disable radio` · `stop radio mode` |
@@ -300,6 +304,7 @@ Invocation name: **"jellyfin player"**
 | Set Playback Speed | `at speed {speed}` · `speed {speed}` · `set the speed to {speed}` · `set speed {speed}` · `play at speed {speed}` · `go {speed}` |
 | Set Reminder | `remind me in {reminder_duration}` · `remind me at {reminder_time}` · `set a reminder for {reminder_duration}` · `set a reminder for {reminder_time}` |
 | Show More | `show more` · `next page` · `more results` · `see more` · `more` · `what else` |
+| Show Photo Album | `show my photos` · `show my {photoAlbum} photos` · `show me my photos` · `show photos of {photoAlbum}` · `show photos from {photoAlbum}` · `show me photos of {photoAlbum}` |
 | Shuffle Play | `shuffle the playlist {playlist}` · `play the playlist {playlist} in shuffle mode` · `play the playlist {playlist} on shuffle` · `play {playlist} shuffled` |
 | Sleep Timer | `stop playing in {sleep_duration}` · `set a sleep timer for {sleep_duration}` · `sleep timer {sleep_duration}` · `stop after {sleep_duration}` · `turn off in {sleep_duration}` · `set sleep timer {sleep_duration}` |
 | Turn Radio Off | `turn off radio mode` · `disable radio mode` · `radio mode off` · `turn off radio` · `disable radio` · `stop radio mode` |
@@ -357,6 +362,7 @@ Invocation name: **"jellyfin player"**
 | Set Playback Speed | `at speed {speed}` · `speed {speed}` · `set the speed to {speed}` · `set speed {speed}` · `play at speed {speed}` · `go {speed}` |
 | Set Reminder | `remind me in {reminder_duration}` · `remind me at {reminder_time}` · `set a reminder for {reminder_duration}` · `set a reminder for {reminder_time}` |
 | Show More | `show more` · `next page` · `more results` · `see more` · `more` · `what else` |
+| Show Photo Album | `show my photos` · `show my {photoAlbum} photos` · `show me my photos` · `show photos of {photoAlbum}` · `show photos from {photoAlbum}` · `show me photos of {photoAlbum}` |
 | Shuffle Play | `shuffle the playlist {playlist}` · `play the playlist {playlist} in shuffle mode` · `play the playlist {playlist} on shuffle` · `play {playlist} shuffled` |
 | Sleep Timer | `stop playing in {sleep_duration}` · `set a sleep timer for {sleep_duration}` · `sleep timer {sleep_duration}` · `stop after {sleep_duration}` · `turn off in {sleep_duration}` · `set sleep timer {sleep_duration}` |
 | Turn Radio Off | `turn off radio mode` · `disable radio mode` · `radio mode off` · `turn off radio` · `disable radio` · `stop radio mode` |
@@ -415,6 +421,7 @@ Invocation name: **"jellyfin player"**
 | Set Playback Speed | `at speed {speed}` · `speed {speed}` · `set the speed to {speed}` · `set speed {speed}` · `play at speed {speed}` · `go {speed}` |
 | Set Reminder | `remind me in {reminder_duration}` · `remind me at {reminder_time}` · `set a reminder for {reminder_duration}` · `set a reminder for {reminder_time}` |
 | Show More | `show more` · `next page` · `more results` · `see more` · `more` · `what else` |
+| Show Photo Album | `show my photos` · `show my {photoAlbum} photos` · `show me my photos` · `show photos of {photoAlbum}` · `show photos from {photoAlbum}` · `show me photos of {photoAlbum}` |
 | Shuffle Play | `shuffle the playlist {playlist}` · `play the playlist {playlist} in shuffle mode` · `play the playlist {playlist} on shuffle` · `play {playlist} shuffled` |
 | Skip Forward Back | `skip forward {seek_amount} {seek_unit}` · `skip {seek_direction} {seek_amount} {seek_unit}` · `skip {seek_direction}` · `skip forward` · `skip {seek_amount} seconds` · `skip back {seek_amount} {seek_unit}` |
 | Sleep Timer | `stop playing in {sleep_duration}` · `set a sleep timer for {sleep_duration}` · `sleep timer {sleep_duration}` · `stop after {sleep_duration}` · `turn off in {sleep_duration}` · `set sleep timer {sleep_duration}` |
@@ -473,6 +480,7 @@ Invocation name: **"jellyfin player"**
 | Set Playback Speed | `a velocidad {speed}` · `velocidad {speed}` · `pon la velocidad en {speed}` · `reproduce a velocidad {speed}` · `pon {speed}` |
 | Set Reminder | `recuérdame en {reminder_duration}` · `recuérdame a las {reminder_time}` · `pon un recordatorio de {reminder_duration}` · `crea un recordatorio para las {reminder_time}` |
 | Show More | `mostrar más` · `más resultados` · `siguiente` · `continúa` · `qué más` · `ver más` |
+| Show Photo Album | `muestra mis fotos` · `muestra fotos de {photoAlbum}` · `muéstrame mis fotos` · `muestra las fotos de {photoAlbum}` · `muéstrame las fotos de {photoAlbum}` · `abre las fotos de {photoAlbum}` |
 | Shuffle Play | `reproduce la lista {playlist} en modo aleatorio` · `mezcla la lista {playlist}` · `reproduce la lista de reproducción {playlist} en modo aleatorio` |
 | Sleep Timer | `detener en {sleep_duration}` · `temporizador {sleep_duration}` · `parar después de {sleep_duration}` · `apagar en {sleep_duration}` |
 | Turn Radio Off | `Desactiva el modo radio` · `Apaga el modo radio` · `Modo radio apagado` · `Desactiva la radio` · `Apaga la radio` · `Detén el modo radio` |
@@ -530,6 +538,7 @@ Invocation name: **"jellyfin player"**
 | Set Playback Speed | `a velocidad {speed}` · `velocidad {speed}` · `pon la velocidad en {speed}` · `reproduce a velocidad {speed}` · `pon {speed}` |
 | Set Reminder | `recuérdame en {reminder_duration}` · `recuérdame a las {reminder_time}` · `pon un recordatorio de {reminder_duration}` · `crea un recordatorio para las {reminder_time}` |
 | Show More | `mostrar más` · `más resultados` · `siguiente` · `continúa` · `qué más` · `ver más` |
+| Show Photo Album | `muestra mis fotos` · `muestra fotos de {photoAlbum}` · `muéstrame mis fotos` · `muestra las fotos de {photoAlbum}` · `muéstrame las fotos de {photoAlbum}` · `abre las fotos de {photoAlbum}` |
 | Shuffle Play | `reproduce la lista {playlist} en modo aleatorio` · `mezcla la lista {playlist}` · `reproduce la lista de reproducción {playlist} en modo aleatorio` |
 | Sleep Timer | `detener en {sleep_duration}` · `temporizador {sleep_duration}` · `parar después de {sleep_duration}` · `apagar en {sleep_duration}` |
 | Turn Radio Off | `Desactiva el modo radio` · `Apaga el modo radio` · `Modo radio apagado` · `Desactiva la radio` · `Apaga la radio` · `Detén el modo radio` |
@@ -587,6 +596,7 @@ Invocation name: **"jellyfin player"**
 | Set Playback Speed | `a velocidad {speed}` · `velocidad {speed}` · `pon la velocidad en {speed}` · `reproduce a velocidad {speed}` · `pon {speed}` |
 | Set Reminder | `recuérdame en {reminder_duration}` · `recuérdame a las {reminder_time}` · `pon un recordatorio de {reminder_duration}` · `crea un recordatorio para las {reminder_time}` |
 | Show More | `mostrar más` · `más resultados` · `siguiente` · `continúa` · `qué más` · `ver más` |
+| Show Photo Album | `muestra mis fotos` · `muestra fotos de {photoAlbum}` · `muéstrame mis fotos` · `muestra las fotos de {photoAlbum}` · `muéstrame las fotos de {photoAlbum}` · `abre las fotos de {photoAlbum}` |
 | Shuffle Play | `reproduce la lista {playlist} en modo aleatorio` · `mezcla la lista {playlist}` · `reproduce la lista de reproducción {playlist} en modo aleatorio` |
 | Sleep Timer | `detener en {sleep_duration}` · `temporizador {sleep_duration}` · `parar después de {sleep_duration}` · `apagar en {sleep_duration}` |
 | Turn Radio Off | `Desactiva el modo radio` · `Apaga el modo radio` · `Modo radio apagado` · `Desactiva la radio` · `Apaga la radio` · `Detén el modo radio` |
@@ -647,6 +657,7 @@ Invocation name: **"jellyfin player"**
 | Set Playback Speed | `à vitesse {speed}` · `vitesse {speed}` · `mets la vitesse à {speed}` · `lis à vitesse {speed}` · `mets {speed}` |
 | Set Reminder | `rappelle-moi dans {reminder_duration}` · `rappelle-moi à {reminder_time}` · `mets un rappel de {reminder_duration}` · `crée un rappel pour {reminder_time}` |
 | Show More | `montre plus` · `encore` · `plus de résultats` · `continuer` · `suivant` · `quoi d'autre` |
+| Show Photo Album | `montre mes photos` · `montre les photos de {photoAlbum}` · `montre-moi mes photos` · `montre-moi les photos de {photoAlbum}` · `affiche les photos de {photoAlbum}` · `ouvre les photos de {photoAlbum}` |
 | Shuffle All Off | `désactive la lecture aléatoire` · `arrête la lecture aléatoire` |
 | Shuffle All On | `active la lecture aléatoire` · `mélange la file d'attente` · `lecture aléatoire` |
 | Shuffle Play | `lis la playlist {playlist} en mode aléatoire` · `mélange la playlist {playlist}` · `mets la playlist {playlist} en mode aléatoire` |
@@ -709,6 +720,7 @@ Invocation name: **"jellyfin player"**
 | Set Playback Speed | `à vitesse {speed}` · `vitesse {speed}` · `mets la vitesse à {speed}` · `lis à vitesse {speed}` · `mets {speed}` |
 | Set Reminder | `rappelle-moi dans {reminder_duration}` · `rappelle-moi à {reminder_time}` · `mets un rappel de {reminder_duration}` · `crée un rappel pour {reminder_time}` |
 | Show More | `montre plus` · `encore` · `plus de résultats` · `continuer` · `suivant` · `quoi d'autre` |
+| Show Photo Album | `montre mes photos` · `montre les photos de {photoAlbum}` · `montre-moi mes photos` · `montre-moi les photos de {photoAlbum}` · `affiche les photos de {photoAlbum}` · `ouvre les photos de {photoAlbum}` |
 | Shuffle All Off | `désactive la lecture aléatoire` · `arrête la lecture aléatoire` |
 | Shuffle All On | `active la lecture aléatoire` · `mélange la file d'attente` · `mets en lecture aléatoire` · `lecture aléatoire` |
 | Shuffle Play | `lis la playlist {playlist} en mode aléatoire` · `mélange la playlist {playlist}` · `mets la playlist {playlist} en mode aléatoire` |
@@ -768,6 +780,7 @@ Invocation name: **"jellyfin player"**
 | Set Playback Speed | `गति {speed}` · `गति {speed} पर` · `{speed} गति पर` · `{speed} करो` |
 | Set Reminder | `{reminder_duration} में मुझे याद दिलाओ` · `{reminder_time} पर मुझे याद दिलाओ` · `{reminder_duration} का रिमाइंडर सेट करो` · `{reminder_time} का रिमाइंडर सेट करो` |
 | Show More | `और दिखाओ` · `अगला पेज` · `और` · `जारी रखो` · `आगे` · `क्या और है` |
+| Show Photo Album | `मेरी फ़ोटो दिखाओ` · `{photoAlbum} की फ़ोटो दिखाओ` · `मुझे मेरी फ़ोटो दिखाओ` · `{photoAlbum} की तस्वीरें दिखाओ` · `{photoAlbum} का फ़ोटो एल्बम दिखाओ` · `मेरी फ़ोटो की स्लाइडशो शुरू करो` |
 | Shuffle Play | `प्लेलिस्ट {playlist} शफल में चलाओ` · `प्लेलिस्ट {playlist} शफल करो` |
 | Sleep Timer | `{sleep_duration} में बंद करो` · `स्लीप टाइमर {sleep_duration} सेट करो` · `स्लीप टाइमर {sleep_duration}` · `{sleep_duration} बाद बंद करो` |
 | Turn Radio Off | `रेडियो मोड बंद करो` · `रेडियो मोड डिसेबल करो` · `रेडियो मोड ऑफ` · `रेडियो बंद करो` · `रेडियो डिसेबल करो` |
@@ -828,6 +841,7 @@ Invocation name: **"mia collezione"**
 | Set Playback Speed | `a velocità {speed}` · `velocità {speed}` · `imposta la velocità {speed}` · `metti la velocità {speed}` · `riproduci a velocità {speed}` · `vai {speed}` |
 | Set Reminder | `Ricordami tra {reminder_duration}` · `Ricordami alle {reminder_time}` · `Imposta un promemoria tra {reminder_duration}` · `Imposta un promemoria per le {reminder_time}` |
 | Show More | `mostra di più` · `altra pagina` · `più risultati` · `vedi altro` · `altro` · `cos'altro` |
+| Show Photo Album | `mostra le mie foto` · `mostra le foto di {photoAlbum}` · `mostrami le mie foto` · `mostra le mie foto di {photoAlbum}` · `mostrami le foto di {photoAlbum}` · `apri le foto di {photoAlbum}` |
 | Shuffle All Off | `Disattiva mescolamento` · `Disattiva il casuale` · `Ripristina l'ordine della coda` · `disattivare il mescolamento` · `Di disattivare il mescolamento` |
 | Shuffle All On | `Attiva mescolamento` · `Attiva il casuale` · `Mescola la coda` · `Mescola la riproduzione` · `attivare il mescolamento` · `mescolare la coda` |
 | Shuffle Play | `Mescola la playlist {playlist}` · `Mescola playlist {playlist}` · `Riproduci la playlist {playlist} in modalità casuale` · `Riproduci la playlist {playlist} a caso` · `Suona la playlist {playlist} in modalità casuale` |
@@ -887,6 +901,7 @@ Invocation name: **"jellyfin player"**
 | Set Playback Speed | `速度 {speed}` · `速度を {speed} にして` · `再生速度 {speed}` · `{speed} にして` |
 | Set Reminder | `{reminder_duration} 後にリマインドして` · `{reminder_time} にリマインドして` · `{reminder_duration} のリマインダーを設定して` · `{reminder_time} のリマインダーを設定して` |
 | Show More | `もっと見せて` · `次のページ` · `もっと` · `続き` · `他に何がある` · `もっと結果` |
+| Show Photo Album | `写真を見せて` · `{photoAlbum} の写真を見せて` · `私の写真を見せて` · `{photoAlbum} のフォトアルバムを見せて` · `{photoAlbum} の写真を表示して` · `スライドショーを始めて` |
 | Shuffle Play | `プレイリスト {playlist} をシャッフルで再生して` · `シャッフルでプレイリスト {playlist} を再生して` |
 | Sleep Timer | `{sleep_duration} 後に止めて` · `スリープタイマー {sleep_duration}` · `{sleep_duration} 後におやすみタイマー` · `{sleep_duration} でスリープタイマーをセットして` |
 | Turn Radio Off | `ラジオモードをオフにして` · `ラジオモードを無効にして` · `ラジオをオフにして` · `ラジオを無効にして` · `ラジオモードを止めて` |
@@ -944,6 +959,7 @@ Invocation name: **"jellyfin player"**
 | Set Playback Speed | `op snelheid {speed}` · `snelheid {speed}` · `zet de snelheid op {speed}` · `speel op snelheid {speed}` · `speel {speed}` |
 | Set Reminder | `herinner me over {reminder_duration}` · `herinner me om {reminder_time}` · `stel een herinnering in voor {reminder_duration}` · `zet een herinnering op {reminder_time}` |
 | Show More | `toon meer` · `meer resultaten` · `volgende` · `doorgaan` · `wat nog meer` · `meer` |
+| Show Photo Album | `toon mijn foto's` · `toon foto's van {photoAlbum}` · `laat mijn foto's zien` · `toon de foto's van {photoAlbum}` · `laat de foto's van {photoAlbum} zien` · `open de foto's van {photoAlbum}` |
 | Shuffle Play | `speel de playlist {playlist} in willekeurige volgorde` · `shuffle de playlist {playlist}` |
 | Sleep Timer | `stop met afspelen over {sleep_duration}` · `stel een slaaptimer in voor {sleep_duration}` · `slaaptimer {sleep_duration}` · `stop na {sleep_duration}` · `zet uit over {sleep_duration}` |
 | Turn Radio Off | `zet radiomodus uit` · `schakel radiomodus uit` · `radiomodus uit` · `zet radio uit` · `schakel radio uit` · `stop radiomodus` |
@@ -1001,6 +1017,7 @@ Invocation name: **"jellyfin player"**
 | Set Playback Speed | `a velocidade {speed}` · `velocidade {speed}` · `põe a velocidade em {speed}` · `toca a velocidade {speed}` · `põe {speed}` |
 | Set Reminder | `me lembre em {reminder_duration}` · `me lembre às {reminder_time}` · `crie um lembrete de {reminder_duration}` · `crie um lembrete para as {reminder_time}` |
 | Show More | `mostrar mais` · `mais resultados` · `próximo` · `continuar` · `o que mais` · `ver mais` |
+| Show Photo Album | `mostra minhas fotos` · `mostra fotos de {photoAlbum}` · `me mostra minhas fotos` · `mostra as fotos de {photoAlbum}` · `me mostra as fotos de {photoAlbum}` · `abre as fotos de {photoAlbum}` |
 | Shuffle Play | `toque a playlist {playlist} em modo aleatório` · `embaralhe a playlist {playlist}` |
 | Sleep Timer | `parar de tocar em {sleep_duration}` · `definir timer de sono para {sleep_duration}` · `timer de sono {sleep_duration}` · `parar após {sleep_duration}` · `desligar em {sleep_duration}` · `definir timer de sono {sleep_duration}` |
 | Turn Radio Off | `desativar modo rádio` · `desabilitar modo rádio` · `modo rádio desligado` · `desligar rádio` · `desabilitar rádio` · `parar modo rádio` |

@@ -851,6 +851,73 @@ internal static class AplHelper
 
     private static readonly JObject ResumeOfferDocument = JObject.Parse(ResumeOfferTemplate);
 
+    // Photo slideshow APL template (JF-329): a full-screen Pager cycling the
+    // album's images. The advance mechanism is the handleTick + command shape
+    // already proven in this repo (the JF-624 enhanced NowPlaying tick handler,
+    // verified in the Amazon web simulator runtime): every 8 seconds the
+    // SetPage command moves the pager to the wrapped next page (modulo the
+    // images array's own length, the one source of the count), and the same
+    // expression also serves manual swipes (navigation "wrap"). An AutoPages
+    // component would be fewer moving parts but is unproven on our devices.
+    private static readonly string SlideshowTemplate = @"{
+  ""type"": ""APL"",
+  ""version"": ""1.7"",
+  ""theme"": ""dark"",
+  ""extensions"": [{ ""name"": ""Back"", ""uri"": ""aplext:backstack:10"" }],
+  ""mainTemplate"": {
+    ""parameters"": [""payload""],
+    ""items"": [
+      {
+        ""type"": ""Container"",
+        ""height"": ""100vh"",
+        ""width"": ""100vw"",
+        ""items"": [
+          {
+            ""type"": ""Pager"",
+            ""id"": ""slideshowPager"",
+            ""width"": ""100vw"",
+            ""height"": ""100vh"",
+            ""navigation"": ""wrap"",
+            ""data"": ""${payload.slideshowData.properties.images}"",
+            ""items"": {
+              ""type"": ""Image"",
+              ""source"": ""${data.url}"",
+              ""width"": ""100vw"",
+              ""height"": ""100vh"",
+              ""scale"": ""best-fill""
+            },
+            ""handleTick"": [
+              {
+                ""minimumDelay"": 8000,
+                ""commands"": [
+                  {
+                    ""type"": ""SetPage"",
+                    ""componentId"": ""slideshowPager"",
+                    ""position"": ""${(slideshowPager.currentPage + 1) % payload.slideshowData.properties.images.length}""
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            ""type"": ""Text"",
+            ""text"": ""${payload.slideshowData.properties.title}"",
+            ""fontSize"": 28,
+            ""fontWeight"": ""bold"",
+            ""color"": ""white"",
+            ""paddingLeft"": 24,
+            ""paddingTop"": 16,
+            ""position"": ""absolute"",
+            ""width"": ""100vw""
+          }
+        ]
+      }
+    ]
+  }
+}";
+
+    private static readonly JObject SlideshowDocument = JObject.Parse(SlideshowTemplate);
+
     /// <summary>
     /// Check if the requesting device supports APL rendering.
     /// </summary>
@@ -1122,6 +1189,49 @@ internal static class AplHelper
                         ["artUrl"] = imageUrl,
                         ["backgroundUrl"] = backgroundImageUrl,
                         ["prompt"] = prompt
+                    }
+                }
+            },
+            PresentationSession = BuildPresentationSession(context)
+        };
+    }
+
+    /// <summary>
+    /// Build an APL photo-slideshow directive (JF-329): a full-screen pager that
+    /// cycles one image every 8 seconds (the document's tick-handler
+    /// minimumDelay) with the title overlaid. Display-only: the document
+    /// carries no touch handlers, so the response it rides may end the session.
+    /// </summary>
+    /// <param name="title">Header text overlaid on the slideshow.</param>
+    /// <param name="imageUrls">URLs of the photos to cycle, in play order.</param>
+    /// <param name="context">Optional Alexa request context for backstack navigation.</param>
+    /// <returns>An APL RenderDocument directive, or null when no images are given.</returns>
+    public static AplRenderDocumentDirective? BuildSlideshowDirective(string title, List<string> imageUrls, Context? context = null)
+    {
+        if (imageUrls.Count == 0)
+        {
+            return null;
+        }
+
+        var images = new JArray();
+        foreach (string url in imageUrls)
+        {
+            images.Add(new JObject { ["url"] = url });
+        }
+
+        return new AplRenderDocumentDirective
+        {
+            Token = "slideshow",
+            Document = SlideshowDocument,
+            DataSources = new JObject
+            {
+                ["slideshowData"] = new JObject
+                {
+                    ["type"] = "object",
+                    ["properties"] = new JObject
+                    {
+                        ["title"] = title,
+                        ["images"] = images
                     }
                 }
             },

@@ -312,5 +312,12 @@
   "CannotChangeSpeedForBook": "क्षमा करें, मैं ऑडियोबुक की गति नहीं बदल सकता।",
   "StreamTokenNotConfigured": "स्ट्रीमिंग सही ढंग से कॉन्फ़िगर नहीं है। कृपया अपने Jellyfin डैशबोर्ड में Alexa स्किल का सेटिंग्स पेज जाँचें।",
   "PlayingNextEpisodeSsml": "अगला एपिसोड चला रहा हूँ: {0}",
-  "PlayingLatestEpisodeSsml": "नवीनतम एपिसोड चला रहा हूँ: {0}"
+  "PlayingLatestEpisodeSsml": "नवीनतम एपिसोड चला रहा हूँ: {0}",
+  "PhotosRequireScreen": "आपकी फ़ोटो दिखाने के लिए मुझे स्क्रीन वाले डिवाइस की ज़रूरत है, जैसे Echo Show।",
+  "PhotoAlbumNotFound": "माफ़ कीजिए, {0} नाम का फ़ोटो एल्बम नहीं मिला।",
+  "PhotoAlbumEmpty": "फ़ोटो एल्बम {0} में कोई फ़ोटो नहीं है।",
+  "NoPhotosFound": "आपकी लाइब्रेरी में कोई फ़ोटो नहीं मिली।",
+  "ShowingPhotoAlbum": "{1} की {0} फ़ोटो दिखा रहा हूँ।",
+  "ShowingRecentPhotos": "आपकी {0} सबसे हाल की फ़ोटो दिखा रहा हूँ।",
+  "RecentPhotosTitle": "हाल की फ़ोटो"
 }

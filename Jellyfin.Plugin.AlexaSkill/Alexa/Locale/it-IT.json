@@ -312,5 +312,12 @@
   "CannotChangeSpeedForBook": "Mi dispiace, non posso cambiare la velocità degli audiolibri.",
   "StreamTokenNotConfigured": "Lo streaming non è configurato correttamente. Controlla la pagina delle impostazioni della Alexa Skill nella dashboard di Jellyfin.",
   "PlayingNextEpisodeSsml": "Riproduco il prossimo episodio: {0}",
-  "PlayingLatestEpisodeSsml": "Riproduco l'ultimo episodio: {0}"
+  "PlayingLatestEpisodeSsml": "Riproduco l'ultimo episodio: {0}",
+  "PhotosRequireScreen": "Per mostrare le tue foto mi serve un dispositivo con schermo, come un Echo Show.",
+  "PhotoAlbumNotFound": "Spiacente, non ho trovato un album di foto chiamato {0}.",
+  "PhotoAlbumEmpty": "L'album di foto {0} non contiene foto.",
+  "NoPhotosFound": "Non ho trovato foto nella tua libreria.",
+  "ShowingPhotoAlbum": "Sto mostrando {0} foto dell'album {1}.",
+  "ShowingRecentPhotos": "Sto mostrando le tue {0} foto più recenti.",
+  "RecentPhotosTitle": "Foto recenti"
 }

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Apl;
@@ -663,5 +664,48 @@ public class AplHelperTests : PluginTestBase
     {
         // 2 hours, 30 minutes, 0 seconds
         Assert.Equal("2:30:00", AplHelper.FormatTime(9000000));
+    }
+
+    [Fact]
+    public void BuildSlideshowDirective_EmptyImages_ReturnsNull()
+    {
+        Assert.Null(AplHelper.BuildSlideshowDirective("Trip", new List<string>()));
+    }
+
+    [Fact]
+    public void BuildSlideshowDirective_BindsImagesAndTitle()
+    {
+        var directive = AplHelper.BuildSlideshowDirective(
+            "Trip to Rome", new List<string> { "http://img/1", "http://img/2", "http://img/3" });
+
+        Assert.NotNull(directive);
+        Assert.Equal("slideshow", directive!.Token);
+        string dsStr = directive.DataSources!.ToString();
+        Assert.Contains("\"title\": \"Trip to Rome\"", dsStr);
+        foreach (string url in new[] { "http://img/1", "http://img/2", "http://img/3" })
+        {
+            Assert.Contains($"\"url\": \"{url}\"", dsStr);
+        }
+    }
+
+    [Fact]
+    public void BuildSlideshowDirective_DocumentAdvancesViaTickHandler()
+    {
+        // The JF-624-proven advance mechanism: the pager's handleTick fires a
+        // SetPage on the wrapped next index. Pinning the document shape here is
+        // the unit guard for the slideshow's cycling (validate_apl.py only
+        // checks structure, not this command chain).
+        var directive = AplHelper.BuildSlideshowDirective("Trip", new List<string> { "http://img/1", "http://img/2" });
+
+        string docStr = directive!.Document.ToString();
+        Assert.Contains("\"type\": \"Pager\"", docStr);
+        Assert.Contains("\"id\": \"slideshowPager\"", docStr);
+        Assert.Contains("\"navigation\": \"wrap\"", docStr);
+        Assert.Contains("\"data\": \"${payload.slideshowData.properties.images}\"", docStr);
+        Assert.Contains("\"source\": \"${data.url}\"", docStr);
+        Assert.Contains("\"minimumDelay\": 8000", docStr);
+        Assert.Contains("\"type\": \"SetPage\"", docStr);
+        Assert.Contains("\"componentId\": \"slideshowPager\"", docStr);
+        Assert.Contains("% payload.slideshowData.properties.images.length", docStr);
     }
 }

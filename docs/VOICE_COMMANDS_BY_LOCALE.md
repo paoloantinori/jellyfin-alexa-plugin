@@ -49,6 +49,7 @@ Placeholder legend:
 | `<نوع الوسائط (موسيقى، فيديو)>` | `{media_type}` |
 | `<المزاج (هادئ، نشيط)>` | `{mood}` |
 | `<اسم الفنان>` | `{musician}` |
+| `<اسم ألبوم الصور>` | `{photoAlbum}` |
 | `<اسم قائمة التشغيل>` | `{playlist}` |
 | `<اسم قائمة التشغيل>` | `{playlist_target}` |
 | `<اسم البودكاست>` | `{podcast_name}` |
@@ -69,7 +70,7 @@ Placeholder legend:
 | `<كلمات من عنوان الأغنية>` | `{titleKeywords}` |
 | `<اسم المستخدم>` | `{username}` |
 
-Complete phrase list (340 phrases across 66 commands):
+Complete phrase list (347 phrases across 67 commands):
 
 #### Play music
 
@@ -256,6 +257,18 @@ Complete phrase list (340 phrases across 66 commands):
 - `استمع إلى الكتاب الصوتي <عنوان الكتاب الصوتي>`
 - `أريد الاستماع إلى <عنوان الكتاب الصوتي>`
 - `شغل الكتاب المسموع <عنوان الكتاب الصوتي>`
+
+#### Photos
+
+**Show a photo album slideshow**
+
+- `أرني صوري`
+- `اعرض صوري`
+- `أرني صور <اسم ألبوم الصور>`
+- `اعرض صور <اسم ألبوم الصور>`
+- `افتح صور <اسم ألبوم الصور>`
+- `ابدأ عرض شرائح لصوري`
+- `ابدأ عرض شرائح لصور <اسم ألبوم الصور>`
 
 #### Radio and live TV
 
@@ -623,6 +636,7 @@ Placeholder legend:
 | `<mediatype (muziek, video)>` | `{media_type}` |
 | `<stemming (relaxt, energiek)>` | `{mood}` |
 | `<naam van de artiest>` | `{musician}` |
+| `<naam van het fotoalbum>` | `{photoAlbum}` |
 | `<naam van de playlist>` | `{playlist}` |
 | `<playlist name>` | `{playlist_target}` |
 | `<naam van de podcast>` | `{podcast_name}` |
@@ -643,7 +657,7 @@ Placeholder legend:
 | `<woorden uit de songtitel>` | `{titleKeywords}` |
 | `<gebruikersnaam>` | `{username}` |
 
-Complete phrase list (395 phrases across 66 commands):
+Complete phrase list (403 phrases across 67 commands):
 
 #### Play music
 
@@ -849,6 +863,19 @@ Complete phrase list (395 phrases across 66 commands):
 - `luister naar het boek <titel van het luisterboek>`
 - `luister naar luisterboek <titel van het luisterboek>`
 - `luister naar het luisterboek <titel van het luisterboek>`
+
+#### Photos
+
+**Show a photo album slideshow**
+
+- `toon mijn foto's`
+- `laat mijn foto's zien`
+- `toon foto's van <naam van het fotoalbum>`
+- `toon de foto's van <naam van het fotoalbum>`
+- `laat de foto's van <naam van het fotoalbum> zien`
+- `open de foto's van <naam van het fotoalbum>`
+- `start een diavoorstelling van mijn foto's`
+- `start een diavoorstelling van <naam van het fotoalbum>`
 
 #### Radio and live TV
 
@@ -1252,6 +1279,7 @@ Placeholder legend:
 | `<media type (music, video)>` | `{media_type}` |
 | `<mood (relaxed, energetic)>` | `{mood}` |
 | `<artist name>` | `{musician}` |
+| `<photo album name>` | `{photoAlbum}` |
 | `<playlist name>` | `{playlist}` |
 | `<playlist name>` | `{playlist_target}` |
 | `<podcast name>` | `{podcast_name}` |
@@ -1271,7 +1299,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (492 phrases across 66 commands):
+Complete phrase list (502 phrases across 67 commands):
 
 #### Play music
 
@@ -1523,6 +1551,21 @@ Complete phrase list (492 phrases across 66 commands):
 - `listen to the book <audiobook title>`
 - `listen to audiobook <audiobook title>`
 - `listen to the audiobook <audiobook title>`
+
+#### Photos
+
+**Show a photo album slideshow**
+
+- `show my photos`
+- `show me my photos`
+- `show my <photo album name> photos`
+- `show photos of <photo album name>`
+- `show photos from <photo album name>`
+- `show me photos of <photo album name>`
+- `show me photos from <photo album name>`
+- `display photos from <photo album name>`
+- `start a slideshow of my photos`
+- `start a slideshow of <photo album name>`
 
 #### Radio and live TV
 
@@ -1977,6 +2020,7 @@ Placeholder legend:
 | `<media type (music, video)>` | `{media_type}` |
 | `<mood (relaxed, energetic)>` | `{mood}` |
 | `<artist name>` | `{musician}` |
+| `<photo album name>` | `{photoAlbum}` |
 | `<playlist name>` | `{playlist}` |
 | `<playlist name>` | `{playlist_target}` |
 | `<podcast name>` | `{podcast_name}` |
@@ -1996,7 +2040,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (494 phrases across 66 commands):
+Complete phrase list (504 phrases across 67 commands):
 
 #### Play music
 
@@ -2254,6 +2298,21 @@ Complete phrase list (494 phrases across 66 commands):
 - `listen to the book <audiobook title>`
 - `listen to audiobook <audiobook title>`
 - `listen to the audiobook <audiobook title>`
+
+#### Photos
+
+**Show a photo album slideshow**
+
+- `show my photos`
+- `show me my photos`
+- `show my <photo album name> photos`
+- `show photos of <photo album name>`
+- `show photos from <photo album name>`
+- `show me photos of <photo album name>`
+- `show me photos from <photo album name>`
+- `display photos from <photo album name>`
+- `start a slideshow of my photos`
+- `start a slideshow of <photo album name>`
 
 #### Radio and live TV
 
@@ -2704,6 +2763,7 @@ Placeholder legend:
 | `<media type (music, video)>` | `{media_type}` |
 | `<mood (relaxed, energetic)>` | `{mood}` |
 | `<artist name>` | `{musician}` |
+| `<photo album name>` | `{photoAlbum}` |
 | `<playlist name>` | `{playlist}` |
 | `<playlist name>` | `{playlist_target}` |
 | `<podcast name>` | `{podcast_name}` |
@@ -2723,7 +2783,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (581 phrases across 66 commands):
+Complete phrase list (591 phrases across 67 commands):
 
 #### Play music
 
@@ -3049,6 +3109,21 @@ Complete phrase list (581 phrases across 66 commands):
 - `listen to the book <audiobook title>`
 - `listen to audiobook <audiobook title>`
 - `listen to the audiobook <audiobook title>`
+
+#### Photos
+
+**Show a photo album slideshow**
+
+- `show my photos`
+- `show me my photos`
+- `show my <photo album name> photos`
+- `show photos of <photo album name>`
+- `show photos from <photo album name>`
+- `show me photos of <photo album name>`
+- `show me photos from <photo album name>`
+- `display photos from <photo album name>`
+- `start a slideshow of my photos`
+- `start a slideshow of <photo album name>`
 
 #### Radio and live TV
 
@@ -3518,6 +3593,7 @@ Placeholder legend:
 | `<media type (music, video)>` | `{media_type}` |
 | `<mood (relaxed, energetic)>` | `{mood}` |
 | `<artist name>` | `{musician}` |
+| `<photo album name>` | `{photoAlbum}` |
 | `<playlist name>` | `{playlist}` |
 | `<playlist name>` | `{playlist_target}` |
 | `<podcast name>` | `{podcast_name}` |
@@ -3537,7 +3613,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (496 phrases across 66 commands):
+Complete phrase list (506 phrases across 67 commands):
 
 #### Play music
 
@@ -3795,6 +3871,21 @@ Complete phrase list (496 phrases across 66 commands):
 - `listen to the book <audiobook title>`
 - `listen to audiobook <audiobook title>`
 - `listen to the audiobook <audiobook title>`
+
+#### Photos
+
+**Show a photo album slideshow**
+
+- `show my photos`
+- `show me my photos`
+- `show my <photo album name> photos`
+- `show photos of <photo album name>`
+- `show photos from <photo album name>`
+- `show me photos of <photo album name>`
+- `show me photos from <photo album name>`
+- `display photos from <photo album name>`
+- `start a slideshow of my photos`
+- `start a slideshow of <photo album name>`
 
 #### Radio and live TV
 
@@ -4247,6 +4338,7 @@ Placeholder legend:
 | `<media type (music, video)>` | `{media_type}` |
 | `<mood (relaxed, energetic)>` | `{mood}` |
 | `<artist name>` | `{musician}` |
+| `<photo album name>` | `{photoAlbum}` |
 | `<playlist name>` | `{playlist}` |
 | `<playlist name>` | `{playlist_target}` |
 | `<podcast name>` | `{podcast_name}` |
@@ -4273,7 +4365,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (596 phrases across 68 commands):
+Complete phrase list (606 phrases across 69 commands):
 
 #### Play music
 
@@ -4595,6 +4687,21 @@ Complete phrase list (596 phrases across 68 commands):
 - `listen to the book <audiobook title>`
 - `listen to audiobook <audiobook title>`
 - `listen to the audiobook <audiobook title>`
+
+#### Photos
+
+**Show a photo album slideshow**
+
+- `show my photos`
+- `show me my photos`
+- `show my <photo album name> photos`
+- `show photos of <photo album name>`
+- `show photos from <photo album name>`
+- `show me photos of <photo album name>`
+- `show me photos from <photo album name>`
+- `display photos from <photo album name>`
+- `start a slideshow of my photos`
+- `start a slideshow of <photo album name>`
 
 #### Radio and live TV
 
@@ -5089,6 +5196,7 @@ Placeholder legend:
 | `<type de média (musique, vidéo)>` | `{media_type}` |
 | `<ambiance (détendu, énergique)>` | `{mood}` |
 | `<nom de l'artiste>` | `{musician}` |
+| `<nom de l'album photo>` | `{photoAlbum}` |
 | `<nom de la playlist>` | `{playlist}` |
 | `<playlist name>` | `{playlist_target}` |
 | `<nom du podcast>` | `{podcast_name}` |
@@ -5108,7 +5216,7 @@ Placeholder legend:
 | `<mots du titre de la chanson>` | `{titleKeywords}` |
 | `<nom d'utilisateur>` | `{username}` |
 
-Complete phrase list (456 phrases across 71 commands):
+Complete phrase list (465 phrases across 72 commands):
 
 #### Play music
 
@@ -5335,6 +5443,20 @@ Complete phrase list (456 phrases across 71 commands):
 - `écoute <titre du livre audio>`
 - `écoute le livre <titre du livre audio>`
 - `écoute le livre audio <titre du livre audio>`
+
+#### Photos
+
+**Show a photo album slideshow**
+
+- `montre mes photos`
+- `montre-moi mes photos`
+- `montre les photos de <nom de l'album photo>`
+- `montre-moi les photos de <nom de l'album photo>`
+- `affiche les photos de <nom de l'album photo>`
+- `ouvre les photos de <nom de l'album photo>`
+- `montre les photos de l'album <nom de l'album photo>`
+- `lance un diaporama de mes photos`
+- `lance un diaporama de <nom de l'album photo>`
 
 #### Radio and live TV
 
@@ -5793,6 +5915,7 @@ Placeholder legend:
 | `<type de média (musique, vidéo)>` | `{media_type}` |
 | `<ambiance (détendu, énergique)>` | `{mood}` |
 | `<nom de l'artiste>` | `{musician}` |
+| `<nom de l'album photo>` | `{photoAlbum}` |
 | `<nom de la playlist>` | `{playlist}` |
 | `<playlist name>` | `{playlist_target}` |
 | `<nom du podcast>` | `{podcast_name}` |
@@ -5812,7 +5935,7 @@ Placeholder legend:
 | `<mots du titre de la chanson>` | `{titleKeywords}` |
 | `<nom d'utilisateur>` | `{username}` |
 
-Complete phrase list (468 phrases across 71 commands):
+Complete phrase list (477 phrases across 72 commands):
 
 #### Play music
 
@@ -6047,6 +6170,20 @@ Complete phrase list (468 phrases across 71 commands):
 - `écoute <titre du livre audio>`
 - `écoute le livre <titre du livre audio>`
 - `écoute le livre audio <titre du livre audio>`
+
+#### Photos
+
+**Show a photo album slideshow**
+
+- `montre mes photos`
+- `montre-moi mes photos`
+- `montre les photos de <nom de l'album photo>`
+- `montre-moi les photos de <nom de l'album photo>`
+- `affiche les photos de <nom de l'album photo>`
+- `ouvre les photos de <nom de l'album photo>`
+- `montre les photos de l'album <nom de l'album photo>`
+- `lance un diaporama de mes photos`
+- `lance un diaporama de <nom de l'album photo>`
 
 #### Radio and live TV
 
@@ -6509,6 +6646,7 @@ Placeholder legend:
 | `<Medientyp (Musik, Video)>` | `{media_type}` |
 | `<Stimmung (entspannt, energiegeladen)>` | `{mood}` |
 | `<Name des Künstlers>` | `{musician}` |
+| `<Name des Fotoalbums>` | `{photoAlbum}` |
 | `<Name der Playlist>` | `{playlist}` |
 | `<playlist name>` | `{playlist_target}` |
 | `<Name des Podcasts>` | `{podcast_name}` |
@@ -6528,7 +6666,7 @@ Placeholder legend:
 | `<Wörter aus dem Songtitel>` | `{titleKeywords}` |
 | `<Benutzername>` | `{username}` |
 
-Complete phrase list (472 phrases across 71 commands):
+Complete phrase list (482 phrases across 72 commands):
 
 #### Play music
 
@@ -6763,6 +6901,21 @@ Complete phrase list (472 phrases across 71 commands):
 - `spiele hörbuch <Titel des Hörbuchs>`
 - `hör <Titel des Hörbuchs>`
 - `hör das buch <Titel des Hörbuchs>`
+
+#### Photos
+
+**Show a photo album slideshow**
+
+- `zeig meine Fotos`
+- `zeig mir meine Fotos`
+- `zeig Fotos von <Name des Fotoalbums>`
+- `zeig die Fotos von <Name des Fotoalbums>`
+- `zeig mir Fotos von <Name des Fotoalbums>`
+- `zeig Fotos aus <Name des Fotoalbums>`
+- `öffne die Fotos von <Name des Fotoalbums>`
+- `zeig meine <Name des Fotoalbums> Fotos`
+- `starte eine Diashow meiner Fotos`
+- `starte eine Diashow von <Name des Fotoalbums>`
 
 #### Radio and live TV
 
@@ -7229,6 +7382,7 @@ Placeholder legend:
 | `<मीडिया प्रकार (म्यूज़िक, वीडियो)>` | `{media_type}` |
 | `<मूड (शांत, ऊर्जावान)>` | `{mood}` |
 | `<कलाकार का नाम>` | `{musician}` |
+| `<फ़ोटो एल्बम का नाम>` | `{photoAlbum}` |
 | `<प्लेलिस्ट का नाम>` | `{playlist}` |
 | `<प्लेलिस्ट का नाम>` | `{playlist_target}` |
 | `<पॉडकास्ट का नाम>` | `{podcast_name}` |
@@ -7249,7 +7403,7 @@ Placeholder legend:
 | `<गाने के नाम के शब्द>` | `{titleKeywords}` |
 | `<उपयोगकर्ता का नाम>` | `{username}` |
 
-Complete phrase list (370 phrases across 66 commands):
+Complete phrase list (377 phrases across 67 commands):
 
 #### Play music
 
@@ -7451,6 +7605,18 @@ Complete phrase list (370 phrases across 66 commands):
 - `ऑडियोबुक <ऑडियोबुक का नाम> सुनो`
 - `मैं <ऑडियोबुक का नाम> सुनना चाहता हूँ`
 - `ऑडियोबुक <ऑडियोबुक का नाम> सुनाओ`
+
+#### Photos
+
+**Show a photo album slideshow**
+
+- `मेरी फ़ोटो दिखाओ`
+- `मुझे मेरी फ़ोटो दिखाओ`
+- `<फ़ोटो एल्बम का नाम> की फ़ोटो दिखाओ`
+- `<फ़ोटो एल्बम का नाम> की तस्वीरें दिखाओ`
+- `<फ़ोटो एल्बम का नाम> का फ़ोटो एल्बम दिखाओ`
+- `मेरी फ़ोटो की स्लाइडशो शुरू करो`
+- `<फ़ोटो एल्बम का नाम> की स्लाइडशो शुरू करो`
 
 #### Radio and live TV
 
@@ -7834,6 +8000,7 @@ Placeholder legend:
 | `<tipo di contenuto (musica, video)>` | `{media_type}` |
 | `<umore (rilassato, energico)>` | `{mood}` |
 | `<nome dell'artista>` | `{musician}` |
+| `<nome dell'album di foto>` | `{photoAlbum}` |
 | `<nome della playlist>` | `{playlist}` |
 | `<nome della playlist>` | `{playlist_target}` |
 | `<nome del podcast>` | `{podcast_name}` |
@@ -7853,7 +8020,7 @@ Placeholder legend:
 | `<titolo del video o del film>` | `{title}` |
 | `<parole del titolo del brano>` | `{titleKeywords}` |
 
-Complete phrase list (1585 phrases across 71 commands):
+Complete phrase list (1595 phrases across 72 commands):
 
 #### Play music
 
@@ -9107,6 +9274,21 @@ Complete phrase list (1585 phrases across 71 commands):
 - `Di riprodurre il libro <titolo dell'audiolibro>`
 - `Di ascoltare il libro <titolo dell'audiolibro>`
 
+#### Photos
+
+**Show a photo album slideshow**
+
+- `mostra le mie foto`
+- `mostrami le mie foto`
+- `mostra le foto di <nome dell'album di foto>`
+- `mostra le mie foto di <nome dell'album di foto>`
+- `mostrami le foto di <nome dell'album di foto>`
+- `apri le foto di <nome dell'album di foto>`
+- `fai vedere le foto di <nome dell'album di foto>`
+- `visualizza le foto di <nome dell'album di foto>`
+- `avvia una presentazione delle mie foto`
+- `avvia una presentazione di <nome dell'album di foto>`
+
 #### Radio and live TV
 
 **Start radio mode**
@@ -9670,6 +9852,7 @@ Placeholder legend:
 | `<メディアの種類 (音楽、ビデオ)>` | `{media_type}` |
 | `<ムード (リラックス、エネルギッシュ)>` | `{mood}` |
 | `<アーティスト名>` | `{musician}` |
+| `<フォトアルバム名>` | `{photoAlbum}` |
 | `<プレイリスト名>` | `{playlist}` |
 | `<プレイリスト名>` | `{playlist_target}` |
 | `<ポッドキャスト名>` | `{podcast_name}` |
@@ -9690,7 +9873,7 @@ Placeholder legend:
 | `<曲名のキーワード>` | `{titleKeywords}` |
 | `<ユーザー名>` | `{username}` |
 
-Complete phrase list (333 phrases across 66 commands):
+Complete phrase list (341 phrases across 67 commands):
 
 #### Play music
 
@@ -9867,6 +10050,19 @@ Complete phrase list (333 phrases across 66 commands):
 - `オーディオブック <オーディオブック名> を聴かせて`
 - `<オーディオブック名> を聞きたい`
 - `オーディオブック <オーディオブック名> を聞きたい`
+
+#### Photos
+
+**Show a photo album slideshow**
+
+- `写真を見せて`
+- `私の写真を見せて`
+- `<フォトアルバム名> の写真を見せて`
+- `<フォトアルバム名> のフォトアルバムを見せて`
+- `<フォトアルバム名> の写真を表示して`
+- `スライドショーを始めて`
+- `私の写真のスライドショーを始めて`
+- `<フォトアルバム名> のスライドショーを始めて`
 
 #### Radio and live TV
 
@@ -10237,6 +10433,7 @@ Placeholder legend:
 | `<tipo de mídia (música, vídeo)>` | `{media_type}` |
 | `<humor (relaxado, energético)>` | `{mood}` |
 | `<nome do artista>` | `{musician}` |
+| `<nome do álbum de fotos>` | `{photoAlbum}` |
 | `<nome da playlist>` | `{playlist}` |
 | `<nome da playlist>` | `{playlist_target}` |
 | `<nome do podcast>` | `{podcast_name}` |
@@ -10257,7 +10454,7 @@ Placeholder legend:
 | `<palavras do título da música>` | `{titleKeywords}` |
 | `<nome do usuário>` | `{username}` |
 
-Complete phrase list (408 phrases across 66 commands):
+Complete phrase list (417 phrases across 67 commands):
 
 #### Play music
 
@@ -10470,6 +10667,20 @@ Complete phrase list (408 phrases across 66 commands):
 - `ouvir <título do audiolivro>`
 - `ouvir o livro <título do audiolivro>`
 - `ouvir o audiolivro <título do audiolivro>`
+
+#### Photos
+
+**Show a photo album slideshow**
+
+- `mostra minhas fotos`
+- `me mostra minhas fotos`
+- `mostra fotos de <nome do álbum de fotos>`
+- `mostra as fotos de <nome do álbum de fotos>`
+- `me mostra as fotos de <nome do álbum de fotos>`
+- `abre as fotos de <nome do álbum de fotos>`
+- `mostra as fotos do álbum <nome do álbum de fotos>`
+- `inicia uma apresentação de minhas fotos`
+- `inicia uma apresentação de <nome do álbum de fotos>`
 
 #### Radio and live TV
 
@@ -10879,6 +11090,7 @@ Placeholder legend:
 | `<tipo de contenido (música, vídeo)>` | `{media_type}` |
 | `<ánimo (relajado, energético)>` | `{mood}` |
 | `<nombre del artista>` | `{musician}` |
+| `<nombre del álbum de fotos>` | `{photoAlbum}` |
 | `<nombre de la lista>` | `{playlist}` |
 | `<nombre de la lista>` | `{playlist_target}` |
 | `<nombre del pódcast>` | `{podcast_name}` |
@@ -10898,7 +11110,7 @@ Placeholder legend:
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (458 phrases across 66 commands):
+Complete phrase list (468 phrases across 67 commands):
 
 #### Play music
 
@@ -11135,6 +11347,21 @@ Complete phrase list (458 phrases across 66 commands):
 - `escucha <título del audiolibro>`
 - `escucha el libro <título del audiolibro>`
 - `escucha el audiolibro <título del audiolibro>`
+
+#### Photos
+
+**Show a photo album slideshow**
+
+- `muestra mis fotos`
+- `muéstrame mis fotos`
+- `muestra fotos de <nombre del álbum de fotos>`
+- `muestra las fotos de <nombre del álbum de fotos>`
+- `muéstrame las fotos de <nombre del álbum de fotos>`
+- `abre las fotos de <nombre del álbum de fotos>`
+- `enseña las fotos de <nombre del álbum de fotos>`
+- `muestra las fotos del álbum <nombre del álbum de fotos>`
+- `inicia una presentación de mis fotos`
+- `inicia una presentación de <nombre del álbum de fotos>`
 
 #### Radio and live TV
 
@@ -11570,6 +11797,7 @@ Placeholder legend:
 | `<tipo de contenido (música, vídeo)>` | `{media_type}` |
 | `<ánimo (relajado, energético)>` | `{mood}` |
 | `<nombre del artista>` | `{musician}` |
+| `<nombre del álbum de fotos>` | `{photoAlbum}` |
 | `<nombre de la lista>` | `{playlist}` |
 | `<nombre de la lista>` | `{playlist_target}` |
 | `<nombre del pódcast>` | `{podcast_name}` |
@@ -11589,7 +11817,7 @@ Placeholder legend:
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (455 phrases across 66 commands):
+Complete phrase list (465 phrases across 67 commands):
 
 #### Play music
 
@@ -11825,6 +12053,21 @@ Complete phrase list (455 phrases across 66 commands):
 - `escucha <título del audiolibro>`
 - `escucha el libro <título del audiolibro>`
 - `escucha el audiolibro <título del audiolibro>`
+
+#### Photos
+
+**Show a photo album slideshow**
+
+- `muestra mis fotos`
+- `muéstrame mis fotos`
+- `muestra fotos de <nombre del álbum de fotos>`
+- `muestra las fotos de <nombre del álbum de fotos>`
+- `muéstrame las fotos de <nombre del álbum de fotos>`
+- `abre las fotos de <nombre del álbum de fotos>`
+- `enseña las fotos de <nombre del álbum de fotos>`
+- `muestra las fotos del álbum <nombre del álbum de fotos>`
+- `inicia una presentación de mis fotos`
+- `inicia una presentación de <nombre del álbum de fotos>`
 
 #### Radio and live TV
 
@@ -12258,6 +12501,7 @@ Placeholder legend:
 | `<tipo de contenido (música, vídeo)>` | `{media_type}` |
 | `<ánimo (relajado, energético)>` | `{mood}` |
 | `<nombre del artista>` | `{musician}` |
+| `<nombre del álbum de fotos>` | `{photoAlbum}` |
 | `<nombre de la lista>` | `{playlist}` |
 | `<nombre de la lista>` | `{playlist_target}` |
 | `<nombre del pódcast>` | `{podcast_name}` |
@@ -12277,7 +12521,7 @@ Placeholder legend:
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (443 phrases across 66 commands):
+Complete phrase list (453 phrases across 67 commands):
 
 #### Play music
 
@@ -12506,6 +12750,21 @@ Complete phrase list (443 phrases across 66 commands):
 - `escucha <título del audiolibro>`
 - `escucha el libro <título del audiolibro>`
 - `escucha el audiolibro <título del audiolibro>`
+
+#### Photos
+
+**Show a photo album slideshow**
+
+- `muestra mis fotos`
+- `muéstrame mis fotos`
+- `muestra fotos de <nombre del álbum de fotos>`
+- `muestra las fotos de <nombre del álbum de fotos>`
+- `muéstrame las fotos de <nombre del álbum de fotos>`
+- `abre las fotos de <nombre del álbum de fotos>`
+- `enseña las fotos de <nombre del álbum de fotos>`
+- `muestra las fotos del álbum <nombre del álbum de fotos>`
+- `inicia una presentación de mis fotos`
+- `inicia una presentación de <nombre del álbum de fotos>`
 
 #### Radio and live TV
 
@@ -12931,6 +13190,7 @@ The body above is user-facing and never names intents or handlers. This table ma
 | Episodes and series | Play the next episode | `PlayNextEpisodeIntent` |
 | Podcasts | Play a podcast | `PlayPodcastIntent` |
 | Audiobooks | Play an audiobook | `PlayBookIntent` |
+| Photos | Show a photo album slideshow | `ShowPhotoAlbumIntent` |
 | Radio and live TV | Start radio mode | `PlayRadioIntent` |
 | Radio and live TV | Turn radio mode on | `TurnRadioOnIntent` |
 | Radio and live TV | Turn radio mode off | `TurnRadioOffIntent` |

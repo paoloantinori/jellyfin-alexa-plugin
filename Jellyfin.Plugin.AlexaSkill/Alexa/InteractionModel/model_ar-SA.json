@@ -916,6 +916,24 @@
             "type": "AMAZON.SearchQuery"
           }
         ]
+      },
+      {
+        "name": "ShowPhotoAlbumIntent",
+        "samples": [
+          "أرني صوري",
+          "اعرض صوري",
+          "أرني صور {photoAlbum}",
+          "اعرض صور {photoAlbum}",
+          "افتح صور {photoAlbum}",
+          "ابدأ عرض شرائح لصوري",
+          "ابدأ عرض شرائح لصور {photoAlbum}"
+        ],
+        "slots": [
+          {
+            "name": "photoAlbum",
+            "type": "AMAZON.SearchQuery"
+          }
+        ]
       }
     ],
     "types": [

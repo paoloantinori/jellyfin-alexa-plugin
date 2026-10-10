@@ -1075,6 +1075,27 @@
             "type": "AMAZON.SearchQuery"
           }
         ]
+      },
+      {
+        "name": "ShowPhotoAlbumIntent",
+        "samples": [
+          "zeig meine Fotos",
+          "zeig mir meine Fotos",
+          "zeig Fotos von {photoAlbum}",
+          "zeig die Fotos von {photoAlbum}",
+          "zeig mir Fotos von {photoAlbum}",
+          "zeig Fotos aus {photoAlbum}",
+          "öffne die Fotos von {photoAlbum}",
+          "zeig meine {photoAlbum} Fotos",
+          "starte eine Diashow meiner Fotos",
+          "starte eine Diashow von {photoAlbum}"
+        ],
+        "slots": [
+          {
+            "name": "photoAlbum",
+            "type": "AMAZON.SearchQuery"
+          }
+        ]
       }
     ],
     "types": [
