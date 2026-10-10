@@ -232,14 +232,14 @@ public static class AudiobookPlaylistBuilder
     /// truncated listing must stay an event playlist (the player keeps polling
     /// for growth). A <paramref name="maxSegments"/> at or above the listing's
     /// own count returns the content unchanged in shape.
-    /// ALLOCATION SHAPE (JF-818, the per-poll cost review): a span-based
-    /// IndexOf line scan emitting only kept lines, NOT a full
+    /// ALLOCATION SHAPE (JF-818, the per-poll cost review): a
+    /// <see cref="LineScanner"/> walk emitting only kept lines, NOT a full
     /// <c>Split('\n')</c> of the whole prewrite (a 5h single-file book is a
     /// ~4500-entry / ~250KB listing this walk runs on once per mid-encode
-    /// playlist poll, only to emit a window of a few dozen entries). The scan
-    /// reproduces <c>Split('\n')</c> line semantics exactly: newline + 1
-    /// lines (a trailing newline yields one final empty line, an empty input
-    /// one), each CR-trimmed, joined with <c>\n</c>.
+    /// playlist poll, only to emit a window of a few dozen entries). The
+    /// scanner owns the <c>Split('\n')</c>-equivalence line semantics once
+    /// for both span walks (JF-859 /simplify: the scaffold had been copied
+    /// verbatim between this walk and the EXTINF walk).
     /// </summary>
     /// <param name="playlistContent">The full playlist text.</param>
     /// <param name="maxSegments">The number of leading segment entries to keep.</param>
@@ -254,11 +254,10 @@ public static class AudiobookPlaylistBuilder
         var pending = new StringBuilder();
         int segmentCount = 0;
         bool truncated = false;
-        ReadOnlySpan<char> rest = playlistContent.AsSpan();
-        while (true)
+        var scanner = new LineScanner(playlistContent);
+        while (scanner.MoveNext())
         {
-            int newline = rest.IndexOf('\n');
-            ReadOnlySpan<char> line = (newline < 0 ? rest : rest[..newline]).TrimEnd('\r');
+            ReadOnlySpan<char> line = scanner.Current;
             if (IsSegmentUriLine(line))
             {
                 if (segmentCount >= maxSegments)
@@ -278,13 +277,6 @@ public static class AudiobookPlaylistBuilder
                 pending.Append(line);
                 pending.Append('\n');
             }
-
-            if (newline < 0)
-            {
-                break;
-            }
-
-            rest = rest[(newline + 1)..];
         }
 
         // A walk that never truncated keeps the trailing non-URI lines (an
@@ -301,6 +293,65 @@ public static class AudiobookPlaylistBuilder
         // separator); an empty kept set returns the empty string, as Join of
         // an empty list does.
         return output.Length > 0 ? output.Remove(output.Length - 1, 1).ToString() : string.Empty;
+    }
+
+    /// <summary>
+    /// The ONE span line enumerator of the playlist family's allocation-free
+    /// scans (JF-859 /simplify, three convergent review angles:
+    /// <see cref="TruncateToFirstSegments"/> and
+    /// <see cref="TryResolveStartSegmentByExtinf"/> carried verbatim copies
+    /// of the scaffold, and the deferred conversion of the emitting walks
+    /// would mint more). Reproduces <c>Split('\n')</c> line semantics
+    /// exactly: newline + 1 lines (a trailing newline yields one final EMPTY
+    /// line, an empty input one single empty line), each line CR-trimmed; a
+    /// <see cref="MoveNext"/> after the terminal line returns false. Zero
+    /// allocation per line: the current line is a slice of the source.
+    /// </summary>
+    private ref struct LineScanner
+    {
+        private ReadOnlySpan<char> _rest;
+        private bool _finished;
+
+        /// <summary>Initializes a new instance of the <see cref="LineScanner"/> struct.</summary>
+        /// <param name="content">The full playlist text.</param>
+        public LineScanner(string content)
+        {
+            _rest = content.AsSpan();
+            _finished = false;
+            Current = default;
+        }
+
+        /// <summary>The current line, CR-trimmed (valid after a true <see cref="MoveNext"/>).</summary>
+        public ReadOnlySpan<char> Current { get; private set; }
+
+        /// <summary>
+        /// Advance to the next line. The terminal line (the one without a
+        /// trailing newline, or the final EMPTY line a trailing newline
+        /// implies) is reported once; the call after it returns false.
+        /// </summary>
+        /// <returns>True when <see cref="Current"/> holds a line; false at end of content.</returns>
+        public bool MoveNext()
+        {
+            if (_finished)
+            {
+                return false;
+            }
+
+            int newline = _rest.IndexOf('\n');
+            if (newline < 0)
+            {
+                Current = _rest.TrimEnd('\r');
+                _rest = default;
+                _finished = true;
+            }
+            else
+            {
+                Current = _rest[..newline].TrimEnd('\r');
+                _rest = _rest[(newline + 1)..];
+            }
+
+            return true;
+        }
     }
 
     /// <summary>
@@ -325,21 +376,32 @@ public static class AudiobookPlaylistBuilder
     /// playlist carries no parseable durations, or the position lies beyond its
     /// total, so the caller falls back to the flat divisor.
     /// Uses the same segment-URI line predicate as the emitter so indices align.
+    /// ALLOCATION SHAPE (JF-859, the JF-818 follow-up): a
+    /// <see cref="LineScanner"/> walk, NOT a full <c>Split('\n')</c> of the
+    /// listing (a 5h single-file book is a ~4500-entry / ~250KB listing);
+    /// this was the LAST full-content allocation on a mid-encode RESUME poll
+    /// (startTicks &gt; 0), and the walk's early returns now stop at the
+    /// matched segment instead of materializing every line first. BOUNDARY,
+    /// recorded: the builder's two EMITTING walks
+    /// (<see cref="BuildSlicedPlaylist"/>,
+    /// <see cref="BuildStartHintPlaylist"/>) keep their full Split; they are
+    /// per-line output builders, and the span rewrite there is the
+    /// builder-wide conversion the JF-818 filing deliberately deferred, not
+    /// part of this walk-local change.
     /// </summary>
     /// <param name="basePlaylist">The full playlist text.</param>
     /// <param name="startTicks">Resume position in .NET ticks.</param>
     /// <returns>The resume segment index, or null when accumulation is impossible.</returns>
     private static int? TryResolveStartSegmentByExtinf(string basePlaylist, long startTicks)
     {
-        string[] lines = basePlaylist.Split('\n');
         long cumulativeTicks = 0;
         int segmentIndex = 0;
         double? pendingSeconds = null; // buffered #EXTINF awaiting its segment URI line
 
-        foreach (string rawLine in lines)
+        var scanner = new LineScanner(basePlaylist);
+        while (scanner.MoveNext())
         {
-            string line = rawLine.TrimEnd('\r');
-
+            ReadOnlySpan<char> line = scanner.Current;
             if (IsSegmentUriLine(line))
             {
                 if (pendingSeconds is not double seconds)
@@ -356,10 +418,8 @@ public static class AudiobookPlaylistBuilder
                 cumulativeTicks += (long)Math.Round(seconds * TimeSpan.TicksPerSecond);
                 segmentIndex++;
                 pendingSeconds = null;
-                continue;
             }
-
-            if (line.StartsWith("#EXTINF", StringComparison.Ordinal))
+            else if (line.StartsWith("#EXTINF", StringComparison.Ordinal))
             {
                 pendingSeconds = TryParseExtInfSeconds(line);
             }
@@ -372,9 +432,11 @@ public static class AudiobookPlaylistBuilder
 
     /// <summary>
     /// Parse the duration seconds out of an <c>#EXTINF:&lt;duration&gt;[,&lt;title&gt;]</c>
-    /// line, invariant-culture. Returns null on any parse failure.
+    /// line, invariant-culture. Returns null on any parse failure. Takes the
+    /// already-sliced line span (JF-859: the walk's span scan passes it
+    /// through without materializing a per-line string).
     /// </summary>
-    private static double? TryParseExtInfSeconds(string line)
+    private static double? TryParseExtInfSeconds(ReadOnlySpan<char> line)
     {
         int colon = line.IndexOf(':');
         if (colon < 0)
@@ -382,14 +444,15 @@ public static class AudiobookPlaylistBuilder
             return null;
         }
 
-        int end = line.IndexOf(',', colon + 1);
-        if (end < 0)
+        ReadOnlySpan<char> value = line[(colon + 1)..];
+        int comma = value.IndexOf(',');
+        if (comma >= 0)
         {
-            end = line.Length;
+            value = value[..comma];
         }
 
         return double.TryParse(
-            line.AsSpan(colon + 1, end - colon - 1),
+            value,
             NumberStyles.Float,
             CultureInfo.InvariantCulture,
             out double seconds)
