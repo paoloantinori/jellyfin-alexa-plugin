@@ -265,30 +265,38 @@ public class PlaybackLaunchBuilderMediumTests : PluginTestBase
     }
 
     /// <summary>
-    /// A <see cref="DeviceQueueManager"/> constructed over a pre-JF-568 persisted
-    /// queue file naming the given item as the device's last play (the ONLY way a
-    /// null recorded route exists; <c>RecordLastPlayed</c> always records one).
+    /// A <see cref="DeviceQueueManager"/> constructed over a persisted legacy
+    /// queue file naming the given item as the device's last play: pre-JF-568
+    /// (null recorded route) by default, or the between-JF-568-and-JF-619 shape
+    /// (route recorded, JF-619 stamp absent) with a non-null
+    /// <paramref name="routeName"/>; the two are the ONLY ways those null shapes
+    /// exist (<c>RecordLastPlayed</c> always records both route and stamp).
     /// The file must exist before the ctor loads it, so this builds its own
     /// one-file temp dir rather than riding <c>TestHelpers.CreateDeviceQueueManager</c>
     /// (the JF-540 cross-loading rationale); hoisted here on the third identical
     /// construction (the JF-713 convention).
     /// </summary>
-    private static DeviceQueueManager LegacyQueueWith(Guid lastPlayedItemId, string deviceId)
+    private static DeviceQueueManager LegacyQueueWith(Guid lastPlayedItemId, string deviceId, string? routeName = null)
     {
         string dir = TestHelpers.CreateRegisteredTempDir($"legacy-queue-{deviceId}");
-        File.WriteAllText(Path.Combine(dir, $"queue_{deviceId}.json"), LegacyQueueJson(lastPlayedItemId));
+        File.WriteAllText(Path.Combine(dir, $"queue_{deviceId}.json"), LegacyQueueJson(lastPlayedItemId, routeName));
         return new DeviceQueueManager(dir, Microsoft.Extensions.Logging.Abstractions.NullLogger<DeviceQueueManager>.Instance);
     }
 
     /// <summary>
     /// A pre-JF-568 persisted queue file: every then-existing member, no
-    /// lastPlayedLaunchRoute (the field JF-568 added).
+    /// lastPlayedLaunchRoute (the field JF-568 added). A non-null
+    /// <paramref name="routeName"/> writes the between-JF-568-and-JF-619 shape
+    /// instead (the route member exists, the JF-619 freshness stamp does not -
+    /// the JF-789 null-stamp fixtures' persisted era).
     /// </summary>
-    private static string LegacyQueueJson(Guid lastPlayedItemId)
+    private static string LegacyQueueJson(Guid lastPlayedItemId, string? routeName = null)
         => $"{{\"itemIds\":[],\"currentIndex\":-1,\"repeatMode\":\"None\",\"playbackOrder\":\"Default\","
             + $"\"lastModifiedUtc\":\"2026-09-01T00:00:00Z\",\"currentPositionTicks\":0,"
             + $"\"itemPositionState\":{{}},\"activeLaunchBaseMs\":{{}},\"pendingLaunchBaseMs\":{{}},"
-            + $"\"lastPlayedItemId\":\"{lastPlayedItemId}\"}}";
+            + $"\"lastPlayedItemId\":\"{lastPlayedItemId}\""
+            + (routeName == null ? string.Empty : $",\"lastPlayedLaunchRoute\":\"{routeName}\"")
+            + "}";
 
     /// <summary>
     /// A ledger id the library cannot resolve (deleted item) is Unknown, so a
@@ -437,8 +445,16 @@ public class PlaybackLaunchBuilderMediumTests : PluginTestBase
     /// <summary>
     /// JF-785 Leg A at the resolver level: the guarded callers' flag refuses the
     /// non-displacement tail (no token, no session item), while the default
-    /// keeps the deliberate unbounded stance (RateItem's JF-626 shape) and
-    /// resolves the same entry.
+    /// keeps the deliberate tail-answering stance (RateItem's JF-626 shape) and
+    /// resolves the same entry. DELIBERATE WORDING UPDATE (JF-789): the stance
+    /// is no longer "unbounded": this entry is fresh, so it answers inside the
+    /// recency window; the days-old twin
+    /// (<see cref="CurrentItem_DaysOldLedgerTail_Refused_JF789"/>) pins the
+    /// bound. This pin is also the recorded discriminator for JF-789 step 5's
+    /// REJECTED guard fold: the resolver answers a fresh no-token/no-session
+    /// entry, so dissolving <c>HasCurrentPlaybackEvidence</c> into the recency
+    /// check would flip the guarded families' idle refusals on exactly this
+    /// shape.
     /// </summary>
     [Fact]
     public void CurrentItem_GuardedCaller_TailRefused_DefaultKeepsTail_JF785()
@@ -541,6 +557,177 @@ public class PlaybackLaunchBuilderMediumTests : PluginTestBase
 
             AssertLockstep(library.Object, queue, "lockstep-device");
         }
+    }
+
+    // ---- ResolveCurrentPlayingItem + ResolveScreenOwningMedium: the JF-789 recency bound ----
+
+    /// <summary>
+    /// JF-789 step 3: the resolver's final non-displacement tail answers only
+    /// within the ledger recency window. A DAYS-OLD audio-routed entry with no
+    /// token and no session (the idle-device shape RateItem's JF-626 stance used
+    /// to act on) must answer null. RED on the pre-JF-789 tree: the tail was
+    /// unbounded and resolved the same entry
+    /// (<c>CurrentItem_GuardedCaller_TailRefused_DefaultKeepsTail_JF785</c>'s
+    /// fresh twin shows the answering side).
+    /// </summary>
+    [Fact]
+    public void CurrentItem_DaysOldLedgerTail_Refused_JF789()
+    {
+        var oldSong = new Audio { Name = "Days Old Song", Id = Guid.NewGuid() };
+        var (library, queue) = LedgerWith(oldSong, "ci-tail-jf789", route: DeviceQueueManager.LaunchRoute.Audio);
+        TestHelpers.BackdateLastPlayedStamp(queue, "ci-tail-jf789", TimeSpan.FromDays(3));
+
+        Assert.Null(_builder.ResolveCurrentPlayingItem(
+            TestHelpers.CreateTestContext("ci-tail-jf789"), null, library.Object, queue));
+    }
+
+    /// <summary>
+    /// JF-789 step 4, hole (b): the belt's unresolvable arm (deleted movie/book)
+    /// answers Video only within the recency window; a DAYS-OLD unresolvable
+    /// VideoApp-routed entry lets the classifier's Unknown stand, so the
+    /// belt-consuming gates (loop/sleep/speed) fall through to their no-media
+    /// paths on idle devices. RED on the pre-JF-789 tree: the belt answered Video.
+    /// </summary>
+    [Fact]
+    public void ScreenOwner_DaysOldUnresolvableVideoAppEntry_ClassifiesUnknown_JF789()
+    {
+        Guid deletedId = Guid.NewGuid();
+        using DeviceQueueManager queue = TestHelpers.CreateDeviceQueueManager("medium-probe");
+        queue.RecordLastPlayed("belt-old-unresolvable", deletedId.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
+        TestHelpers.BackdateLastPlayedStamp(queue, "belt-old-unresolvable", TimeSpan.FromDays(3));
+        var library = new Mock<ILibraryManager>();
+        library.Setup(l => l.GetItemById(deletedId)).Returns((BaseItem?)null);
+
+        Assert.Equal("Unknown", _builder.ResolveScreenOwningMedium(
+            TestHelpers.CreateTestContext("belt-old-unresolvable"), library.Object, queue).ToString());
+    }
+
+    /// <summary>
+    /// JF-789 step 4, hole (a): the belt's same-item arm (the seek-mode shape,
+    /// where the AudioPlayer token still names the VideoApp-routed ledger item)
+    /// overrides the classifier only within the recency window; a DAYS-OLD entry
+    /// keeps the classifier's Audio. RED on the pre-JF-789 tree: the belt
+    /// answered VideoAppAudio.
+    /// </summary>
+    [Fact]
+    public void ScreenOwner_DaysOldSameItemVideoAppEntry_KeepsClassifierAudio_JF789()
+    {
+        var seekSong = new Audio { Name = "Same Item Seek Song", Id = Guid.NewGuid() };
+        var (library, queue) = LedgerWith(seekSong, "belt-old-sameitem");
+        TestHelpers.BackdateLastPlayedStamp(queue, "belt-old-sameitem", TimeSpan.FromDays(3));
+        Context tokenNamingLedgerItem = TestHelpers.CreateContextWithToken(seekSong.Id.ToString(), "belt-old-sameitem");
+
+        Assert.Equal("Audio", _builder.ResolveScreenOwningMedium(
+            tokenNamingLedgerItem, library.Object, queue).ToString());
+    }
+
+    /// <summary>
+    /// JF-789 step 4 green pin: within the recency window the belt's unresolvable
+    /// arm still closes the JF-632 hole (b): the deleted movie/book refuses the
+    /// belt-consuming gates exactly as before the bound.
+    /// </summary>
+    [Fact]
+    public void ScreenOwner_FreshUnresolvableVideoAppEntry_StillVideo_JF789()
+    {
+        Guid deletedId = Guid.NewGuid();
+        using DeviceQueueManager queue = TestHelpers.CreateDeviceQueueManager("medium-probe");
+        queue.RecordLastPlayed("belt-fresh-unresolvable", deletedId.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
+        var library = new Mock<ILibraryManager>();
+        library.Setup(l => l.GetItemById(deletedId)).Returns((BaseItem?)null);
+
+        Assert.Equal("Video", _builder.ResolveScreenOwningMedium(
+            TestHelpers.CreateTestContext("belt-fresh-unresolvable"), library.Object, queue).ToString());
+    }
+
+    /// <summary>
+    /// JF-789 step 4 green pin: within the recency window the belt's same-item
+    /// arm still closes the JF-632 hole (a): the seek-mode shape (token names
+    /// the VideoApp-routed ledger item) classifies VideoAppAudio, so the
+    /// belt-consuming gates keep refusing (this is the resolver-level twin of
+    /// Loop's <c>HandleAsync_SameItemSeekModeShape_BeltOverridesTokenOwnership</c>).
+    /// </summary>
+    [Fact]
+    public void ScreenOwner_FreshSameItemVideoAppEntry_StillVideoAppAudio_JF789()
+    {
+        var seekSong = new Audio { Name = "Same Item Seek Song", Id = Guid.NewGuid() };
+        var (library, queue) = LedgerWith(seekSong, "belt-fresh-sameitem");
+        Context tokenNamingLedgerItem = TestHelpers.CreateContextWithToken(seekSong.Id.ToString(), "belt-fresh-sameitem");
+
+        Assert.Equal("VideoAppAudio", _builder.ResolveScreenOwningMedium(
+            tokenNamingLedgerItem, library.Object, queue).ToString());
+    }
+
+    /// <summary>
+    /// JF-789 null-stamp policy pin (the legacy tie): a queue file persisted
+    /// between JF-568 and JF-619 carries a route but NO freshness stamp; null
+    /// stamps resolve as within the window (the window doc's policy), so the
+    /// belt keeps answering Video for the unresolvable entry whatever the file's
+    /// age, exactly as before JF-789. The JSON is hand-written to that persisted
+    /// shape and loaded through the ctor's disk path (the LegacyQueueJson
+    /// pattern; <c>RecordLastPlayed</c> always stamps).
+    /// </summary>
+    [Fact]
+    public void ScreenOwner_NullStampVideoAppEntry_LegacyTieKeepsBelt_JF789()
+    {
+        Guid deletedId = Guid.NewGuid();
+        using var queue = LegacyQueueWith(deletedId, "belt-nullstamp-device", "VideoApp");
+        var library = new Mock<ILibraryManager>();
+        library.Setup(l => l.GetItemById(deletedId)).Returns((BaseItem?)null);
+
+        Assert.Equal("Video", _builder.ResolveScreenOwningMedium(
+            TestHelpers.CreateTestContext("belt-nullstamp-device"), library.Object, queue).ToString());
+    }
+
+    /// <summary>
+    /// JF-789 null-stamp policy pin (the legacy tie), resolver tail side: an
+    /// audio-routed entry with a null stamp (pre-JF-619 file) keeps the tail
+    /// answering, so old files behave exactly as before the bound (the window
+    /// doc's policy).
+    /// </summary>
+    [Fact]
+    public void CurrentItem_NullStampLedgerTail_LegacyTieAnswers_JF789()
+    {
+        var song = new Audio { Name = "Null Stamp Song", Id = Guid.NewGuid() };
+        var library = new Mock<ILibraryManager>();
+        library.Setup(l => l.GetItemById(song.Id)).Returns(song);
+
+        using var queue = LegacyQueueWith(song.Id, "tail-nullstamp-device", "Audio");
+
+        Assert.Same(song, _builder.ResolveCurrentPlayingItem(
+            TestHelpers.CreateTestContext("tail-nullstamp-device"), null, library.Object, queue));
+    }
+
+    /// <summary>
+    /// JF-789 code-review finding (the cached displacement leg): a legacy
+    /// null-route music ledger entry plus a live MISMATCHED token whose own item
+    /// no longer resolves runs the displacement resolve, but the kind verdict is
+    /// Audio (null route + music kind), so the pre-fix final line returned the
+    /// cached ledger item regardless of the caller flag (a JF-785 Leg A leak:
+    /// guarded callers could receive it). The cached leg now rides the SAME
+    /// flag+window gates as the tail. RED on the pre-fix tree: the guarded call
+    /// returned the item.
+    /// </summary>
+    [Fact]
+    public void CurrentItem_LegacyNullRouteMusicLedger_StaleUnresolvableToken_GuardedCallerRefused_JF789()
+    {
+        var legacySong = new Audio { Name = "Legacy Null-Route Song", Id = Guid.NewGuid() };
+        var library = new Mock<ILibraryManager>();
+        library.Setup(l => l.GetItemById(legacySong.Id)).Returns(legacySong);
+        library.Setup(l => l.GetItemById(It.Is<Guid>(g => g != legacySong.Id))).Returns((BaseItem?)null);
+
+        using var queue = LegacyQueueWith(legacySong.Id, "ci-cacheleg-jf789");
+        Context staleUnresolvableToken = TestHelpers.CreateContextWithToken(Guid.NewGuid().ToString(), "ci-cacheleg-jf789");
+
+        // The guarded caller (favorite/media/loop/playlist-edit): refused.
+        Assert.Null(_builder.ResolveCurrentPlayingItem(
+            staleUnresolvableToken, null, library.Object, queue, allowLedgerTailAnswers: false));
+
+        // The default caller (RateItem/Repeat/SetPlaybackSpeed): the null-route
+        // file is also null-STAMP (route and stamp were born together on
+        // RecordLastPlayed), so the legacy tie keeps the tail answering; this is
+        // the JF-626 stance within the window's null policy, unchanged.
+        Assert.Same(legacySong, _builder.ResolveCurrentPlayingItem(
+            staleUnresolvableToken, null, library.Object, queue));
     }
 
     // ---- IsVideoAppMedium ----

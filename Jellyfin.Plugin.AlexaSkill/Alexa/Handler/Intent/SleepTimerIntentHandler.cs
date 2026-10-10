@@ -195,8 +195,11 @@ public class SleepTimerIntentHandler : BaseHandler
         // re-issued track and the launch scope records the RESOLVED source. Shared by
         // the cancel replay and the arm below (both are ReplaceAll re-issues); the
         // route guard the review proved necessary lives in the VideoApp-medium GATE
-        // above (it refuses on ANY VideoApp-routed entry, absorbed from this belt);
-        // only audio-routed shapes reach this write.
+        // above (it refuses on any WITHIN-WINDOW VideoApp-routed entry, absorbed
+        // from this belt; JF-789 recency-bounded the belt's two hole arms, so an
+        // outside-window belt-only shape no longer refuses (the accepted residual
+        // recorded on ResolveScreenOwningMedium); every shape that reaches this
+        // write is one the gate just classified as audio.
         void RecordReissueLedger()
         {
             if (itemGuid != Guid.Empty

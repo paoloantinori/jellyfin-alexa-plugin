@@ -417,6 +417,72 @@ public class LoopIntentHandlerTests : PluginTestBase
     }
 
     /// <summary>
+    /// JF-789 step 4 red proof, the loop family's consumer-level flip (the gate's
+    /// shipped KNOWN TRADEOFF comment named exactly this fork): a DAYS-OLD
+    /// unresolvable VideoApp-routed ledger entry on an idle device used to answer
+    /// the video-family refusal (the belt treated any VideoApp-routed entry as
+    /// screen-owning regardless of age); the belt is recency-bounded now, so the
+    /// classifier's Unknown stands and the idle guard's no-media tell answers. RED
+    /// on the pre-JF-789 tree: CannotRepeatContent answered.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_DaysOldUnresolvableVideoAppLedger_NoMediaInsteadOfRefusal_JF789()
+    {
+        DeviceQueueManager queues = TestHelpers.CreateDeviceQueueManager("loop-stale-jf789");
+        // The ledger id resolves to nothing (the deleted movie/book shape); the
+        // stamp is backdated through the public DTO setter (RecordLastPlayed
+        // always stamps now).
+        queues.RecordLastPlayed("loop-stale-jf789-device", Guid.NewGuid().ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
+        TestHelpers.BackdateLastPlayedStamp(queues, "loop-stale-jf789-device", TimeSpan.FromDays(3));
+        BaseHandler handler = CreateOwner(IntentNames.LoopAllOn, queues);
+        SessionInfo session = CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(
+            IntentRequestFor(IntentNames.LoopAllOn), TestHelpers.CreateTestContext("loop-stale-jf789-device"),
+            CreateUser(), session, CancellationToken.None);
+
+        Assert.Contains(
+            ResponseStrings.Get("NoMediaPlaying", "en-US"),
+            TestHelpers.GetSpeechText(response), StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(
+            ResponseStrings.Get("CannotRepeatContent", "en-US"),
+            TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+        _sessionManagerMock.Verify(
+            s => s.OnPlaybackProgress(It.IsAny<PlaybackProgressInfo>(), It.IsAny<bool>()), Times.Never);
+    }
+
+    /// <summary>
+    /// JF-789 code-review pin (the bound's boundary): a RESOLVABLE days-old
+    /// VideoApp-routed movie still answers the video-family refusal, because the
+    /// classifier's route/kind ladder inside ResolveScreenOwningMedium is
+    /// deliberately unbounded (its flat transport consumers are outside JF-789's
+    /// scope; the window doc owns that carve-out). Only the belt's two hole
+    /// shapes (unresolvable, same-item) age out, so the sibling proof above and
+    /// this pin together draw the exact flip line.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_DaysOldResolvableVideoAppMovie_StillRefuses_JF789()
+    {
+        DeviceQueueManager queues = TestHelpers.CreateDeviceQueueManager("loop-resolvable-jf789");
+        var movie = TestHelpers.CreateMovie("Days Old Resolvable Movie");
+        SetupLibraryResolves(movie);
+        queues.RecordLastPlayed("loop-resolvable-jf789-device", movie.Id.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
+        TestHelpers.BackdateLastPlayedStamp(queues, "loop-resolvable-jf789-device", TimeSpan.FromDays(3));
+        BaseHandler handler = CreateOwner(IntentNames.LoopAllOn, queues);
+        SessionInfo session = CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(
+            IntentRequestFor(IntentNames.LoopAllOn), TestHelpers.CreateTestContext("loop-resolvable-jf789-device"),
+            CreateUser(), session, CancellationToken.None);
+
+        Assert.Contains(
+            ResponseStrings.Get("CannotRepeatContent", "en-US"),
+            TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+        _sessionManagerMock.Verify(
+            s => s.OnPlaybackProgress(It.IsAny<PlaybackProgressInfo>(), It.IsAny<bool>()), Times.Never);
+    }
+
+    /// <summary>
     /// The string-decision pin: a VideoApp-routed AUDIOBOOK must take the
     /// video-family refusal (CannotRepeatContent names audiobooks honestly), not
     /// the seek-mode music line, even though AudioBook subclasses Audio and would

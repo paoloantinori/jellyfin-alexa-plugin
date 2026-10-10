@@ -404,7 +404,7 @@ public class SleepTimerIntentHandlerTests : PluginTestBase, IDisposable
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
         Assert.NotNull(response);
-        (string? itemId, DeviceQueueManager.LaunchRoute? route) = _queueManager.GetLastPlayedSnapshot(DeviceId);
+        (string? itemId, DeviceQueueManager.LaunchRoute? route, _) = _queueManager.GetLastPlayedSnapshot(DeviceId);
         return (response, itemId, route);
     }
 
@@ -578,6 +578,47 @@ public class SleepTimerIntentHandlerTests : PluginTestBase, IDisposable
     }
 
     /// <summary>
+    /// JF-789 code-review red proof (the sleep family's flip, pinned DELIBERATE):
+    /// a session that still HOLDS the played movie (boundary (a) on
+    /// HasCurrentPlaybackEvidence: the plugin never clears it) plus a DAYS-OLD
+    /// unresolvable VideoApp ledger entry. The pre-JF-789 belt refused here
+    /// (CannotSetSleepTimerOverVideo); the recency-bounded belt declines, so the
+    /// aged entry flows like every other aged non-VideoApp held-item shape the
+    /// handler has always re-issued (an aged AUDIO-routed held item ships the
+    /// re-issue today; the belt no longer contradicts the session's own
+    /// now-playing report once the launch has aged out). The realistic idle shape
+    /// (the session DROPPED the item) answers NoMediaPlaying at the handler's own
+    /// guard before the gate, so this held-item corner is the only sleep flip.
+    /// RED on the pre-JF-789 tree: the refusal answered.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_DaysOldUnresolvableLedger_SessionHoldsMovie_ShipsTheReIssue_JF789()
+    {
+        var movie = new MediaBrowser.Controller.Entities.Movies.Movie
+        {
+            Name = "Days Old Held Movie",
+            Id = Guid.NewGuid(),
+            RunTimeTicks = TimeSpan.FromHours(2).Ticks
+        };
+        _libraryManagerMock.Setup(l => l.GetItemById(movie.Id)).Returns(movie);
+        _queueManager.RecordLastPlayed(DeviceId, Guid.NewGuid().ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
+        TestHelpers.BackdateLastPlayedStamp(_queueManager, DeviceId, TimeSpan.FromDays(3));
+
+        var handler = CreateHandler();
+        SessionInfo session = CreateSession();
+        session.FullNowPlayingItem = movie; // the launch's write, still held days later
+
+        SkillResponse response = await handler.HandleAsync(
+            CreateIntentRequest(durationValue: "PT30M"), CreateContext(), CreateUser(), session, CancellationToken.None);
+
+        Assert.NotNull(TestHelpers.GetPlayDirective(response));
+        Assert.Contains("sleep", TestHelpers.GetSpeechText(response), StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(
+            Jellyfin.Plugin.AlexaSkill.Alexa.Locale.ResponseStrings.Get("CannotSetSleepTimerOverVideo", "en-US"),
+            TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// JF-632 review hole (b), probe-proven: an UNRESOLVABLE VideoApp ledger item
     /// (deleted movie/book) answers Unknown, and the re-issue used to ship with a
     /// deadline that could never fire. The route-level check refuses without needing
@@ -597,7 +638,6 @@ public class SleepTimerIntentHandlerTests : PluginTestBase, IDisposable
         Assert.DoesNotContain("Sleep timer set", TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
         Assert.Equal(DeviceQueueManager.LaunchRoute.VideoApp, route);
     }
-
 
     /// <summary>
     /// JF-636: arming a sleep timer during atempo playback keeps the speed and the

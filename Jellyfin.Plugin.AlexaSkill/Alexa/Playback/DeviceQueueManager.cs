@@ -233,14 +233,21 @@ public sealed class DeviceQueueManager : IDisposable
     /// route in sequence), so a request thread interleaving between those two
     /// assignments can still observe the old id with the new route; only an
     /// immutable ledger entry (assigned as one reference) would close that.
+    /// JF-789 added the freshness stamp (<see cref="DeviceQueue.LastPlayedWrittenAt"/>)
+    /// as the third value, same single-lookup shape: the recency bounds (the
+    /// resolver tail and the screen-owner belt) read it beside the pair, and the
+    /// same honest-bounds caveat extends to it (RecordLastPlayed assigns the stamp
+    /// last, so an interleaved reader can observe the old id with the NEW stamp;
+    /// the stamp is refreshed on every relaunch, so a torn triple is at worst as
+    /// permissive as the unbounded pre-JF-789 read for one request).
     /// </summary>
     /// <param name="deviceId">The Alexa device ID.</param>
-    /// <returns>The recorded item id and route; (null, null) when the device has nothing recorded.</returns>
-    public (string? ItemId, LaunchRoute? Route) GetLastPlayedSnapshot(string deviceId)
+    /// <returns>The recorded item id, route, and freshness stamp; (null, null, null) when the device has nothing recorded.</returns>
+    public (string? ItemId, LaunchRoute? Route, DateTime? WrittenAt) GetLastPlayedSnapshot(string deviceId)
     {
         return _queues.TryGetValue(deviceId, out DeviceQueue? queue)
-            ? (queue.LastPlayedItemId, ParseRoute(queue.LastPlayedLaunchRoute))
-            : (null, null);
+            ? (queue.LastPlayedItemId, ParseRoute(queue.LastPlayedLaunchRoute), queue.LastPlayedWrittenAt)
+            : (null, null, null);
     }
 
     /// <summary>
@@ -384,6 +391,57 @@ public sealed class DeviceQueueManager : IDisposable
     /// window after a launch-time record does not outrank it.
     /// </summary>
     private static readonly TimeSpan LaunchVsStopGrace = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// JF-789: the playback-session recency window bounding the last-played
+    /// ledger's ANSWERING roles: <c>PlaybackLaunchBuilder.ResolveCurrentPlayingItem</c>'s
+    /// final non-displacement tail, and <c>PlaybackLaunchBuilder.ResolveScreenOwningMedium</c>'s
+    /// belt (both read the stamp through <see cref="GetLastPlayedSnapshot"/>).
+    /// Outside the window the ledger stops answering "this is what the device is
+    /// on now": the tail resolves nothing and the belt lets the classifier's own
+    /// answer stand, so idle devices get their families' no-media tells instead
+    /// of acting on (or refusing over) a days-old playback. The evidence-backed
+    /// resolver arms (the live mismatched-token displacement, the AudioPlayer
+    /// token, the session items) are deliberately NOT bounded by this window:
+    /// each is backed by a request-carried or session-held fact, not by the
+    /// launch-time ledger write alone. The classifier's ledger-only route/kind
+    /// ladder (<c>PlaybackLaunchBuilder.ResolvePlayingMedium</c>) is ALSO
+    /// unbounded, for a different reason: its consumers (the Pause/Next/Previous
+    /// and Repeat flat transport gates) are outside JF-789's scope, and bounding
+    /// their answers is a per-family behavior change that needs its own red
+    /// proofs, not a rider on this one; the belt is the one classifier-family
+    /// reader JF-789 bounds, because its two hole arms are pure ledger reads.
+    /// One further route-only reader stays deliberately unbounded (JF-789
+    /// review): RateItem's keep-alive check
+    /// (<c>RateItemIntentHandler.PlayingMediumIsVideoAppAudio</c>, route ==
+    /// VideoApp attaches the NowPlaying keep-alive). Its failure asymmetry is
+    /// the opposite of the gates: attaching on an aged entry only renders an
+    /// extra document, while refusing on a live one dismisses a playing player
+    /// (the JF-635 bug the keep-alive exists to prevent), so the conservative
+    /// direction is to keep attaching.
+    /// VALUE (60 minutes, no device evidence backs any number today): the WIDEST
+    /// of the 30-60 minute playback-session range the JF-789 plan names, chosen so
+    /// the bound bites only clearly-idle devices; a shorter window would start
+    /// refusing mid-session shapes (a long album, a movie's second hour) whose
+    /// only session evidence is the ledger.
+    /// NULL-STAMP POLICY (legacy tie): a null stamp (pre-JF-619 files, and files
+    /// persisted between JF-568 and JF-619 that carry a route but no stamp)
+    /// resolves as WITHIN the window, so old files keep the pre-JF-789 unbounded
+    /// behavior exactly as <see cref="GetDeviceResumePointer"/> treats null
+    /// stamps as the legacy tie; the first <see cref="RecordLastPlayed"/> after
+    /// upgrade restores stamped arbitration.
+    /// </summary>
+    public static readonly TimeSpan LastPlayedRecencyWindow = TimeSpan.FromMinutes(60);
+
+    /// <summary>
+    /// JF-789 read side of <see cref="LastPlayedRecencyWindow"/>: is the ledger
+    /// entry's write stamp fresh enough for the ledger's answering roles? Null
+    /// stamps are the legacy tie (within the window; see the window's doc).
+    /// </summary>
+    /// <param name="writtenAt">The stamp read beside the ledger pair.</param>
+    /// <returns>True when the entry may answer as current evidence.</returns>
+    public static bool IsWithinLastPlayedRecencyWindow(DateTime? writtenAt)
+        => writtenAt is null || writtenAt.Value >= DateTime.UtcNow - LastPlayedRecencyWindow;
 
     /// <summary>Which store a JF-619 device resume pointer came from.</summary>
     public enum DeviceResumeSource

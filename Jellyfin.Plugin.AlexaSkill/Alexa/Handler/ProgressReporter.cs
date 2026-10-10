@@ -787,13 +787,17 @@ public sealed class ProgressReporter
         // because the live incident shape (a one-shot over seek-mode playback)
         // carries NO AudioPlayer token and an empty session, so the device
         // ledger's recorded route is the only evidence and the honest answer is
-        // the refusal, not no-media. KNOWN TRADEOFF (deliberate, the
-        // RepeatIntentHandler gate's shipped parity): the ledger carries no
-        // recency read, so an IDLE device whose last skill playback was a
-        // VideoApp launch days ago answers this refusal instead of the no-media
-        // tell; the failure mode is a harmless refusal line, and bounding it
-        // would fork the family's ledger semantics (Repeat/RateItem act on the
-        // same unbounded tail).
+        // the refusal, not no-media. THE FORMER KNOWN TRADEOFF IS TAKEN (JF-789
+        // step 4), with its exact scope: the belt inside
+        // ResolveScreenOwningMedium ages out, so an idle device whose VideoApp
+        // ledger entry is outside the recency window AND is one of the belt's
+        // two hole shapes (unresolvable, or the same-item seek shape) falls
+        // through to the idle guard's no-media tell instead of this refusal. A
+        // RESOLVABLE video-kind entry still refuses at any age (the classifier's
+        // route/kind ladder is deliberately unbounded; its flat transport
+        // consumers are outside JF-789's scope, pinned by the loop suite's
+        // days-old-resolvable proof). No refusal string died: every
+        // within-window belt shape still refuses.
         // The ONE belt-inclusive screen-owner answer
         // (classifier + raw ledger route + kind kernel) lives on
         // PlaybackLaunchBuilder.ResolveScreenOwningMedium; the refusal STRINGS
@@ -815,9 +819,10 @@ public sealed class ProgressReporter
 
         // JF-629 idle guard, the ONE predicate (JF-785 migrated this family's
         // DTO-only guard onto it): with no current evidence, nothing is playing
-        // NOW, and the resolver's unbounded ledger tail (a days-old
-        // audio-routed last-played) must not take the mode write; the
-        // predicate's doc owns the evidence legs.
+        // NOW, and the resolver's ledger tail (recency-bounded since JF-789, but
+        // still answering a within-window idle device) must not take the mode
+        // write; the predicate's doc owns the evidence legs and the REJECTED
+        // JF-789 fold.
         if (!PlaybackLaunchBuilder.HasCurrentPlaybackEvidence(context, session))
         {
             _logger.LogDebug("{Label}: idle device (no token, no session item), returning the no-media tell", label);

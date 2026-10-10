@@ -86,8 +86,10 @@ public abstract class FavoriteToggleIntentHandler : BaseHandler
 
         // JF-629 idle guard, the ONE predicate (JF-785 migrated this family's
         // DTO-only guard onto it): without current evidence the resolver's
-        // unbounded ledger tail must not favorite the idle device's days-old
-        // last-played item; the predicate's doc owns the evidence legs. JF-788
+        // ledger tail (recency-bounded since JF-789, but still answering a
+        // within-window idle device) must not favorite the idle device's
+        // last-played item; the predicate's doc owns the evidence legs and the
+        // REJECTED JF-789 fold. JF-788
         // unified this door's tell with the other guarded families
         // (playlist-edit, media-info, the ProgressReporter loop-mode applier;
         // NOT RepeatIntentHandler, an unguarded tail rider): NoMediaPlaying.
