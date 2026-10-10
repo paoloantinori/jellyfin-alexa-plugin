@@ -1159,7 +1159,10 @@ public sealed class PlaybackLaunchBuilder
         // Reusing the cache when the tail may answer avoids a second resolve of
         // the same id.
         bool withinWindow = DeviceQueueManager.IsWithinLastPlayedRecencyWindow(writtenAt);
-        if (allowLedgerTailAnswers && !withinWindow)
+        // The tail's entire permission in ONE conjunction: the flag (the caller's
+        // live-evidence gate) AND the window (the ledger's recency bound).
+        bool tailMayAnswer = allowLedgerTailAnswers && withinWindow;
+        if (allowLedgerTailAnswers && !tailMayAnswer)
         {
             // Null stamps resolve as within-window, so a refusal here always has a
             // stamp to name (the window doc owns the null policy).
@@ -1168,7 +1171,7 @@ public sealed class PlaybackLaunchBuilder
                 logLabel, writtenAt, DeviceQueueManager.LastPlayedRecencyWindow.TotalMinutes);
         }
 
-        BaseItem? resolved = allowLedgerTailAnswers && withinWindow
+        BaseItem? resolved = tailMayAnswer
             ? ledgerItem ?? ResolveId(lastPlayedId)
             : null;
         if (resolved is null)

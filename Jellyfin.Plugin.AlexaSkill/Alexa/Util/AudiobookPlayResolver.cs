@@ -235,13 +235,20 @@ public static class AudiobookPlayResolver
             "{Label}: checking resume for '{BookName}' ({BookId}) with {TrackCount} tracks",
             logLabel, book.Name, book.Id, trackItems.Count);
 
-        for (int debugIdx = 0; debugIdx < trackItems.Count; debugIdx++)
+        // The per-track dump feeds ONLY Debug lines: skip the per-chapter
+        // GetUserData calls entirely when Debug is off (one wasted user-data
+        // call per chapter on every book ask otherwise; the sibling shape is
+        // AlbumPlayService's RenderTotal guard).
+        if (logger.IsEnabled(LogLevel.Debug))
         {
-            UserItemData? dbgData = userDataManager.GetUserData(jellyfinUser, trackItems[debugIdx]);
-            logger.LogDebug(
-                "{Label} track[{Idx}]: '{TrackName}', Played={Played}, PositionTicks={Ticks}",
-                logLabel, debugIdx, trackItems[debugIdx].Name,
-                dbgData?.Played, dbgData?.PlaybackPositionTicks);
+            for (int debugIdx = 0; debugIdx < trackItems.Count; debugIdx++)
+            {
+                UserItemData? dbgData = userDataManager.GetUserData(jellyfinUser, trackItems[debugIdx]);
+                logger.LogDebug(
+                    "{Label} track[{Idx}]: '{TrackName}', Played={Played}, PositionTicks={Ticks}",
+                    logLabel, debugIdx, trackItems[debugIdx].Name,
+                    dbgData?.Played, dbgData?.PlaybackPositionTicks);
+            }
         }
 
         int startIndex;
@@ -403,9 +410,6 @@ public static class AudiobookPlayResolver
         // runs before the probes (cheapest first), and the whole gate folds into
         // one condition: nothing below it runs when the page answer is complete
         // or the probes prove no row carries resume-relevant user data.
-        bool queueHoldsBookCandidateEntry = false;
-        bool resumeProbeHit = false;
-
         // JF-790: the deep-resume gate is MOOT in the detected shape (the full
         // book is already in hand and the resume fork above already scanned every
         // chapter of it), so the whole gate section stays cold there.
@@ -417,32 +421,29 @@ public static class AudiobookPlayResolver
             // the page answer is incomplete - the eager shape paid a lock acquisition
             // plus an O(cap) scan on _launchScopeLock for every single-page book and
             // every page-resolved resume, the shapes that discard the value.
-            queueHoldsBookCandidateEntry = queueManager != null
+            bool queueHoldsBookCandidateEntry = queueManager != null
                 && session.DeviceId != null
                 && queueManager.HasAnyBookShapedStoredPosition(session.DeviceId);
-        }
 
-        if (deepResumeEligible && !queueHoldsBookCandidateEntry)
-        {
-            resumeProbeHit = await QueueContinuationFetcher.MayHaveResumeRelevantUserDataAsync(
-                (probeStartIndex, probeLimit) => QueueContinuationFetcher.BuildScopedAudiobookChaptersQuery(
-                    jellyfinUser, user, libraryManager, logger, book.Id, probeStartIndex, probeLimit),
-                probeQuery => RetryHelper.ExecuteWithRequestBudgetAsync(
-                    () => SearchService.SafeGetItemsResult(libraryManager, probeQuery, logger),
-                    logger,
-                    "GetBookTracksResumeProbe",
-                    cancellationToken: cancellationToken)).ConfigureAwait(false);
+            bool resumeProbeHit = false;
+            if (!queueHoldsBookCandidateEntry)
+            {
+                resumeProbeHit = await QueueContinuationFetcher.MayHaveResumeRelevantUserDataAsync(
+                    (probeStartIndex, probeLimit) => QueueContinuationFetcher.BuildScopedAudiobookChaptersQuery(
+                        jellyfinUser, user, libraryManager, logger, book.Id, probeStartIndex, probeLimit),
+                    probeQuery => RetryHelper.ExecuteWithRequestBudgetAsync(
+                        () => SearchService.SafeGetItemsResult(libraryManager, probeQuery, logger),
+                        logger,
+                        "GetBookTracksResumeProbe",
+                        cancellationToken: cancellationToken)).ConfigureAwait(false);
+            }
 
-        }
-
-        // Gate-marker tail F1: the gate DECISION logged for triage (the Debug
-        // Logging Policy) on every path where the gate question was asked - the
-        // first cut logged only inside the probe branch, so the JF-581
-        // valve-release shape (a positioned queue entry releasing the fetch with
-        // no probe run) logged nothing, and the 'positioned queue entries' field
-        // was constant-false wherever the log did fire.
-        if (deepResumeEligible)
-        {
+            // Gate-marker tail F1: the gate DECISION logged for triage (the Debug
+            // Logging Policy) on every path where the gate question was asked - the
+            // first cut logged only inside the probe branch, so the JF-581
+            // valve-release shape (a positioned queue entry releasing the fetch with
+            // no probe run) logged nothing, and the 'positioned queue entries' field
+            // was constant-false wherever the log did fire.
             logger.LogDebug(
                 "{Label}: deep-resume gate for '{BookName}': page answer carries no position and more pages remain; released by {Trigger}",
                 logLabel,
@@ -450,22 +451,21 @@ public static class AudiobookPlayResolver
                 queueHoldsBookCandidateEntry ? "a book-shaped positioned queue entry (JF-581/JF-812 valve)"
                     : resumeProbeHit ? "a user-data probe hit"
                     : "nothing (staying cold)");
-        }
 
-        if (deepResumeEligible
-            && (queueHoldsBookCandidateEntry || resumeProbeHit))
-        {
-            QueueContinuationFetcher.DeepResumeRePage? bookRePage = await QueueContinuationFetcher.TryDeepResumeRePageAsync(
-                () => FetchUnpagedBookAsync("GetBookTracksDeepResume"),
-                fullBook =>
-                {
-                    (int deepIndex, long deepTicks) = ResumeMath.FindResumeTrackIndex(
-                        fullBook, jellyfinUser, userDataManager, queueManager, session.DeviceId, resumePosition: true, logger);
-                    return deepIndex > 0 ? (deepIndex, deepTicks) : null;
-                }).ConfigureAwait(false);
-            if (bookRePage is { } deep)
+            if (queueHoldsBookCandidateEntry || resumeProbeHit)
             {
-                ApplyRePage(deep);
+                QueueContinuationFetcher.DeepResumeRePage? bookRePage = await QueueContinuationFetcher.TryDeepResumeRePageAsync(
+                    () => FetchUnpagedBookAsync("GetBookTracksDeepResume"),
+                    fullBook =>
+                    {
+                        (int deepIndex, long deepTicks) = ResumeMath.FindResumeTrackIndex(
+                            fullBook, jellyfinUser, userDataManager, queueManager, session.DeviceId, resumePosition: true, logger);
+                        return deepIndex > 0 ? (deepIndex, deepTicks) : null;
+                    }).ConfigureAwait(false);
+                if (bookRePage is { } deep)
+                {
+                    ApplyRePage(deep);
+                }
             }
         }
 

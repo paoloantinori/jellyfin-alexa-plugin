@@ -839,7 +839,10 @@ public sealed class AlbumPlayService
         // The album path has no ItemPositionState tier (FindResumeTrackIndex runs
         // here without a queue manager), so the two probes are the whole gate.
         bool albumResumeProbeHit = false;
-        if (!trackerOverrideEngaged && albumPageResumeTicks == 0 && continuationHasMore)
+        // One gate, two consumers (the probe and the deep fetch it releases):
+        // the twin book head hoists the same shape (deepResumeEligible).
+        bool albumDeepResumeGateOpen = !trackerOverrideEngaged && albumPageResumeTicks == 0 && continuationHasMore;
+        if (albumDeepResumeGateOpen)
         {
             albumResumeProbeHit = await QueueContinuationFetcher.MayHaveResumeRelevantUserDataAsync(
                 (probeStartIndex, probeLimit) => QueueContinuationFetcher.BuildScopedAlbumTracksQuery(
@@ -856,10 +859,7 @@ public sealed class AlbumPlayService
                 logLabel, album.Name, albumResumeProbeHit);
         }
 
-        if (!trackerOverrideEngaged
-            && albumPageResumeTicks == 0
-            && continuationHasMore
-            && albumResumeProbeHit)
+        if (albumDeepResumeGateOpen && albumResumeProbeHit)
         {
             QueueContinuationFetcher.DeepResumeRePage? albumRePage = await QueueContinuationFetcher.TryDeepResumeRePageAsync(
                 () => FetchUnpagedAlbumAsync(logLabel + ":GetAlbumTracksDeepResume"),
