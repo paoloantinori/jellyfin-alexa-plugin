@@ -4,7 +4,7 @@ title: >-
   JF-771 - hi-IN: the two remaining फिल्म-carried short-form failures found by
   the JF-770 probe map (फिल्म {title} खोजो reads Fallback; फिल्म {title} चलाओ is
   stolen by PlaySong's bare slot-initial {song} चलाओ)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-10-05'
 labels:
@@ -122,4 +122,5 @@ counterparts to compare against).
 
 CHOSEN SHAPES: khojo leg = video/movie {title} khojo added to PlayVideoIntent (the missing-pattern fix, JF-770 L1b precedent double-verified); chalao leg = movie {title} chalao + movie {title} laga added (family-strengthening on the sample-absent crossings) + a guard comment at PlaySong's bare sample + guard pins; the film-carried forms stay accept-and-document (trainer anomaly, two-failed-fixes rule honored). Files: templates/hi-IN.yaml +4 samples, model regenerated 366->370 exactly, VOICE_COMMANDS_BY_LOCALE regenerated, fixtures +6 (4 red-until-deploy per the JF-766 convention, 2 green guards incl. video+chalao). Validators at baseline (291 warnings unchanged), dry-run 8 passed/1158 skipped. Gates: /simplify (efficiency CLEAN; comment compression + the altitude catch that found laga applied) + /code-review high (3 applied; finding 3 REFUTED by a simulator control - the whole Inception corpus is an NLU-layer probe vehicle since not even Latin 'Inception' resolves in the library; findings 1-2 landed as this note + the cross-locale task). COMMIT 4c09f8b1 on jf771. CLOSURE rides the post-deploy matrix (11 legs, recorded in the orchestrator's checkpoint; the 4 fixture pins go green when the rebuild deploys - the JF-770 closure shape). UNTRIED DOOR, low priority: a handler-side video-noun strip in the greedy-slot entity fallback (the TryEntityFallbackAsync/JF-463 pattern) would be trainer-immune for the chalao steal.
 
+POST-DEPLOY MATRIX OUTCOME (2026-10-10 13:05, orchestrator; deploy f2832df9 + hi-IN rebuild SUCCEEDED): ALL 11 LEGS EXACTLY AS PREDICTED. LEG1-4 (the fix bar): video/movie+khojo and movie+chalao/laga ALL route PlayVideoIntent 4/4 - the khojo missing-pattern fix and the chalao steal fix work LIVE. LEG7 song guards green (bare '{song} chalao' still routes bohemian rhapsody 4/4 - no regression on the load-bearing form). LEG8 family stability 4/4 across video+chalao/dekho, movie+dekho/shuru-karo. LEG9 the JF-766 steal-fix guards hold (both episode addresses route PlayEpisodeIntent 4/4 - the family growth did not reopen the steal). LEG5-6 (record only): the film-carried forms stay Fallback / PlaySong-steal - the trainer anomaly persists, logged as JF-770's FIFTH-rebuild data point. The 4 red-until-deploy fixture pins are now live-green by construction (the matrix is the proof; the NLU suite will carry them durably). TASK CLOSED on the full bar.
 <!-- SECTION:NOTES:END -->
