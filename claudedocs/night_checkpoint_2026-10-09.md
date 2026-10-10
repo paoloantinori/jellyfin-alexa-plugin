@@ -211,3 +211,22 @@ the final three micro-merges ride the NEXT deploy - they are test-only).
 - JF-856 (slug-length guard) still RUNNING on /tmp/wt-jf856.
 - Still dispatchable after JF-856: the video-audio refactor queue, JF-529,
   JF-771, JF-818 follow-ups.
+
+## Afternoon wave (through 15:20)
+
+- JF-789 MERGED + DEPLOYED (production): the recency window (60min, legacy-tie
+  nulls) bounds the tail and the belt; three stances flipped with red proofs;
+  the step-5 fold REJECTED on evidence (the guards stand); JF-858 filed for
+  the two residuals. Deploy f2832df9 verified (md5, config, smoke shows the
+  NEW idle behavior + the JF-846 prefix again during the rebuild window).
+- JF-771 MERGED + CLOSED: hi-IN rebuild SUCCEEDED; the 11-leg post-deploy
+  matrix GREEN exactly as predicted (4 fixes live, guards hold, film
+  anomaly persists = JF-770's fifth-rebuild data point). JF-857 filed (the
+  de-DE NO_SELECTION datum, cross-locale class).
+- ENAMETOOLONG fired LIVE on jf-771's MCP claim (file deleted, recovered
+  from HEAD, hand-flipped): the JF-853/856 regime proven necessary in
+  practice.
+- JF-775 found DONE-STALE (merged 2026-10-05, status never flipped; verified
+  ancestor-of-HEAD) - corrected. A second reconciliation pass over the
+  remaining queue [787/812/798/799/803/648/818-follow-ups] is running.
+- main green on CI through all of it (38052999897 success).
