@@ -8,6 +8,7 @@ using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Controller;
@@ -10814,6 +10815,140 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
             parentId, trackCount: 12, tokenScope: new[] { Guid.NewGuid() }, "jf784-no-metadata");
 
         AssertCacheInvalidatedAndReencoded(logRecords, result, "no encode metadata");
+    }
+
+    /// <summary>
+    /// The shared arrangement of the JF-787 tracker-timeline pins (the sibling
+    /// of <see cref="ServeAlbumOverSeededConcatCacheAsync"/>): a MusicAlbum
+    /// whose (scoped) enumeration is 12 Audio tracks of 3 minutes each. Step A
+    /// records a segment fetch while the sidecar carries the GIVEN identity
+    /// (the during-encode foreign-serve write), step B rewrites the cache the
+    /// way the re-encoded timeline verdict leaves it (completed 216-segment
+    /// entry, sidecar matching the live 12/36-minute enumeration), then the
+    /// resume request (?start=20 minutes, the seeded mark's read-back) serves.
+    /// Returns the served playlist content for the caller's slice asserts.
+    /// </summary>
+    private async Task<string> ServeAlbumAfterSidecarStampedRecordAsync(
+        Guid parentId,
+        TimelineIdentity sidecarIdentityAtRecord,
+        string fakeFfmpegTag)
+    {
+        string parentIdStr = parentId.ToString("D");
+        long threeMinutes = TimeSpan.FromMinutes(3).Ticks;
+
+        var album = new MediaBrowser.Controller.Entities.Audio.MusicAlbum
+        {
+            Name = $"JF-787 Timeline Album ({fakeFfmpegTag})",
+            Id = parentId
+        };
+        _libraryManagerMock.Setup(m => m.GetItemById(parentId)).Returns(album);
+        var tracks = new List<MediaBrowser.Controller.Entities.BaseItem>();
+        for (int i = 1; i <= 12; i++)
+        {
+            tracks.Add(new MediaBrowser.Controller.Entities.Audio.Audio
+            {
+                Name = $"Track {i}",
+                Id = Guid.NewGuid(),
+                RunTimeTicks = threeMinutes
+            });
+        }
+
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+        _libraryManagerMock
+            .Setup(m => m.GetItemList(It.IsAny<MediaBrowser.Controller.Entities.InternalItemsQuery>()))
+            .Returns(tracks);
+
+        // Step A: scope B is served scope A's running encode (the accepted
+        // during-encode residual) and its device fetches segments; the record
+        // gate stamps the mark against the identity the encode's sidecar
+        // carries.
+        string hlsDir = _cache.GetHlsDirectoryPath(parentIdStr, 0);
+        Directory.CreateDirectory(hlsDir);
+        await File.WriteAllTextAsync(Path.Combine(hlsDir, "seg_0121.ts"), new string('x', 512));
+        WriteEncodeMetadata(hlsDir, sidecarIdentityAtRecord.ChapterCount, sidecarIdentityAtRecord.DurationTicks);
+        _cache.RegisterHlsDirectory(parentIdStr, 0);
+
+        var tracker = CreatePositionTracker("jf787-tracker");
+        using var trackerSwap = SwapPluginPositionTracker(tracker);
+
+        var recordController = CreateController(parentIdStr);
+        await recordController.GetSegment(parentIdStr, "seg_0121.ts");
+
+        // Step B: the timeline verdict re-encodes under B's membership; the
+        // cache now carries the 12-track/36-minute identity and serves
+        // completed. (216 segments = that timeline's own count, so the
+        // undercount bar passes and the tracker gate is the row under test.)
+        await SeedCompletedConcatCacheAsync(
+            _cache, parentId, segmentCount: 216, encodedChapterCount: 12, encodedDurationTicks: 12 * threeMinutes);
+
+        // The resume request: mark 121 reads back 20 minutes, sliced at
+        // segment 120 when honored, at seg_0000 when the gate drops it.
+        var logRecords = new List<(LogLevel Level, string Message)>();
+        using var loggerFactory = TestCaptureLogger.CreateCaptureLoggerFactory(logRecords);
+        var controller = CreateController(
+            parentIdStr,
+            loggerFactory,
+            ffmpegPath: WriteFlushLagFakeFfmpeg($"fake-ffmpeg-{fakeFfmpegTag}"),
+            tokenScope: new[] { Guid.NewGuid() });
+        ActionResult result = await controller.StreamHlsAudiobook(parentIdStr, TimeSpan.FromMinutes(20).Ticks);
+
+        return Assert.IsType<ContentResult>(result).Content!;
+    }
+
+    /// <summary>
+    /// JF-787 RED proof, the filed sequence end to end: the tracker records a
+    /// high-water mark under the SHARED album key while the requesting scope is
+    /// served ANOTHER scope's running encode (the during-encode serve residual;
+    /// reproduced by recording a segment fetch while the sidecar still carried
+    /// the foreign 15-track/45-minute identity), then the timeline verdict
+    /// re-encodes under the requesting scope's membership (the sidecar now the
+    /// 12-track/36-minute identity). The stale foreign-timeline mark maps onto
+    /// the new timeline: PRE-FIX the resume slice serves <c>?start=</c> at the
+    /// foreign offset (segment 120, unrelated content), POST-FIX the tracker's
+    /// timeline-identity gate reads the entry as ABSENT for this timeline and
+    /// the playlist serves from the beginning.
+    /// SABOTAGE (red on the unmodified tree): the pin asserts the unsliced
+    /// first segment; the pre-fix tree slices at seg_0120 (its served listing
+    /// opened with "#EXT-X-MEDIA-SEQUENCE:120") and the assert reds.
+    /// The seeding is deliberately all production paths (GetSegment's record
+    /// gate reads the identity off the live sidecar; the seed then rewrites the
+    /// sidecar the way B's re-encode does), so the pin exercises the record
+    /// stamping and the serve gate together.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsAudiobook_ResumeSlice_TrackerPositionFromForeignTimeline_IsDropped()
+    {
+        long threeMinutes = TimeSpan.FromMinutes(3).Ticks;
+
+        string content = await ServeAlbumAfterSidecarStampedRecordAsync(
+            Guid.NewGuid(), new TimelineIdentity(15, 15 * threeMinutes), "jf787-foreign");
+
+        // Full serve from the beginning: the first segment leads the listing and
+        // the slicer's MEDIA-SEQUENCE header is absent. seg_0120 still appears
+        // mid-listing in the full 216-segment playlist, so its bare absence is
+        // not the discriminator.
+        Assert.Contains("seg_0000.ts?token=", content, StringComparison.Ordinal);
+        Assert.DoesNotContain("#EXT-X-MEDIA-SEQUENCE:120", content, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// JF-787 no-thrash control, the SAME-timeline row: when the tracker entry's
+    /// identity matches this enumeration's (the mark was recorded under the
+    /// membership this serve enumerates), the resume slice is honored exactly as
+    /// before the gate.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsAudiobook_ResumeSlice_TrackerSameTimeline_IsServed()
+    {
+        long threeMinutes = TimeSpan.FromMinutes(3).Ticks;
+
+        string content = await ServeAlbumAfterSidecarStampedRecordAsync(
+            Guid.NewGuid(), new TimelineIdentity(12, 12 * threeMinutes), "jf787-same");
+
+        // Sliced serve at segment 120: the slicer's header leads the listing and
+        // the unsliced first segment is gone.
+        Assert.Contains("#EXT-X-MEDIA-SEQUENCE:120", content, StringComparison.Ordinal);
+        Assert.DoesNotContain("seg_0000.ts?token=", content, StringComparison.Ordinal);
     }
 
     // ---- W4: permission-denied deletes must not surface as 500s ----
