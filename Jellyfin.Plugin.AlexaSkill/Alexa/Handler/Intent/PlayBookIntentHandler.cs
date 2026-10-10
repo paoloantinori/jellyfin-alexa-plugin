@@ -11,11 +11,9 @@ using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
-using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
-using MediaBrowser.Model.Querying;
 using Microsoft.Extensions.Logging;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 
@@ -165,39 +163,38 @@ public class PlayBookIntentHandler : BaseHandler
             return userError;
         }
 
-        var bookQuery = new InternalItemsQuery
-        {
-            User = jellyfinUser,
-            Recursive = true,
-            SearchTerm = book,
-            IncludeItemTypes = new[] { BaseItemKind.AudioBook },
-            DtoOptions = new DtoOptions(true)
-        };
-        ApplyLibraryFilter(bookQuery, user, _libraryManager);
-
-        IReadOnlyList<BaseItem> books = await RetryAsync(
-            () => _libraryManager.GetItemList(bookQuery),
+        // JF-862: the shared named-item resolve chain (the SearchTerm tier, the
+        // zero-result fuzzy fallback) with THIS site's multi-match policy:
+        // CallerArbitrates, because the arbitration is the Handler-layer prompt
+        // flow below (NormalizeBookCandidates + HandleFuzzyMiss + AskFirstMatch),
+        // which the Util-layer chain cannot host.
+        NamedItemResolution resolution = await Search.ResolveNamedItemAsync(
+            book,
+            jellyfinUser,
+            user,
+            _libraryManager,
+            new[] { BaseItemKind.AudioBook },
+            NamedItemMultiMatchPolicy.CallerArbitrates,
             "GetAudiobooks",
+            "PlayBookFuzzyFallback",
+            locale,
             cancellationToken).ConfigureAwait(false);
 
-        if (books.Count == 0)
+        if (resolution.Item is null && resolution.Matches is null)
         {
-            var fuzzy = await Search.SearchItemsFuzzyAsync(book, jellyfinUser, user, _libraryManager, new[] { BaseItemKind.AudioBook }, cancellationToken, "PlayBookFuzzyFallback", locale: locale).ConfigureAwait(false);
-            if (fuzzy != null)
-            {
-                books = new List<BaseItem> { fuzzy.Value.Item };
-            }
-            else
-            {
-                return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundBook", locale, book));
-            }
+            return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundBook", locale, book));
         }
 
         // JF-793 Finding 3: BOOK-granular candidates before the disambiguation
         // consumers (the illusory chapter-granular choice, and the "- Chapter N"
         // name tails dragging the fuzzy scores below the auto-play bar). The shape
-        // rationale and the pass-through list live on NormalizeBookCandidates.
-        books = NormalizeBookCandidates(books);
+        // rationale and the pass-through list live on NormalizeBookCandidates; the
+        // single-match and fuzzy-hit legs skip it (its Count <= 1 short-circuit
+        // made them pass-throughs pre-JF-862 too, and resolution.Item is non-null
+        // there by the one-payload invariant).
+        IReadOnlyList<BaseItem> books = resolution.Matches is { } rawMatches
+            ? NormalizeBookCandidates(rawMatches)
+            : new List<BaseItem> { resolution.Item! };
 
         if (books.Count > 1)
         {

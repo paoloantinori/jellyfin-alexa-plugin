@@ -481,6 +481,46 @@ public class SearchServiceTests : PluginTestBase
     }
 
     // ---------------------------------------------------------------------
+    // ResolveNamedItemAsync (JF-862)
+    // ---------------------------------------------------------------------
+
+    [Fact]
+    public async Task ResolveNamedItemAsync_FirstMatchWins_MultiMatch_TakesFirstRow_NoFuzzyScan()
+    {
+        // JF-862 code-review F3: the series-leg policy arm had NO pin (every
+        // series-resolution mock in the project returns exactly one series, so the
+        // Count > 1 arm of the shared policy switch was never exercised). The
+        // policy's contract: Jellyfin's SearchTerm relevance order is the
+        // authority, the FIRST row wins with no arbitration, and the fuzzy tier
+        // must not run (it is the EMPTY-tier fallback only).
+        var libraryManager = new Mock<ILibraryManager>();
+        var first = new global::MediaBrowser.Controller.Entities.TV.Series { Name = "The Office (US)", Id = Guid.NewGuid() };
+        var second = new global::MediaBrowser.Controller.Entities.TV.Series { Name = "The Office (UK)", Id = Guid.NewGuid() };
+        libraryManager
+            .Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.SearchTerm == "the office")))
+            .Returns(new List<BaseItem> { first, second });
+        var search = CreateSearchService(new PluginConfiguration());
+
+        NamedItemResolution resolution = await search.ResolveNamedItemAsync(
+            "the office",
+            jellyfinUser: null,
+            TestHelpers.CreateTestUser(),
+            libraryManager.Object,
+            new[] { BaseItemKind.Series },
+            NamedItemMultiMatchPolicy.FirstMatchWins,
+            "GetSeries",
+            "SeriesFuzzyFallback",
+            "en-US",
+            CancellationToken.None);
+
+        Assert.Same(first, resolution.Item);
+        Assert.Null(resolution.Matches);
+        libraryManager.Verify(
+            l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.SearchTerm == null)),
+            Times.Never);
+    }
+
+    // ---------------------------------------------------------------------
     // helpers
     // ---------------------------------------------------------------------
 
