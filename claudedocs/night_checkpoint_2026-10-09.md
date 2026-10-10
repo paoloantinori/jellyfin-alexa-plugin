@@ -254,3 +254,27 @@ the final three micro-merges ride the NEXT deploy - they are test-only).
   inline TicksToMs copies (extract at the third); the belt's doubled
   snapshot reads (documented, deeper fix deliberately not taken); es-US
   deserves an identical-content rebuild probe before any content change.
+
+## NIGHT CLOSED, FOR REAL THIS TIME (22:40) - and why it holds
+
+The difference from the 01:50 close the maintainer rightly overturned: at
+01:50 the "remaining" list held six dispatchable tasks and I parked them on
+a weight judgment. Now every last one is landed (JF-787, JF-648, JF-859
+closed tonight; JF-803/812/857/771 earlier) and the open list is provably
+blocked: JF-855/858/861/798 are Paolo DECISIONS or permission gates (the
+fixture, the flag, the mirror-directive, the residuals), JF-529 is root,
+JF-799's verification half needs the device probe, JF-595 is Amazon,
+JF-399/844's levers are product calls, JF-770/848 are recorded-trigger
+parks, and the 1.0 device round gates the tag. There is no dispatchable To
+Do left. The cron is deleted at close BY RULE, not by fatigue; the next
+session's work is Paolo's answers to JF-861, JF-855, and JF-798's fixture
+blessing - plus the device menu already served earlier today.
+
+DEPLOYED: a0443f46 (JF-859 latch/planter/span + JF-787 timeline identity +
+JF-648 scope-per-key + JF-860A gated read), verified as always (md5,
+config, smoke = the bounded no-media answer).
+
+FINAL DAY TALLY: 15 tasks closed (JF-772/853/854/856/859/787/648/860A in
+this second stretch + 771/803/812/857/789 + reconciliations 775/818),
+7 merges to main, 3 verified deploys, CI green all day after the manifest
+fix, main advanced bbfc01ff..a0443f46-equivalent (all pushed).
