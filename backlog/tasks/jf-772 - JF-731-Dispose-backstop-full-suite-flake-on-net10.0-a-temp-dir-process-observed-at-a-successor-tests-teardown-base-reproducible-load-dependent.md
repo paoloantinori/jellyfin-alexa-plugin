@@ -3,10 +3,10 @@ id: JF-772
 title: >-
   JF-731 Dispose-backstop full-suite flake on net10.0: a temp-dir process
   observed at a successor test's teardown (base-reproducible, load-dependent)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-10-05'
-updated_date: '2026-10-10 05:25'
+updated_date: '2026-10-10 08:43'
 labels:
   - tests
   - flake
@@ -76,4 +76,6 @@ JF-808 GATE-MARKER ADDENDUM (2026-10-07): a NEW DATA POINT for this flake - the 
 JF-808 GATE RUN (2026-10-07): a second one-shot net9.0 failure in the JF-808 merged-tree full gate (name lost to scroll-off; the immediate re-run fully green 5466/5466 both TFMs). Same signature as the JF-808-tree occurrence: net9.0-only, single-shot, green on re-run. Two net9.0 data points in one day against the net10.0-specific candidate; the load-window reading stands.
 
 JF-797 GATE RUN (2026-10-07): a one-shot net10.0 failure (name lost to scroll-off; two immediate re-runs fully green 5484/5484 both TFMs; the locale mechanism remains structurally closed). Fourth data point: the flake now observed on BOTH TFMs, alternating - consistent with the plain load-window reading.
+
+CLOSE-OUT (2026-10-10 10:50, orchestrator; merged 9851001f, cs identity with the worker branch verified empty): the fix landed as FenceTempDirEncodesDeadBeforeSweep (class-level death fence before the kill pass, the JF-731 founding philosophy over per-test finallys; ~119 encode sites were never going to be fenced individually). THE FILING'S OWN FRAMING IS REFUTED and the record is corrected here: the title's 'a successor test's teardown' story is impossible by construction - the /proc half matches cmdline against the harness's PER-INSTANCE _tempDir (xUnit instantiates the class per test), so the backstop can only ever name the RED test's OWN fakes; the observed signature is always the red test's own encode still dying at its own Dispose under the parallel-load window (self-exiting fakes with no kill site, or in-flight kill signals). Deterministic A/B probes proved the mechanism (planted 1.5s self-exiter reds pre-fix with the filing's byte-identical message, greens post-fix; planted 300s sleeper reds both - the leak contract holds). Honest reproduction status: the full-suite flake itself not reproduced this session (6 suites green); residual ceiling recorded (a death slower than 5s under a harsher spike still reds).
 <!-- SECTION:NOTES:END -->

@@ -188,3 +188,26 @@ the final three micro-merges ride the NEXT deploy - they are test-only).
   (device/external), JF-848 (parked, above), JF-822 (record-only by
   convention), minix's queued 1.0.0.0 install ERR (known, self-resolving,
   do not fix).
+
+## Reopened wave COMPLETE (10:55)
+
+- JF-853 merged 4ecd02ad (normalize-then-fold proven; 0/851 orphans; the
+  CLI's drop-a-closed-unknown-marker discovery; upstream issue draft in the
+  task file for Paolo).
+- JF-854 merged e08e53db IN THE DESIGNED ORDER (fold first, then the tool):
+  validate-backlog CI green from its first run; the allowlist prune was the
+  guard enforcing its own same-change rule (fold happened in place, not by
+  file removal - the test's self-heal assumption).
+- JF-772 merged 9851001f (the death fence; the filing's successor framing
+  REFUTED by per-instance temp-dir scoping; deterministic A/B probes;
+  5612/5612 both TFMs).
+- CI INCIDENT FOUND AND FIXED: main had been RED on validate-versions since
+  2026-10-08 08:44 (the jf814 morning commit 4783954d added the 1.0.0.0
+  manifest placeholders without the version bump - five+ failed runs, and
+  the same entries resurrected the issue-#38 phantom-catalog condition
+  behind minix's known install-ERR loop). Fixed adccc02f: exactly the 14
+  placeholder lines removed, validate_versions PASS; the parked 1.0 state
+  in docs/release/ untouched.
+- JF-856 (slug-length guard) still RUNNING on /tmp/wt-jf856.
+- Still dispatchable after JF-856: the video-audio refactor queue, JF-529,
+  JF-771, JF-818 follow-ups.
