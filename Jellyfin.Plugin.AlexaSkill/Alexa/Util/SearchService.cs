@@ -486,11 +486,17 @@ public sealed class SearchService
     /// localized not-found (wording and media noun differ by site), keeping
     /// response-building out of this recall layer.
     /// </summary>
-    /// <param name="query">The spoken item name, ROMANIZED by the caller (the
-    /// JF-643 pattern: the SearchTerm index is Latin-script, so every original
-    /// caller romanizes kana before this point; <see cref="SearchItemsFuzzyAsync"/>
-    /// romanizes internally too, and the romanizer is idempotent, so the fuzzy tier
-    /// is unchanged by the double pass).</param>
+    /// <param name="query">The spoken item name. The chain romanizes it itself
+    /// (JF-643: the SearchTerm index is Latin-script, so a kana query must not
+    /// reach either tier raw; <see cref="KatakanaRomanizer.Romanize"/> is
+    /// idempotent, so the original callers that already romanize for their own
+    /// speech paths pay only the no-kana early-out). ONE known tier-boundary
+    /// delta vs the pre-JF-862 series site, which passed its RAW name to the
+    /// fuzzy tier: <see cref="SearchItemsFuzzyAsync"/>'s minQueryLength gate now
+    /// reads the ROMANIZED form, so a short kana name whose romaji crosses the
+    /// gate's length bound (e.g. a two-kana name) scans instead of refusing;
+    /// the photo-album and book sites are unchanged (they always fed the fuzzy
+    /// tier romanized).</param>
     /// <param name="jellyfinUser">The Jellyfin user for query context.</param>
     /// <param name="user">The plugin user for library access filtering and the
     /// arbitration threshold.</param>
@@ -521,6 +527,12 @@ public sealed class SearchService
         string locale,
         CancellationToken cancellationToken)
     {
+        // JF-643 choke point (the code-review F2 hardening): romanize HERE so the
+        // contract is enforced by the chain, not remembered by each caller. Identity
+        // for kana-free input (the no-kana early-out returns the same instance), so
+        // the original callers' own romanization stays harmless.
+        query = KatakanaRomanizer.Romanize(query);
+
         var searchQuery = new InternalItemsQuery
         {
             User = jellyfinUser,

@@ -106,11 +106,12 @@ public sealed class TvNextUpService
 
         // JF-862: the shared named-item resolve chain, this site's policy being
         // FirstMatchWins (Jellyfin's SearchTerm relevance order is the authority for
-        // series; the policy member's doc). The QUERY is romanized here (the
-        // JF-645/JF-643 pattern: the SearchTerm index is Latin-script); the
-        // not-found speech below keeps the raw seriesName (the user's own words).
+        // series; the policy member's doc). The chain romanizes the query itself
+        // (the JF-645/JF-643 pattern: the SearchTerm index is Latin-script), so the
+        // raw slot value passes through here; the not-found speech below keeps it
+        // (the user's own words).
         NamedItemResolution resolution = await _search.ResolveNamedItemAsync(
-            Util.KatakanaRomanizer.Romanize(seriesName),
+            seriesName,
             jellyfinUser,
             user,
             libraryManager,
