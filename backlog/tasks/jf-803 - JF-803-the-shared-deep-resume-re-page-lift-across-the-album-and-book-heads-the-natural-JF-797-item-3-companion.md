@@ -3,9 +3,10 @@ id: JF-803
 title: >-
   JF-803 - the shared deep-resume re-page lift across the album and book heads
   (the natural JF-797 item 3 companion)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-10-07'
+updated_date: '2026-10-10 12:58'
 labels:
   - refactor
   - playback
@@ -19,6 +20,7 @@ priority: low
 ---
 
 ## Description
+
 <!-- SECTION:DESCRIPTION:BEGIN -->
 Filed by the JF-796 worker (2026-10-07), same-turn per the review-recommendation
 rule, from the /simplify altitude round on the album deep-resume block. JF-796

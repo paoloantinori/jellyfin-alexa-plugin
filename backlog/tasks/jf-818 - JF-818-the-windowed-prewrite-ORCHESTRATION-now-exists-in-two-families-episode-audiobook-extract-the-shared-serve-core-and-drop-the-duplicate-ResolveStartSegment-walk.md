@@ -1,11 +1,13 @@
 ---
 id: JF-818
 title: >-
-  JF-818 - the windowed-prewrite ORCHESTRATION now exists in two families (episode + audiobook):
-  extract the shared serve core, and drop the duplicate ResolveStartSegment walk
-status: To Do
+  JF-818 - the windowed-prewrite ORCHESTRATION now exists in two families
+  (episode + audiobook): extract the shared serve core, and drop the duplicate
+  ResolveStartSegment walk
+status: Done
 assignee: []
 created_date: '2026-10-08'
+updated_date: '2026-10-10 12:58'
 labels:
   - refactor
   - hls
