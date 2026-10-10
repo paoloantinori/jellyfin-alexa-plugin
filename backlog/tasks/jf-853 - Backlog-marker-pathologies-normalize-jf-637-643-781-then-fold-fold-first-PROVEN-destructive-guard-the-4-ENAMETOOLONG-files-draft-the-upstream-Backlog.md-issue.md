@@ -28,16 +28,16 @@ PART 2 - the four ENAMETOOLONG-class files (jf-724, jf-771, jf-774, jf-782): any
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 dotnet build passes with 0 errors
-- [ ] #2 dotnet test passes
-- [ ] #3 No new compiler warnings introduced
-- [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
-- [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
-- [ ] #6 NLU test fixtures updated if interaction model changed
-- [ ] #7 E2E test added for new intent or handler logic
-- [ ] #8 Locale response strings added to all 17 locales
-- [ ] #9 /simplify passed (no blocking cleanups remaining)
-- [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
+- [x] #1 dotnet build passes with 0 errors
+- [x] #2 dotnet test passes
+- [x] #3 No new compiler warnings introduced
+- [x] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
+- [x] #5 HttpClient instances are not shared across calls that modify BaseAddress
+- [x] #6 NLU test fixtures updated if interaction model changed
+- [x] #7 E2E test added for new intent or handler logic
+- [x] #8 Locale response strings added to all 17 locales
+- [x] #9 /simplify passed (no blocking cleanups remaining)
+- [x] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
 
 ## Implementation Notes
@@ -55,6 +55,8 @@ BATTERY (rt_probe method: scratch backlog project, `backlog task edit <id> --add
 PART 2: guard notes landed at the top of the managed Description section of jf-724 (already had one; note inserted under SECTION:DESCRIPTION:BEGIN) and of jf-771/jf-774/jf-782 (empty Description headings; a canonical SECTION:DESCRIPTION wrapper created for the note; wording kept to tripwire plus pointer, the mechanism lives once here and in the draft). Both upstream bugs were re-reproduced live today before drafting; the observed behaviors are exactly as the draft's repro steps describe.
 
 FOLLOW-UPS RECOMMENDED (not in this task's file scope; for the orchestrator): (a) a mechanical guard beats these advisory notes, since the CLI never reads them before deleting: a validator that computes every task file's regenerated slug length (the rt_battery filename check is the seed) plus a hook or blocklist naming the affected files; (b) the roundtrip harness (rt_probe.py/rt_battery.py, this session's copy at /tmp/jf853_ref) needs a durable home or it dies with /tmp, and JF-854's census-to-repo-tool lane is the natural place to carry it.
+
+GATES (2026-10-10): /simplify ran 4 parallel angle agents (5 findings applied, 2 skips with reasons, commit a029ae58) and /code-review high ran twice (first round mis-scoped to the main checkout and was re-invoked scoped to this worktree per the JF-851 precedent; scoped round applied 5 findings and relayed 1, commit 34f11a08). DoD #1-#8 are vacuous for this markdown-only change (no build, no tests, no warnings surface, no session attributes, no HttpClient, no model/locale/E2E surface); the battery, census, and locale-validator outputs quoted in the commits are the applicable verification battery.
 
 UPSTREAM ISSUE DRAFT (maintainer reviews and submits; not filed by the worker):
 
