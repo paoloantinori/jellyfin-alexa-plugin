@@ -77,13 +77,6 @@ public sealed class NamedItemResolution
     /// </summary>
     public IReadOnlyList<BaseItem>? Matches { get; }
 
-    /// <summary>
-    /// Gets a value indicating whether the caller must arbitrate the multi-match
-    /// (shorthand for <see cref="Matches"/> != null; a single SearchTerm match
-    /// always resolves directly, so this is never true for a one-match query).
-    /// </summary>
-    public bool IsAmbiguous => Matches != null;
-
     /// <summary>Factory for the resolved state.</summary>
     /// <param name="item">The resolved item.</param>
     /// <returns>The resolution.</returns>

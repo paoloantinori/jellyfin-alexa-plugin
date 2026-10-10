@@ -104,14 +104,11 @@ public sealed class TvNextUpService
             return (null, ResponseBuilder.Tell(ResponseStrings.Get("MediaTypeNotAvailable", locale)));
         }
 
-        // JF-862: the shared named-item resolve chain (the JF-329 convergence hoist
-        // of this site's inline chain). JF-645 (the JF-643 pattern): the series name
-        // feeds the SearchTerm index, Latin-script; a ja-JP series slot arrives as
-        // katakana, so the QUERY is romanized before the call (the fuzzy tier
-        // romanizes internally too, and the romanizer is idempotent). The
-        // FirstMatchWins policy keeps this site's shape: Jellyfin's SearchTerm
-        // relevance order is the authority for series, no arbitration. The
-        // not-found speech keeps the raw seriesName (the user's own words).
+        // JF-862: the shared named-item resolve chain, this site's policy being
+        // FirstMatchWins (Jellyfin's SearchTerm relevance order is the authority for
+        // series; the policy member's doc). The QUERY is romanized here (the
+        // JF-645/JF-643 pattern: the SearchTerm index is Latin-script); the
+        // not-found speech below keeps the raw seriesName (the user's own words).
         NamedItemResolution resolution = await _search.ResolveNamedItemAsync(
             Util.KatakanaRomanizer.Romanize(seriesName),
             jellyfinUser,

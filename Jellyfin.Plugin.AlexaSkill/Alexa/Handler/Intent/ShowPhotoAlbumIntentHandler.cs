@@ -112,7 +112,21 @@ public class ShowPhotoAlbumIntentHandler : BaseHandler
         BaseItem? album = null;
         if (albumName != null)
         {
-            album = await ResolveAlbumAsync(albumName, jellyfinUser, user, locale, cancellationToken).ConfigureAwait(false);
+            // JF-862: the shared named-item resolve chain, this site's policy being
+            // ArbitrateThenTopRanked (the JF-776 ScoringName arbitration, and below
+            // the fuzzy bar the top-ranked SearchTerm match, announced by name).
+            NamedItemResolution resolution = await Search.ResolveNamedItemAsync(
+                albumName,
+                jellyfinUser,
+                user,
+                _libraryManager,
+                new[] { BaseItemKind.PhotoAlbum },
+                NamedItemMultiMatchPolicy.ArbitrateThenTopRanked,
+                "GetPhotoAlbums",
+                "ShowPhotoAlbumFuzzyFallback",
+                locale,
+                cancellationToken).ConfigureAwait(false);
+            album = resolution.Item;
             if (album == null)
             {
                 Logger.LogDebug("ShowPhotoAlbum: no album matched query={Query}", albumName);
@@ -151,44 +165,6 @@ public class ShowPhotoAlbumIntentHandler : BaseHandler
         response.Response.Directives.Add(directive!);
 
         return response;
-    }
-
-    /// <summary>
-    /// Resolve the spoken album name to a Jellyfin <c>PhotoAlbum</c> folder on the
-    /// shared named-item resolve chain (<see cref="SearchService.ResolveNamedItemAsync"/>,
-    /// the JF-862 hoist of this handler's inline chain): the SearchTerm tier first,
-    /// the <see cref="NamedItemMultiMatchPolicy.ArbitrateThenTopRanked"/> policy on a
-    /// multi-match (fuzzy arbitration through the JF-776 ScoringName reading, and the
-    /// below-bar fallback to the top-ranked SearchTerm match, announced by name), and
-    /// the shared bounded fuzzy scan on a SearchTerm miss. All tiers run under the
-    /// per-user library filter.
-    /// </summary>
-    /// <param name="albumName">The romanized spoken album name.</param>
-    /// <param name="jellyfinUser">The resolved Jellyfin user for query context.</param>
-    /// <param name="user">The plugin user for library access filtering.</param>
-    /// <param name="locale">The request locale, for the fuzzy scan's tokenizer.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>The best-matching photo album, or null when nothing clears the bar.</returns>
-    private async Task<BaseItem?> ResolveAlbumAsync(
-        string albumName,
-        Jellyfin.Database.Implementations.Entities.User? jellyfinUser,
-        Entities.User user,
-        string locale,
-        CancellationToken cancellationToken)
-    {
-        NamedItemResolution resolution = await Search.ResolveNamedItemAsync(
-            albumName,
-            jellyfinUser,
-            user,
-            _libraryManager,
-            new[] { BaseItemKind.PhotoAlbum },
-            NamedItemMultiMatchPolicy.ArbitrateThenTopRanked,
-            "GetPhotoAlbums",
-            "ShowPhotoAlbumFuzzyFallback",
-            locale,
-            cancellationToken).ConfigureAwait(false);
-
-        return resolution.Item;
     }
 
     /// <summary>

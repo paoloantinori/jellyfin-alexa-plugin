@@ -167,8 +167,7 @@ public class PlayBookIntentHandler : BaseHandler
         // zero-result fuzzy fallback) with THIS site's multi-match policy:
         // CallerArbitrates, because the arbitration is the Handler-layer prompt
         // flow below (NormalizeBookCandidates + HandleFuzzyMiss + AskFirstMatch),
-        // which the Util-layer chain cannot host. The not-found leg speaks this
-        // handler's own line.
+        // which the Util-layer chain cannot host.
         NamedItemResolution resolution = await Search.ResolveNamedItemAsync(
             book,
             jellyfinUser,
@@ -181,59 +180,57 @@ public class PlayBookIntentHandler : BaseHandler
             locale,
             cancellationToken).ConfigureAwait(false);
 
-        IReadOnlyList<BaseItem> books;
-        if (resolution.IsAmbiguous)
-        {
-            // JF-793 Finding 3: BOOK-granular candidates before the disambiguation
-            // consumers (the illusory chapter-granular choice, and the "- Chapter N"
-            // name tails dragging the fuzzy scores below the auto-play bar). The shape
-            // rationale and the pass-through list live on NormalizeBookCandidates.
-            books = NormalizeBookCandidates(resolution.Matches!);
-
-            if (books.Count > 1)
-            {
-                BaseItem? bookMatch = null;
-                // JF-776: scoring through the romaji reading (ScoringName), speech
-                // keeps the display name (the JF-755 speechSelector seam).
-                var (missOutcome, missResponse) = await HandleFuzzyMiss(
-                    book,
-                    books,
-                    b => Util.KeywordMatcher.ScoringName(b.Name),
-                    best => new List<(Guid, string)> { (best.Id, best.Name) },
-                    DisambiguationHelper.MediaTypeAlbum,
-                    locale,
-                    best =>
-                    {
-                        bookMatch = best;
-                        return Task.FromResult<SkillResponse>(null!);
-                    },
-                    user: user,
-                    speechSelector: b => b.Name).ConfigureAwait(false);
-
-                if (missOutcome != FuzzyMissOutcome.NotFound)
-                {
-                    if (missResponse != null)
-                    {
-                        return missResponse;
-                    }
-
-                    books = new List<BaseItem> { bookMatch! };
-                }
-                else
-                {
-                    var matches = books.Take(3).Select(b => (b.Id, b.Name, (string?)Launch.GetImageUrl(b.Id.ToString("N"), user))).ToList();
-                    return DisambiguationHelper.AskFirstMatch(
-                        matches, DisambiguationHelper.MediaTypeAlbum, locale, context);
-                }
-            }
-        }
-        else if (resolution.Item is BaseItem resolvedBook)
-        {
-            books = new List<BaseItem> { resolvedBook };
-        }
-        else
+        if (resolution.Item is null && resolution.Matches is null)
         {
             return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundBook", locale, book));
+        }
+
+        // JF-793 Finding 3: BOOK-granular candidates before the disambiguation
+        // consumers (the illusory chapter-granular choice, and the "- Chapter N"
+        // name tails dragging the fuzzy scores below the auto-play bar). The shape
+        // rationale and the pass-through list live on NormalizeBookCandidates; the
+        // single-match and fuzzy-hit legs skip it (its Count <= 1 short-circuit
+        // made them pass-throughs pre-JF-862 too, and resolution.Item is non-null
+        // there by the one-payload invariant).
+        IReadOnlyList<BaseItem> books = resolution.Matches is { } rawMatches
+            ? NormalizeBookCandidates(rawMatches)
+            : new List<BaseItem> { resolution.Item! };
+
+        if (books.Count > 1)
+        {
+            BaseItem? bookMatch = null;
+            // JF-776: scoring through the romaji reading (ScoringName), speech
+            // keeps the display name (the JF-755 speechSelector seam).
+            var (missOutcome, missResponse) = await HandleFuzzyMiss(
+                book,
+                books,
+                b => Util.KeywordMatcher.ScoringName(b.Name),
+                best => new List<(Guid, string)> { (best.Id, best.Name) },
+                DisambiguationHelper.MediaTypeAlbum,
+                locale,
+                best =>
+                {
+                    bookMatch = best;
+                    return Task.FromResult<SkillResponse>(null!);
+                },
+                user: user,
+                speechSelector: b => b.Name).ConfigureAwait(false);
+
+            if (missOutcome != FuzzyMissOutcome.NotFound)
+            {
+                if (missResponse != null)
+                {
+                    return missResponse;
+                }
+
+                books = new List<BaseItem> { bookMatch! };
+            }
+            else
+            {
+                var matches = books.Take(3).Select(b => (b.Id, b.Name, (string?)Launch.GetImageUrl(b.Id.ToString("N"), user))).ToList();
+                return DisambiguationHelper.AskFirstMatch(
+                    matches, DisambiguationHelper.MediaTypeAlbum, locale, context);
+            }
         }
 
         // JF-795: everything from the chapter-leaf climb down (the initial page,
