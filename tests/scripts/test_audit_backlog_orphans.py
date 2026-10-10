@@ -27,11 +27,11 @@ TASKS_DIR = audit.DEFAULT_TASKS_DIR
 # When a member leaves backlog/tasks/, delete its row in the same change;
 # once all three are folded the parked set below is empty and this guard is
 # green with no further edits.
-KNOWN_RAW_PARKED = {
-    "jf-637 - JF-636-follow-ups-consolidate-the-variant-HLS-machinery-the-JF-632-gate-preamble-and-the-slot-resolution-walk.md",
-    "jf-643 - JF-643-katakana-query-values-never-match-Latin-library-names-script-gap-in-fuzzy-phonetic-search-naturalized-ja-JP-artist-and-genre-requests-all-end-not-found.md",
-    "jf-781 - the-SearchMedia-fuzzy-pass-kana-gate-keeps-refuse-and-stop-non-Audio-kinds-have-no-walk-nor-retry-recovery.md",
-}
+# JF-853 folded all three IN PLACE (same filenames) on 2026-10-10, so the
+# rows were pruned in that change window per the same-change rule; the set
+# is now the empty steady state. A future raw file must NEVER be parked here
+# silently: fix or fold it instead (the MCP drops raw tails on rewrite).
+KNOWN_RAW_PARKED: set[str] = set()
 
 
 CLEAN_TASK = """\
