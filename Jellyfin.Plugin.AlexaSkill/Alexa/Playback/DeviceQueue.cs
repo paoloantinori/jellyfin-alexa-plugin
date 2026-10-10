@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
@@ -122,49 +123,177 @@ public sealed class DeviceQueue
     public Dictionary<string, string> ItemPositionKinds { get; set; } = new();
 
     /// <summary>
-    /// Gets or sets per-item ACTIVE audio-launch bases (itemId ("N" format) →
-    /// milliseconds, JF-522). A LAUNCH-SCOPED record (replacing the JF-514 last-resolve
-    /// ledger, deleted by JF-522): it is written when an <c>AudioPlayer.Play</c>
-    /// DIRECTIVE is issued (the BuildAudioPlayerResponse chokepoint; the sleep-timer
-    /// re-issue, which builds its directive directly, records its base-0 replay
-    /// itself), never by a mere resolve (precompute), so it carries the base of the
-    /// stream the device is actually playing. The playback event writers add it to
-    /// raw device offsets to persist item-absolute positions. Survives queue resets
-    /// like the sibling stores.
+    /// Gets or sets per-item ACTIVE launch scopes (itemId ("N" format) →
+    /// <see cref="LaunchScope"/>, JF-522/JF-648). A LAUNCH-SCOPED record (replacing
+    /// the JF-514 last-resolve ledger, deleted by JF-522): it is written when an
+    /// <c>AudioPlayer.Play</c> DIRECTIVE is issued (the BuildAudioPlayerResponse
+    /// chokepoint; the sleep-timer re-issue, which builds its directive directly,
+    /// records its base-0 replay itself), never by a mere resolve (precompute), so
+    /// it carries the base and rate of the stream the device is actually playing.
+    /// The playback event writers add the base to raw device offsets (scaling by the
+    /// rate) to persist item-absolute positions. Survives queue resets like the
+    /// sibling stores. PERSISTED SHAPE (JF-648): this map replaces the legacy
+    /// activeLaunchBaseMs/activePlaybackRatePerMille half-map pair in the queue
+    /// files; old-shape files fold into it at load.
     /// </summary>
-    public Dictionary<string, long> ActiveLaunchBaseMs { get; set; } = new();
+    public Dictionary<string, LaunchScope> ActiveLaunchScopes { get; set; } = new();
 
     /// <summary>
-    /// Gets or sets per-item PENDING audio-launch bases (itemId ("N" format) →
-    /// milliseconds, JF-522): enqueued directives whose stream has not started yet. A
-    /// wrapped/repeat-one queue enqueues the SAME item that is still playing; the
-    /// pending entry keeps that enqueue's base separate from the running stream's
-    /// <see cref="ActiveLaunchBaseMs"/> entry until PlaybackStarted promotes it, so
-    /// the running stream's terminal events still compose with the base they were
-    /// launched with (the clobber hazard the JF-521 rejection documented).
+    /// Gets or sets per-item PENDING launch scopes (itemId ("N" format) →
+    /// <see cref="LaunchScope"/>, JF-522/JF-648): enqueued directives whose stream
+    /// has not started yet. A wrapped/repeat-one queue enqueues the SAME item that
+    /// is still playing; the pending scope keeps that enqueue's base and rate
+    /// separate from the running stream's <see cref="ActiveLaunchScopes"/> entry
+    /// until PlaybackStarted promotes it, so the running stream's terminal events
+    /// still compose with the base they were launched with (the clobber hazard the
+    /// JF-521 rejection documented). PERSISTED SHAPE (JF-648): replaces the legacy
+    /// pendingLaunchBaseMs/pendingPlaybackRatePerMille half-map pair in the queue
+    /// files; old-shape files fold into it at load.
     /// </summary>
-    public Dictionary<string, long> PendingLaunchBaseMs { get; set; } = new();
+    public Dictionary<string, LaunchScope> PendingLaunchScopes { get; set; } = new();
 
     /// <summary>
-    /// Gets or sets per-item ACTIVE playback rates (itemId ("N" format) → per-mille,
-    /// JF-636: 750..2000), the rate half of the launch scope the base maps own. An
-    /// atempo stream's output timeline runs at rate R, so the playback event writers
-    /// scale raw device offsets by this value before composing the launch base
-    /// (content = base + offset x R). Written ONLY beside
-    /// <see cref="ActiveLaunchBaseMs"/>/<see cref="PendingLaunchBaseMs"/> by
-    /// <c>DeviceQueueManager.RecordLaunchBase</c> (default 1000 = identity, no
-    /// scaling), so an absent entry means a pre-JF-636 raw-static or transcode
-    /// stream whose offsets never scale. Additive in the persisted JSON (missing on
-    /// pre-JF-636 files).
+    /// JF-648 migration buffer: every JSON member this version does not bind to a
+    /// declared property lands here at DESERIALIZATION time (the four legacy
+    /// half-map members on an old queue file, plus any member a NEWER plugin wrote
+    /// that this one does not know). Consumed and nulled by
+    /// <see cref="FoldLegacyLaunchScopeMaps"/> on the manager's load path (the ONE
+    /// deserialization site), so unknown members are dropped on the next persist
+    /// exactly as the pre-JF-648 reader skipped them (no forward-member
+    /// resurrection) and nothing here is ever re-serialized.
     /// </summary>
-    public Dictionary<string, int> ActivePlaybackRatePerMille { get; set; } = new();
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? LegacyAndUnknownMembers { get; set; }
 
     /// <summary>
-    /// Gets or sets per-item PENDING playback rates (the enqueued twin of
-    /// <see cref="ActivePlaybackRatePerMille"/>): promoted to active at the item's
-    /// next PlaybackStarted together with its pending launch base.
+    /// JF-648 migration: folds the legacy four half-map members (read out of
+    /// <see cref="LegacyAndUnknownMembers"/>) into the scope-per-key maps, then
+    /// nulls the buffer so its members can neither be re-read nor re-serialized.
+    /// CONFLICT BY INSPECTION (a file carrying BOTH shapes, only possible from a
+    /// hand-edited or foreign-written file: the plugin writes exactly one shape
+    /// per version): where both shapes name a key, the SCOPE entry wins, because
+    /// it was written by strictly newer code than the half-map members. BOUNDED
+    /// RESIDUAL on the same hybrid files (code-review F1, JF-648): the win is
+    /// per-key VALUE preference only; the folded legacy keys append at LATER
+    /// insertion slots than the deserialized scope entries, so a cap-pressure
+    /// trim on a hybrid file may evict scope entries before folded legacy ones
+    /// (the trust order inverted by eviction order). Not worth machinery for a
+    /// shape no plugin writes; the readers never see a SPLIT either way (both
+    /// halves of any surviving entry stay paired). An
+    /// orphan legacy RATE (a rate key with no base key; the invariant's
+    /// forbidden direction, which no plugin writer produced but a torn file
+    /// could carry) is DROPPED: the fold is where the half-map convention
+    /// becomes the structural invariant, and carrying the orphan over would
+    /// preserve exactly the corruption JF-648 closes.
     /// </summary>
-    public Dictionary<string, int> PendingPlaybackRatePerMille { get; set; } = new();
+    internal void FoldLegacyLaunchScopeMaps()
+    {
+        // A file can carry an explicit null scope member (torn or hand-edited;
+        // the deserializer binds null over the property initializer) and every
+        // reader assumes non-null maps, so re-materialize before anything else.
+        // This also covers a NEW-shape file whose only defect is the null
+        // member: the extension-data guard below must not skip it.
+        ActiveLaunchScopes ??= new Dictionary<string, LaunchScope>();
+        PendingLaunchScopes ??= new Dictionary<string, LaunchScope>();
+
+        if (LegacyAndUnknownMembers == null)
+        {
+            return;
+        }
+
+        FoldLegacyLaunchFamily(
+            ReadLegacyBaseMap(LegacyAndUnknownMembers, "activeLaunchBaseMs"),
+            ReadLegacyRateMap(LegacyAndUnknownMembers, "activePlaybackRatePerMille"),
+            ActiveLaunchScopes);
+        FoldLegacyLaunchFamily(
+            ReadLegacyBaseMap(LegacyAndUnknownMembers, "pendingLaunchBaseMs"),
+            ReadLegacyRateMap(LegacyAndUnknownMembers, "pendingPlaybackRatePerMille"),
+            PendingLaunchScopes);
+        LegacyAndUnknownMembers = null;
+    }
+
+    /// <summary>
+    /// Reads one legacy base half-map member out of the extension-data buffer
+    /// (null when the member is absent or not an object). TOTAL BY DESIGN
+    /// (code-review F2, JF-648): an entry that does not parse as a whole
+    /// long (a torn file's fraction or overflow; the pre-JF-648 reader let
+    /// the bind exception drop the WHOLE queue file at load) is SKIPPED, so
+    /// one bad launch-scope entry can no longer cost the device its items,
+    /// positions, and last-played record. The camelCase member names are the
+    /// manager's <c>JsonNamingPolicy.CamelCase</c> persistence contract.
+    /// </summary>
+    private static Dictionary<string, long>? ReadLegacyBaseMap(Dictionary<string, JsonElement> data, string memberName)
+    {
+        if (!data.TryGetValue(memberName, out JsonElement member) || member.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        var halfMap = new Dictionary<string, long>();
+        foreach (JsonProperty entry in member.EnumerateObject())
+        {
+            if (entry.Value.ValueKind == JsonValueKind.Number && entry.Value.TryGetInt64(out long value))
+            {
+                halfMap[entry.Name] = value;
+            }
+        }
+
+        return halfMap;
+    }
+
+    /// <summary>
+    /// The rate half of <see cref="ReadLegacyBaseMap"/> (per-mille ints, same
+    /// total-by-design skip of unconvertible entries; see that doc).
+    /// </summary>
+    private static Dictionary<string, int>? ReadLegacyRateMap(Dictionary<string, JsonElement> data, string memberName)
+    {
+        if (!data.TryGetValue(memberName, out JsonElement member) || member.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        var halfMap = new Dictionary<string, int>();
+        foreach (JsonProperty entry in member.EnumerateObject())
+        {
+            if (entry.Value.ValueKind == JsonValueKind.Number && entry.Value.TryGetInt32(out int value))
+            {
+                halfMap[entry.Name] = value;
+            }
+        }
+
+        return halfMap;
+    }
+
+    /// <summary>
+    /// One family's fold leg: every legacy base key becomes a scope (rate null
+    /// when the rate half-map lacks the key, the tolerated pre-JF-636 shape);
+    /// scope keys already present keep their scope (the conflict rule on the
+    /// <see cref="FoldLegacyLaunchScopeMaps"/> doc).
+    /// </summary>
+    private static void FoldLegacyLaunchFamily(
+        Dictionary<string, long>? legacyBase,
+        Dictionary<string, int>? legacyRate,
+        Dictionary<string, LaunchScope> scopes)
+    {
+        if (legacyBase == null)
+        {
+            return;
+        }
+
+        foreach (KeyValuePair<string, long> kvp in legacyBase)
+        {
+            if (scopes.ContainsKey(kvp.Key))
+            {
+                continue;
+            }
+
+            scopes[kvp.Key] = new LaunchScope
+            {
+                BaseMs = kvp.Value,
+                RatePerMille = legacyRate != null && legacyRate.TryGetValue(kvp.Key, out int rate) ? rate : null,
+            };
+        }
+    }
 
     /// <summary>
     /// Gets or sets the item ID of the last user-initiated play on this device.
@@ -212,4 +341,41 @@ public sealed class DeviceQueue
     /// what the stale record points at without a disk dig.
     /// </summary>
     public string? LastEnqueueNextItemId { get; set; }
+}
+
+/// <summary>
+/// JF-648: ONE item's launch scope in ONE family (pending or active), the
+/// item-absolute launch base and its playback rate as a SINGLE value (the
+/// value type of <see cref="DeviceQueue.ActiveLaunchScopes"/> and
+/// <see cref="DeviceQueue.PendingLaunchScopes"/>). The pre-JF-648 shape
+/// carried the halves in FOUR sibling half-maps, and the trim's independent
+/// per-map eviction could SPLIT a pair whose halves entered at different
+/// times (a legacy mixed-age file near the cap: base evicted, rate
+/// orphaned); with the halves sharing one dictionary entry the pairing
+/// invariant ("a rate half exists iff its base half exists", JF-636/JF-637)
+/// is STRUCTURAL: no write, trim, reset-carry, or promote can remove one
+/// half without the other.
+/// <see cref="LaunchScope.RatePerMille"/> is nullable for the ONE tolerated
+/// legacy direction (JF-637): a pre-JF-636 entry persisted with a base and
+/// no rate, folded with a null rate by
+/// <see cref="DeviceQueue.FoldLegacyLaunchScopeMaps"/>. The fold preserves
+/// null rather than normalizing to 1000 because a pre-JF-636 entry read null
+/// before the collapse and must keep reading null after it (most readers
+/// compose no scaling for null and 1000 alike, but SetPlaybackSpeed's
+/// cycle-step seeds from the user's standing preference on null), and
+/// promotion defaults null to 1000 (the documented JF-636 behavior). The
+/// REVERSE direction (a rate over no base) never existed in a written file
+/// and is dropped by the fold.
+/// </summary>
+public sealed class LaunchScope
+{
+    /// <summary>Gets or sets the item-absolute launch base in milliseconds.</summary>
+    public long BaseMs { get; set; }
+
+    /// <summary>
+    /// Gets or sets the stream's playback rate in per-mille form (1000 =
+    /// identity; 750..2000 = an atempo stream). Null is the tolerated
+    /// pre-JF-636 legacy shape (see the class doc).
+    /// </summary>
+    public int? RatePerMille { get; set; }
 }

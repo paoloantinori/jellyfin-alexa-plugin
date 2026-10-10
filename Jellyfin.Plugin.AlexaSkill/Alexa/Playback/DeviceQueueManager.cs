@@ -17,7 +17,15 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 /// </summary>
 public sealed class DeviceQueueManager : IDisposable
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
+    /// <summary>
+    /// The ONE persistence contract for queue files (camelCase member naming).
+    /// Internal for the InternalsVisibleTo test seam: the legacy-shape fixtures
+    /// write their files through THIS options instance, so a naming-policy
+    /// change cannot silently strand a fixture's member names in
+    /// <see cref="DeviceQueue.LegacyAndUnknownMembers"/> (the fold would skip
+    /// them and the pin would degrade to vacuous green with no obvious cause).
+    /// </summary>
+    internal static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = false,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
@@ -458,63 +466,33 @@ public sealed class DeviceQueueManager : IDisposable
         => Enum.TryParse<LaunchRoute>(routeName, out LaunchRoute route) ? route : null;
 
     /// <summary>
-    /// The ONE writer family for a launch-scope base/rate pair (JF-637, hardening
-    /// the JF-636 lockstep that comments previously enforced at every write site):
-    /// a base map and its rate map are WRITTEN, removed at write time, and carried
-    /// only in pairs, so a future single-map write cannot break the invariant "a
-    /// rate entry exists iff its base entry exists" at the write sites. The
-    /// lockstep is load-bearing: <see cref="RecordLaunchBase"/>'s active
-    /// short-circuit checks only the BASE map for a stale pending entry, so an
-    /// orphan rate written beside no base would silently survive it and later
-    /// scale a new stream's offsets with the wrong rate. Two paths remain
-    /// convention-enforced rather than structural (same as pre-JF-637): the trim
-    /// (<see cref="TrimLaunchBaseIfNeeded"/>) evicts each map by its own
-    /// insertion order, which can in principle orphan a rate half on legacy
-    /// mixed-age files near the cap, and <see cref="CopySurvivingStores"/> must
-    /// keep carrying all four maps; the structural fix is the single
-    /// scope-per-key map the JF-637 review named as the follow-up. One tolerated
-    /// legacy shape: a pre-JF-636 file can carry a base WITHOUT a rate
-    /// (<see cref="PromotePendingLaunchBase"/> defaults those to 1000); the
-    /// reverse direction must never exist.
+    /// The ONE writer for a launch scope. JF-637 enforced the base/rate pairing
+    /// with a three-helper lockstep family over four half-maps; JF-648 moved
+    /// the invariant into the data structure (base and rate are one
+    /// <see cref="LaunchScope"/> value in one dictionary entry), so the pairing
+    /// can no longer be broken by any write, the trim's eviction order, or the
+    /// reset-carry, and the family collapses to this single setter. The
+    /// pending/active target is the caller's choice:
+    /// <see cref="RecordLaunchBase"/>'s enqueued branch writes pending; its
+    /// active branch writes active and removes the item's pending scope (the
+    /// new stream supersedes the still-pending enqueue);
+    /// <see cref="PromotePendingLaunchBase"/> moves the extracted pending
+    /// scope here. The ONE tolerated legacy shape (a pre-JF-636 base persisted
+    /// with no rate, folded with a null rate) is documented on
+    /// <see cref="LaunchScope"/>.
     /// </summary>
-    private static void WritePendingLaunchScope(DeviceQueue queue, string key, long baseMs, int ratePerMille)
+    private static void WriteLaunchScope(Dictionary<string, LaunchScope> scopes, string key, long baseMs, int ratePerMille)
     {
-        queue.PendingLaunchBaseMs[key] = baseMs;
-        queue.PendingPlaybackRatePerMille[key] = ratePerMille;
-    }
-
-    /// <summary>
-    /// Active-map half of the paired-write family (see
-    /// <see cref="WritePendingLaunchScope"/> for the lockstep invariant): writes
-    /// the active base+rate pair. Pair it with
-    /// <see cref="RetirePendingLaunchScope"/> when the write supersedes a
-    /// still-pending enqueue (the <see cref="RecordLaunchBase"/> active branch);
-    /// <see cref="PromotePendingLaunchBase"/> needs only this half, having
-    /// already extracted the pending pair's values with its own removes.
-    /// </summary>
-    private static void WriteActiveLaunchScope(DeviceQueue queue, string key, long baseMs, int ratePerMille)
-    {
-        queue.ActiveLaunchBaseMs[key] = baseMs;
-        queue.ActivePlaybackRatePerMille[key] = ratePerMille;
-    }
-
-    /// <summary>
-    /// Pending-retire half of the paired-write family: removes the item's pending
-    /// base+rate pair together (the new stream supersedes the enqueued one).
-    /// </summary>
-    private static void RetirePendingLaunchScope(DeviceQueue queue, string key)
-    {
-        queue.PendingLaunchBaseMs.Remove(key);
-        queue.PendingPlaybackRatePerMille.Remove(key);
+        scopes[key] = new LaunchScope { BaseMs = baseMs, RatePerMille = ratePerMille };
     }
 
     /// <summary>
     /// JF-522 launch-scope write: records the item-absolute base of the
     /// <c>AudioPlayer.Play</c> directive just issued for an item on a device. An
-    /// ENQUEUED directive routes to <see cref="DeviceQueue.PendingLaunchBaseMs"/>
+    /// ENQUEUED directive routes to <see cref="DeviceQueue.PendingLaunchScopes"/>
     /// (promoted to active at the item's next PlaybackStarted, keeping the running
-    /// stream's active base intact for wrapped/repeat-one queues); every other
-    /// behavior routes to <see cref="DeviceQueue.ActiveLaunchBaseMs"/> and retires
+    /// stream's active scope intact for wrapped/repeat-one queues); every other
+    /// behavior routes to <see cref="DeviceQueue.ActiveLaunchScopes"/> and retires
     /// any pending entry for the same item (the new stream supersedes it). Keys are
     /// normalized to "N" format, matching the writer/reader event handlers' codec
     /// parsing. Short-circuits on an unchanged value (the
@@ -557,13 +535,14 @@ public sealed class DeviceQueueManager : IDisposable
 
             if (enqueued)
             {
-                if (queue.PendingLaunchBaseMs.TryGetValue(key, out long existingPending) && existingPending == baseMs
-                    && queue.PendingPlaybackRatePerMille.TryGetValue(key, out int existingPendingRate) && existingPendingRate == ratePerMille)
+                if (queue.PendingLaunchScopes.TryGetValue(key, out LaunchScope? existingPending)
+                    && existingPending.BaseMs == baseMs
+                    && existingPending.RatePerMille == ratePerMille)
                 {
                     return;
                 }
 
-                WritePendingLaunchScope(queue, key, baseMs, ratePerMille);
+                WriteLaunchScope(queue.PendingLaunchScopes, key, baseMs, ratePerMille);
             }
             else
             {
@@ -572,15 +551,19 @@ public sealed class DeviceQueueManager : IDisposable
                 // independent (base 0 at 1.5x, then base 0 at 2.0x); skipping on an
                 // unchanged base alone would leave the stale rate composing the new
                 // stream's offsets.
-                if (queue.ActiveLaunchBaseMs.TryGetValue(key, out long existingActive) && existingActive == baseMs
-                    && queue.ActivePlaybackRatePerMille.TryGetValue(key, out int existingRate) && existingRate == ratePerMille
-                    && !queue.PendingLaunchBaseMs.ContainsKey(key))
+                if (queue.ActiveLaunchScopes.TryGetValue(key, out LaunchScope? existingActive)
+                    && existingActive.BaseMs == baseMs
+                    && existingActive.RatePerMille == ratePerMille
+                    && !queue.PendingLaunchScopes.ContainsKey(key))
                 {
                     return;
                 }
 
-                WriteActiveLaunchScope(queue, key, baseMs, ratePerMille);
-                RetirePendingLaunchScope(queue, key);
+                WriteLaunchScope(queue.ActiveLaunchScopes, key, baseMs, ratePerMille);
+
+                // The new stream supersedes the still-pending enqueue: retire
+                // its pending scope (base and rate together, structurally).
+                queue.PendingLaunchScopes.Remove(key);
             }
 
             TrimLaunchBaseIfNeeded(deviceId, queue, key);
@@ -616,19 +599,19 @@ public sealed class DeviceQueueManager : IDisposable
         int ratePerMille;
         lock (_launchScopeLock)
         {
-            if (!queue.PendingLaunchBaseMs.Remove(key, out baseMs))
+            if (!queue.PendingLaunchScopes.Remove(key, out LaunchScope? pending))
             {
                 return;
             }
 
             // JF-636: the rate rides with its base (an atempo stream enqueued into a
             // wrapped queue scales its offsets from the moment it starts). The
-            // 1000 default is the tolerated pre-JF-636 legacy shape (pending base
-            // persisted before the rate map existed); see WritePendingLaunchScope.
-            ratePerMille = queue.PendingPlaybackRatePerMille.Remove(key, out int pendingRate)
-                ? pendingRate
-                : 1000;
-            WriteActiveLaunchScope(queue, key, baseMs, ratePerMille);
+            // null half is the tolerated pre-JF-636 legacy shape (a pending base
+            // persisted before the rate existed, folded with a null rate); see
+            // LaunchScope.
+            baseMs = pending.BaseMs;
+            ratePerMille = pending.RatePerMille ?? 1000;
+            WriteLaunchScope(queue.ActiveLaunchScopes, key, baseMs, ratePerMille);
 
             // JF-739 (gate-marker GM-F1): the promotion is the launch family's
             // THIRD write into the bounded maps, and the freshness rule must
@@ -669,8 +652,8 @@ public sealed class DeviceQueueManager : IDisposable
 
         lock (_launchScopeLock)
         {
-            return queue.ActiveLaunchBaseMs.TryGetValue(parsedItemId.ToString("N"), out long baseMs)
-                ? baseMs
+            return queue.ActiveLaunchScopes.TryGetValue(parsedItemId.ToString("N"), out LaunchScope? scope)
+                ? scope.BaseMs
                 : null;
         }
     }
@@ -678,8 +661,13 @@ public sealed class DeviceQueueManager : IDisposable
     /// <summary>
     /// JF-636 rate half of the launch-scope read: the ACTIVE playback rate for an
     /// item on a device, the rate of the stream whose events must scale their raw
-    /// device offsets. Null means no rate entry exists (a pre-JF-636 or identity
-    /// stream); callers treat null and 1000 identically (no scaling).
+    /// device offsets. Null means no rate is recorded (no scope at all, or the
+    /// tolerated pre-JF-636 scope folded with a null rate, see
+    /// <see cref="LaunchScope"/>). Most callers compose no scaling for null and
+    /// for 1000 alike; SetPlaybackSpeed's cycle-step is the one consumer that
+    /// DISTINGUISHES them (null seeds the step from the user's standing
+    /// preference, the reason the fold preserves null rather than normalizing
+    /// to 1000).
     /// </summary>
     /// <param name="deviceId">The Alexa device ID.</param>
     /// <param name="itemId">The item ID in any GUID format (normalized to "N").</param>
@@ -709,9 +697,9 @@ public sealed class DeviceQueueManager : IDisposable
         string key = parsedItemId.ToString("N");
         lock (_launchScopeLock)
         {
-            long? baseMs = queue.ActiveLaunchBaseMs.TryGetValue(key, out long b) ? b : null;
-            int? rate = queue.ActivePlaybackRatePerMille.TryGetValue(key, out int r) ? r : null;
-            return (baseMs, rate);
+            return queue.ActiveLaunchScopes.TryGetValue(key, out LaunchScope? scope)
+                ? (scope.BaseMs, scope.RatePerMille)
+                : (null, null);
         }
     }
 
@@ -891,17 +879,13 @@ public sealed class DeviceQueueManager : IDisposable
     }
 
     /// <summary>
-    /// Bounds the four launch-scope dictionaries (the base/rate map family)
-    /// exactly like the sibling trims (JF-514/JF-522): over the cap, remove the
-    /// oldest entries whose item is not in the current queue; entries for queued
-    /// items all stay. RESIDUAL (pre-existing, JF-637 review): each map is evicted
-    /// by its own insertion order, so a base/rate pair whose halves entered at
-    /// different times (a pre-JF-636 base with a later rate) can be split near
-    /// the cap; harmless while promotion defaults a missing rate to 1000 and the
-    /// writers keep every NEW pair inserted together. The structural fix is the
-    /// single scope-per-key map named in <see cref="WritePendingLaunchScope"/>.
-    /// The JF-723 exemption and the JF-738 membership normalization are
-    /// documented on the trim method itself (<see cref="TrimLaunchBaseIfNeeded"/>).
+    /// Bounds the two launch-scope dictionaries (the pending and active
+    /// scope-per-key maps, JF-648) exactly like the sibling trims
+    /// (JF-514/JF-522): over the cap, remove the oldest entries whose item is
+    /// not in the current queue; entries for queued items all stay. The
+    /// eviction's whole-scope atomicity (the JF-648 collapse), the JF-723
+    /// exemption, and the JF-738 membership normalization are documented on
+    /// the trim method itself (<see cref="TrimLaunchBaseIfNeeded"/>).
     /// Internal for the InternalsVisibleTo test seam (the VideoAudioCache /
     /// KeyedOneShotDebounce pattern): the JF-723 pins seed their cap pressure from
     /// this constant so a cap change cannot silently degrade them to vacuous green.
@@ -941,18 +925,21 @@ public sealed class DeviceQueueManager : IDisposable
     /// construction. Membership alone does NOT protect the derive-to-commit
     /// window's fresh entry (its item is not yet in the STORED queue), which is
     /// why the JF-739 stamps exist beside it.
+    /// ATOMICITY (JF-648): the trim evicts WHOLE scopes (base and rate are one
+    /// entry of the pending/active scope maps), so the pre-JF-648 residual (the
+    /// four half-maps' independent per-map eviction splitting a legacy
+    /// mixed-age pair near the cap) is structurally closed; red-proven by
+    /// RecordLaunchBase_LegacyMixedAgeFileAtCap_TrimsWholeScopesNeverOneHalf_JF648.
     /// </summary>
     /// <param name="deviceId">The device whose launch-scope maps are bounded (the
     /// stamp registry key).</param>
-    /// <param name="queue">The device queue whose four launch-scope maps are bounded.</param>
+    /// <param name="queue">The device queue whose two launch-scope maps are bounded.</param>
     /// <param name="freshlyRecordedKey">The "N"-normalized key RecordLaunchBase just
     /// wrote; never this trim's evictee (the JF-723 guard).</param>
     private void TrimLaunchBaseIfNeeded(string deviceId, DeviceQueue queue, string freshlyRecordedKey)
     {
-        if (queue.ActiveLaunchBaseMs.Count <= MaxLaunchBaseEntries
-            && queue.PendingLaunchBaseMs.Count <= MaxLaunchBaseEntries
-            && queue.ActivePlaybackRatePerMille.Count <= MaxLaunchBaseEntries
-            && queue.PendingPlaybackRatePerMille.Count <= MaxLaunchBaseEntries)
+        if (queue.ActiveLaunchScopes.Count <= MaxLaunchBaseEntries
+            && queue.PendingLaunchScopes.Count <= MaxLaunchBaseEntries)
         {
             return;
         }
@@ -961,10 +948,8 @@ public sealed class DeviceQueueManager : IDisposable
         // membership build: neither the just-recorded key nor any other
         // still-fresh entry is this trim's evictee.
         HashSet<string> queuedItems = BuildTrimMembershipSet(deviceId, queue, freshlyRecordedKey);
-        TrimPositionMap(queue.ActiveLaunchBaseMs, queuedItems, MaxLaunchBaseEntries);
-        TrimPositionMap(queue.PendingLaunchBaseMs, queuedItems, MaxLaunchBaseEntries);
-        TrimPositionMap(queue.ActivePlaybackRatePerMille, queuedItems, MaxLaunchBaseEntries);
-        TrimPositionMap(queue.PendingPlaybackRatePerMille, queuedItems, MaxLaunchBaseEntries);
+        TrimPositionMap(queue.ActiveLaunchScopes, queuedItems, MaxLaunchBaseEntries);
+        TrimPositionMap(queue.PendingLaunchScopes, queuedItems, MaxLaunchBaseEntries);
     }
 
     /// <summary>
@@ -981,14 +966,14 @@ public sealed class DeviceQueueManager : IDisposable
     /// any other. Entries that do not parse as a GUID keep their raw form, so a
     /// non-GUID key still compares equal to itself. Iterator form: both
     /// consumers sit behind their own count gates
-    /// (<see cref="TrimLaunchBaseIfNeeded"/>'s four-map OR gate;
+    /// (<see cref="TrimLaunchBaseIfNeeded"/>'s two-map OR gate;
     /// <see cref="RecordStoppedPositionAndTrim"/>'s map-count gate), so the
     /// projection runs only when a map is OVER its cap (NOT a transient state
     /// for a fully-navigated queue, whose maps sit pinned at queue length; see
     /// <see cref="BuildTrimMembershipSet"/>'s honest-cost note), and
     /// <see cref="BuildTrimMembershipSet"/> drains it immediately into the
     /// capacity-hinted membership set (one set, shared by the launch-scope
-    /// trim's four maps). JF-741: the per-element rule is the single-string
+    /// trim's two scope maps). JF-741: the per-element rule is the single-string
     /// core <see cref="NormalizeToMapKeyFormat(string)"/> (the ONE parse-or-raw
     /// rule, shared with AudiobookPositionTracker's NormalizeKey), not a local
     /// expression.
@@ -1018,7 +1003,7 @@ public sealed class DeviceQueueManager : IDisposable
     /// either consumer: the key-format mismatches this rule exists to prevent
     /// (JF-738's inert trim membership; the tracker's silent record/read drift)
     /// are exactly what a second, later-divergent copy reintroduces. HOME: this
-    /// type is the rule's senior owner (the JF-738 membership re-key and the four
+    /// type is the rule's senior owner (the JF-738 membership re-key and the
     /// "N"-keyed bounded maps it serves); a neutral shared home (the filing's
     /// GuidKey alternative) is deliberately NOT taken while both consumers sit in
     /// this namespace. If a THIRD consumer outside Alexa/Playback ever appears,
@@ -1304,9 +1289,9 @@ public sealed class DeviceQueueManager : IDisposable
     /// the inert-membership bug JF-738 fixed. New call sites must not assume
     /// "any key format" matches.</param>
     /// <param name="cap">The maximum entry count.</param>
-    /// <typeparam name="T">The map's value type (position ticks, launch bases, per-mille rates).</typeparam>
+    /// <typeparam name="T">The map's value type (position ticks, whole launch scopes).</typeparam>
     /// <returns>The keys this call evicted, in eviction order (the shared empty
-    /// array when the map was at or under the cap, so the four launch-map call
+    /// array when the map was at or under the cap, so the two launch-map call
     /// sites that ignore the return pay no allocation).</returns>
     internal static IReadOnlyList<string> TrimPositionMap<T>(Dictionary<string, T> map, IEnumerable<string> queuedItems, int cap)
     {
@@ -1345,14 +1330,25 @@ public sealed class DeviceQueueManager : IDisposable
 
     /// <summary>
     /// Carries the reset-surviving per-item stores (positions with their JF-812
-    /// kind stamps, and the launch-scope base/rate map family) from an old queue
-    /// into its replacement (JF-522: one definition for the surviving-store set,
-    /// so a new surviving store is wired once, not per reset path). The base and
-    /// rate maps must be carried together (the pairing invariant
-    /// <see cref="WritePendingLaunchScope"/> owns: a rate entry exists iff its
-    /// base entry exists), and the kind stamps with their positions (the JF-812
-    /// subset invariant <see cref="RecordStoppedPositionAndTrim"/>'s evicted-key
-    /// mirror keeps).
+    /// kind stamps, and the launch-scope maps) from an old queue into its
+    /// replacement (JF-522: one definition for the surviving-store set, so a
+    /// new surviving store is wired once, not per reset path). The launch
+    /// scopes carry their base and rate halves together BY CONSTRUCTION since
+    /// JF-648 (one entry per key in the pending/active scope maps; the
+    /// pre-JF-648 four half-map carry, a convention-enforced pairing, is what
+    /// this change collapsed), and the kind stamps with their positions (the
+    /// JF-812 subset invariant
+    /// <see cref="RecordStoppedPositionAndTrim"/>'s evicted-key mirror keeps).
+    /// NAMED FOLLOW-UP (the JF-648 review's altitude round, the JF-637
+    /// precedent of naming the residual in the diff that leaves it):
+    /// ItemPositionState + ItemPositionKinds is now the store's LAST
+    /// convention-enforced parallel-map pair (a hand evicted-key mirror at the
+    /// trim, a double carry here); the same collapse
+    /// (Dictionary&lt;string, ItemPositionRecord&gt; with ticks plus a nullable
+    /// kind, null AS the already-designed kindless state) would delete the
+    /// mirror, this double carry, and TrimPositionMap's evicted-keys return
+    /// seam. Deliberately not ridden on JF-648: it restructures a different
+    /// family with its own pin battery.
     /// JF-693 (code-review finding 1): the LAST-PLAYED record survives too. It is a
     /// fact about a LAUNCH, not about the queue's contents, and the PlayBook paths
     /// now call <see cref="SetQueue"/> AFTER the launch builder (the JF-687
@@ -1368,10 +1364,8 @@ public sealed class DeviceQueueManager : IDisposable
     {
         queue.ItemPositionState = oldQueue?.ItemPositionState ?? new Dictionary<string, long>();
         queue.ItemPositionKinds = oldQueue?.ItemPositionKinds ?? new Dictionary<string, string>();
-        queue.ActiveLaunchBaseMs = oldQueue?.ActiveLaunchBaseMs ?? new Dictionary<string, long>();
-        queue.PendingLaunchBaseMs = oldQueue?.PendingLaunchBaseMs ?? new Dictionary<string, long>();
-        queue.ActivePlaybackRatePerMille = oldQueue?.ActivePlaybackRatePerMille ?? new Dictionary<string, int>();
-        queue.PendingPlaybackRatePerMille = oldQueue?.PendingPlaybackRatePerMille ?? new Dictionary<string, int>();
+        queue.ActiveLaunchScopes = oldQueue?.ActiveLaunchScopes ?? new Dictionary<string, LaunchScope>();
+        queue.PendingLaunchScopes = oldQueue?.PendingLaunchScopes ?? new Dictionary<string, LaunchScope>();
         queue.LastPlayedItemId = oldQueue?.LastPlayedItemId;
         queue.LastPlayedLaunchRoute = oldQueue?.LastPlayedLaunchRoute;
 
@@ -1942,6 +1936,14 @@ public sealed class DeviceQueueManager : IDisposable
 
     private void PersistToDisk(string deviceId, DeviceQueue queue)
     {
+        // JF-648 (code-review F4): the extension-data buffer's "never
+        // re-serialized" promise is STRUCTURAL, not comment-enforced: nulling
+        // it here means even a future deserialization path that forgets the
+        // fold cannot resurrect captured legacy/unknown members into a
+        // persisted file (the both-shapes hybrid this migration declares
+        // unwritable).
+        queue.LegacyAndUnknownMembers = null;
+
         string filePath = GetQueueFilePath(deviceId);
         try
         {
@@ -1978,6 +1980,14 @@ public sealed class DeviceQueueManager : IDisposable
                     DeviceQueue? queue = JsonSerializer.Deserialize<DeviceQueue>(json, JsonOptions);
                     if (queue != null)
                     {
+                        // JF-648: the ONE fold call for the legacy four half-map
+                        // persisted shape (old files load with their pairs intact;
+                        // see DeviceQueue.FoldLegacyLaunchScopeMaps for the
+                        // conflict and orphan rules). This load path is the only
+                        // DeviceQueue deserialization site, so every queue that
+                        // enters _queues carries only the scope-per-key maps.
+                        queue.FoldLegacyLaunchScopeMaps();
+
                         // Extract device ID from filename: queue_<deviceId>.json
                         string fileName = Path.GetFileNameWithoutExtension(file);
                         string deviceId = fileName["queue_".Length..];

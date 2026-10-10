@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
@@ -1090,11 +1091,11 @@ public class DeviceQueueManagerTests : IDisposable
 
     /// <summary>
     /// JF-723 pin, ENQUEUED arm: the guard protects a freshly-written PENDING pair
-    /// (WritePendingLaunchScope) exactly like the active one; a regression that
-    /// drops the exemption from only the pending-map trims reds here. The residents
-    /// are seeded as PENDING entries so the pending maps sit at the cap and the
+    /// (the pending scope write) exactly like the active one; a regression that
+    /// drops the exemption from only the pending-map trim reds here. The residents
+    /// are seeded as PENDING entries so the pending map sits at the cap and the
     /// fresh enqueued record actually crosses it (the trim's count gate is an OR
-    /// across the four maps). The pending entry is observed through its promotion
+    /// across the two scope maps). The pending entry is observed through its promotion
     /// (the only public read path): after
     /// <see cref="DeviceQueueManager.PromotePendingLaunchBase"/> the ACTIVE scope
     /// must carry the recorded base and rate. Without the guard, the fresh pending
@@ -1243,10 +1244,10 @@ public class DeviceQueueManagerTests : IDisposable
         _manager.RecordLaunchBase("dev-jf739-pend", siblingId, 0, enqueued: false);
 
         // Every seeded pending resident survived the sibling's trim (GM-F2; the
-        // pending maps have no public reader, so the pin reads the queue store
+        // pending map has no public reader, so the pin reads the queue store
         // directly, the EventHandlerTests JF-738 idiom).
         DeviceQueue queue = _manager.GetQueue("dev-jf739-pend")!;
-        Assert.All(queuedIds, id => Assert.True(queue.PendingLaunchBaseMs.ContainsKey(Guid.Parse(id).ToString("N"))));
+        Assert.All(queuedIds, id => Assert.True(queue.PendingLaunchScopes.ContainsKey(Guid.Parse(id).ToString("N"))));
 
         _manager.PromotePendingLaunchBase("dev-jf739-pend", freshId);
 
@@ -1511,6 +1512,375 @@ public class DeviceQueueManagerTests : IDisposable
         // lost both (the trim + the prune).
         Assert.Contains(crossingId.ToString("N"), queue.ItemPositionState.Keys);
         Assert.Contains(crossingId.ToString("N"), queue.ItemPositionKinds.Keys);
+    }
+
+    // =====================================================================
+    // Launch-scope atomicity (JF-648: the four half-maps collapse into the
+    // scope-per-key maps, so a scope's base and rate halves can never be
+    // trimmed apart)
+    // =====================================================================
+
+    /// <summary>
+    /// JF-648 red proof + atomic-trim pin, planted through PRODUCTION paths on
+    /// the legacy four-map persisted shape: a pre-JF-648 queue file whose
+    /// split-prone key S carries the OLDEST base-map entry and the NEWEST
+    /// rate-map entry (the halves entered the two half-maps at different
+    /// times; the exact "legacy mixed-age file near the cap" shape the
+    /// JF-637 review named), with 199 filler pairs holding both half-maps AT
+    /// the cap and nothing queued. One fresh non-queued launch crosses the
+    /// cap and its trim must remove ONE entry per over-cap map. Pre-fix the
+    /// four maps evicted INDEPENDENTLY: the base half-map evicted S (oldest
+    /// base) while the rate half-map evicted the OLDEST FILLER's rate (S's
+    /// rate, newest, survived), so S read (null, 1500), a rate orphaned over
+    /// no base, and the first filler read (0, null). Post-fix the fold put
+    /// S's halves into ONE scope (the oldest), the trim evicts that WHOLE
+    /// scope, and every survivor keeps both halves.
+    /// </summary>
+    [Fact]
+    public void RecordLaunchBase_LegacyMixedAgeFileAtCap_TrimsWholeScopesNeverOneHalf_JF648()
+    {
+        Guid splitId = Guid.NewGuid();
+        List<Guid> fillerIds = Enumerable.Range(0, DeviceQueueManager.MaxLaunchBaseEntries - 1)
+            .Select(_ => Guid.NewGuid())
+            .ToList();
+
+        // The mixed-age legacy file: S's base enters the base half-map FIRST,
+        // its rate enters the rate half-map LAST, fillers keep both at cap.
+        var legacyBase = new Dictionary<string, long> { [splitId.ToString("N")] = MinutesToMs(20) };
+        var legacyRate = new Dictionary<string, int>();
+        foreach (Guid filler in fillerIds)
+        {
+            legacyBase[filler.ToString("N")] = 0;
+            legacyRate[filler.ToString("N")] = 1000;
+        }
+
+        legacyRate[splitId.ToString("N")] = 1500;
+
+        WriteLegacyFourMapQueueFile(
+            _tempDir,
+            "dev-jf648",
+            legacyBase,
+            legacyRate,
+            pendingBase: new Dictionary<string, long>(),
+            pendingRate: new Dictionary<string, int>());
+        _manager.Dispose();
+
+        using var loaded = new DeviceQueueManager(_tempDir, _logger);
+
+        // The crossing launch (fresh, non-queued): pushes the launch-scope
+        // store over cap; its trim must evict exactly one aged scope.
+        string freshId = Guid.NewGuid().ToString();
+        loaded.RecordLaunchBase("dev-jf648", freshId, 0, enqueued: false, ratePerMille: 1000);
+
+        // S lived and died as ONE scope: the whole scope (the oldest) is gone,
+        // never the base half alone (pre-fix RED: the rate read 1500 over a
+        // null base, the forbidden orphan direction).
+        (long? splitBase, int? splitRate) = loaded.GetActiveLaunchScope("dev-jf648", splitId.ToString());
+        Assert.Null(splitBase);
+        Assert.Null(splitRate);
+
+        // The oldest filler kept BOTH halves (pre-fix RED here too: its rate
+        // half was the rate half-map's evictee while its base survived).
+        (long? fillerBase, int? fillerRate) = loaded.GetActiveLaunchScope("dev-jf648", fillerIds[0].ToString());
+        Assert.Equal(0, fillerBase);
+        Assert.Equal(1000, fillerRate);
+
+        // The crossing launch itself survived its own trim (the JF-723 guard).
+        Assert.Equal(0, loaded.GetActiveLaunchScope("dev-jf648", freshId).BaseMs);
+    }
+
+    /// <summary>
+    /// JF-648 post-fix atomic-trim pin on the PURE new shape (no legacy file:
+    /// production RecordLaunchBase writes only, aged past the freshness window
+    /// with the fake clock so the trim is free to evict them): at cap pressure
+    /// the trim removes the OLDEST scope WHOLE, and every survivor keeps BOTH
+    /// halves (base and non-identity rate together). This is the regression
+    /// guard for the collapse itself: a future revert to half-maps or a
+    /// half-aware eviction reds here even without a legacy file in play.
+    /// </summary>
+    [Fact]
+    public void RecordLaunchBase_CapTrimOnScopeMaps_EvictsWholeScopes_JF648()
+    {
+        var fake = new FakeTimeProvider(DateTimeOffset.UtcNow);
+        _manager.SetTimeForTest(fake);
+
+        // Cap-filling distinct non-queued launches (no trim fires at count <= cap);
+        // each step crosses the freshness window so the NEXT record's trim sees
+        // every earlier entry as expired (the JF-723 saturated-churn idiom).
+        TimeSpan windowPlus = DeviceQueueManager.RecentRecordFreshnessWindow.Add(TimeSpan.FromSeconds(1));
+        Guid oldestId = Guid.NewGuid();
+        Guid midId = Guid.NewGuid();
+        _manager.RecordLaunchBase("dev-jf648-atomic", oldestId.ToString(), MinutesToMs(1), enqueued: false, ratePerMille: 1500);
+        fake.Advance(windowPlus);
+        foreach (int _ in Enumerable.Range(0, DeviceQueueManager.MaxLaunchBaseEntries - 2))
+        {
+            _manager.RecordLaunchBase("dev-jf648-atomic", Guid.NewGuid().ToString(), 0, enqueued: false, ratePerMille: 1250);
+            fake.Advance(windowPlus);
+        }
+
+        _manager.RecordLaunchBase("dev-jf648-atomic", midId.ToString(), MinutesToMs(2), enqueued: false, ratePerMille: 1750);
+        fake.Advance(windowPlus);
+
+        // The crossing launch: one over-cap trim, evicting exactly the oldest scope.
+        string crossingId = Guid.NewGuid().ToString();
+        _manager.RecordLaunchBase("dev-jf648-atomic", crossingId, 0, enqueued: false, ratePerMille: 1000);
+
+        // The oldest scope died WHOLE: no base half left behind, and (the
+        // pre-JF-648 failure direction) no orphaned rate half either.
+        (long? evictedBase, int? evictedRate) = _manager.GetActiveLaunchScope("dev-jf648-atomic", oldestId.ToString());
+        Assert.Null(evictedBase);
+        Assert.Null(evictedRate);
+
+        // A survivor keeps BOTH halves together.
+        (long? midBase, int? midRate) = _manager.GetActiveLaunchScope("dev-jf648-atomic", midId.ToString());
+        Assert.Equal(MinutesToMs(2), midBase);
+        Assert.Equal(1750, midRate);
+
+        // The map is back at the cap and the crossing launch survived its own trim.
+        Assert.Equal(DeviceQueueManager.MaxLaunchBaseEntries, _manager.GetQueue("dev-jf648-atomic")!.ActiveLaunchScopes.Count);
+        Assert.Equal(0, _manager.GetActiveLaunchScope("dev-jf648-atomic", crossingId).BaseMs);
+    }
+
+    /// <summary>
+    /// JF-648 migration pin, old XML folds with the PAIRS INTACT: an old-shape
+    /// queue file (the four half-map members, no scope members) loads so that
+    /// every base+rate pair reads as one scope in BOTH families, the ONE
+    /// tolerated legacy direction (a base persisted with NO rate, the
+    /// pre-JF-636 shape) folds with a null rate and promotes at the default
+    /// 1000, and an orphan legacy rate (a rate key with NO base key, the
+    /// invariant's forbidden direction a torn file could carry) is DROPPED
+    /// rather than resurrected as a half-scope. The fixture writer leaves the
+    /// scope members null, so the file also carries explicit null scope
+    /// members: the load must survive them (the fold re-materializes a null
+    /// map instead of losing the queue to the load path's warn-and-skip).
+    /// </summary>
+    [Fact]
+    public void LoadAllFromDisk_LegacyFourMapFile_FoldsPairsIntoScopeMaps_JF648()
+    {
+        Guid activePairedId = Guid.NewGuid();
+        Guid activeBaseOnlyId = Guid.NewGuid();
+        Guid pendingPairedId = Guid.NewGuid();
+        Guid pendingBaseOnlyId = Guid.NewGuid();
+        Guid orphanRateId = Guid.NewGuid();
+
+        WriteLegacyFourMapQueueFile(
+            _tempDir,
+            "dev-jf648-fold",
+            activeBase: new Dictionary<string, long>
+            {
+                [activePairedId.ToString("N")] = MinutesToMs(20),
+                [activeBaseOnlyId.ToString("N")] = MinutesToMs(5),
+            },
+            activeRate: new Dictionary<string, int>
+            {
+                [activePairedId.ToString("N")] = 1500,
+                [orphanRateId.ToString("N")] = 1250,
+            },
+            pendingBase: new Dictionary<string, long>
+            {
+                [pendingPairedId.ToString("N")] = MinutesToMs(9),
+                [pendingBaseOnlyId.ToString("N")] = MinutesToMs(3),
+            },
+            pendingRate: new Dictionary<string, int> { [pendingPairedId.ToString("N")] = 750 });
+        _manager.Dispose();
+
+        using var loaded = new DeviceQueueManager(_tempDir, _logger);
+
+        // Active pair folded as ONE scope.
+        (long? pairedBase, int? pairedRate) = loaded.GetActiveLaunchScope("dev-jf648-fold", activePairedId.ToString());
+        Assert.Equal(MinutesToMs(20), pairedBase);
+        Assert.Equal(1500, pairedRate);
+
+        // The tolerated pre-JF-636 direction: base with NO rate reads null rate
+        // (readers treat null and 1000 identically).
+        (long? baseOnlyBase, int? baseOnlyRate) = loaded.GetActiveLaunchScope("dev-jf648-fold", activeBaseOnlyId.ToString());
+        Assert.Equal(MinutesToMs(5), baseOnlyBase);
+        Assert.Null(baseOnlyRate);
+
+        // Pending pair promotes with BOTH halves (the only public pending read).
+        loaded.PromotePendingLaunchBase("dev-jf648-fold", pendingPairedId.ToString());
+        (long? promotedBase, int? promotedRate) = loaded.GetActiveLaunchScope("dev-jf648-fold", pendingPairedId.ToString());
+        Assert.Equal(MinutesToMs(9), promotedBase);
+        Assert.Equal(750, promotedRate);
+
+        // The pending base-only half promotes at the documented 1000 default.
+        loaded.PromotePendingLaunchBase("dev-jf648-fold", pendingBaseOnlyId.ToString());
+        (long? defaultedBase, int? defaultedRate) = loaded.GetActiveLaunchScope("dev-jf648-fold", pendingBaseOnlyId.ToString());
+        Assert.Equal(MinutesToMs(3), defaultedBase);
+        Assert.Equal(1000, defaultedRate);
+
+        // The orphan rate (no base) is dropped, not resurrected as a half-scope.
+        Assert.Null(loaded.GetActiveLaunchScope("dev-jf648-fold", orphanRateId.ToString()).RatePerMille);
+
+        // The fold consumed the buffer: nothing legacy rides a later persist.
+        Assert.Null(loaded.GetQueue("dev-jf648-fold")!.LegacyAndUnknownMembers);
+    }
+
+    /// <summary>
+    /// JF-648 migration pin, the fold is TOTAL (code-review F2): a torn legacy
+    /// entry whose number does not parse as a whole long (a fraction; the
+    /// pre-JF-648 deserializer let the bind exception drop the WHOLE queue
+    /// file at load) is SKIPPED by the fold, and every other member of the
+    /// file (the good launch-scope entry, the queue items, the last-played
+    /// record) survives the load.
+    /// </summary>
+    [Fact]
+    public void LoadAllFromDisk_TornLegacyNumberEntry_SkippedNotFileDropping_JF648()
+    {
+        Guid goodId = Guid.NewGuid();
+        Guid lastPlayedId = Guid.NewGuid();
+        File.WriteAllText(
+            Path.Combine(_tempDir, "queue_dev-jf648-torn.json"),
+            "{\"itemIds\":[\"track-1\"],\"lastPlayedItemId\":\"" + lastPlayedId + "\","
+                + "\"activeLaunchBaseMs\":{\"" + goodId.ToString("N") + "\":" + MinutesToMs(20) + ",\"torn-entry\":1.5}}");
+        _manager.Dispose();
+
+        using var loaded = new DeviceQueueManager(_tempDir, _logger);
+
+        // The good entry folded; the torn one skipped; nothing else lost.
+        Assert.Equal(MinutesToMs(20), loaded.GetActiveLaunchScope("dev-jf648-torn", goodId.ToString()).BaseMs);
+        Assert.Equal(new List<string> { "track-1" }, loaded.GetQueue("dev-jf648-torn")!.ItemIds);
+        Assert.Equal(lastPlayedId.ToString(), loaded.GetLastPlayedItemId("dev-jf648-torn"));
+    }
+
+    /// <summary>
+    /// JF-648 migration pin, conflict BY INSPECTION: a file carrying BOTH the
+    /// legacy half-map members and the scope members (only possible from a
+    /// hand-edited or foreign-written file; the plugin writes exactly one
+    /// shape per version) resolves per key toward the SCOPE entry, written by
+    /// strictly newer code than the half-map members, in BOTH families. The
+    /// pending family is observed through the promote (its only public read;
+    /// code-review F5: without this leg a regression in the pending fold leg's
+    /// scope-wins skip could not redden any pin).
+    /// </summary>
+    [Fact]
+    public void LoadAllFromDisk_BothShapesPresent_ScopeEntryWinsPerKey_JF648()
+    {
+        Guid contestedId = Guid.NewGuid();
+        Guid legacyOnlyId = Guid.NewGuid();
+
+        WriteLegacyFourMapQueueFile(
+            _tempDir,
+            "dev-jf648-conflict",
+            activeBase: new Dictionary<string, long>
+            {
+                [contestedId.ToString("N")] = MinutesToMs(20),
+                [legacyOnlyId.ToString("N")] = MinutesToMs(4),
+            },
+            activeRate: new Dictionary<string, int> { [contestedId.ToString("N")] = 1500 },
+            pendingBase: new Dictionary<string, long> { [contestedId.ToString("N")] = MinutesToMs(30) },
+            pendingRate: new Dictionary<string, int> { [contestedId.ToString("N")] = 2000 },
+            activeScopes: new Dictionary<string, LaunchScope>
+            {
+                [contestedId.ToString("N")] = new LaunchScope { BaseMs = MinutesToMs(7), RatePerMille = 1750 },
+            },
+            pendingScopes: new Dictionary<string, LaunchScope>
+            {
+                [contestedId.ToString("N")] = new LaunchScope { BaseMs = MinutesToMs(8), RatePerMille = 1250 },
+            });
+        _manager.Dispose();
+
+        using var loaded = new DeviceQueueManager(_tempDir, _logger);
+
+        // The contested key reads the SCOPE entry (newer shape wins)...
+        (long? contestedBase, int? contestedRate) = loaded.GetActiveLaunchScope("dev-jf648-conflict", contestedId.ToString());
+        Assert.Equal(MinutesToMs(7), contestedBase);
+        Assert.Equal(1750, contestedRate);
+
+        // ...in the PENDING family too: the promote carries the pending SCOPE's
+        // base and rate, never the legacy half-maps' (30min/2000).
+        loaded.PromotePendingLaunchBase("dev-jf648-conflict", contestedId.ToString());
+        (long? promotedBase, int? promotedRate) = loaded.GetActiveLaunchScope("dev-jf648-conflict", contestedId.ToString());
+        Assert.Equal(MinutesToMs(8), promotedBase);
+        Assert.Equal(1250, promotedRate);
+
+        // ...and a key only the legacy members name still folds in (no data loss
+        // on the legacy-only tail of a hybrid file).
+        (long? legacyOnlyBase, int? legacyOnlyRate) = loaded.GetActiveLaunchScope("dev-jf648-conflict", legacyOnlyId.ToString());
+        Assert.Equal(MinutesToMs(4), legacyOnlyBase);
+        Assert.Null(legacyOnlyRate);
+    }
+
+    /// <summary>
+    /// JF-648 round-trip pin, NEW shape: scopes (base + rate, and a legacy
+    /// null-rate entry preserved as null) survive the persist/reload cycle as
+    /// ATOMIC pairs, and the written file carries the NEW members only (the
+    /// four legacy half-map members are gone from the persisted shape; the
+    /// next load needs no fold).
+    /// </summary>
+    [Fact]
+    public void LaunchScopes_RoundTripThroughDisk_PairsStayAtomic_JF648()
+    {
+        Guid activeId = Guid.NewGuid();
+        Guid pendingId = Guid.NewGuid();
+        Guid nullRateId = Guid.NewGuid();
+
+        _manager.RecordLaunchBase("dev-jf648-rt", activeId.ToString(), MinutesToMs(20), enqueued: false, ratePerMille: 1500);
+        _manager.RecordLaunchBase("dev-jf648-rt", pendingId.ToString(), MinutesToMs(9), enqueued: true, ratePerMille: 750);
+
+        // The tolerated null-rate shape, seeded the fold's own way (an old-file
+        // fold is its only producer): it must round-trip as null, not silently
+        // become 1000 on disk.
+        _manager.GetQueue("dev-jf648-rt")!.ActiveLaunchScopes[nullRateId.ToString("N")] = new LaunchScope { BaseMs = MinutesToMs(2) };
+
+        _manager.Dispose();
+        string fileText = File.ReadAllText(Path.Combine(_tempDir, "queue_dev-jf648-rt.json"));
+
+        // The persisted shape: the NEW members, none of the legacy four.
+        Assert.Contains("\"activeLaunchScopes\":", fileText, StringComparison.Ordinal);
+        Assert.Contains("\"pendingLaunchScopes\":", fileText, StringComparison.Ordinal);
+        Assert.DoesNotContain("LaunchBaseMs", fileText, StringComparison.Ordinal);
+        Assert.DoesNotContain("PlaybackRatePerMille", fileText, StringComparison.Ordinal);
+        Assert.Null(JsonSerializer.Deserialize<DeviceQueue>(fileText, DeviceQueueManager.JsonOptions)!.LegacyAndUnknownMembers);
+
+        using var reloaded = new DeviceQueueManager(_tempDir, _logger);
+        (long? activeBase, int? activeRate) = reloaded.GetActiveLaunchScope("dev-jf648-rt", activeId.ToString());
+        Assert.Equal(MinutesToMs(20), activeBase);
+        Assert.Equal(1500, activeRate);
+
+        // The pending pair is still atomic after the reload (promote carries both).
+        reloaded.PromotePendingLaunchBase("dev-jf648-rt", pendingId.ToString());
+        (long? pendingBase, int? pendingRate) = reloaded.GetActiveLaunchScope("dev-jf648-rt", pendingId.ToString());
+        Assert.Equal(MinutesToMs(9), pendingBase);
+        Assert.Equal(750, pendingRate);
+
+        (long? nullRateBase, int? nullRateRate) = reloaded.GetActiveLaunchScope("dev-jf648-rt", nullRateId.ToString());
+        Assert.Equal(MinutesToMs(2), nullRateBase);
+        Assert.Null(nullRateRate);
+    }
+
+    /// <summary>
+    /// Seeds the JF-648 legacy four-map queue file (the red-proof fixture's
+    /// writer, parameterized): writes the OLD persisted shape's members (plus
+    /// optional pre-populated scope members per family, the both-shapes
+    /// conflict pin's hybrid) through the manager's own persistence options,
+    /// so the fixtures' member naming can never drift from the loader's
+    /// contract.
+    /// </summary>
+    private static void WriteLegacyFourMapQueueFile(
+        string dir,
+        string deviceId,
+        Dictionary<string, long>? activeBase,
+        Dictionary<string, int>? activeRate,
+        Dictionary<string, long>? pendingBase,
+        Dictionary<string, int>? pendingRate,
+        Dictionary<string, LaunchScope>? activeScopes = null,
+        Dictionary<string, LaunchScope>? pendingScopes = null)
+    {
+        File.WriteAllText(
+            Path.Combine(dir, $"queue_{deviceId}.json"),
+            JsonSerializer.Serialize(
+                new
+                {
+                    itemIds = new List<string>(),
+                    activeLaunchBaseMs = activeBase,
+                    activePlaybackRatePerMille = activeRate,
+                    pendingLaunchBaseMs = pendingBase,
+                    pendingPlaybackRatePerMille = pendingRate,
+                    activeLaunchScopes = activeScopes,
+                    pendingLaunchScopes = pendingScopes
+                },
+                DeviceQueueManager.JsonOptions));
     }
 
     /// <summary>
