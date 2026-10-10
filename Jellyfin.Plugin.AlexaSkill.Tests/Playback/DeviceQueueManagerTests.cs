@@ -1328,7 +1328,7 @@ public class DeviceQueueManagerTests : IDisposable
 
         Guid firstId = Guid.NewGuid();
         long firstTicks = TimeSpan.FromMinutes(3).Ticks;
-        _manager.RecordStoppedPositionAndTrim("dev-jf739-pos", queue, firstId, firstTicks);
+        _manager.RecordStoppedPositionAndTrim("dev-jf739-pos", queue, firstId, firstTicks, bookShaped: null);
 
         // Survives its own trim (the JF-738 fresh-entry guard).
         Assert.Equal(firstTicks, _manager.GetStoredPositionTicks("dev-jf739-pos", firstId.ToString()));
@@ -1336,11 +1336,181 @@ public class DeviceQueueManagerTests : IDisposable
         // The sibling stop, inside the window.
         Guid siblingId = Guid.NewGuid();
         long siblingTicks = TimeSpan.FromMinutes(4).Ticks;
-        _manager.RecordStoppedPositionAndTrim("dev-jf739-pos", queue, siblingId, siblingTicks);
+        _manager.RecordStoppedPositionAndTrim("dev-jf739-pos", queue, siblingId, siblingTicks, bookShaped: null);
 
         Assert.Equal(firstTicks, _manager.GetStoredPositionTicks("dev-jf739-pos", firstId.ToString()));
         Assert.Equal(siblingTicks, _manager.GetStoredPositionTicks("dev-jf739-pos", siblingId.ToString()));
         Assert.All(residentIds, id => Assert.Equal((long?)1234, _manager.GetStoredPositionTicks("dev-jf739-pos", id.ToString())));
+    }
+
+    // =====================================================================
+    // Position kind stamps (JF-812: the JF-797 deep-resume valve's discriminator)
+    // =====================================================================
+
+    /// <summary>
+    /// JF-812 tightening pin: a store holding ONLY song-shaped entries (each
+    /// stamped Other at write time) does NOT release the deep-resume valve. The
+    /// pre-JF-812 valve keyed on any positive entry, so a household that had
+    /// played any song held a permanently-true valve and every first-ever
+    /// multi-page book ask paid the unconditional unpaged fetch.
+    /// </summary>
+    [Fact]
+    public void HasAnyBookShapedStoredPosition_SongShapedOnlyStore_IsFalse()
+    {
+        DeviceQueue queue = _manager.GetOrCreateQueue("dev-kinds");
+        _manager.RecordStoppedPositionAndTrim("dev-kinds", queue, Guid.NewGuid(), TimeSpan.FromMinutes(1).Ticks, bookShaped: false);
+        _manager.RecordStoppedPositionAndTrim("dev-kinds", queue, Guid.NewGuid(), TimeSpan.FromMinutes(2).Ticks, bookShaped: false);
+
+        Assert.False(_manager.HasAnyBookShapedStoredPosition("dev-kinds"));
+    }
+
+    /// <summary>
+    /// JF-812 release pin: a book-stamped entry still releases the valve (the
+    /// JF-581 write-loss shape stays covered for stores written since the kind
+    /// stamps landed).
+    /// </summary>
+    [Fact]
+    public void HasAnyBookShapedStoredPosition_BookStampedEntry_IsTrue()
+    {
+        DeviceQueue queue = _manager.GetOrCreateQueue("dev-kinds");
+        _manager.RecordStoppedPositionAndTrim("dev-kinds", queue, Guid.NewGuid(), TimeSpan.FromMinutes(3).Ticks, bookShaped: true);
+
+        Assert.True(_manager.HasAnyBookShapedStoredPosition("dev-kinds"));
+    }
+
+    /// <summary>
+    /// JF-812 kindless-legacy pin (the deliberate semantics): an entry with NO
+    /// kind stamp (a pre-JF-812 store, or a write whose item could not be
+    /// resolved) still releases the valve. Old stores' book positions must keep
+    /// the JF-581 guarantee, and the ambiguity of a missing stamp resolves toward
+    /// the resume.
+    /// </summary>
+    [Fact]
+    public void HasAnyBookShapedStoredPosition_KindlessLegacyEntry_IsTrue()
+    {
+        // Direct seed (the SeedStoredPosition idiom): a pre-JF-812 entry carries
+        // no kind stamp by construction.
+        Guid itemId = Guid.NewGuid();
+        SeedStoredPosition("dev-kinds", itemId, TimeSpan.FromMinutes(4).Ticks);
+
+        Assert.True(_manager.HasAnyBookShapedStoredPosition("dev-kinds"));
+    }
+
+    /// <summary>
+    /// JF-812 code-review F2 pin: a re-stop whose item resolution fails (null
+    /// kind) keeps the entry's earlier truthful stamp; the doc-promised
+    /// preservation clause ("a failed lookup is not evidence the item changed
+    /// kind") is pinned behavior, not comment.
+    /// </summary>
+    [Fact]
+    public void RecordStoppedPositionAndTrim_UnresolvedReStop_KeepsEarlierTruthfulKindStamp()
+    {
+        Guid itemId = Guid.NewGuid();
+        DeviceQueue queue = _manager.GetOrCreateQueue("dev-kinds");
+        _manager.RecordStoppedPositionAndTrim("dev-kinds", queue, itemId, TimeSpan.FromMinutes(3).Ticks, bookShaped: true);
+
+        // The transient-resolution re-stop: the position updates, the stamp
+        // survives it.
+        _manager.RecordStoppedPositionAndTrim("dev-kinds", queue, itemId, TimeSpan.FromMinutes(4).Ticks, bookShaped: null);
+
+        Assert.Equal(DeviceQueueManager.PositionKindBook, queue.ItemPositionKinds[itemId.ToString("N")]);
+        Assert.Equal(TimeSpan.FromMinutes(4).Ticks, _manager.GetStoredPositionTicks("dev-kinds", itemId.ToString()));
+    }
+
+    /// <summary>
+    /// JF-812 mixed pin: one song-shaped entry does not mask a book-shaped
+    /// sibling; the valve is an any-predicate over releasable entries.
+    /// </summary>
+    [Fact]
+    public void HasAnyBookShapedStoredPosition_MixedStore_ReleasesOnTheBookEntry()
+    {
+        DeviceQueue queue = _manager.GetOrCreateQueue("dev-kinds");
+        _manager.RecordStoppedPositionAndTrim("dev-kinds", queue, Guid.NewGuid(), TimeSpan.FromMinutes(1).Ticks, bookShaped: false);
+        _manager.RecordStoppedPositionAndTrim("dev-kinds", queue, Guid.NewGuid(), TimeSpan.FromMinutes(2).Ticks, bookShaped: true);
+
+        Assert.True(_manager.HasAnyBookShapedStoredPosition("dev-kinds"));
+    }
+
+    /// <summary>
+    /// JF-812 round-trip pin for the new field: the kind stamps survive the
+    /// persist/reload cycle (Dispose flushes, a fresh manager on the same dir
+    /// reloads), so the valve discriminates after a restart too.
+    /// </summary>
+    [Fact]
+    public void RecordStoppedPositionAndTrim_KindStampsRoundTripThroughDisk()
+    {
+        Guid bookId = Guid.NewGuid();
+        Guid songId = Guid.NewGuid();
+        DeviceQueue queue = _manager.GetOrCreateQueue("dev-kinds");
+        _manager.RecordStoppedPositionAndTrim("dev-kinds", queue, bookId, TimeSpan.FromMinutes(3).Ticks, bookShaped: true);
+        _manager.RecordStoppedPositionAndTrim("dev-kinds", queue, songId, TimeSpan.FromMinutes(1).Ticks, bookShaped: false);
+        _manager.Dispose();
+
+        using var reloaded = new DeviceQueueManager(_tempDir, _logger);
+        DeviceQueue reloadedQueue = reloaded.GetOrCreateQueue("dev-kinds");
+        Assert.Equal(DeviceQueueManager.PositionKindBook, reloadedQueue.ItemPositionKinds[bookId.ToString("N")]);
+        Assert.Equal(DeviceQueueManager.PositionKindOther, reloadedQueue.ItemPositionKinds[songId.ToString("N")]);
+        Assert.True(reloaded.HasAnyBookShapedStoredPosition("dev-kinds"));
+
+        // The song-only shape must ALSO discriminate after the reload (both
+        // stamps truly persisted, not just the book one): drop the book entry
+        // WHOLE (position and stamp) and only the Other-stamped song remains.
+        reloadedQueue.ItemPositionState.Remove(bookId.ToString("N"));
+        reloadedQueue.ItemPositionKinds.Remove(bookId.ToString("N"));
+        Assert.False(reloaded.HasAnyBookShapedStoredPosition("dev-kinds"));
+    }
+
+    /// <summary>
+    /// JF-812 backward-compat pin: a pre-JF-812 queue file (positions persisted
+    /// with no itemPositionKinds member) loads with the kind map empty and its
+    /// entries still release the valve (today's behavior for existing stores).
+    /// </summary>
+    [Fact]
+    public void LoadAllFromDisk_PreJf812QueueFile_KindlessEntriesStillReleaseValve()
+    {
+        Guid songId = Guid.NewGuid();
+        // A pre-JF-812 file: camelCase members, no itemPositionKinds property.
+        File.WriteAllText(
+            Path.Combine(_tempDir, "queue_dev-legacy.json"),
+            "{\"itemPositionState\":{\"" + songId.ToString("N") + "\":" + TimeSpan.FromMinutes(1).Ticks + "}}");
+        _manager.Dispose();
+
+        using var reloaded = new DeviceQueueManager(_tempDir, _logger);
+        DeviceQueue legacyQueue = reloaded.GetOrCreateQueue("dev-legacy");
+        Assert.Empty(legacyQueue.ItemPositionKinds);
+        Assert.True(reloaded.HasAnyBookShapedStoredPosition("dev-legacy"));
+    }
+
+    /// <summary>
+    /// JF-812 subset-invariant pin: when the cap trim evicts position entries,
+    /// their kind stamps are pruned with them, so the kind map never holds orphan
+    /// keys (unbounded growth in the persisted file). Seeds are direct (the
+    /// JF-739 idiom: no freshness stamps), so the single crossing write's trim is
+    /// free to evict the oldest seeded entries.
+    /// </summary>
+    [Fact]
+    public void RecordStoppedPositionAndTrim_CapTrimPrunesKindStampsOfEvictedPositions()
+    {
+        DeviceQueue queue = _manager.GetOrCreateQueue("dev-kinds");
+        List<Guid> residentIds = Enumerable.Range(0, DeviceQueueManager.MaxItemPositionStateEntries)
+            .Select(_ => Guid.NewGuid())
+            .ToList();
+        foreach (Guid id in residentIds)
+        {
+            SeedStoredPosition("dev-kinds", id, 1234, DeviceQueueManager.PositionKindOther);
+        }
+
+        Guid crossingId = Guid.NewGuid();
+        _manager.RecordStoppedPositionAndTrim("dev-kinds", queue, crossingId, TimeSpan.FromMinutes(1).Ticks, bookShaped: false);
+
+        Assert.Equal(DeviceQueueManager.MaxItemPositionStateEntries, queue.ItemPositionState.Count);
+        Assert.Equal(DeviceQueueManager.MaxItemPositionStateEntries, queue.ItemPositionKinds.Count);
+        // The kind map is a subset of the surviving position keys: no orphan stamps.
+        Assert.All(queue.ItemPositionKinds.Keys, key => Assert.Contains(key, queue.ItemPositionState.Keys));
+        // The fresh entry kept both halves (the JF-738 guard) and one aged seed
+        // lost both (the trim + the prune).
+        Assert.Contains(crossingId.ToString("N"), queue.ItemPositionState.Keys);
+        Assert.Contains(crossingId.ToString("N"), queue.ItemPositionKinds.Keys);
     }
 
     /// <summary>
@@ -1435,8 +1605,20 @@ public class DeviceQueueManagerTests : IDisposable
         Assert.Equal(0, DeviceQueueManager.ResolveResumeTicks(_manager, null, itemId.ToString(), 0, userDataPlayed: false));
     }
 
-    private void SeedStoredPosition(string deviceId, Guid itemId, long ticks)
-        => _manager.GetOrCreateQueue(deviceId).ItemPositionState[itemId.ToString("N")] = ticks;
+    /// <summary>
+    /// Seeds a stored position directly ("N"-keyed, no freshness stamps; the
+    /// JF-739 direct-seed idiom). JF-812: pass <paramref name="kind"/> to seed
+    /// the kind stamp beside it; the default leaves the entry KINDLESS.
+    /// </summary>
+    private void SeedStoredPosition(string deviceId, Guid itemId, long ticks, string? kind = null)
+    {
+        DeviceQueue queue = _manager.GetOrCreateQueue(deviceId);
+        queue.ItemPositionState[itemId.ToString("N")] = ticks;
+        if (kind != null)
+        {
+            queue.ItemPositionKinds[itemId.ToString("N")] = kind;
+        }
+    }
 
     /// <summary>
     /// The seeded Fisher-Yates oracle shared by the shuffle tests: an independent
