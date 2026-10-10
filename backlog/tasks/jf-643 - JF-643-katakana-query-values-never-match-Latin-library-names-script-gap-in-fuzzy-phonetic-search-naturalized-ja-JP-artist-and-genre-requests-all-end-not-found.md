@@ -44,16 +44,16 @@ RELATION: depends on nothing technically; JF-642 dependency recorded only for sc
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 dotnet build passes with 0 errors
-- [ ] #2 dotnet test passes
-- [ ] #3 No new compiler warnings introduced
-- [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
-- [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
-- [ ] #6 NLU test fixtures updated if interaction model changed
-- [ ] #7 E2E test added for new intent or handler logic
-- [ ] #8 Locale response strings added to all 17 locales
-- [ ] #9 /simplify passed (no blocking cleanups remaining)
-- [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
+- [x] #1 dotnet build passes with 0 errors
+- [x] #2 dotnet test passes
+- [x] #3 No new compiler warnings introduced
+- [x] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
+- [x] #5 HttpClient instances are not shared across calls that modify BaseAddress
+- [x] #6 NLU test fixtures updated if interaction model changed
+- [x] #7 E2E test added for new intent or handler logic
+- [x] #8 Locale response strings added to all 17 locales
+- [x] #9 /simplify passed (no blocking cleanups remaining)
+- [x] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
 
 ## Implementation Notes
@@ -105,7 +105,11 @@ KNOWN NARROWING (accepted, review-verified): normalization is asymmetric (query 
 
 SAME-CLASS RESIDUALS (extends the worker's list; /simplify reuse angle): un-wired genre slots with identical exact-Genres semantics: PlayRandomIntentHandler, PlayByDecadeIntentHandler, BrowseLibraryIntentHandler. Un-wired raw-kana SearchTerm sites: AddToQueueIntentHandler (song side; artist side covered), PlayNextIntentHandler, AddSongToPlaylistIntentHandler, PlayChannelIntentHandler, TvNextUpService. When the first sibling genre site is wired, lift ResolveGenreTagAsync onto the SearchService collaborator (the GetArtistSongsAsync precedent) instead of copying it. Script coverage: this romanizer is kana-specific by construction; Devanagari (hi-IN) and Arabic (ar-SA) native-script values remain unmatched (the JF-643 task Description flagged them); if a second script lands, extract a normalizer-chain shape rather than a parallel one-off.
 
+FOLDED FROM RAW TAIL (2026-10-10, the JF-853 normalize-then-fold; content verbatim, previously the second Implementation Notes region's nested SECTION:NOTES pair):
+
 2026-09-27 LIVE VERIFICATION OUTCOME (deployed a39eb2a8, minix): genre rows PASSED (ジャズ plays jazz via the vocab tier; Jazz Latin control unchanged; the stolen-artist rescue fires). Artist rows FAILED the bar as written: クイーン -> 'kuin' -> tier-4 phonetic floor 91 TIE between Queen and Keane resolves silently to Keane (single-best auto-play, no disambiguation); ビートルズ -> 'bitoruzu' -> plain-fuzzy false accept of 'Sator' at threshold 60. Root cause and fix direction filed as JF-652 (kana-aware acceptance calibration), which BLOCKS this task's completion. Mechanism itself verified good: romanizer no-op on Latin (byte-identical, pinned), kana bridging works, genre path exact. Status stays In Progress until JF-652 lands and the artist rows re-verify.
+
+DoD RECONCILED (2026-10-10, JF-853 code-review finding): the ten boxes were left unticked when the task flipped Done; ticked per the Final Summary's completion record (gates /simplify and /code-review ran for real; #4/#5/#6/#7/#8 are vacuous for this search-layer change: no session attributes, no HttpClient lifecycle, no model/template/locale surface touched, per the notes above).
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary

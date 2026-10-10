@@ -4,9 +4,10 @@ title: >-
   Backlog marker pathologies: normalize jf-637/643/781 then fold (fold-first
   PROVEN destructive), guard the 4 ENAMETOOLONG files, draft the upstream
   Backlog.md issue
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-10-09 22:44'
+updated_date: '2026-10-10 05:25'
 labels:
   - tooling
   - tech-debt
@@ -45,8 +46,8 @@ PART 2 - the four ENAMETOOLONG-class files (jf-724, jf-771, jf-774, jf-782): any
 EXECUTION (2026-10-10, worker on branch jf853; all edits by hand, the backlog MCP untouched):
 
 PART 1, per-file verdicts (harness copied to /tmp/jf853_ref per the spec; probes always ran with REAL filenames: a renamed copy makes the CLI answer "Task not found" and the probe false-passes, caught and corrected during execution):
-- jf-637: pathology = the SECTION:NOTES:ORCHESTRATOR-SIMPLIFY:BEGIN at old line 75, never closed (stack-parse ran it to EOF), plus a raw dated Implementation Notes section (old lines 54-73). Normalization: ONE canonical SECTION:NOTES region now wraps the raw notes (dated heading kept verbatim INSIDE the region, the jf-492 fold precedent), and the orchestrator-simplify block is folded in behind its own provenance line; the unclosed marker is dissolved. Why dissolved rather than closed in place: the CLI drops an unknown closed marker region on rewrite (the Description's jf-637 0->5 case is exactly this drop; mechanism in the BATTERY notes), so folding the content into the managed notes region is.
-- jf-643: pathology = stray SECTION:NOTES:END at old line 92 (no BEGIN), unclosed SECTION:NOTES:SIMPLIFY-ROUND region at 94-101, and a NESTED second SECTION:NOTES pair (105-107) inside it (the stray nested BEGIN). Normalization: ONE managed Implementation Notes region; the raw first block, the simplify-round content, and the nested region's LIVE VERIFICATION line merged in document order with two provenance lines; the stray END, the SIMPLIFY-ROUND BEGIN, and the duplicate scaffold heading dissolved.
+- jf-637: pathology = the SECTION:NOTES:ORCHESTRATOR-SIMPLIFY:BEGIN at old line 75, never closed (stack-parse ran it to EOF), plus a raw dated Implementation Notes section (old lines 54-73). Normalization: ONE canonical SECTION:NOTES region now wraps the raw notes (dated heading kept verbatim INSIDE the region, the jf-492 fold precedent), and the orchestrator-simplify block is folded in behind its own provenance line; the unclosed marker is dissolved. Why dissolved rather than closed in place: the CLI drops an unknown closed marker region on rewrite (the Description's jf-637 0->5 case is exactly this drop; mechanism in the BATTERY notes), so folding the content into the managed notes region is the durable form.
+- jf-643: pathology = stray SECTION:NOTES:END at old line 92 (no BEGIN), unclosed SECTION:NOTES:SIMPLIFY-ROUND region at 94-101, and a NESTED second SECTION:NOTES pair (105-107) inside it (the stray nested BEGIN). Normalization: ONE managed Implementation Notes region; the raw first block, the simplify-round content, and the nested region's LIVE VERIFICATION line merged in document order with three provenance lines (one per source region); the stray END, the SIMPLIFY-ROUND BEGIN, and the duplicate scaffold heading dissolved.
 - jf-781: pathology = legacy `<!-- NOTES:` pair (old lines 79/126) the canonical extractor does not recognize, plus a raw CLOSED tail and an unmarked/unnumbered DoD. Normalization: the legacy pair converted to canonical SECTION:NOTES form, Description wrapped in SECTION:DESCRIPTION markers, DoD wrapped in DOD markers with the CLI's own #1/#2/#3 numbering (its rewrite renumbers unnumbered checklists anyway; pre-numbering is what makes the roundtrip lossless), CLOSED tail folded in. Side note: the next real MCP edit will also RENAME this file (title starts with "JF-781 - ", regenerated slug 185 bytes, still under the limit).
 
 BATTERY (rt_probe method: scratch backlog project, `backlog task edit <id> --add-label`, pre/post body-content multiset diff; backlog CLI v1.44.0): HEAD baselines reproduced first (jf-637 0, jf-643 0, jf-781 3: the three unnumbered DoD first lines). After normalize+fold: single-edit loss 0/0/0; double-edit (two sequential labels, the second running on the CLI's own first-edit output) 0/0/0. Conservation audit vs HEAD: jf-637/jf-643 zero content lines lost; jf-781 only the three DoD first lines, replaced by their #N-renumbered forms. Census (fold_sweep verify): 0/3 residual orphans. Mechanism notes recorded for the future: the CLI passes an already-canonical body through byte-identical (jf-637/643 path) and fully re-serializes when a section is not in its expected shape (jf-781 path); the re-serialization wraps unmarked Description/DoD, renumbers checklists, converts nothing else, and drops anything outside ITS recognized SECTION:NOTES:BEGIN-to-first-END span.
@@ -109,7 +110,7 @@ Steps to reproduce:
 
 3. Observed:
 
-       ENAMETOOLONG: name too long, open '<project>/backlog/tasks/jf-782 - <337-byte regenerated slug>.md'
+       ENAMETOOLONG: name too long, open '<project>/backlog/tasks/jf-999 - <regenerated slug, 337 bytes>.md'
 
    The command exits 1, and the ORIGINAL task file has already been removed
    from backlog/tasks/ at that point. The task and all of its content are gone
