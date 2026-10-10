@@ -399,7 +399,7 @@ public class PlaybackPositionProvenanceTests : PluginTestBase, IDisposable
         // The enqueue of the wrapped next item (the same episode, base 0) landed in the
         // PENDING scope; the running stream's ACTIVE base is untouched.
         Assert.Equal(MinutesToMs(20), _queueManager.GetActiveLaunchBase(DeviceId, id.ToString()));
-        Assert.Equal(0, _queueManager.GetOrCreateQueue(DeviceId).PendingLaunchBaseMs[id.ToString("N")]);
+        Assert.Equal(0, _queueManager.GetOrCreateQueue(DeviceId).PendingLaunchScopes[id.ToString("N")].BaseMs);
 
         // And the promote at the wrapped stream's start retires the 20:00 base for the
         // new 0-base stream (repeat-one semantics: the track plays again from its start).
