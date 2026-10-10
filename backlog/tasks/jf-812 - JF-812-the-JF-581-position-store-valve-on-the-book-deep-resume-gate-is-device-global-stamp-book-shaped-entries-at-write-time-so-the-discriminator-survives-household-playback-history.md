@@ -4,10 +4,10 @@ title: >-
   JF-812 - the JF-581 position-store valve on the book deep-resume gate is
   device-global: stamp book-shaped entries at write time so the discriminator
   survives household playback history
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-10-07 09:10'
-updated_date: '2026-10-10 13:57'
+updated_date: '2026-10-10 15:20'
 labels:
   - tech-debt
   - audiobooks

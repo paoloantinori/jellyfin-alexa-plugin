@@ -3,10 +3,10 @@ id: JF-803
 title: >-
   JF-803 - the shared deep-resume re-page lift across the album and book heads
   (the natural JF-797 item 3 companion)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-10-07'
-updated_date: '2026-10-10 12:58'
+updated_date: '2026-10-10 15:20'
 labels:
   - refactor
   - playback
