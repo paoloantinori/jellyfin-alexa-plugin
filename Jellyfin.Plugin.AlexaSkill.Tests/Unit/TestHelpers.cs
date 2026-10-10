@@ -91,6 +91,55 @@ internal static class TestHelpers
         };
     }
 
+    /// <summary>
+    /// The ONE paging-honoring album-tracks mock setup (the JF-803 hoist of the
+    /// census the JF-796/JF-804 rounds recorded: the five inline
+    /// <c>GetItemsResult</c> paging lambdas in AlbumAnnounceVehicleTests, the
+    /// continuation fixture in ProgressiveQueueTests, and SetupDeepResumeAlbum's
+    /// own lambda), answering the matched tracks queries through the
+    /// flag-honoring <see cref="ServePagedTracks"/> engine. The mock comes in as
+    /// a parameter so the different backings fit: AlbumAnnounceVehicleTests'
+    /// per-test <c>new Mock&lt;ILibraryManager&gt;()</c> and the fixtures'
+    /// <c>_fx.LibraryManager</c> alike. Callers that model progress pass the
+    /// probe matchers so the discriminator's IsPlayed/IsResumable queries are
+    /// answered the way the server answers them; a fresh collection passes
+    /// neither and both probes miss (see <see cref="ServePagedTracks"/>).
+    /// TRAP (code-review JF-803 F2): a fixture that models deep progress ONLY
+    /// through the IUserDataManager mock MUST still pass <paramref name="resumableRow"/>
+    /// (and <paramref name="playedRow"/> where applicable) - with no matcher the
+    /// probes answer EMPTY, the deep-resume gate stays cold, and the test
+    /// silently exercises the shallow path (the pre-hoist inline mocks were
+    /// flag-blind, so they answered all-rows and never had this failure mode).
+    /// <paramref name="matches"/> narrows which queries the setup answers (a
+    /// multi-query fixture keeps its original scoping instead of widening to
+    /// ANY); null answers every query. Beside
+    /// <see cref="HandlerTestFixture.SetupAlbumTracks"/>, the non-paging
+    /// single-album setup this generalizes (the fixture keeps its own instance
+    /// shape; this one serves any paging depth, including the unpaged deep
+    /// fetch).
+    /// </summary>
+    /// <param name="library">The library mock to install the tracks setup on.</param>
+    /// <param name="tracks">The full ordered track list the mock serves (page order = list order).</param>
+    /// <param name="queries">Optional capture of every matched tracks query issued against the mock.</param>
+    /// <param name="playedRow">Which rows the user has Played=true (the IsPlayed probe's matcher).</param>
+    /// <param name="resumableRow">Which rows carry in-progress user data (the IsResumable probe's matcher).</param>
+    /// <param name="matches">Optional query predicate narrowing the setup; null matches every query.</param>
+    internal static void SetupAlbumPages(
+        Mock<ILibraryManager> library,
+        IReadOnlyList<BaseItem> tracks,
+        List<InternalItemsQuery>? queries = null,
+        Func<BaseItem, bool>? playedRow = null,
+        Func<BaseItem, bool>? resumableRow = null,
+        Func<InternalItemsQuery, bool>? matches = null)
+    {
+        library.Setup(l => l.GetItemsResult(It.Is<InternalItemsQuery>(q => matches == null || matches(q))))
+            .Returns((InternalItemsQuery q) =>
+            {
+                queries?.Add(q);
+                return ServePagedTracks(tracks, q, playedRow, resumableRow);
+            });
+    }
+
     internal static Entities.User CreateTestUser(
         Guid? id = null,
         string invocationName = "test",
