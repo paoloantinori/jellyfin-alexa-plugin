@@ -230,3 +230,27 @@ the final three micro-merges ride the NEXT deploy - they are test-only).
   ancestor-of-HEAD) - corrected. A second reconciliation pass over the
   remaining queue [787/812/798/799/803/648/818-follow-ups] is running.
 - main green on CI through all of it (38052999897 success).
+
+## Late-afternoon wave (17:30)
+
+- JF-803 MERGED (pure lift, zero assert changes, 5626/5626 x2 both TFMs).
+- JF-857 MERGED (audit + de-DE representative fix; premise INVERTED - the
+  carrier x tail CROSSINGS fail in 13/15 locales, exact shapes route; true
+  trainer anomaly = ar-SA + es-US only; 12-locale wave = Paolo's JF-855
+  call). Map landed in its task file; closure rides the de-DE matrix.
+- The afternoon-wave orchestrator /simplify ran (4 angles: reuse CLEAN,
+  efficiency CLEAN, altitude CLEAN, simplification 3 findings). PENDING
+  (held for JF-812's merge to avoid same-file conflicts): the album-gate
+  hoist, the book-head single-if fold, the resolver-tail local, the
+  IsEnabled(Debug) guard on the per-chapter GetUserData loop (efficiency's
+  adjacent #1, real handler-path cost), SetupConfirmedAlbum's absorption
+  (reuse adjacent a). Then /code-review high over 61014d0c..HEAD, flips
+  (JF-803, JF-812), push, batch deploy + de-DE rebuild + JF-857's 11-leg
+  matrix + smoke.
+- TRACKER NOTES from the rounds (record-only): the two time-policy seams on
+  DeviceQueueManager (TimeProvider vs UtcNow; unify at a third window); the
+  deepIndex>0 accept twin (hoist at a fourth probe-side caller); the
+  ApplyRePage twin contract (head-state object at a fourth head); the two
+  inline TicksToMs copies (extract at the third); the belt's doubled
+  snapshot reads (documented, deeper fix deliberately not taken); es-US
+  deserves an identical-content rebuild probe before any content change.
