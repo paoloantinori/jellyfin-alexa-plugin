@@ -797,6 +797,27 @@ intents:
     slots:
       - name: playlist
         type: AMAZON.SearchQuery
+  - name: ShowPhotoAlbumIntent
+    # JF-329 photo slideshow. Optional-slot intent (the JF-403 boundary): the
+    # static forms deliver the working default (the handler shows the most
+    # recent photos of the whole photo library). Every slotted carrier names
+    # the photo media so the free-text carriers of PlayVideo/PlaySong cannot
+    # steal these utterances. photoAlbum is this intent's own slot name; its
+    # AMAZON.SearchQuery type never shares a sample with another slot.
+    samples:
+      - montre mes photos
+      - montre-moi mes photos
+      - montre les photos de {photoAlbum}
+      - montre-moi les photos de {photoAlbum}
+      - affiche les photos de {photoAlbum}
+      - ouvre les photos de {photoAlbum}
+      - montre les photos de l'album {photoAlbum}
+      - lance un diaporama de mes photos
+      - lance un diaporama de {photoAlbum}
+    slots:
+      - name: photoAlbum
+        type: AMAZON.SearchQuery
+
 types:
   # JF-636: playback-speed vocabulary (the JF-354 Mood architecture). Ids are
   # the shared cross-locale key space (per-mille strings + faster/slower).

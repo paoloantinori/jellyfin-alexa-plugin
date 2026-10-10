@@ -1503,3 +1503,28 @@ tests:
     expected_intent: SetPlaybackSpeedIntent
     expected_slots:
       speed: {}
+
+  # -------------------------------------------------------------------------
+  # ShowPhotoAlbumIntent (JF-329): la forma statica di libreria intera e il
+  # carrier con album. Il pin slottato asserisce solo il fill (i valori
+  # SearchQuery variano con il nome parlato).
+  # -------------------------------------------------------------------------
+  - utterance: "mostra le mie foto"
+    expected_intent: ShowPhotoAlbumIntent
+    expected_slots: {}
+
+  - utterance: "avvia una presentazione delle mie foto"
+    expected_intent: ShowPhotoAlbumIntent
+    expected_slots: {}
+
+  - utterance: "mostra le foto di roma"
+    expected_intent: ShowPhotoAlbumIntent
+    expected_slots:
+      photoAlbum: {}
+
+  # Recensione F5: la forma esposta al furto. PlayVideoIntent porta il carrier
+  # libero "mostra {title}"; questo pin fallisce se quel carrier vince
+  # "mostrami le mie foto" (anti-pattern #3).
+  - utterance: "mostrami le mie foto"
+    expected_intent: ShowPhotoAlbumIntent
+    expected_slots: {}

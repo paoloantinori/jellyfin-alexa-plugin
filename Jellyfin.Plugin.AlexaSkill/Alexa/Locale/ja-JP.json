@@ -312,5 +312,12 @@
   "CannotChangeSpeedForBook": "申し訳ありません、オーディオブックの再生速度は変更できません。",
   "StreamTokenNotConfigured": "ストリーミングが正しく設定されていません。JellyfinのダッシュボードでAlexaスキルの設定ページを確認してください。",
   "PlayingNextEpisodeSsml": "次のエピソードを再生します: {0}",
-  "PlayingLatestEpisodeSsml": "最新のエピソードを再生します: {0}"
+  "PlayingLatestEpisodeSsml": "最新のエピソードを再生します: {0}",
+  "PhotosRequireScreen": "写真を表示するには、Echo Show などの画面付きデバイスが必要です。",
+  "PhotoAlbumNotFound": "すみません、{0} という名前のフォトアルバムは見つかりませんでした。",
+  "PhotoAlbumEmpty": "フォトアルバム {0} に写真がありません。",
+  "NoPhotosFound": "ライブラリに写真が見つかりませんでした。",
+  "ShowingPhotoAlbum": "{1} の写真を {0} 枚表示しています。",
+  "ShowingRecentPhotos": "最近の写真を {0} 枚表示しています。",
+  "RecentPhotosTitle": "最近の写真"
 }

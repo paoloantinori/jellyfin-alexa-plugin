@@ -37,7 +37,12 @@ public class ResponseStringsTests
         "CannotRepeatContent", "CannotRepeatInSeekMode",
         "CannotSetSleepTimerInSeekMode", "CannotSetSleepTimerOverVideo",
         "CannotChangeSpeedOverVideo", "CannotChangeSpeedForBook",
-        "CannotNavigateVideoByVoice", "CannotNavigateLiveTvByVoice", "CannotNavigateMusicByVoice"
+        "CannotNavigateVideoByVoice", "CannotNavigateLiveTvByVoice", "CannotNavigateMusicByVoice",
+        // JF-329 photo slideshow: the screen-required capability tell, the
+        // album-resolution outcomes, and the showing announcements (incl. the
+        // APL header title).
+        "PhotosRequireScreen", "PhotoAlbumNotFound", "PhotoAlbumEmpty",
+        "NoPhotosFound", "ShowingPhotoAlbum", "ShowingRecentPhotos", "RecentPhotosTitle"
     };
 
     /// <summary>

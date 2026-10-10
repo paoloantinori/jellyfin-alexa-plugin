@@ -85,6 +85,7 @@ internal static class IntentNames
     public const string FindSongIntent = "FindSongIntent";
     public const string FindSongByArtistIntent = "FindSongByArtistIntent";
     public const string SetPlaybackSpeed = "SetPlaybackSpeedIntent";
+    public const string ShowPhotoAlbum = "ShowPhotoAlbumIntent";
 
     public const string AmazonFallback = "AMAZON.FallbackIntent";
     public const string AmazonLoopOff = "AMAZON.LoopOffIntent";

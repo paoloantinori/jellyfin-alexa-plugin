@@ -874,3 +874,28 @@ tests:
     expected_intent: SetPlaybackSpeedIntent
     expected_slots:
       speed: {}
+
+  # -------------------------------------------------------------------------
+  # ShowPhotoAlbumIntent (JF-329): the static whole-library default and the
+  # slotted album carrier. The slotted pin only asserts fill (SearchQuery
+  # values vary with the spoken album name).
+  # -------------------------------------------------------------------------
+  - utterance: "show my photos"
+    expected_intent: ShowPhotoAlbumIntent
+    expected_slots: {}
+
+  - utterance: "start a slideshow of my photos"
+    expected_intent: ShowPhotoAlbumIntent
+    expected_slots: {}
+
+  - utterance: "show photos from rome"
+    expected_intent: ShowPhotoAlbumIntent
+    expected_slots:
+      photoAlbum: {}
+
+  # Code-review F5: the steal-exposed form. PlayVideoIntent carries the bare
+  # carrier "show me {title}"; this pin fails if that carrier wins "show me my
+  # photos" (anti-pattern #3, the FallbackIntent-class gap).
+  - utterance: "show me my photos"
+    expected_intent: ShowPhotoAlbumIntent
+    expected_slots: {}

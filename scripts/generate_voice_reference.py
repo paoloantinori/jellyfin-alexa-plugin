@@ -119,6 +119,9 @@ GROUPS = [
     ("Audiobooks", [
         ("PlayBookIntent", "Play an audiobook", False),
     ]),
+    ("Photos", [
+        ("ShowPhotoAlbumIntent", "Show a photo album slideshow", False),
+    ]),
     ("Radio and live TV", [
         ("PlayRadioIntent", "Start radio mode", False),
         ("TurnRadioOnIntent", "Turn radio mode on", False),
@@ -207,6 +210,7 @@ GROUPS = [
 # group) so the doc can never degrade to raw identifiers.
 SLOT_HINTS = {
     "en": {
+        "photoAlbum": "photo album name",
         "song_query": "song title",
         "song": "song title", "musician": "artist name", "album": "album title",
         "book": "audiobook title", "genre": "music genre",
@@ -233,6 +237,7 @@ SLOT_HINTS = {
             "sleep_duration": "duration (5 minutes, 30 seconds, half an hour)"
     },
     "it": {
+        "photoAlbum": "nome dell'album di foto",
         "song_query": "titolo del brano",
         "song": "titolo del brano", "musician": "nome dell'artista",
         "album": "titolo dell'album", "book": "titolo dell'audiolibro",
@@ -262,6 +267,7 @@ SLOT_HINTS = {
             "sleep_duration": "durata (5 minuti, 30 secondi, mezz'ora)"
     },
     "de": {
+        "photoAlbum": "Name des Fotoalbums",
         "song_query": "Songtitel",
         "song": "Titel des Liedes", "musician": "Name des Künstlers",
         "album": "Titel des Albums", "book": "Titel des Hörbuchs",
@@ -291,6 +297,7 @@ SLOT_HINTS = {
             "sleep_duration": "Dauer (5 Minuten, 30 Sekunden, eine halbe Stunde)"
     },
     "es": {
+        "photoAlbum": "nombre del álbum de fotos",
         "song_query": "título de la canción",
         "song": "título de la canción", "musician": "nombre del artista",
         "album": "título del álbum", "book": "título del audiolibro",
@@ -322,6 +329,7 @@ SLOT_HINTS = {
             "sleep_duration": "duración (5 minutos, 30 segundos, media hora)"
     },
     "fr": {
+        "photoAlbum": "nom de l'album photo",
         "song_query": "titre de la chanson",
         "song": "titre de la chanson", "musician": "nom de l'artiste",
         "album": "titre de l'album", "book": "titre du livre audio",
@@ -353,6 +361,7 @@ SLOT_HINTS = {
             "sleep_duration": "durée (5 minutes, 30 secondes, une demi-heure)"
     },
     "pt": {
+        "photoAlbum": "nome do álbum de fotos",
         "song_query": "título da música",
         "song": "título da música", "musician": "nome do artista",
         "album": "título do álbum", "book": "título do audiolivro",
@@ -382,6 +391,7 @@ SLOT_HINTS = {
             "sleep_duration": "duração (5 minutos, 30 segundos, meia hora)"
     },
     "nl": {
+        "photoAlbum": "naam van het fotoalbum",
         "song_query": "nummer",
         "song": "titel van het nummer", "musician": "naam van de artiest",
         "album": "titel van het album", "book": "titel van het luisterboek",
@@ -413,6 +423,7 @@ SLOT_HINTS = {
             "sleep_duration": "duur (5 minuten, 30 seconden, een half uur)"
     },
     "ja": {
+        "photoAlbum": "フォトアルバム名",
         "song_query": "曲名",
         "song": "曲名", "musician": "アーティスト名", "album": "アルバム名",
         "book": "オーディオブック名", "genre": "ジャンル",
@@ -437,6 +448,7 @@ SLOT_HINTS = {
             "sleep_duration": "時間（5分、30秒、30分）"
     },
     "hi": {
+        "photoAlbum": "फ़ोटो एल्बम का नाम",
         "song_query": "गाने का नाम",
         "song": "गाने का नाम", "musician": "कलाकार का नाम",
         "album": "एल्बम का नाम", "book": "ऑडियोबुक का नाम",
@@ -465,6 +477,7 @@ SLOT_HINTS = {
             "sleep_duration": "अवधि (5 मिनट, 30 सेकंड, आधा घंटा)"
     },
     "ar": {
+        "photoAlbum": "اسم ألبوم الصور",
         "song_query": "عنوان الأغنية",
         "song": "اسم الأغنية", "musician": "اسم الفنان",
         "album": "عنوان الألبوم", "book": "عنوان الكتاب الصوتي",

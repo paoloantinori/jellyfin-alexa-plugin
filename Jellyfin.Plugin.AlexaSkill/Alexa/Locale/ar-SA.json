@@ -312,5 +312,12 @@
   "CannotChangeSpeedForBook": "عذراً، لا أستطيع تغيير سرعة تشغيل الكتب الصوتية.",
   "StreamTokenNotConfigured": "البث غير مهيأ بشكل صحيح. يرجى التحقق من صفحة إعدادات مهارة Alexa في لوحة تحكم Jellyfin.",
   "PlayingNextEpisodeSsml": "أشغل الحلقة التالية: {0}",
-  "PlayingLatestEpisodeSsml": "أشغل أحدث حلقة: {0}"
+  "PlayingLatestEpisodeSsml": "أشغل أحدث حلقة: {0}",
+  "PhotosRequireScreen": "لعرض صورك، أحتاج إلى جهاز بشاشة، مثل إيكو شو.",
+  "PhotoAlbumNotFound": "عذرًا، لم أجد ألبوم صور بالاسم {0}.",
+  "PhotoAlbumEmpty": "لا يحتوي ألبوم الصور {0} على أي صور.",
+  "NoPhotosFound": "لم أجد أي صور في مكتبتك.",
+  "ShowingPhotoAlbum": "أعرض {0} صور من {1}.",
+  "ShowingRecentPhotos": "أعرض أحدث {0} صور لك.",
+  "RecentPhotosTitle": "أحدث الصور"
 }

@@ -971,6 +971,25 @@
             "type": "AMAZON.SearchQuery"
           }
         ]
+      },
+      {
+        "name": "ShowPhotoAlbumIntent",
+        "samples": [
+          "toon mijn foto's",
+          "laat mijn foto's zien",
+          "toon foto's van {photoAlbum}",
+          "toon de foto's van {photoAlbum}",
+          "laat de foto's van {photoAlbum} zien",
+          "open de foto's van {photoAlbum}",
+          "start een diavoorstelling van mijn foto's",
+          "start een diavoorstelling van {photoAlbum}"
+        ],
+        "slots": [
+          {
+            "name": "photoAlbum",
+            "type": "AMAZON.SearchQuery"
+          }
+        ]
       }
     ],
     "types": [

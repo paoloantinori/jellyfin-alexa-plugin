@@ -896,6 +896,27 @@
         ]
       },
       {
+        "name": "ShowPhotoAlbumIntent",
+        "samples": [
+          "mostra le mie foto",
+          "mostrami le mie foto",
+          "mostra le foto di {photoAlbum}",
+          "mostra le mie foto di {photoAlbum}",
+          "mostrami le foto di {photoAlbum}",
+          "apri le foto di {photoAlbum}",
+          "fai vedere le foto di {photoAlbum}",
+          "visualizza le foto di {photoAlbum}",
+          "avvia una presentazione delle mie foto",
+          "avvia una presentazione di {photoAlbum}"
+        ],
+        "slots": [
+          {
+            "name": "photoAlbum",
+            "type": "AMAZON.SearchQuery"
+          }
+        ]
+      },
+      {
         "name": "PlaySongIntent",
         "samples": [
           "Riproduci il brano {song}",

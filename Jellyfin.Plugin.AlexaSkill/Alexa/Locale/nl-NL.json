@@ -312,5 +312,12 @@
   "CannotChangeSpeedForBook": "Sorry, ik kan de snelheid van luisterboeken niet wijzigen.",
   "StreamTokenNotConfigured": "Streaming is niet goed geconfigureerd. Controleer de instellingen van de Alexa-skill in je Jellyfin-dashboard.",
   "PlayingNextEpisodeSsml": "De volgende aflevering afspelen: {0}",
-  "PlayingLatestEpisodeSsml": "De nieuwste aflevering afspelen: {0}"
+  "PlayingLatestEpisodeSsml": "De nieuwste aflevering afspelen: {0}",
+  "PhotosRequireScreen": "Om je foto's te laten zien heb ik een apparaat met scherm nodig, zoals een Echo Show.",
+  "PhotoAlbumNotFound": "Sorry, ik kon geen fotoalbum met de naam {0} vinden.",
+  "PhotoAlbumEmpty": "Het fotoalbum {0} bevat geen foto's.",
+  "NoPhotosFound": "Ik kon geen foto's in je bibliotheek vinden.",
+  "ShowingPhotoAlbum": "Ik toon {0} foto's uit {1}.",
+  "ShowingRecentPhotos": "Ik toon je {0} meest recente foto's.",
+  "RecentPhotosTitle": "Recente foto's"
 }

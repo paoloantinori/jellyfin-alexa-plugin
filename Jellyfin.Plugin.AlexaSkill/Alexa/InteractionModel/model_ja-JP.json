@@ -909,6 +909,25 @@
             "type": "AMAZON.SearchQuery"
           }
         ]
+      },
+      {
+        "name": "ShowPhotoAlbumIntent",
+        "samples": [
+          "写真を見せて",
+          "私の写真を見せて",
+          "{photoAlbum} の写真を見せて",
+          "{photoAlbum} のフォトアルバムを見せて",
+          "{photoAlbum} の写真を表示して",
+          "スライドショーを始めて",
+          "私の写真のスライドショーを始めて",
+          "{photoAlbum} のスライドショーを始めて"
+        ],
+        "slots": [
+          {
+            "name": "photoAlbum",
+            "type": "AMAZON.SearchQuery"
+          }
+        ]
       }
     ],
     "types": [
