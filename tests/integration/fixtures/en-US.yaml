@@ -892,3 +892,10 @@ tests:
     expected_intent: ShowPhotoAlbumIntent
     expected_slots:
       photoAlbum: {}
+
+  # Code-review F5: the steal-exposed form. PlayVideoIntent carries the bare
+  # carrier "show me {title}"; this pin fails if that carrier wins "show me my
+  # photos" (anti-pattern #3, the FallbackIntent-class gap).
+  - utterance: "show me my photos"
+    expected_intent: ShowPhotoAlbumIntent
+    expected_slots: {}

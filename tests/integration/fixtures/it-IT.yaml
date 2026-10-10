@@ -1521,3 +1521,10 @@ tests:
     expected_intent: ShowPhotoAlbumIntent
     expected_slots:
       photoAlbum: {}
+
+  # Recensione F5: la forma esposta al furto. PlayVideoIntent porta il carrier
+  # libero "mostra {title}"; questo pin fallisce se quel carrier vince
+  # "mostrami le mie foto" (anti-pattern #3).
+  - utterance: "mostrami le mie foto"
+    expected_intent: ShowPhotoAlbumIntent
+    expected_slots: {}

@@ -680,6 +680,10 @@ public class AplHelperTests : PluginTestBase
 
         Assert.NotNull(directive);
         Assert.Equal("slideshow", directive!.Token);
+        // The dossier persistence rule: SHORT (default) dismisses a
+        // no-interaction document after ~30s; a 30-photo x 8s slideshow needs
+        // MAX (device max idle timeout). Code-review F1 pin.
+        Assert.Equal("MAX", directive.TimeoutType);
         string dsStr = directive.DataSources!.ToString();
         Assert.Contains("\"title\": \"Trip to Rome\"", dsStr);
         foreach (string url in new[] { "http://img/1", "http://img/2", "http://img/3" })

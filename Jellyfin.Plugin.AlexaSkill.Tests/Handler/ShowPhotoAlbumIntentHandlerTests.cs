@@ -219,6 +219,26 @@ public class ShowPhotoAlbumIntentHandlerTests : PluginTestBase
     }
 
     [Fact]
+    public async Task Handle_MultipleAlbums_BelowFuzzyBar_ShowsTopRankedMatch()
+    {
+        // Code-review F4: with SearchTerm matches in hand but none clearing the
+        // fuzzy bar, the honest answer is the top-ranked match (announced by
+        // name), never a not-found that contradicts the query's own matches.
+        var albums = new List<BaseItem> { CreateAlbum("Asdf Album"), CreateAlbum("Zxcv Album") };
+        QueueResults(albums, CreatePhotos(2));
+        var handler = CreateHandler();
+
+        var response = await handler.HandleAsync(
+            CreateRequest("qwertyuiop"), AplContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+        var speech = response.Tells<PlainTextOutputSpeech>();
+
+        Assert.Contains("Asdf Album", speech.Text);
+        var directive = GetSlideshowDirective(response);
+        Assert.NotNull(directive);
+        Assert.Equal(albums[0].Id, _capturedQueries[^1].ParentId);
+    }
+
+    [Fact]
     public async Task Handle_EmptySlot_ShowsRecentPhotos()
     {
         QueueResults(CreatePhotos(5));

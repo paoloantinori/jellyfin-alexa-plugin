@@ -129,9 +129,12 @@ public class ShowPhotoAlbumIntentHandler : BaseHandler
         }
 
         Logger.LogDebug(
-            "ShowPhotoAlbum: album={Album}, photoCount={PhotoCount}",
+            "ShowPhotoAlbum: album={Album} ({AlbumId}), photoCount={PhotoCount}, firstPhotoId={FirstPhotoId}, lastPhotoId={LastPhotoId}",
             album?.Name ?? "(recent)",
-            photos.Count);
+            album?.Id,
+            photos.Count,
+            photos[0].Id,
+            photos[^1].Id);
 
         List<string> imageUrls = photos.Select(p => Launch.GetImageUrl(p.Id.ToString("N"), user)).ToList();
         string title = album?.Name ?? ResponseStrings.Get("RecentPhotosTitle", locale);
@@ -192,7 +195,26 @@ public class ShowPhotoAlbumIntentHandler : BaseHandler
 
         if (albums.Count > 1)
         {
-            return Search.FuzzyMatch(albumName, albums, a => a.Name ?? string.Empty, user);
+            // JF-776: the query reaching this scan is ALWAYS romanized (the
+            // JF-643 entry wiring above), so scoring reads the candidates
+            // through the romaji reading (KeywordMatcher.ScoringName), never
+            // the raw name; the announcement below keeps the display name.
+            BaseItem? best = Search.FuzzyMatch(albumName, albums, a => KeywordMatcher.ScoringName(a.Name), user);
+            if (best != null)
+            {
+                return best;
+            }
+
+            // Below the fuzzy bar with SearchTerm matches in hand: the honest
+            // answer is the top-ranked match (Jellyfin's SearchTerm relevance
+            // order, the TvNextUp ResolveSeriesAsync first-match precedent),
+            // announced by name below. A hard not-found here would contradict
+            // the matches the query just returned.
+            Logger.LogDebug(
+                "ShowPhotoAlbum: fuzzy miss on {Count} SearchTerm matches for query={Query}, taking the top-ranked",
+                albums.Count,
+                albumName);
+            return albums[0];
         }
 
         var fuzzy = await Search.SearchItemsFuzzyAsync(

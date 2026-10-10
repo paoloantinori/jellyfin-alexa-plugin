@@ -1222,6 +1222,12 @@ internal static class AplHelper
         return new AplRenderDocumentDirective
         {
             Token = "slideshow",
+            // The dossier's persistence rule (research_apl_persistence_exhaustive
+            // 2026-05-25): SHORT (the default) dismisses a no-interaction document
+            // after ~30s, which would cut a 30-photo x 8s slideshow to ~4 photos;
+            // MAX rides the device's max idle timeout (~5min on Show 5), the shape
+            // the dossier prescribes for display documents meant to persist.
+            TimeoutType = "MAX",
             Document = SlideshowDocument,
             DataSources = new JObject
             {
