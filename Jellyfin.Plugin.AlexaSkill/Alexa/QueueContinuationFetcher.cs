@@ -785,14 +785,14 @@ internal static class QueueContinuationFetcher
     /// fork in PlayBookAsync, which re-pages an already-fetched full book.
     /// </summary>
     /// <param name="fullList">The fetch-all list (page order, the shared core's order).</param>
-    /// <param name="deepIndex">The index to re-page at; MUST name a row of the list (0 &lt;= index &lt; count) - the re-slice at a row the rescan never found would install an EMPTY page whose first-row consumers throw.</param>
+    /// <param name="deepIndex">The index to re-page at; MUST name a row of the list (0 &lt;= index &lt; count); the re-slice at a row the rescan never found would install an EMPTY page whose first-row consumers throw.</param>
     /// <param name="deepTicks">The rescan's second value (ticks/partials), carried through to the result.</param>
     /// <returns>The re-page result.</returns>
     internal static DeepResumeRePage RePageAt(IReadOnlyList<BaseItem> fullList, int deepIndex, long deepTicks)
     {
         // Structural guard (code-review JF-803 F1): the three call sites today
         // accept only found rows (the delegate predicates), but the shared
-        // factory owns the invariant now - a walk-off index (the tracker walk
+        // factory owns the invariant now: a walk-off index (the tracker walk
         // answers items.Count on fall-off) must fail loudly here, not as an
         // empty page that albumItems[startIndex] later turns into an
         // IndexOutOfRangeException.

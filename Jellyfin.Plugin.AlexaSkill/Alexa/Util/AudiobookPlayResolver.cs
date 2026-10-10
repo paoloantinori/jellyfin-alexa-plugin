@@ -439,7 +439,7 @@ public static class AudiobookPlayResolver
             }
 
             // Gate-marker tail F1: the gate DECISION logged for triage (the Debug
-            // Logging Policy) on every path where the gate question was asked - the
+            // Logging Policy) on every path where the gate question was asked; the
             // first cut logged only inside the probe branch, so the JF-581
             // valve-release shape (a positioned queue entry releasing the fetch with
             // no probe run) logged nothing, and the 'positioned queue entries' field

@@ -780,7 +780,7 @@ public sealed class DeviceQueueManager : IDisposable
         }
 
         // Gate-marker tail F2: the read takes _launchScopeLock like the aggregate
-        // sibling HasAnyBookShapedStoredPosition - an unlocked TryGetValue can race the locked
+        // sibling HasAnyBookShapedStoredPosition: an unlocked TryGetValue can race the locked
         // structural write/trim in RecordStoppedPositionAndTrim mid-resize (Dictionary
         // is not thread-safe for concurrent read plus write; the die-before-the-ack
         // JF-425/JF-447/JF-738 class this store's contract names).
