@@ -95,7 +95,7 @@ VERIFICATION (2026-09-27, this worktree):
 
 SAME-CLASS RESIDUALS (documented, out of scope here): PlayRadio's station-to-genre seed keeps exact-match semantics (romanized only; a katakana radio genre would need the same vocabulary-resolution tier if ja radio voice matters); queries containing kanji romanize only their kana runs; the mood slot's LocalizedMoodMap (katakana mood words) is the mood architecture, not the search layer.
 
-FOLDED FROM MARKER REGION (2026-10-10, the JF-853 normalize-then-fold; the unclosed SECTION:NOTES:SIMPLIFY-ROUND block, content verbatim):
+FOLDED FROM RAW TAIL (2026-10-10, the JF-853 normalize-then-fold; content verbatim, previously the unclosed SECTION:NOTES:SIMPLIFY-ROUND block):
 
 /simplify round (2026-09-27, orchestrator, all four angles): applied = shared TestCandidate (deletes the fifth per-file copy that shadowed the JF-573 shape), NormalizeQuery helper collapsing the three verbatim FuzzyMatcher sites, Romanize null-preservation via NotNullIfNotNull (collapses the guarded handler sites), FindSong passes the already-romanized local to TryEntityFallbackAsync (kills the duplicate transliteration), TryAlbumFallbackAsync romanize-before-guard matching its sibling, the stale RAW comment fixed, Romanize made internal matching ContainsKana, and the class-doc NARROWING record. Skips recorded: no loop-merge into KeywordMatcher.Tokenize (it is index-side shared: would transliterate library text); the yoon table stays declarative (auditable over derived); the ~15 per-site comments stay (per-site placement contracts are the repo convention).
 

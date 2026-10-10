@@ -78,7 +78,7 @@ Behavior-preserving consolidation; #4-#8 are satisfied vacuously (no session att
 `Passed!  - Failed:     0, Passed:  4468, Skipped:     0, Total:  4468, Duration: ... - Jellyfin.Plugin.AlexaSkill.Tests.dll` on BOTH net9.0 and net10.0. Build: 0 errors, 0 new warnings (the 2 xUnit1013 warnings on the untouched `SetPlaybackSpeedIntentHandlerTests.Dispose` predate this change). Gates: /simplify (4 parallel reviewers; findings applied: LogCachedHit log-only delegate, lazy encode-only inputs incl. `Func<long>` estimate, `KillEncodeAndClearFlag`, `RetirePendingLaunchScope` split, call-site comment dedup) and /code-review high (findings applied: doc accuracy on the pairing invariant, explicit owner-device param on `RegisterLiveSpeedEncode`, audiobook-exclusion and ceiling-calibration docs; 2 pre-existing items filed, see above).
 
 
-FOLDED FROM MARKER REGION (2026-10-10, the JF-853 normalize-then-fold; the unclosed SECTION:NOTES:ORCHESTRATOR-SIMPLIFY block, content verbatim):
+FOLDED FROM RAW TAIL (2026-10-10, the JF-853 normalize-then-fold; content verbatim, previously the unclosed SECTION:NOTES:ORCHESTRATOR-SIMPLIFY block):
 
 Orchestrator /simplify round (2026-09-27, four fresh reviewers on the final state; the worker's internal round was verified, not trusted):
 - APPLIED: EstimateBytes Func -> EstimateScalePerMille plain number (the estimate is pure arithmetic over data the core holds; the laziness contract was copied from BuildFfmpegArgs where it IS load-bearing, here it protected nothing; also removes the identical base expression both builders carried). The ?d= hint read once into deviceIdHint (was read twice, with a 3-line comment justifying the second read). The two ceiling-calibration comment copies shrunk to pointers at the wait helper's doc.
