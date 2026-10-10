@@ -51,6 +51,11 @@ Done as part of JF-636 instead (not to redo): the 0.75x JF-521 clamp inversion, 
 - [x] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
 
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+FOLDED FROM RAW TAIL (2026-10-10, the JF-853 normalize-then-fold; content verbatim, previously outside the managed sections):
+
 ## Implementation Notes (2026-09-27)
 
 Behavior-preserving consolidation; #4-#8 are satisfied vacuously (no session attributes, HttpClient, interaction model, new handler surface, or locale strings were touched by this refactor; #1-#3/#9/#10 ran for real).
@@ -72,12 +77,15 @@ Behavior-preserving consolidation; #4-#8 are satisfied vacuously (no session att
 **Test summary (identical to baseline before any change):**
 `Passed!  - Failed:     0, Passed:  4468, Skipped:     0, Total:  4468, Duration: ... - Jellyfin.Plugin.AlexaSkill.Tests.dll` on BOTH net9.0 and net10.0. Build: 0 errors, 0 new warnings (the 2 xUnit1013 warnings on the untouched `SetPlaybackSpeedIntentHandlerTests.Dispose` predate this change). Gates: /simplify (4 parallel reviewers; findings applied: LogCachedHit log-only delegate, lazy encode-only inputs incl. `Func<long>` estimate, `KillEncodeAndClearFlag`, `RetirePendingLaunchScope` split, call-site comment dedup) and /code-review high (findings applied: doc accuracy on the pairing invariant, explicit owner-device param on `RegisterLiveSpeedEncode`, audiobook-exclusion and ceiling-calibration docs; 2 pre-existing items filed, see above).
 
-<!-- SECTION:NOTES:ORCHESTRATOR-SIMPLIFY:BEGIN -->
+
+FOLDED FROM RAW TAIL (2026-10-10, the JF-853 normalize-then-fold; content verbatim, previously the unclosed SECTION:NOTES:ORCHESTRATOR-SIMPLIFY block):
+
 Orchestrator /simplify round (2026-09-27, four fresh reviewers on the final state; the worker's internal round was verified, not trusted):
 - APPLIED: EstimateBytes Func -> EstimateScalePerMille plain number (the estimate is pure arithmetic over data the core holds; the laziness contract was copied from BuildFfmpegArgs where it IS load-bearing, here it protected nothing; also removes the identical base expression both builders carried). The ?d= hint read once into deviceIdHint (was read twice, with a 3-line comment justifying the second read). The two ceiling-calibration comment copies shrunk to pointers at the wait helper's doc.
 - SKIPPED with reasons: S1 (the 5 wording members -> 2 with core-owned templates, byte-identical rendered text): preserves structured placeholders (StartTicks/RatePerMille) that carry triage value in structured logging, and the deeper form (VariantHlsKind enum + core-owned wording table) has an explicit trigger, the THIRD variant, recorded here and in JF-650; taking it now inverts the extension point with only two variants. deviceIdForLedger rename: name is stale but live (three reviewers confirmed the local is consumed); zero-behavior churn skipped.
 - DEFERRAL-NOTE CORRECTION (altitude reviewer): item 4's shared shape, at the fourth ER walk, is a lazy IEnumerable<ResolutionValue> enumerator with each caller a FirstOrDefault(predicate) keeping its own semantics; a walk-mode enum parameter would be the WRONG depth.
 - FILED same-turn: JF-650 (serve-strategy-spec consolidation for the triplicated skeleton), JF-651 (the ~9x Guid.TryParse+ValidateStreamToken route preamble extraction, from the altitude review's item-4 verification).
+<!-- SECTION:NOTES:END -->
 
 ## Final Summary
 

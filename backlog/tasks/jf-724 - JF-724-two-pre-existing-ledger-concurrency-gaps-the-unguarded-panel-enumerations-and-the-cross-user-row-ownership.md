@@ -24,6 +24,7 @@ priority: low
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
+GUARD (2026-10-10, JF-853): any backlog CLI/MCP edit on this file FAILS with ENAMETOOLONG AND DELETES it (pre-existing upstream bug; mechanism and issue draft in JF-853). Hand-edit only, never MCP-edit.
 Filed 2026-10-03 same-turn from the JF-722 /code-review round (effort high), carrying
 the two findings that round judged real but PRE-EXISTING (not introduced by JF-722's
 diff, which only widened the exposure windows):

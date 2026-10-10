@@ -44,17 +44,22 @@ RELATION: depends on nothing technically; JF-642 dependency recorded only for sc
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 dotnet build passes with 0 errors
-- [ ] #2 dotnet test passes
-- [ ] #3 No new compiler warnings introduced
-- [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
-- [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
-- [ ] #6 NLU test fixtures updated if interaction model changed
-- [ ] #7 E2E test added for new intent or handler logic
-- [ ] #8 Locale response strings added to all 17 locales
-- [ ] #9 /simplify passed (no blocking cleanups remaining)
-- [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
+- [x] #1 dotnet build passes with 0 errors
+- [x] #2 dotnet test passes
+- [x] #3 No new compiler warnings introduced
+- [x] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
+- [x] #5 HttpClient instances are not shared across calls that modify BaseAddress
+- [x] #6 NLU test fixtures updated if interaction model changed
+- [x] #7 E2E test added for new intent or handler logic
+- [x] #8 Locale response strings added to all 17 locales
+- [x] #9 /simplify passed (no blocking cleanups remaining)
+- [x] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+FOLDED FROM RAW TAIL (2026-10-10, the JF-853 normalize-then-fold; content verbatim, previously outside the managed sections):
 
 ## Implementation Notes (2026-09-27)
 
@@ -89,9 +94,9 @@ VERIFICATION (2026-09-27, this worktree):
 - WarmingGateCoverageTests: no roster change needed (no handlers added).
 
 SAME-CLASS RESIDUALS (documented, out of scope here): PlayRadio's station-to-genre seed keeps exact-match semantics (romanized only; a katakana radio genre would need the same vocabulary-resolution tier if ja radio voice matters); queries containing kanji romanize only their kana runs; the mood slot's LocalizedMoodMap (katakana mood words) is the mood architecture, not the search layer.
-<!-- SECTION:NOTES:END -->
 
-<!-- SECTION:NOTES:SIMPLIFY-ROUND:BEGIN -->
+FOLDED FROM RAW TAIL (2026-10-10, the JF-853 normalize-then-fold; content verbatim, previously the unclosed SECTION:NOTES:SIMPLIFY-ROUND block):
+
 /simplify round (2026-09-27, orchestrator, all four angles): applied = shared TestCandidate (deletes the fifth per-file copy that shadowed the JF-573 shape), NormalizeQuery helper collapsing the three verbatim FuzzyMatcher sites, Romanize null-preservation via NotNullIfNotNull (collapses the guarded handler sites), FindSong passes the already-romanized local to TryEntityFallbackAsync (kills the duplicate transliteration), TryAlbumFallbackAsync romanize-before-guard matching its sibling, the stale RAW comment fixed, Romanize made internal matching ContainsKana, and the class-doc NARROWING record. Skips recorded: no loop-merge into KeywordMatcher.Tokenize (it is index-side shared: would transliterate library text); the yoon table stays declarative (auditable over derived); the ~15 per-site comments stay (per-site placement contracts are the repo convention).
 
 INTERPLAY with JF-642 (recorded on both sides): ER_SUCCESS_MATCH canonical (JF-642's custom GenreType) bypasses the vocabulary tier entirely and exactly; the tier is the ER_NO_MATCH / long-tail / library-specific-tag path. Neither makes the other redundant: the static type covers the common head with zero DB queries, the tier covers the dynamic library vocabulary.
@@ -100,10 +105,11 @@ KNOWN NARROWING (accepted, review-verified): normalization is asymmetric (query 
 
 SAME-CLASS RESIDUALS (extends the worker's list; /simplify reuse angle): un-wired genre slots with identical exact-Genres semantics: PlayRandomIntentHandler, PlayByDecadeIntentHandler, BrowseLibraryIntentHandler. Un-wired raw-kana SearchTerm sites: AddToQueueIntentHandler (song side; artist side covered), PlayNextIntentHandler, AddSongToPlaylistIntentHandler, PlayChannelIntentHandler, TvNextUpService. When the first sibling genre site is wired, lift ResolveGenreTagAsync onto the SearchService collaborator (the GetArtistSongsAsync precedent) instead of copying it. Script coverage: this romanizer is kana-specific by construction; Devanagari (hi-IN) and Arabic (ar-SA) native-script values remain unmatched (the JF-643 task Description flagged them); if a second script lands, extract a normalizer-chain shape rather than a parallel one-off.
 
-## Implementation Notes
+FOLDED FROM RAW TAIL (2026-10-10, the JF-853 normalize-then-fold; content verbatim, previously the second Implementation Notes region's nested SECTION:NOTES pair):
 
-<!-- SECTION:NOTES:BEGIN -->
 2026-09-27 LIVE VERIFICATION OUTCOME (deployed a39eb2a8, minix): genre rows PASSED (ジャズ plays jazz via the vocab tier; Jazz Latin control unchanged; the stolen-artist rescue fires). Artist rows FAILED the bar as written: クイーン -> 'kuin' -> tier-4 phonetic floor 91 TIE between Queen and Keane resolves silently to Keane (single-best auto-play, no disambiguation); ビートルズ -> 'bitoruzu' -> plain-fuzzy false accept of 'Sator' at threshold 60. Root cause and fix direction filed as JF-652 (kana-aware acceptance calibration), which BLOCKS this task's completion. Mechanism itself verified good: romanizer no-op on Latin (byte-identical, pinned), kana bridging works, genre path exact. Status stays In Progress until JF-652 lands and the artist rows re-verify.
+
+DoD RECONCILED (2026-10-10, JF-853 code-review finding): the ten boxes were left unticked when the task flipped Done; ticked per the Final Summary's completion record (gates /simplify and /code-review ran for real; #4/#5/#6/#7/#8 are vacuous for this search-layer change: no session attributes, no HttpClient lifecycle, no model/template/locale surface touched, per the notes above).
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary

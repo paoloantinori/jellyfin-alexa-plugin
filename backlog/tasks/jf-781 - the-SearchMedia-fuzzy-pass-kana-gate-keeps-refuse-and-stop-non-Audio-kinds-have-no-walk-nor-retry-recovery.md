@@ -21,6 +21,7 @@ priority: low
 
 ## Description
 
+<!-- SECTION:DESCRIPTION:BEGIN -->
 Filed 2026-10-05 from the JF-777 /simplify altitude round (out of that task's
 declared surface: the filing names SearchMedia's PRE-CHECK, not the fuzzy-pass
 gate one branch earlier; a conversion there is a behavior change that needs its
@@ -52,10 +53,11 @@ signature suffices; the walked-out case keeps today's fall-through to the
 song-title retry unchanged; dedupe the resulting double refusal log
 (PassesKanaSongGate's own line vs the walk's line) so the triage surface stays
 one line per refusal.
+<!-- SECTION:DESCRIPTION:END -->
 
 ## Definition of Done
-
-- [x] Red proof: a kana-tagged VIDEO (or Series/Playlist) library with the
+<!-- DOD:BEGIN -->
+- [x] #1 Red proof: a kana-tagged VIDEO (or Series/Playlist) library with the
       suffixed sibling listed first in the fuzzy scan, the exact item plays
       (kana query); pre-change tree first, both TFMs
       (DONE 2026-10-05: three red pins on the UNMODIFIED tree, both TFMs
@@ -65,18 +67,19 @@ one line per refusal.
       Playlist pin (the SearchMediaFuzzyOutOfLibrary sibling call, so BOTH
       fuzzy calls' bars are armed and pinned); the fourth pin, the bait-alone
       control, was green pre-fix by design and stays green)
-- [x] The existing JF-654 fuzzy-pass bait pin stays green (the bait alone still
+- [x] #2 The existing JF-654 fuzzy-pass bait pin stays green (the bait alone still
       falls through to the Audio-only retry and the honest miss)
       (DONE 2026-10-05: HandleAsync_KanaQuery_FuzzyPassSoupHit_GatedToHonestNotFound
       green in the 88-test kana/SearchMedia neighborhood battery and in the full
       suite; the new bait-alone control pins the same invariant at the walk)
-- [x] dotnet build 0 errors, dotnet test green, no new warnings
+- [x] #3 dotnet build 0 errors, dotnet test green, no new warnings
       (DONE 2026-10-05: full suite 5307/5307 both TFMs (main baseline ~5303 +
       4); Debug build 0 warnings; Release -warnaserror clean)
+<!-- DOD:END -->
 
 ## Implementation Notes
 
-<!-- NOTES:BEGIN -->
+<!-- SECTION:NOTES:BEGIN -->
 - The JF-777 KatakanaRomanizer class-doc paragraph already scopes the walk
   closure to the song/playlist bars; this site's conversion updates that
   sentence's "song-side" list with the fuzzy-pass gate.
@@ -123,6 +126,8 @@ one line per refusal.
   the mechanism is pinned transitively at every live caller (playlist
   JF-777, the SearchMedia pre-check JF-777, this fuzzy-pass gate JF-781), so
   no uncovered behavior exists and no task was cut for it.
-<!-- NOTES:END -->
+
+FOLDED FROM RAW TAIL (2026-10-10, the JF-853 normalize-then-fold; content verbatim, previously outside the managed sections):
 
 CLOSED 2026-10-05 by the orchestrator: merged into main at 6a2338d5, gate-marker six axes CLEAN, production deploys with the next batch.
+<!-- SECTION:NOTES:END -->
