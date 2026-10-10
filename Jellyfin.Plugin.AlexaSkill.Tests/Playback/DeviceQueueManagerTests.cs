@@ -1476,8 +1476,7 @@ public class DeviceQueueManagerTests : IDisposable
             .ToList();
         foreach (Guid id in residentIds)
         {
-            queue.ItemPositionState[id.ToString("N")] = 1234;
-            queue.ItemPositionKinds[id.ToString("N")] = DeviceQueueManager.PositionKindOther;
+            SeedStoredPosition("dev-kinds", id, 1234, DeviceQueueManager.PositionKindOther);
         }
 
         Guid crossingId = Guid.NewGuid();
@@ -1585,8 +1584,20 @@ public class DeviceQueueManagerTests : IDisposable
         Assert.Equal(0, DeviceQueueManager.ResolveResumeTicks(_manager, null, itemId.ToString(), 0, userDataPlayed: false));
     }
 
-    private void SeedStoredPosition(string deviceId, Guid itemId, long ticks)
-        => _manager.GetOrCreateQueue(deviceId).ItemPositionState[itemId.ToString("N")] = ticks;
+    /// <summary>
+    /// Seeds a stored position directly ("N"-keyed, no freshness stamps; the
+    /// JF-739 direct-seed idiom). JF-812: pass <paramref name="kind"/> to seed
+    /// the kind stamp beside it; the default leaves the entry KINDLESS.
+    /// </summary>
+    private void SeedStoredPosition(string deviceId, Guid itemId, long ticks, string? kind = null)
+    {
+        DeviceQueue queue = _manager.GetOrCreateQueue(deviceId);
+        queue.ItemPositionState[itemId.ToString("N")] = ticks;
+        if (kind != null)
+        {
+            queue.ItemPositionKinds[itemId.ToString("N")] = kind;
+        }
+    }
 
     /// <summary>
     /// The seeded Fisher-Yates oracle shared by the shuffle tests: an independent

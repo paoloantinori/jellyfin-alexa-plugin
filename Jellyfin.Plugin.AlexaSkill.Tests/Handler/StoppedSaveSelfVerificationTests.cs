@@ -24,6 +24,10 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 /// Jellyfin user from the SESSION id. The pre-JF-581 code resolved through the
 /// plugin identity id (user.Id, the LWA token GUID), which is not a Jellyfin user
 /// id, so the cross-client fill silently never ran in production.
+/// JF-812: the same save block's position write stamps the stopped item's KIND
+/// beside the position (DeviceQueue.ItemPositionKinds), so the JF-797 deep-resume
+/// valve on the book head can skip song-shaped entries; those pins live here too
+/// (same block, same fixture).
 /// </summary>
 [Collection("Plugin")]
 public class StoppedSaveSelfVerificationTests : PluginTestBase, IDisposable
@@ -177,5 +181,86 @@ public class StoppedSaveSelfVerificationTests : PluginTestBase, IDisposable
                 It.IsAny<UserDataSaveReason>(),
                 It.IsAny<CancellationToken>()),
             Times.Never);
+    }
+
+    // =====================================================================
+    // Position kind stamps (JF-812)
+    // =====================================================================
+
+    /// <summary>
+    /// JF-812: an AudioBook stopped item (the chapter-leaf or single-file book
+    /// shape) stamps Book beside its stored position, so the deep-resume valve
+    /// releases. The stamp comes from the ONE item resolution the save block
+    /// makes (GetItemById, classified through AudiobookItems.IsAudioBookOrChapter).
+    /// </summary>
+    [Fact]
+    public async Task PlaybackStopped_AudioBookStoppedItem_StampsBookKind()
+    {
+        var id = Guid.NewGuid();
+        _fx.LibraryManager.Setup(lm => lm.GetItemById(id))
+            .Returns(new AudioBook { Name = "The Hobbit", Id = id });
+
+        await CreateHandler().HandleAsync(
+            TestHelpers.CreateAudioPlayerEventRequest("AudioPlayer.PlaybackStopped", id.ToString(), 364_118),
+            TestHelpers.CreateTestContext(DeviceId),
+            _pluginUser,
+            CreateSession(),
+            CancellationToken.None);
+
+        DeviceQueue queue = _queueManager.GetOrCreateQueue(DeviceId);
+        Assert.Equal(DeviceQueueManager.PositionKindBook, queue.ItemPositionKinds[id.ToString("N")]);
+        Assert.True(_queueManager.HasAnyBookShapedStoredPosition(DeviceId));
+    }
+
+    /// <summary>
+    /// JF-812 tightening: a plain resolved song stamps Other, so the valve skips
+    /// it (household song playback no longer permanently releases the book
+    /// head's deep-resume fetch).
+    /// </summary>
+    [Fact]
+    public async Task PlaybackStopped_PlainSongStoppedItem_StampsOtherKind()
+    {
+        var id = Guid.NewGuid();
+        _fx.LibraryManager.Setup(lm => lm.GetItemById(id))
+            .Returns(new Audio { Name = "Morning", Id = id });
+
+        await CreateHandler().HandleAsync(
+            TestHelpers.CreateAudioPlayerEventRequest("AudioPlayer.PlaybackStopped", id.ToString(), 364_118),
+            TestHelpers.CreateTestContext(DeviceId),
+            _pluginUser,
+            CreateSession(),
+            CancellationToken.None);
+
+        DeviceQueue queue = _queueManager.GetOrCreateQueue(DeviceId);
+        Assert.Equal(DeviceQueueManager.PositionKindOther, queue.ItemPositionKinds[id.ToString("N")]);
+        Assert.False(_queueManager.HasAnyBookShapedStoredPosition(DeviceId));
+    }
+
+    /// <summary>
+    /// JF-812 conservative default: an item that does not resolve (no
+    /// LibraryManager row for the stopped id) still writes the position but
+    /// stores it KINDLESS - the entry keeps the valve's conservative release,
+    /// never a song-shaped skip the failed lookup could not justify
+    /// (IsAudioBookOrChapter answers false for null, which alone would have
+    /// stamped it Other).
+    /// </summary>
+    [Fact]
+    public async Task PlaybackStopped_UnresolvableStoppedItem_StoresKindless()
+    {
+        var id = Guid.NewGuid();
+        // No GetItemById setup: the mock answers null (the unresolved-row shape).
+
+        await CreateHandler().HandleAsync(
+            TestHelpers.CreateAudioPlayerEventRequest("AudioPlayer.PlaybackStopped", id.ToString(), 364_118),
+            TestHelpers.CreateTestContext(DeviceId),
+            _pluginUser,
+            CreateSession(),
+            CancellationToken.None);
+
+        DeviceQueue queue = _queueManager.GetOrCreateQueue(DeviceId);
+        string key = id.ToString("N");
+        Assert.Equal(364_118L * TimeSpan.TicksPerMillisecond, queue.ItemPositionState[key]);
+        Assert.DoesNotContain(key, queue.ItemPositionKinds.Keys);
+        Assert.True(_queueManager.HasAnyBookShapedStoredPosition(DeviceId));
     }
 }

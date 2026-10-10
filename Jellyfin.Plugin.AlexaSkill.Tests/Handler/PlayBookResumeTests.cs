@@ -539,15 +539,12 @@ public class PlayBookResumeTests : PluginTestBase, IDisposable
         }
     }
 
-    // JF-797 item 2 (the JF-581 over-fire pin, JF-812 kindless-legacy semantics):
-    // the resume scan also reads the device queue's ItemPositionState, and a
-    // server-side UserData write loss can leave the ONLY progress there. A
-    // KINDLESS positioned entry (the pre-JF-812 store shape: positions persisted
-    // before the kind stamps existed, or a write whose item could not be
-    // resolved) must still force the deep fetch (an in-memory check) even with
-    // clean UserData, or the discriminator would drop exactly that resume.
-    [Fact]
-    public async Task HandleAsync_FreshAsk_DeviceQueueHoldsKindlessPositionedEntry_StillFetchesDeep()
+    // JF-812: the shared FreshAsk valve fixture (the query-count pin shape): the
+    // clean-UserData 26-chapter multi-page book, a device store seeded with the
+    // given kind stamps, the fresh ask run, and every tracks query recorded for
+    // the fetch-count asserts. The continuation entry is removed on every path.
+    private async Task<(SkillResponse Response, List<InternalItemsQuery> Queries, List<BaseItem> Chapters)> RunFreshAskWithPositionStamps(
+        params bool?[] bookShapedStamps)
     {
         var handler = CreateHandler();
         var request = CreateIntentRequest("Measure What Matters");
@@ -559,29 +556,43 @@ public class PlayBookResumeTests : PluginTestBase, IDisposable
         var queries = new List<InternalItemsQuery>();
         (List<BaseItem> chapters, Guid _) = SetupDeepResumeBook(26, positionTicks: 0, queries: queries);
 
-        // A KINDLESS positioned entry from a pre-JF-812 store (the entry's item
-        // is not one of this book's chapters, the crash-recovery leftover shape).
         DeviceQueue queue = _queueManager.GetOrCreateQueue("test-device");
-        _queueManager.RecordStoppedPositionAndTrim("test-device", queue, Guid.NewGuid(), TimeSpan.FromMinutes(1).Ticks, bookShaped: null);
+        foreach (bool? bookShaped in bookShapedStamps)
+        {
+            _queueManager.RecordStoppedPositionAndTrim(
+                "test-device", queue, Guid.NewGuid(), TimeSpan.FromMinutes(1).Ticks, bookShaped);
+        }
 
         try
         {
-            SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
-
-            Assert.NotNull(response);
-            var audioDirective = response.Response.Directives?.OfType<AudioPlayerPlayDirective>().FirstOrDefault();
-            Assert.NotNull(audioDirective);
-
-            // The positioned entry's item is foreign to this book, so the deep scan
-            // finds no resume position and the fresh launch stands: the pin is the
-            // FETCH, not the outcome.
-            Assert.Equal(chapters[0].Id.ToString(), audioDirective.AudioItem.Stream.Token);
-            Assert.Single(queries, q => q.Limit == null);
+            return (await handler.HandleAsync(request, context, user, session, CancellationToken.None), queries, chapters);
         }
         finally
         {
             QueueContinuationStore.Remove(session.UserId, context.System.Device.DeviceID!);
         }
+    }
+
+    // JF-797 item 2 (the JF-581 over-fire pin, JF-812 kindless-legacy semantics):
+    // the resume scan also reads the device queue's ItemPositionState, and a
+    // server-side UserData write loss can leave the ONLY progress there. A
+    // KINDLESS positioned entry (the pre-JF-812 store shape: positions persisted
+    // before the kind stamps existed, or a write whose item could not be
+    // resolved) must still force the deep fetch (an in-memory check) even with
+    // clean UserData, or the discriminator would drop exactly that resume.
+    [Fact]
+    public async Task HandleAsync_FreshAsk_DeviceQueueHoldsKindlessPositionedEntry_StillFetchesDeep()
+    {
+        var (response, queries, chapters) = await RunFreshAskWithPositionStamps(new bool?[] { null });
+
+        var audioDirective = response.Response.Directives?.OfType<AudioPlayerPlayDirective>().FirstOrDefault();
+        Assert.NotNull(audioDirective);
+
+        // The positioned entry's item is foreign to this book, so the deep scan
+        // finds no resume position and the fresh launch stands: the pin is the
+        // FETCH, not the outcome.
+        Assert.Equal(chapters[0].Id.ToString(), audioDirective!.AudioItem.Stream.Token);
+        Assert.Single(queries, q => q.Limit == null);
     }
 
     // JF-812 (the tightening, the query-count pin shape): a device whose position
@@ -594,44 +605,20 @@ public class PlayBookResumeTests : PluginTestBase, IDisposable
     [Fact]
     public async Task HandleAsync_FreshAsk_DeviceQueueHoldsOnlySongShapedEntries_SkipsTheDeepFetch()
     {
-        var handler = CreateHandler();
-        var request = CreateIntentRequest("Measure What Matters");
-        var context = _fx.CreateContext();
-        var user = _fx.CreateUser();
-        var session = CreateSession();
+        var (response, queries, chapters) = await RunFreshAskWithPositionStamps(new bool?[] { false, false });
 
-        _fx.SetupUserMock();
-        var queries = new List<InternalItemsQuery>();
-        (List<BaseItem> chapters, Guid _) = SetupDeepResumeBook(26, positionTicks: 0, queries: queries);
+        var audioDirective = response.Response.Directives?.OfType<AudioPlayerPlayDirective>().FirstOrDefault();
+        Assert.NotNull(audioDirective);
 
-        // Only song-shaped entries: plain songs stopped through the skill, each
-        // stamped Other at write time (the JF-812 write-site stamp).
-        DeviceQueue queue = _queueManager.GetOrCreateQueue("test-device");
-        _queueManager.RecordStoppedPositionAndTrim("test-device", queue, Guid.NewGuid(), TimeSpan.FromMinutes(1).Ticks, bookShaped: false);
-        _queueManager.RecordStoppedPositionAndTrim("test-device", queue, Guid.NewGuid(), TimeSpan.FromMinutes(2).Ticks, bookShaped: false);
+        // The page-1 fresh outcome stands (chapter 1 at 0:00)...
+        Assert.Equal(chapters[0].Id.ToString(), audioDirective!.AudioItem.Stream.Token);
+        Assert.Equal(0, audioDirective.AudioItem.Stream.OffsetInMilliseconds);
 
-        try
-        {
-            SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
-
-            Assert.NotNull(response);
-            var audioDirective = response.Response.Directives?.OfType<AudioPlayerPlayDirective>().FirstOrDefault();
-            Assert.NotNull(audioDirective);
-
-            // The page-1 fresh outcome stands (chapter 1 at 0:00)...
-            Assert.Equal(chapters[0].Id.ToString(), audioDirective.AudioItem.Stream.Token);
-            Assert.Equal(0, audioDirective.AudioItem.Stream.OffsetInMilliseconds);
-
-            // ...and the gate cost is the two bounded probes, NOT the unpaged
-            // full-book fetch (the valve skipped the song-shaped store, so the
-            // probes answered the gate).
-            Assert.DoesNotContain(queries, q => q.Limit == null);
-            Assert.Equal(2, queries.Count(q => q.IsPlayed == true || q.IsResumable == true));
-        }
-        finally
-        {
-            QueueContinuationStore.Remove(session.UserId, context.System.Device.DeviceID!);
-        }
+        // ...and the gate cost is the two bounded probes, NOT the unpaged
+        // full-book fetch (the valve skipped the song-shaped store, so the
+        // probes answered the gate).
+        Assert.DoesNotContain(queries, q => q.Limit == null);
+        Assert.Equal(2, queries.Count(q => q.IsPlayed == true || q.IsResumable == true));
     }
 
     // JF-812 companion release pin: a BOOK-shaped stamped entry (an audiobook
@@ -641,40 +628,16 @@ public class PlayBookResumeTests : PluginTestBase, IDisposable
     [Fact]
     public async Task HandleAsync_FreshAsk_DeviceQueueHoldsBookShapedEntry_StillFetchesDeep()
     {
-        var handler = CreateHandler();
-        var request = CreateIntentRequest("Measure What Matters");
-        var context = _fx.CreateContext();
-        var user = _fx.CreateUser();
-        var session = CreateSession();
+        var (response, queries, chapters) = await RunFreshAskWithPositionStamps(new bool?[] { true, false });
 
-        _fx.SetupUserMock();
-        var queries = new List<InternalItemsQuery>();
-        (List<BaseItem> chapters, Guid _) = SetupDeepResumeBook(26, positionTicks: 0, queries: queries);
+        var audioDirective = response.Response.Directives?.OfType<AudioPlayerPlayDirective>().FirstOrDefault();
+        Assert.NotNull(audioDirective);
 
-        // A book-shaped entry (a chapter of a DIFFERENT book, the cross-book
-        // leftover shape) stamped Book at write time, beside a song-shaped one.
-        DeviceQueue queue = _queueManager.GetOrCreateQueue("test-device");
-        _queueManager.RecordStoppedPositionAndTrim("test-device", queue, Guid.NewGuid(), TimeSpan.FromMinutes(1).Ticks, bookShaped: true);
-        _queueManager.RecordStoppedPositionAndTrim("test-device", queue, Guid.NewGuid(), TimeSpan.FromMinutes(2).Ticks, bookShaped: false);
-
-        try
-        {
-            SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
-
-            Assert.NotNull(response);
-            var audioDirective = response.Response.Directives?.OfType<AudioPlayerPlayDirective>().FirstOrDefault();
-            Assert.NotNull(audioDirective);
-
-            // The book-shaped entry releases the fetch (one unpaged tracks query);
-            // its item is foreign to this book, so the deep scan finds no resume
-            // and the fresh launch stands: the pin is the FETCH, not the outcome.
-            Assert.Equal(chapters[0].Id.ToString(), audioDirective.AudioItem.Stream.Token);
-            Assert.Single(queries, q => q.Limit == null);
-        }
-        finally
-        {
-            QueueContinuationStore.Remove(session.UserId, context.System.Device.DeviceID!);
-        }
+        // The book-shaped entry releases the fetch (one unpaged tracks query);
+        // its item is foreign to this book, so the deep scan finds no resume
+        // and the fresh launch stands: the pin is the FETCH, not the outcome.
+        Assert.Equal(chapters[0].Id.ToString(), audioDirective!.AudioItem.Stream.Token);
+        Assert.Single(queries, q => q.Limit == null);
     }
 
     [Fact]

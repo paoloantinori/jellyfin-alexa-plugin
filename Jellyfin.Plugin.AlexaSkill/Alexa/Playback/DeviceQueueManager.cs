@@ -829,13 +829,12 @@ public sealed class DeviceQueueManager : IDisposable
     {
         lock (_launchScopeLock)
         {
+            // Ordinal string != (null-safe): a missing stamp reads null, and
+            // null != "Other" releases - the kindless semantics live right here.
             return _queues.TryGetValue(deviceId, out DeviceQueue? queue)
                 && queue.ItemPositionState.Any(kvp =>
                     kvp.Value > 0
-                    && !string.Equals(
-                        queue.ItemPositionKinds.TryGetValue(kvp.Key, out string? kind) ? kind : string.Empty,
-                        PositionKindOther,
-                        StringComparison.Ordinal));
+                    && queue.ItemPositionKinds.GetValueOrDefault(kvp.Key) != PositionKindOther);
         }
     }
 
@@ -1221,10 +1220,9 @@ public sealed class DeviceQueueManager : IDisposable
     /// families consult, one freshness rule).
     /// JF-812 (the kind stamp): the write also stamps the stopped item's KIND
     /// beside the position (<see cref="DeviceQueue.ItemPositionKinds"/>), so the
-    /// JF-797 deep-resume valve can skip song-shaped entries; the trim prunes the
-    /// kind map back to the surviving position keys
-    /// (<see cref="PruneKindStampsToSurvivingPositions"/>), keeping the kind map
-    /// a subset of the position map (no orphan growth at cap churn).
+    /// JF-797 deep-resume valve can skip song-shaped entries; the trim hands back
+    /// its evicted keys and each evicted entry's kind stamp dies with it (the
+    /// kinds-subset-of-positions invariant, no orphan growth at cap churn).
     /// </summary>
     /// <param name="deviceId">The device whose queue is persisted (debounced).</param>
     /// <param name="queue">The device queue whose ItemPositionState is written and bounded.</param>
@@ -1252,46 +1250,18 @@ public sealed class DeviceQueueManager : IDisposable
             StampRecentRecord(deviceId, key);
             if (queue.ItemPositionState.Count > cap)
             {
-                TrimPositionMap(queue.ItemPositionState, BuildTrimMembershipSet(deviceId, queue, key), cap);
-                PruneKindStampsToSurvivingPositions(queue);
+                List<string> evictedKeys = TrimPositionMap(
+                    queue.ItemPositionState, BuildTrimMembershipSet(deviceId, queue, key), cap);
+                foreach (string evictedKey in evictedKeys)
+                {
+                    // JF-812: the kind stamp dies with its position entry (the
+                    // kinds-subset-of-positions invariant).
+                    queue.ItemPositionKinds.Remove(evictedKey);
+                }
             }
         }
 
         SchedulePersistInternal(deviceId);
-    }
-
-    /// <summary>
-    /// JF-812: prunes <see cref="DeviceQueue.ItemPositionKinds"/> back to the
-    /// surviving <see cref="DeviceQueue.ItemPositionState"/> keys after a trim, so
-    /// the kind map stays a subset of the position map (the invariant every reader
-    /// of the pair relies on; without this, cap churn on the position map would
-    /// leave the kind map growing without bound in the persisted file). Must run
-    /// under <see cref="_launchScopeLock"/> beside the trim it follows.
-    /// </summary>
-    /// <param name="queue">The device queue whose kind stamps are pruned.</param>
-    private static void PruneKindStampsToSurvivingPositions(DeviceQueue queue)
-    {
-        if (queue.ItemPositionKinds.Count == 0)
-        {
-            return;
-        }
-
-        List<string>? orphanedKeys = null;
-        foreach (KeyValuePair<string, string> stamp in queue.ItemPositionKinds)
-        {
-            if (!queue.ItemPositionState.ContainsKey(stamp.Key))
-            {
-                (orphanedKeys ??= new List<string>()).Add(stamp.Key);
-            }
-        }
-
-        if (orphanedKeys != null)
-        {
-            foreach (string orphanedKey in orphanedKeys)
-            {
-                queue.ItemPositionKinds.Remove(orphanedKey);
-            }
-        }
     }
 
     /// <summary>
@@ -1318,7 +1288,10 @@ public sealed class DeviceQueueManager : IDisposable
     /// device queue (JF-522; previously three inline copies across this class and
     /// PlaybackStoppedEventHandler): over the cap, remove the oldest entries whose
     /// item is not queued; entries for queued items all stay. The map's own
-    /// count gate keeps the set construction off the happy path.
+    /// count gate keeps the set construction off the happy path. Returns the
+    /// evicted keys (empty when no trim ran) so a caller with a MIRRORED map can
+    /// evict the same keys (JF-812: the position store's kind stamps); callers
+    /// without a mirror ignore the return.
     /// </summary>
     /// <param name="map">The bounded dictionary.</param>
     /// <param name="queuedItems">The queued item ids, compared case-insensitively.
@@ -1332,11 +1305,12 @@ public sealed class DeviceQueueManager : IDisposable
     /// "any key format" matches.</param>
     /// <param name="cap">The maximum entry count.</param>
     /// <typeparam name="T">The map's value type (position ticks, launch bases, per-mille rates).</typeparam>
-    internal static void TrimPositionMap<T>(Dictionary<string, T> map, IEnumerable<string> queuedItems, int cap)
+    /// <returns>The keys this call evicted, in eviction order (empty when the map was at or under the cap).</returns>
+    internal static List<string> TrimPositionMap<T>(Dictionary<string, T> map, IEnumerable<string> queuedItems, int cap)
     {
         if (map.Count <= cap)
         {
-            return;
+            return new List<string>();
         }
 
         HashSet<string> queued = queuedItems as HashSet<string> ?? new HashSet<string>(queuedItems, StringComparer.OrdinalIgnoreCase);
@@ -1351,10 +1325,13 @@ public sealed class DeviceQueueManager : IDisposable
 
         // Remove oldest non-queued entries until under cap
         int toRemove = map.Count - cap;
-        foreach (string key in keysToRemove.Take(toRemove))
+        List<string> evictedKeys = keysToRemove.Take(toRemove).ToList();
+        foreach (string key in evictedKeys)
         {
             map.Remove(key);
         }
+
+        return evictedKeys;
     }
 
     /// <summary>
@@ -1365,7 +1342,8 @@ public sealed class DeviceQueueManager : IDisposable
     /// rate maps must be carried together (the pairing invariant
     /// <see cref="WritePendingLaunchScope"/> owns: a rate entry exists iff its
     /// base entry exists), and the kind stamps with their positions (the JF-812
-    /// subset invariant <see cref="PruneKindStampsToSurvivingPositions"/> keeps).
+    /// subset invariant <see cref="RecordStoppedPositionAndTrim"/>'s evicted-key
+    /// mirror keeps).
     /// JF-693 (code-review finding 1): the LAST-PLAYED record survives too. It is a
     /// fact about a LAUNCH, not about the queue's contents, and the PlayBook paths
     /// now call <see cref="SetQueue"/> AFTER the launch builder (the JF-687
