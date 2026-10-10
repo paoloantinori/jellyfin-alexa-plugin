@@ -121,8 +121,14 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
     /// arranges an encode's death, whether through its own finally kills or
     /// through the monitor's stall-budget kill, must return only after
     /// OBSERVING the death (<see cref="FenceTempDirEncodesDeadAsync"/> is the
-    /// shared fence); a kill signal in flight at teardown reads as a leak
-    /// here, by design.
+    /// shared fence). Since JF-772 the backstop itself grants every in-flight
+    /// death one bounded observation window before counting anything (<see
+    /// cref="FenceTempDirEncodesDeadBeforeSweep"/>), so the site fences are
+    /// the fast path (they overlap the dying window inside the test's own
+    /// lifetime) rather than the only thing standing between a correctly
+    /// cleaned test and a false red; note the fences STACK: a site-fenced
+    /// encode gets its 5s there plus the backstop's own 5s, so removing a
+    /// site fence is not free.
     /// When a kill proves a leak, the SAME re-arming kill-and-poll loop drains
     /// the gate (the JF-730 review-round shape: a launch the scenario abandoned
     /// acquires its slot only AFTER a kill frees one, then spawns its own
@@ -136,8 +142,11 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
     /// asserted exactly this; skipping it let that regression pass green and
     /// hang the next gated test on the untimed gate wait). The measured price
     /// of waiting out the transients is accepted: ~18.6s per TFM across this
-    /// class (70ms average per Dispose, max ~600ms), and a stuck slot reds
-    /// within a 2s zero-kill budget instead of the 10s a kill chain may need.
+    /// class (70ms average per Dispose, max ~600ms; JF-772 adds the death
+    /// fence's one extra /proc scan per Dispose, ~24ms measured, and its
+    /// <see cref="DeathFenceWindow"/> wait only when a live temp-dir process
+    /// exists), and a stuck slot reds within a 2s zero-kill budget instead of
+    /// the 10s a kill chain may need.
     /// DESIGN CONSTRAINTS carried from JF-730's measured experience:
     /// 1. The drain target is the CONFIGURED capacity of the CURRENT gate
     ///    instance (the <see
@@ -163,6 +172,10 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
     /// </returns>
     private (bool CleanedUpAfterThisTest, string Detail) KillLeftoverEncodesAndDrainGate()
     {
+        // JF-772: observe the in-flight deaths before the sweep counts them
+        // (FenceTempDirEncodesDeadBeforeSweep owns the why).
+        FenceTempDirEncodesDeadBeforeSweep();
+
         // DISTINCT targets (JF-731 review round): the re-arming loop re-kills
         // a slow-to-die zombie every 100ms pass, so counting kill signals per
         // pass would report one leak as dozens; the sets below count each
@@ -196,7 +209,9 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
             int configuredCap = VideoAudioController.EncodeGateConfiguredCapacityForTest;
             if (gate.CurrentCount == configuredCap)
             {
-                return (killedAnything, $"gate refilled to its configured cap" + KillDetail(killedRegistryKeys, killedPidPaths, killedTempDirPids));
+                return (killedAnything, $"gate refilled to its configured cap"
+                    + KillDetail(killedRegistryKeys, killedPidPaths, killedTempDirPids)
+                    + DeathFenceGrantedNote(killedAnything));
             }
 
             // Nothing killed: a transient needs at most one more 500ms exit-poll
@@ -208,7 +223,8 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
             {
                 return (true, $"gate still below its configured cap ({gate.CurrentCount}/{configuredCap} slots free) after the {drainDeadline.Subtract(drainStart).TotalSeconds:F0}s budget"
                     + (killedAnything ? string.Empty : " with NOTHING killable: a stuck slot (an exit-poll release that never landed?)")
-                    + KillDetail(killedRegistryKeys, killedPidPaths, killedTempDirPids));
+                    + KillDetail(killedRegistryKeys, killedPidPaths, killedTempDirPids)
+                    + DeathFenceGrantedNote(killedAnything));
             }
 
             Thread.Sleep(100);
@@ -224,6 +240,18 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
         => $"; {registryKeys.Count} registry kill target(s) (keys: {DescribeKeys(registryKeys)}), "
             + $"{pidPaths.Count} pid-file kill target(s), "
             + $"{tempDirPids.Count} temp-dir process kill target(s) (the halves may name the same encodes)";
+
+    /// <summary>
+    /// The red-time note that the JF-772 death fence already ran before the
+    /// kill halves, carried ONLY on the killed-something details: the shared
+    /// Dispose assert also fires on the stuck-slot disease (nothing killable,
+    /// nothing the fence could wait on), where the note would misdirect triage
+    /// toward kill-delivery latency instead of the gate's release machinery.
+    /// </summary>
+    private static string DeathFenceGrantedNote(bool killedAnything)
+        => killedAnything
+            ? $" (teardown already granted it a {DeathFenceWindow.TotalSeconds:F0}s death fence first)"
+            : string.Empty;
 
     /// <summary>
     /// The pid-file half of the JF-731 backstop: scan the whole per-test cache
@@ -287,9 +315,10 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
     /// <see cref="KillEncodeByPidFile"/>. Best-effort: pids can vanish between
     /// the directory listing and the cmdline read.
     /// </summary>
-    private List<int> LiveTempDirEncodePids()
+    private List<int> LiveTempDirEncodePids(out bool enumerationCompleted)
     {
         var pids = new List<int>();
+        enumerationCompleted = false;
         try
         {
             foreach (string procDir in Directory.EnumerateDirectories("/proc"))
@@ -312,10 +341,17 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
 
                 pids.Add(pid);
             }
+
+            enumerationCompleted = true;
         }
         catch (IOException)
         {
-            // Best effort: /proc shifts under every scan.
+            // Best effort: /proc shifts under every scan. The caller decides
+            // what an ABORTED enumeration means: the kill halves and the
+            // async site fence treat the partial list as just another pass
+            // (their loops re-scan anyway), while the Dispose grace (JF-772
+            // review round) must NOT read an aborted empty scan as an
+            // all-dead verdict, or its fence silently never runs.
         }
         catch (UnauthorizedAccessException)
         {
@@ -334,7 +370,7 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
     private List<int> SweepProcessesUnderTempDir()
     {
         var killedPids = new List<int>();
-        foreach (int pid in LiveTempDirEncodePids())
+        foreach (int pid in LiveTempDirEncodePids(out _))
         {
             try
             {
@@ -349,6 +385,16 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
     }
 
     /// <summary>
+    /// The ONE death-fence window and poll cadence, shared by the per-site
+    /// fence and the Dispose backstop's grace so the twin claims in their docs
+    /// stay mechanically true (JF-772 review round: independently hardcoded 5s
+    /// and 50ms values rot silently).
+    /// </summary>
+    private static readonly TimeSpan DeathFenceWindow = TimeSpan.FromSeconds(5);
+
+    private const int DeathFencePollMs = 50;
+
+    /// <summary>
     /// The shared death fence for every site that arranges an encode's death
     /// (its own finally kills, or the monitor's stall-budget kill): poll until
     /// every fake this test launched is OBSERVED dead, bounded at 5s (the
@@ -357,11 +403,71 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
     /// waiting for the exit observation, and the Dispose backstop counts a
     /// still-alive process as a leak; without this fence a correctly
     /// self-cleaned test could false-red on kill-delivery timing. A timeout is
-    /// not asserted here: anything surviving its own kill for 5s stays live
-    /// for the Dispose backstop to count and red honestly.
+    /// not asserted here: anything surviving its own kill for 5s falls through
+    /// to the Dispose backstop, which since JF-772 grants it one more bounded
+    /// observation window first (<see
+    /// cref="FenceTempDirEncodesDeadBeforeSweep"/>).
     /// </summary>
     private Task FenceTempDirEncodesDeadAsync()
-        => WaitUntilAsync(() => LiveTempDirEncodePids().Count == 0, TimeSpan.FromSeconds(5), 50);
+        => WaitUntilAsync(() => LiveTempDirEncodePids(out _).Count == 0, DeathFenceWindow, DeathFencePollMs);
+
+    /// <summary>
+    /// JF-772: the Dispose backstop's own death fence, the synchronous twin of
+    /// <see cref="FenceTempDirEncodesDeadAsync"/> (same predicate, same
+    /// <see cref="DeathFenceWindow"/> and <see cref="DeathFencePollMs"/>)
+    /// run before the backstop's first kill pass.
+    /// WHY this lives HERE and not at more test sites: the full-suite flake
+    /// (JF-772) proved the per-site obligation does not converge. The sweep's
+    /// temp-dir probe matches cmdline against THIS instance's temp dir, so a
+    /// red of the temp-dir half is always the red test's OWN encode; the
+    /// encodes that flaked were dying in flight at their own teardown in the
+    /// two shapes no single site-rule covers: a self-exiting fake (the
+    /// recording fakes still owe "write playlist; exit" AFTER the endpoint's
+    /// first-segment wait returns, so the test arranges no kill at all and has
+    /// no kill site to fence) and an arranged kill whose signal had not landed
+    /// (the JF-537.1 cycle's MonitorHls reds, fenced one site at a time).
+    /// Under the parallel-suite load window (the JF-842 thrash class: measured
+    /// swap exhaustion, first-slice delays past a second) the death-to-
+    /// observation latency exceeds the body-return-to-sweep gap, the sweep
+    /// kills the dying process, and the assert reds a correctly-cleaned test.
+    /// This grace absorbs BOTH shapes in ONE place for every encode-driving
+    /// test in the class (the same class-level ownership JF-731 founded);
+    /// survivors of the window are true leaks (a parked sleeper never dies on
+    /// its own) and still fall to the kill halves, the count, and the red.
+    /// The window is the project's established bound for exactly this wait
+    /// class (the per-site fence's 5s, held green since JF-537.1; JF-842's
+    /// 5s warm-up against the same measured thrash): a death slower than it
+    /// is a leak by any budget this suite uses, the honest ceiling of any
+    /// in-project fix short of removing the load window itself.
+    /// Synchronous polling (Thread.Sleep, the drain loop's own idiom) because
+    /// Dispose is synchronous; blocking on the async fence's Task.Delay here
+    /// would burn a thread-pool thread under the exact load class being
+    /// fixed.
+    /// </summary>
+    private void FenceTempDirEncodesDeadBeforeSweep()
+    {
+        DateTime graceDeadline = DateTime.UtcNow.Add(DeathFenceWindow);
+        while (true)
+        {
+            // Only a COMPLETED scan observing zero ends the grace early
+            // (JF-772 review round): an enumeration aborted by the /proc race
+            // returns a partial (possibly empty) list, and trusting that as
+            // the all-dead verdict would skip the fence on exactly the load
+            // window it exists for; an aborted scan just polls again.
+            List<int> live = LiveTempDirEncodePids(out bool scanCompleted);
+            if (scanCompleted && live.Count == 0)
+            {
+                return;
+            }
+
+            if (DateTime.UtcNow >= graceDeadline)
+            {
+                return;
+            }
+
+            Thread.Sleep(DeathFencePollMs);
+        }
+    }
 
     /// <summary>
     /// Reads /proc/&lt;pid&gt;/cmdline as one string (NUL-separated argv), or
