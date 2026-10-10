@@ -291,4 +291,193 @@ public class AudiobookPositionTrackerTests : IDisposable
             freshTracker.Dispose();
         }
     }
+
+    // ---- JF-787: the timeline-identity axis ----
+
+    /// <summary>
+    /// The JF-787 tracker-level proof: a position seeded under one timeline
+    /// identity READS AS ABSENT for the serve on another timeline (the
+    /// resolver answers 0, so the serve drops the slice), while the same
+    /// timeline's serve resolves the mark and the identity-agnostic mint read
+    /// (the raw read) keeps returning the mark. Pre-fix there was no identity
+    /// axis at all: every timeline read the stale offset (the red controller
+    /// pin, StreamHlsAudiobook_ResumeSlice_TrackerPositionFromForeignTimeline_IsDropped,
+    /// proves the served slice end to end on the sabotaged tree).
+    /// </summary>
+    [Fact]
+    public void TimelineIdentity_ForeignTimeline_ReadsAsAbsent_SameTimeline_ResolvesMark()
+    {
+        long timelineA = TimeSpan.FromHours(8).Ticks;
+        long timelineB = TimeSpan.FromHours(6).Ticks;
+
+        // Seeded under timeline A (45 chapters / 8h), mark 300 reads 49:50.
+        _tracker.RecordSegment("book-tl", 300, new TimelineIdentity(45, timelineA));
+
+        // Foreign timeline B's serve: the position reads as ABSENT (0) for it.
+        Assert.Equal(0, _tracker.ResolveServeSliceTicks("book-tl", 30, timelineB, 20 * TicksPerSegment));
+
+        // Same timeline A's serve: resolves to the mark (the minted value was
+        // byte-identical in the common case).
+        Assert.Equal(299 * TicksPerSegment, _tracker.ResolveServeSliceTicks("book-tl", 45, timelineA, 299 * TicksPerSegment));
+
+        // The raw mint read keeps today's behavior: the best-known mark.
+        Assert.Equal(299 * TicksPerSegment, _tracker.GetPositionTicks("book-tl"));
+
+        // A cold key passes the minted slice through (the Yes-side resume
+        // fallback's cold-tracker row).
+        Assert.Equal(20 * TicksPerSegment, _tracker.ResolveServeSliceTicks("never-recorded", 30, timelineB, 20 * TicksPerSegment));
+    }
+
+    /// <summary>
+    /// The JF-787 duration axis: an equal chapter COUNT with a different runtime
+    /// sum is a different timeline (the JF-784 verdict's same discipline).
+    /// </summary>
+    [Fact]
+    public void TimelineIdentity_CountEqualDurationDifferent_IsForeign()
+    {
+        long eightHours = TimeSpan.FromHours(8).Ticks;
+        _tracker.RecordSegment("book-dur", 100, new TimelineIdentity(45, eightHours));
+
+        Assert.Equal(0, _tracker.ResolveServeSliceTicks("book-dur", 45, eightHours / 2, 99 * TicksPerSegment));
+        Assert.Equal(99 * TicksPerSegment, _tracker.ResolveServeSliceTicks("book-dur", 45, eightHours, 99 * TicksPerSegment));
+    }
+
+    /// <summary>
+    /// The JF-787 legacy decision (the JF-812 kindless-legacy precedent): an
+    /// IDENTITY-LESS entry (a pre-upgrade persisted position, or a write from a
+    /// sidecar-less cache) is ambiguous between same-timeline and foreign, and
+    /// the conservative choice keeps TODAY's behavior for it: the minted slice
+    /// passes through under every timeline. Dropping it would regress the
+    /// legit same-timeline resumes that are the common case.
+    /// </summary>
+    [Fact]
+    public void TimelineIdentity_LegacyIdentitylessEntry_PassesMintedSliceThrough()
+    {
+        _tracker.RecordSegment("book-legacy", 50); // no identity stamped
+
+        Assert.Equal(49 * TicksPerSegment, _tracker.GetPositionTicks("book-legacy"));
+        Assert.Equal(49 * TicksPerSegment, _tracker.ResolveServeSliceTicks("book-legacy", 1, 0, 49 * TicksPerSegment));
+        Assert.Equal(49 * TicksPerSegment, _tracker.ResolveServeSliceTicks("book-legacy", 999, 999L, 49 * TicksPerSegment));
+
+        // Identity-carrying writes advance their OWN slots alongside; the legacy
+        // slot is untouched and still passes its slice through.
+        _tracker.RecordSegment("book-legacy", 60, new TimelineIdentity(5, 500));
+        Assert.Equal(59 * TicksPerSegment, _tracker.GetPositionTicks("book-legacy"));
+        Assert.Equal(49 * TicksPerSegment, _tracker.ResolveServeSliceTicks("book-legacy", 999, 999L, 49 * TicksPerSegment));
+        Assert.Equal(59 * TicksPerSegment, _tracker.ResolveServeSliceTicks("book-legacy", 5, 500, 59 * TicksPerSegment));
+    }
+
+    /// <summary>
+    /// The JF-787 review F1/F5 independence pin: slots are keyed by timeline,
+    /// so a foreign-timeline write (a fetch served another scope's running
+    /// encode, below OR above the listener's own mark) can neither destroy,
+    /// overwrite, nor floor the listener's same-timeline slot. The
+    /// pre-redesign single-slot reset rule destroyed the mark on any
+    /// identity-bearing foreign write; the slot design has no cross-slot
+    /// interaction at all.
+    /// </summary>
+    [Fact]
+    public void TimelineIdentity_ForeignWritesNeverTouchTheOwnTimelineSlot()
+    {
+        long a = 1000, b = 2000;
+
+        // The listener's own timeline B holds mark 450; scope A's device fetches
+        // seg_0003 (below) and later seg_0500 (above) during A-encoded serves.
+        _tracker.RecordSegment("book-slots", 450, new TimelineIdentity(30, b));
+        _tracker.RecordSegment("book-slots", 3, new TimelineIdentity(45, a));
+        _tracker.RecordSegment("book-slots", 500, new TimelineIdentity(45, a));
+
+        // B's serve resolves to B's OWN 450 mark (not A's 500, not 0).
+        Assert.Equal(449 * TicksPerSegment, _tracker.ResolveServeSliceTicks("book-slots", 30, b, 449 * TicksPerSegment));
+
+        // The raw mint read answers the best-known mark (A's 500): the announce
+        // may overstate; the serve's resolver corrects it (the documented
+        // bounded residual).
+        Assert.Equal(499 * TicksPerSegment, _tracker.GetPositionTicks("book-slots"));
+    }
+
+    /// <summary>
+    /// The JF-787 suppression pin: the new timeline's own progress accumulates
+    /// from its first fetch even while a HIGHER foreign slot exists (the
+    /// pre-JF-787 single high-water mark floored B's writes below A's mark, so
+    /// B could never accumulate a position of its own).
+    /// </summary>
+    [Fact]
+    public void TimelineIdentity_NewTimelineAccumulates_BelowAHigherForeignSlot()
+    {
+        long a = 1000, b = 2000;
+
+        // A's foreign mark at segment 300; B's own playback reaches only 5.
+        _tracker.RecordSegment("book-new", 300, new TimelineIdentity(45, a));
+        _tracker.RecordSegment("book-new", 5, new TimelineIdentity(30, b));
+
+        // B's serve resolves to B's own (5-1)*10s mark, not the foreign 300;
+        // A's own mark survives in its own slot (every timeline keeps its own
+        // truth) and still serves A's resume.
+        Assert.Equal(4 * TicksPerSegment, _tracker.ResolveServeSliceTicks("book-new", 30, b, 4 * TicksPerSegment));
+        Assert.Equal(299 * TicksPerSegment, _tracker.ResolveServeSliceTicks("book-new", 45, a, 299 * TicksPerSegment));
+
+        // Same timeline: backward fetches stay ignored (monotonic per slot).
+        _tracker.RecordSegment("book-new", 2, new TimelineIdentity(30, b));
+        Assert.Equal(4 * TicksPerSegment, _tracker.ResolveServeSliceTicks("book-new", 30, b, 4 * TicksPerSegment));
+    }
+
+    /// <summary>
+    /// The JF-787 review F3 pin: a segment-0 fetch creates NO slot (its
+    /// conservative read is 0 anyway), so a fresh play-from-0 never arms the
+    /// gate against a legitimately minted non-tracker slice.
+    /// </summary>
+    [Fact]
+    public void TimelineIdentity_SegmentZeroWrite_CreatesNoSlot()
+    {
+        _tracker.RecordSegment("book-zero", 0, new TimelineIdentity(12, 3000));
+
+        Assert.Equal(0, _tracker.GetPositionTicks("book-zero"));
+        Assert.Equal(
+            12 * TicksPerSegment,
+            _tracker.ResolveServeSliceTicks("book-zero", 30, 9999L, 12 * TicksPerSegment));
+    }
+
+    /// <summary>
+    /// The JF-787 persistence round trip: the slots (marks + identities)
+    /// survive Dispose/reload, and the persisted shape loads BOTH ways for
+    /// pre-upgrade files (the bare-number legacy entries load identity-less
+    /// and keep today's honored read; array entries load with their
+    /// identities).
+    /// </summary>
+    [Fact]
+    public void TimelineIdentity_PersistsAcrossReload_LegacyNumbersStillLoad()
+    {
+        _tracker.RecordSegment("book-keep", 100, new TimelineIdentity(12, 3000));
+        _tracker.RecordSegment("book-keep", 40, new TimelineIdentity(15, 5000));
+        _tracker.Dispose();
+
+        string dataFile = Path.Combine(_tempDir, "audiobook-positions.json");
+        Assert.True(File.Exists(dataFile));
+
+        // Graft a pre-upgrade bare-number entry next to the new-shape entry
+        // (splice before the dict's single closing brace).
+        string json = File.ReadAllText(dataFile);
+        File.WriteAllText(dataFile, json[..^1] + ",\"book-old\":42}");
+
+        var reloaded = new AudiobookPositionTracker(_tempDir, LoggerFactory.Create(b => { }).CreateLogger<AudiobookPositionTracker>());
+        try
+        {
+            // New shape: both slots' identities intact, the resolver still
+            // discriminates.
+            Assert.Equal(99 * TicksPerSegment, reloaded.ResolveServeSliceTicks("book-keep", 12, 3000, 99 * TicksPerSegment));
+            Assert.Equal(39 * TicksPerSegment, reloaded.ResolveServeSliceTicks("book-keep", 15, 5000, 39 * TicksPerSegment));
+            Assert.Equal(0, reloaded.ResolveServeSliceTicks("book-keep", 13, 3000, 99 * TicksPerSegment));
+
+            // Legacy number: identity-less, honored under every timeline.
+            Assert.Equal(41 * TicksPerSegment, reloaded.GetPositionTicks("book-old"));
+            Assert.Equal(
+                41 * TicksPerSegment,
+                reloaded.ResolveServeSliceTicks("book-old", 77, 7777L, 41 * TicksPerSegment));
+        }
+        finally
+        {
+            reloaded.Dispose();
+        }
+    }
 }

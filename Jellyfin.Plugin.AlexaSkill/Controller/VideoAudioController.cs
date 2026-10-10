@@ -3943,6 +3943,47 @@ public class VideoAudioController : ControllerBase
         // membership difference fails on count, duration, or both.
         long chapterDurationTicks = chapters.Sum(c => c.RunTimeTicks ?? 0);
 
+        // JF-787: the tracker timeline-identity gate. A tracker position recorded
+        // during a foreign-timeline serve (the accepted during-encode residual)
+        // used to OUTLIVE the encode window: its stale offset sliced whichever
+        // timeline the NEXT request served, landing the resume slice at unrelated
+        // content. The resolver drops the ?start= slice when only OTHER
+        // identity-bearing timelines hold marks (the foreign entry READS AS
+        // ABSENT for this enumeration), and re-slices to this timeline's OWN slot
+        // when it holds one (the same pair the JF-784 verdict compares decides
+        // which slot is live). Identity-less entries (legacy persisted positions,
+        // sidecar-less cache writes) and a cold tracker pass the minted slice
+        // through unchanged. The resume MINT sites stay identity-agnostic on
+        // purpose: they hold no enumeration provably identical to this serve's,
+        // so the authoritative check lives here, on the enumeration that serves;
+        // the accepted cost is an announce that may overstate in the rare
+        // foreign-slot window while the serve lands on the live timeline's own
+        // truth or the beginning. RESIDUAL (accepted, same window as the
+        // during-encode serve itself): while a foreign encode is still RUNNING,
+        // the concurrent-encode rows below serve that encode's listing while
+        // this gate keeps the live enumeration as its ONE comparison basis; a
+        // slice matching the running encode's timeline can be dropped here.
+        if (startTicks is > 0
+            && Plugin.Instance?.AudiobookPositionTracker is { } positionTracker)
+        {
+            long resolvedTicks = positionTracker.ResolveServeSliceTicks(
+                parentId, chapters.Count, chapterDurationTicks, startTicks.Value);
+            if (resolvedTicks <= 0)
+            {
+                _logger.LogInformation(
+                    "VideoAudio concat HLS: dropping resume slice for parent {ParentId} (startTicks={StartTicks}): the tracked position was recorded against a different timeline than this enumeration ({ChapterCount} chapters / {DurationTicks} ticks); serving from the beginning",
+                    parentId, startTicks, chapters.Count, chapterDurationTicks);
+                startTicks = null;
+            }
+            else if (resolvedTicks != startTicks)
+            {
+                _logger.LogInformation(
+                    "VideoAudio concat HLS: re-slicing resume for parent {ParentId} from {StartTicks} to {ResolvedTicks}: this timeline's own tracked position",
+                    parentId, startTicks, resolvedTicks);
+                startTicks = resolvedTicks;
+            }
+        }
+
         // Single chapter — use regular single-item HLS (no concat needed)
         if (chapters.Count == 1)
         {
@@ -4543,10 +4584,39 @@ public class VideoAudioController : ControllerBase
 
         try
         {
+            Alexa.Playback.AudiobookPositionTracker? tracker = Plugin.Instance?.AudiobookPositionTracker;
+            if (tracker == null)
+            {
+                return;
+            }
+
             BaseItem? item = _libraryManager.GetItemById(itemGuid);
             if (item is MediaBrowser.Controller.Entities.Folder)
             {
-                Plugin.Instance?.AudiobookPositionTracker?.RecordSegment(itemId, segmentNumber);
+                // JF-787: stamp the record with the TIMELINE IDENTITY the concat
+                // serving this segment was cut under: the encode-metadata sidecar
+                // beside the segments (written at encode start; the same pair the
+                // JF-784 serve verdict compares). A fetch served a foreign scope's
+                // running encode then lands identity-stamped, and the serve-side
+                // gate reads it as ABSENT instead of poisoning the re-encoded
+                // timeline's resume. Sidecar-less shapes (pre-JF-784 caches) stamp
+                // nothing and keep today's identity-less behavior. FindHlsDirectory
+                // is the ticks-blind segment-question resolver (the one GetSegment's
+                // serve below uses), normally one in-memory dictionary read. The
+                // sidecar read itself is deliberately NOT memoized: a re-encode
+                // rewrites the sidecar inside the SAME generation directory, so a
+                // dir-keyed memo would stamp post-re-encode records with the dead
+                // timeline's identity; the file is the truth source at one ~100-byte
+                // read per 10s segment fetch.
+                Alexa.Playback.TimelineIdentity? identity = null;
+                string? hlsDir = _cache.FindHlsDirectory(itemId);
+                if (hlsDir != null
+                    && TryReadEncodeTimelineMetadata(hlsDir, out int encodedChapterCount, out long encodedDurationTicks))
+                {
+                    identity = new Alexa.Playback.TimelineIdentity(encodedChapterCount, encodedDurationTicks);
+                }
+
+                tracker.RecordSegment(itemId, segmentNumber, identity);
             }
             else if (item != null
                 && AudiobookItems.IsAudioBook(item)
@@ -4562,10 +4632,14 @@ public class VideoAudioController : ControllerBase
                 // in-memory platform-cache lookup per segment fetch (the cost note on
                 // the helper). A leaf whose ParentId resolves to NO Folder (dangling)
                 // records nothing: the key would be write-only dead weight.
-                Plugin.Instance?.AudiobookPositionTracker?.RecordScaledSegment(
+                // JF-787: the single-item timeline the leaf serves is identified by
+                // (1, the leaf's own runtime), the pair the one-chapter redirect's
+                // enumeration compares at the serve gate.
+                tracker.RecordScaledSegment(
                     AudiobookItems.ResolveTrackedBookKey(item, _libraryManager),
                     segmentNumber,
-                    SongHlsSegmentSeconds);
+                    SongHlsSegmentSeconds,
+                    new Alexa.Playback.TimelineIdentity(1, item.RunTimeTicks ?? 0));
             }
         }
         catch (Exception ex)
@@ -7175,12 +7249,14 @@ public class VideoAudioController : ControllerBase
     /// The ONE reader of the encode-metadata sidecar (JF-784 review F6):
     /// parse the timeline identity (chapter count + runtime sum) the concat
     /// encode wrote at start. False when the file is missing, unreadable, or
-    /// lacks either field; the two consumers give that answer opposite
+    /// lacks either field; the three consumers give that answer three
     /// meanings (the monitor's completeness row skips itself, the timeline
-    /// verdict fails closed). Sync because the verdict's content hook is
-    /// synchronous; the monitor's background call tolerates the small
-    /// blocking read. The property names are the write site's anonymous-type
-    /// properties and live ONLY here.
+    /// verdict fails closed, and the JF-787 record gate stamps the position
+    /// write identity-less, which keeps today's honored read). Sync because
+    /// the verdict's content hook is synchronous; the monitor's background
+    /// call and the per-segment record gate tolerate the small blocking read.
+    /// The property names are the write site's anonymous-type properties and
+    /// live ONLY here.
     /// </summary>
     /// <param name="hlsDir">The concat generation directory.</param>
     /// <param name="chapterCount">On success: the encoded chapter count.</param>
