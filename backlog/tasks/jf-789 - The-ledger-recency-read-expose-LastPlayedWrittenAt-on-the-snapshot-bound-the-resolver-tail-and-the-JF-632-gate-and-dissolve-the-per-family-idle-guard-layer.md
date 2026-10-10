@@ -1,12 +1,13 @@
 ---
 id: JF-789
 title: >-
-  The ledger recency read: expose LastPlayedWrittenAt on the snapshot, bound
-  the resolver tail and the JF-632 gate, and dissolve the per-family idle
-  guard layer
-status: To Do
+  The ledger recency read: expose LastPlayedWrittenAt on the snapshot, bound the
+  resolver tail and the JF-632 gate, and dissolve the per-family idle guard
+  layer
+status: In Progress
 assignee: []
 created_date: '2026-10-06'
+updated_date: '2026-10-10 11:11'
 labels:
   - tech-debt
   - playback
@@ -17,6 +18,7 @@ priority: low
 
 ## Description
 
+<!-- SECTION:DESCRIPTION:BEGIN -->
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
@@ -87,3 +89,4 @@ the lockstep matrix (PlaybackLaunchBuilderMediumTests) and the JF-785 pins
 (the tail-refusal pair and the Leg B boundary pair) re-run and deliberately
 updated where the bound supersedes them.
 <!-- SECTION:NOTES:END -->
+<!-- SECTION:DESCRIPTION:END -->
