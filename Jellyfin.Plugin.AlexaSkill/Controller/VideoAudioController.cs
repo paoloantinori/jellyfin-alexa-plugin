@@ -1870,6 +1870,7 @@ public class VideoAudioController : ControllerBase
         return await ServeWindowedPrewriteAsync(
             prewrittenPath,
             itemId,
+            artModifiedTicks,
             startTicks,
             EpisodeWindowedPrewriteServe).ConfigureAwait(false);
     }
@@ -2040,6 +2041,7 @@ public class VideoAudioController : ControllerBase
         return await ServeWindowedPrewriteAsync(
             prewrittenPath,
             itemId,
+            artModifiedTicks,
             startTicks,
             SongWindowedPrewriteServe,
             overrideToken).ConfigureAwait(false);
@@ -3062,6 +3064,15 @@ public class VideoAudioController : ControllerBase
     /// <param name="requestTicks">The caller's art ticks (its own cache directory generation).</param>
     /// <param name="hlsDir">The resolved directory whose prewrite (or, for
     /// albums, whose live stream.m3u8) the guard serves.</param>
+    /// <param name="servedTicks">The PICKED generation's art ticks (the
+    /// generation whose prewrite <paramref name="hlsDir"/> serves; the
+    /// caller's own on the own-ticks arm, the live foreign generation's on
+    /// the foreign arm). The guard's prewrite serve threads THIS value, not
+    /// <paramref name="requestTicks"/>, into the windowed serve's
+    /// registry-keyed honor-band latch (JF-859 code-review F1: threading the
+    /// caller's ticks made the latch miss on every foreign-arm poll, so the
+    /// drop line never reached Information for the whole encode window).
+    /// 0 when the resolution declined.</param>
     /// <returns>True when the guard row may serve from <paramref name="hlsDir"/>;
     /// false declines the guard row (the caller falls through to the normal
     /// cache/lock rows).</returns>
@@ -3070,7 +3081,8 @@ public class VideoAudioController : ControllerBase
         ActiveEncodeGenerations activeGenerations,
         string cacheKey,
         long requestTicks,
-        out string hlsDir)
+        out string hlsDir,
+        out long servedTicks)
     {
         long? pickedTicks = PickLiveGenerationTicks(cache, activeGenerations, cacheKey, requestTicks);
         if (pickedTicks is long ticks && activeGenerations.IsTickLive(ticks))
@@ -3090,10 +3102,12 @@ public class VideoAudioController : ControllerBase
             }
 
             hlsDir = registered ?? cache.GetHlsDirectoryPath(cacheKey, ticks);
+            servedTicks = ticks;
             return true;
         }
 
         hlsDir = string.Empty;
+        servedTicks = 0;
         return false;
     }
 
@@ -3237,7 +3251,7 @@ public class VideoAudioController : ControllerBase
         /// <summary>Serializes the slot mutations with this entry's registry removal.</summary>
         private readonly object _gate = new();
 
-        private readonly Dictionary<long, object> _slotsByTicks = new();
+        private readonly Dictionary<long, EncodeGenerationState> _slotsByTicks = new();
 
         public ActiveEncodeGenerations(ConcurrentDictionary<string, ActiveEncodeGenerations> registry, string cacheKey)
         {
@@ -3254,7 +3268,7 @@ public class VideoAudioController : ControllerBase
         /// against the holder the registry stores now, so a registration can
         /// never be stranded in an unreachable holder.
         /// </summary>
-        internal bool RegisterIfStored(long artModifiedTicks, object generation)
+        internal bool RegisterIfStored(long artModifiedTicks, EncodeGenerationState generation)
         {
             lock (_gate)
             {
@@ -3276,11 +3290,11 @@ public class VideoAudioController : ControllerBase
         /// with the slot mutation so a concurrent registration cannot refill a
         /// holder this clear is about to drop (and vice versa).
         /// </summary>
-        internal void ClearGeneration(long artModifiedTicks, object generation)
+        internal void ClearGeneration(long artModifiedTicks, EncodeGenerationState generation)
         {
             lock (_gate)
             {
-                if (_slotsByTicks.TryGetValue(artModifiedTicks, out object? current) && ReferenceEquals(current, generation))
+                if (_slotsByTicks.TryGetValue(artModifiedTicks, out EncodeGenerationState? current) && ReferenceEquals(current, generation))
                 {
                     _slotsByTicks.Remove(artModifiedTicks);
                 }
@@ -3398,6 +3412,79 @@ public class VideoAudioController : ControllerBase
                 return _slotsByTicks.Count == 0 ? TickLiveness.Registering : TickLiveness.NotLive;
             }
         }
+
+        /// <summary>
+        /// Mark the honor-band drop log's once-per-generation latch (JF-818's
+        /// orchestrator gate-marker; rehomed onto the registry by JF-859, the
+        /// filed follow-up): true when THIS call is the live generation at
+        /// <paramref name="artModifiedTicks"/>'s FIRST mark (the caller logs
+        /// the drop at Information), false when that generation already
+        /// marked (the caller logs Debug), and false when no live generation
+        /// holds the tick: the encode ended between the serve gate's
+        /// liveness read and this mark, the gate that reached here is closed
+        /// for later polls, so the quieter Debug level is safe. The refresh
+        /// noise the latch exists for: the player retains
+        /// <c>?start=</c> across the event playlist's refreshes (the URL is
+        /// unchanged), so a dropped-offset resume re-fires the identical
+        /// 6-placeholder line once per refresh for the whole minutes-long
+        /// encode window, dozens of near-identical Information lines per
+        /// incident in the log the debug-logging policy keeps clean for
+        /// triage. The flag rides the slot's own generation token
+        /// (<see cref="EncodeGenerationState"/>), which closes both flaws of
+        /// the pre-JF-859 path-keyed latch: a re-encode at UNCHANGED art
+        /// ticks mints a fresh token (the JF-665 newest-owns displacement),
+        /// so the fresh encode's first drop logs at Information; and the
+        /// flag is unreachable the moment its generation's slot clears, so
+        /// it evicts with the registry entry instead of accumulating for the
+        /// process lifetime.
+        /// </summary>
+        /// <param name="artModifiedTicks">The serve's art ticks (the prewrite's cache-directory generation).</param>
+        /// <returns>True when this call is the generation's first mark; false when already marked or no live generation holds the tick.</returns>
+        internal bool TryMarkHonorBandDropLogged(long artModifiedTicks)
+        {
+            lock (_gate)
+            {
+                if (_slotsByTicks.TryGetValue(artModifiedTicks, out EncodeGenerationState? state))
+                {
+                    if (state.HonorBandDropLogged)
+                    {
+                        return false;
+                    }
+
+                    state.HonorBandDropLogged = true;
+                    return true;
+                }
+
+                return false;
+            }
+        }
+    }
+
+    /// <summary>
+    /// The mutable per-generation state a registry slot's token carries
+    /// (JF-859): reference identity REMAINS the generation
+    /// (<see cref="ActiveEncodeHandle"/>'s clears compare against this very
+    /// object, and <see cref="ActiveEncodeHandle.MarkActive"/> is still the
+    /// one mint), so generation-scoped latches can ride the token and DERIVE
+    /// from registry state: the honor-band drop log's once-per-generation
+    /// flag (<see cref="HonorBandDropLogged"/>) lives here, where a fresh
+    /// encode resets it (fresh token, even at unchanged art ticks) and the
+    /// registry's own generation eviction drops it with the slot. This is
+    /// also the natural home for the encode-start anchor follow-up recorded
+    /// on <see cref="TryServePrewrittenEpisodePlaylist"/> (the mtime-stat
+    /// replacement): the same state object the registries already thread.
+    /// Keep it state-only: no behavior, no I/O; readers flip their flags
+    /// under the holder's gate.
+    /// </summary>
+    private sealed class EncodeGenerationState
+    {
+        /// <summary>
+        /// Whether this generation already emitted the honor-band drop log at
+        /// Information (the once-per-generation latch;
+        /// <see cref="ActiveEncodeGenerations.TryMarkHonorBandDropLogged"/>
+        /// owns the flip and the rationale).
+        /// </summary>
+        public bool HonorBandDropLogged;
     }
 
     /// <summary>
@@ -3426,10 +3513,10 @@ public class VideoAudioController : ControllerBase
         private readonly long _artModifiedTicks;
 
         /// <summary>
-        /// The generation token minted together with this handle; reference
+        /// The generation state minted together with this handle; reference
         /// identity IS the generation, and every clear compares against it.
         /// </summary>
-        private readonly object _generation;
+        private readonly EncodeGenerationState _generation;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="ActiveEncodeHandle"/> struct.
@@ -3440,7 +3527,7 @@ public class VideoAudioController : ControllerBase
         /// the enclosing controller cannot reach a private ctor's members but CAN
         /// call the public static factory.
         /// </summary>
-        private ActiveEncodeHandle(ActiveEncodeGenerations generations, long artModifiedTicks, object generation)
+        private ActiveEncodeHandle(ActiveEncodeGenerations generations, long artModifiedTicks, EncodeGenerationState generation)
         {
             _generations = generations;
             _artModifiedTicks = artModifiedTicks;
@@ -3461,7 +3548,8 @@ public class VideoAudioController : ControllerBase
         /// </summary>
         public static ActiveEncodeHandle MarkActive(ConcurrentDictionary<string, ActiveEncodeGenerations> activeEncodes, string cacheKey, long artModifiedTicks)
         {
-            var generation = new object();
+            // The ONE mint; the state carrier's identity contract lives on <see cref="EncodeGenerationState"/>.
+            var generation = new EncodeGenerationState();
             while (true)
             {
                 ActiveEncodeGenerations holder = activeEncodes.GetOrAdd(cacheKey, key => new ActiveEncodeGenerations(activeEncodes, key));
@@ -3936,14 +4024,18 @@ public class VideoAudioController : ControllerBase
         // UNTRANSLATED rows of the vanish family (coverage boundary on
         // ResolveServeContentAsync).
         if (_activeAudiobookEncodes.TryGetValue(parentId, out ActiveEncodeGenerations? activeGenerations)
-            && TryResolveLiveEncodeHlsDirectory(_cache, activeGenerations, parentId, artModifiedTicks, out string? guardedHlsDir))
+            && TryResolveLiveEncodeHlsDirectory(_cache, activeGenerations, parentId, artModifiedTicks, out string? guardedHlsDir, out long guardedTicks))
         {
             _logger.LogDebug("VideoAudio audiobook HLS: encode already in progress for {ParentId}, serving pre-written playlist", parentId);
 #pragma warning disable CA3003
             string prewrittenPath = Path.Combine(guardedHlsDir, PrewrittenPlaylistFileName);
             if (System.IO.File.Exists(prewrittenPath))
             {
-                return await ServeWindowedAudiobookPrewriteAsync(prewrittenPath, parentId, startTicks).ConfigureAwait(false);
+                // guardedTicks, NOT artModifiedTicks: on the foreign-ticks arm
+                // the served prewrite belongs to the PICKED live generation,
+                // and the honor-band latch keys that generation's slot
+                // (JF-859 code-review F1).
+                return await ServeWindowedAudiobookPrewriteAsync(prewrittenPath, parentId, guardedTicks, startTicks).ConfigureAwait(false);
             }
 
             // JF-625: album encodes write NO pre-written listing (the live-edge rule
@@ -4320,7 +4412,7 @@ public class VideoAudioController : ControllerBase
             // event playlist and plays available segments without failing on
             // missing ones. The prewrite is plugin-written synchronously above,
             // so no flush-lag boundary applies (the confirmed default).
-            return await ServeWindowedAudiobookPrewriteAsync(prewrittenPath, parentId, startTicks).ConfigureAwait(false);
+            return await ServeWindowedAudiobookPrewriteAsync(prewrittenPath, parentId, artModifiedTicks, startTicks).ConfigureAwait(false);
 #pragma warning restore CA3003
         }
     }
@@ -4785,6 +4877,15 @@ public class VideoAudioController : ControllerBase
     /// audiobook family does not); the core renders it with
     /// ({LogLabel}, {EntityNoun}, {EntityId}) between the honor-band drop and
     /// the windowed line.</param>
+    /// <param name="EncodeRegistry">The family's own active-encode registry
+    /// (episode <see cref="_activeEpisodeEncodes"/>, song
+    /// <see cref="_activeVideoAudioEncodes"/>, audiobook
+    /// <see cref="_activeAudiobookEncodes"/>): the core reads the honor-band
+    /// drop latch from this registry's generation state (JF-859), so a serve
+    /// caller cannot mismatch a family with another family's registry. The
+    /// PRODUCTION side of the pairing; the test seams name theirs through the
+    /// one selector <see cref="EncodeRegistryFor"/>, the second declaration
+    /// the two docs agree on.</param>
     private readonly record struct WindowedPrewriteServeFamily(
         string LogLabel,
         string EntityNoun,
@@ -4793,7 +4894,8 @@ public class VideoAudioController : ControllerBase
         int LeadSegments,
         string DropLogAttribution,
         string WindowedLogRationale,
-        string? ServingLogTemplate);
+        string? ServingLogTemplate,
+        ConcurrentDictionary<string, ActiveEncodeGenerations> EncodeRegistry);
 
     private static readonly WindowedPrewriteServeFamily EpisodeWindowedPrewriteServe = new(
         "VideoAudio episode HLS",
@@ -4803,7 +4905,8 @@ public class VideoAudioController : ControllerBase
         EpisodePrewriteWindowLeadSegments,
         "(JF-778, the JF-686 still-growing rule)",
         "the live-edge default start would land on the un-encoded tail, JF-778",
-        "{LogLabel}: serving pre-written full listing for {EntityNoun} {EntityId} (encode in progress, JF-531; windowed to the encoded region while the encode runs, JF-778)");
+        "{LogLabel}: serving pre-written full listing for {EntityNoun} {EntityId} (encode in progress, JF-531; windowed to the encoded region while the encode runs, JF-778)",
+        _activeEpisodeEncodes);
 
     private static readonly WindowedPrewriteServeFamily SongWindowedPrewriteServe = new(
         "VideoAudio HLS",
@@ -4813,7 +4916,8 @@ public class VideoAudioController : ControllerBase
         SongPrewriteWindowLeadSegments,
         "(JF-819, the JF-778/JF-686 still-growing rule)",
         "a full listing during the encode puts the player's default start on the un-encoded tail, JF-819",
-        "{LogLabel}: serving pre-written full listing for {EntityNoun} {EntityId} (encode in progress, JF-536; windowed to the encoded region while the encode runs, JF-819)");
+        "{LogLabel}: serving pre-written full listing for {EntityNoun} {EntityId} (encode in progress, JF-536; windowed to the encoded region while the encode runs, JF-819)",
+        _activeVideoAudioEncodes);
 
     private static readonly WindowedPrewriteServeFamily AudiobookWindowedPrewriteServe = new(
         "VideoAudio audiobook HLS",
@@ -4823,28 +4927,8 @@ public class VideoAudioController : ControllerBase
         AudiobookPrewriteWindowLeadSegments,
         "(JF-817, the JF-778/JF-686 still-growing rule; gate-marker tail F3)",
         "a full listing during the encode puts the player's default start on the un-encoded tail, JF-817",
-        ServingLogTemplate: null);
-
-    /// <summary>
-    /// The honor-band drop log's once-per-generation latch (JF-818, the
-    /// orchestrator gate-marker): the player retains <c>?start=</c> across the
-    /// event playlist's refreshes (the URL is unchanged), so a dropped-offset
-    /// book resume re-logs the identical 6-placeholder line once per refresh
-    /// for the whole minutes-long encode window, dozens of near-identical
-    /// Information lines per incident in the log the debug-logging policy
-    /// keeps clean for triage. The FIRST occurrence per prewrite generation
-    /// stays Information (the line triage actually needs); every later
-    /// occurrence of the same message drops to Debug. Keyed by the prewrite's
-    /// own path, which is generation-unique for a given item's art state (the
-    /// cache directory name embeds the art-ticks generation). KNOWN LIMIT
-    /// (recorded honestly; the registry-threaded reset is the filed
-    /// follow-up): a re-encode at UNCHANGED art ticks recreates the same
-    /// path, so that genuinely fresh encode's first out-of-band drop logs at
-    /// Debug. Entries live for the process lifetime: one short string per
-    /// dropped-generation path, never evicted (the encode registries DO
-    /// evict; this latch deliberately does not yet).
-    /// </summary>
-    private static readonly ConcurrentDictionary<string, byte> HonorBandDropLoggedPrewrites = new();
+        ServingLogTemplate: null,
+        _activeAudiobookEncodes);
 
     /// <summary>
     /// The ONE windowed-prewrite serve orchestration (JF-818: hoisted at the
@@ -4902,14 +4986,16 @@ public class VideoAudioController : ControllerBase
     /// failure at result execution - strictly more contract-consistent.
     /// </summary>
     /// <param name="prewrittenPath">The pre-write playlist path (the caller existence-gated it).</param>
-    /// <param name="entityId">The served entity's ID string (episode/song itemId or audiobook parentId; logging).</param>
+    /// <param name="entityId">The served entity's ID string (episode/song itemId or audiobook parentId; ALSO the family registry's cache key, the honor-band latch's lookup).</param>
+    /// <param name="artModifiedTicks">The SERVED prewrite's generation ticks (its cache-directory generation; the honor-band latch's slot in the family registry). The four own-generation call sites pass the caller's own ticks; the audiobook guard row passes the PICKED live generation's, which on the foreign-ticks arm is not the caller's (JF-859 code-review F1).</param>
     /// <param name="startTicks">Resume position in .NET ticks (0 serves unsliced).</param>
-    /// <param name="family">The family's calibration and log identity.</param>
+    /// <param name="family">The family's calibration and log identity (its own encode registry included).</param>
     /// <param name="overrideToken">Chapter-scoped token overriding the request's own (the song family's single-chapter audiobook redirect); null uses the request's own.</param>
     /// <returns>The windowed (and, inside the honor band, resume-sliced) playlist response.</returns>
     private async Task<ActionResult> ServeWindowedPrewriteAsync(
         string prewrittenPath,
         string entityId,
+        long artModifiedTicks,
         long startTicks,
         WindowedPrewriteServeFamily family,
         string? overrideToken = null)
@@ -4947,14 +5033,18 @@ public class VideoAudioController : ControllerBase
             // <see cref="ResumeInsidePrewriteHonorBand"/>).
             if (!ResumeInsidePrewriteHonorBand(startSegment, window.WindowSegments, family.LeadSegments))
             {
-                // ONCE PER GENERATION at Information, then Debug (the latch's
-                // doc owns the refresh-noise rationale). The outcome sentence
-                // is the regime-honest wording (JF-818 item a): the live-edge
-                // join lands roughly at the encode-elapsed position only once
-                // the window has grown; while it sits at the floor it serves
-                // from the beginning.
+                // ONCE PER GENERATION at Information, then Debug: the latch
+                // reads and flips the FAMILY REGISTRY's live generation state
+                // (JF-859, rehoming JF-818's path-keyed latch;
+                // <see cref="ActiveEncodeGenerations.TryMarkHonorBandDropLogged"/>
+                // owns the refresh-noise rationale and the not-live fall to
+                // Debug). The outcome sentence is the regime-honest wording
+                // (JF-818 item a): the live-edge join lands roughly at the
+                // encode-elapsed position only once the window has grown;
+                // while it sits at the floor it serves from the beginning.
                 const string DropLogTemplate = "{LogLabel}: cold-cache resume for {EntityNoun} {EntityId} (startTicks={StartTicks}, start segment {StartSegment}) is outside the encode window's honor band ({WindowSegments} of {TotalSegments} entries, edge within {Lead} of the position required); dropping the resume offset - the served windowed no-ENDLIST listing joins at ITS live edge: roughly the encode-elapsed position once the window has grown, and the beginning while it sits at the floor {DropAttribution}";
-                LogLevel dropLevel = HonorBandDropLoggedPrewrites.TryAdd(prewrittenPath, default)
+                LogLevel dropLevel = family.EncodeRegistry.TryGetValue(entityId, out ActiveEncodeGenerations? dropLatchGenerations)
+                    && dropLatchGenerations.TryMarkHonorBandDropLogged(artModifiedTicks)
                     ? LogLevel.Information
                     : LogLevel.Debug;
                 _logger.Log(
@@ -5653,11 +5743,12 @@ public class VideoAudioController : ControllerBase
     /// the threaded in-band start segment are the core's.
     /// </summary>
     /// <param name="prewrittenPath">The prewrite playlist path (playlist-full.m3u8; both callers existence-gate it).</param>
-    /// <param name="parentId">The audiobook parent GUID string (logging).</param>
+    /// <param name="parentId">The audiobook parent GUID string (logging; also the audiobook registry's cache key).</param>
+    /// <param name="artModifiedTicks">The SERVED prewrite's generation ticks (the guard row's PICKED live generation's on the foreign-ticks arm, JF-859 code-review F1; the first-fetch row's own just-marked generation's).</param>
     /// <param name="startTicks">Resume position in .NET ticks (null/0 serves unsliced).</param>
     /// <returns>The windowed (and, inside the honor band, resume-sliced) playlist response.</returns>
-    private Task<ActionResult> ServeWindowedAudiobookPrewriteAsync(string prewrittenPath, string parentId, long? startTicks)
-        => ServeWindowedPrewriteAsync(prewrittenPath, parentId, startTicks ?? 0, AudiobookWindowedPrewriteServe);
+    private Task<ActionResult> ServeWindowedAudiobookPrewriteAsync(string prewrittenPath, string parentId, long artModifiedTicks, long? startTicks)
+        => ServeWindowedPrewriteAsync(prewrittenPath, parentId, artModifiedTicks, startTicks ?? 0, AudiobookWindowedPrewriteServe);
 
     /// <summary>
     /// Read a base audiobook playlist, inject a resume hint for the given start position,

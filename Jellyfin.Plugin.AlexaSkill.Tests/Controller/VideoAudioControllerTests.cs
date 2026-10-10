@@ -6563,10 +6563,12 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
 
     /// <summary>
     /// Shared arrange of a LIVE episode encode over a planted cache directory
-    /// (the JF-778 device shape, parameterized): ffmpeg's own two-entry live
-    /// partial on disk, segment files seg_0000..seg_00{headSegmentCount-1} (the
-    /// encoded head), and the full prewrite for the given runtime. The JF-778
-    /// incident itself is head=7 at 1420.25s runtime (Sailor Moon R E054,
+    /// (the JF-778 device shape, parameterized): ffmpeg's own live partial
+    /// on disk listing EVERY planted segment (the JF-819 shape adopted at
+    /// JF-859; the rationale lives on <see cref="PlantedLivePlaylistShape"/>),
+    /// segment files seg_0000..seg_00{headSegmentCount-1} (the encoded head),
+    /// and the full prewrite for the given runtime. The JF-778 incident
+    /// itself is head=7 at 1420.25s runtime (Sailor Moon R E054,
     /// 2026-10-05 12:27: the "highest existing segment 7" log line and the
     /// 356 x 3.989469s listing). Returns the item ID (for the controller and
     /// the active-encode seam), the HLS dir (to advance the head mid-test), and
@@ -6590,7 +6592,7 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
             artTicks: 0,
             headSegmentCount,
             digitWidth: 4,
-            PlantedLivePlaylistShape.FixedTwoEntries,
+            PlantedLivePlaylistShape.AllPlantedSegments,
             path => VideoAudioController.WriteEpisodePlaylist(
                 path,
                 $"/alexaskill/api/video-audio/{itemIdStr}/segments/",
@@ -6602,17 +6604,16 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
     /// <summary>
     /// The shape of ffmpeg's live partial (stream.m3u8) a planted live-encode
     /// fixture carries: NONE (the audiobook rows take the concurrent-encode
-    /// guard with no live playlist on disk), FIXED-TWO-ENTRIES (the episode
-    /// planter's historical shape, kept verbatim), or EVERY-PLANTED-SEGMENT
-    /// (the single-item planter's JF-819 shape: a fixture whose live playlist
-    /// disagrees with its segment files cannot satisfy the JF-503 hold's
-    /// listing check should a future pin built on this planter touch the hold
-    /// path; code-review F2).
+    /// guard with no live playlist on disk) or EVERY-PLANTED-SEGMENT (the
+    /// JF-819 single-item shape, adopted by the episode planter at JF-859:
+    /// a fixture whose live playlist disagrees with its segment files cannot
+    /// satisfy the JF-503 hold's listing check should a future pin built on
+    /// this planter touch the hold path; code-review F2). The episode
+    /// planter's former FIXED-TWO-ENTRIES case is deleted (JF-859).
     /// </summary>
     private enum PlantedLivePlaylistShape
     {
         None,
-        FixedTwoEntries,
         AllPlantedSegments,
     }
 
@@ -6644,13 +6645,7 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
             File.WriteAllBytes(Path.Combine(hlsDir, $"seg_{i.ToString(digits, CultureInfo.InvariantCulture)}.ts"), new byte[16]);
         }
 
-        if (livePlaylist == PlantedLivePlaylistShape.FixedTwoEntries)
-        {
-            File.WriteAllText(
-                Path.Combine(hlsDir, "stream.m3u8"),
-                "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:4\n#EXT-X-MEDIA-SEQUENCE:0\n#EXTINF:4.000,\nseg_0000.ts\n#EXTINF:4.000,\nseg_0001.ts\n");
-        }
-        else if (livePlaylist == PlantedLivePlaylistShape.AllPlantedSegments)
+        if (livePlaylist == PlantedLivePlaylistShape.AllPlantedSegments)
         {
             var livePartial = new System.Text.StringBuilder(
                 "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:4\n#EXT-X-MEDIA-SEQUENCE:0\n");
@@ -7096,6 +7091,72 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
         }
     }
 
+    /// <summary>
+    /// JF-859 latch-reset pin: the honor-band drop latch derives from the
+    /// ENCODE REGISTRY's live generation state, not the prewrite path, so a
+    /// FRESH encode at UNCHANGED art ticks (the re-encode that recreates the
+    /// same prewrite path and cache directory) resets it: that genuinely new
+    /// generation's first out-of-band drop logs at Information again, the
+    /// line triage needs per incident. RED on the pre-JF-859 tree: the old
+    /// path-keyed latch (HonorBandDropLoggedPrewrites) still held the
+    /// unchanged path, so every later generation's first drop fell to Debug.
+    /// BOTH reset shapes of a same-ticks re-encode, in one fixture (each is
+    /// reachable through the seam and they fail differently): (a) HOLDER
+    /// EVICTION, the clear-then-remark between serves one and two (the
+    /// registry entry TryRemoves and a fresh holder re-marks the same
+    /// ticks-0 slot; proves the flag went with the generation, not into a
+    /// process-lifetime side map); (b) SAME-HOLDER DISPLACEMENT, the re-mark
+    /// WITHOUT a clear before serve three (RegisterIfStored's JF-665
+    /// newest-owns slot overwrite in the EXISTING holder: the production
+    /// two-device re-encode race; a latch keyed to holder creation instead
+    /// of the generation token would pass shape (a) and fail here).
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsEpisode_WindowedPrewrite_DropLogLatchResetsWithFreshEncodeGeneration()
+    {
+        (string itemIdStr, _, string prewritePath) = PlantLiveEncodeFixture("JF-859 Mid Window S01E01", headSegmentCount: 8, runtime: TimeSpan.FromSeconds(1420.25));
+
+        File.SetLastWriteTimeUtc(prewritePath, DateTime.UtcNow.AddSeconds(-40));
+
+        var logRecords = new List<(LogLevel Level, string Message)>();
+        using var loggerFactory = TestCaptureLogger.CreateCaptureLoggerFactory(logRecords);
+
+        VideoAudioController.SetEncodeActiveForTest(itemIdStr, active: true);
+        try
+        {
+            var controller = CreateController(itemIdStr, loggerFactory, ffmpegPath: WriteRecordingFakeFfmpeg("fake-ffmpeg-jf859-drop-latch-reset"));
+
+            ActionResult first = await controller.StreamHlsEpisode(itemIdStr, TimeSpan.FromSeconds(8).Ticks);
+            Assert.IsType<ContentResult>(first);
+
+            // Shape (a), holder eviction: the generation is cleared (its
+            // registry entry evicts) and a fresh one takes the SAME ticks-0
+            // slot over the SAME planted prewrite path.
+            VideoAudioController.SetEncodeActiveForTest(itemIdStr, active: false);
+            VideoAudioController.SetEncodeActiveForTest(itemIdStr, active: true);
+
+            ActionResult second = await controller.StreamHlsEpisode(itemIdStr, TimeSpan.FromSeconds(8).Ticks);
+            Assert.IsType<ContentResult>(second);
+
+            // Shape (b), same-holder displacement: a re-mark WITHOUT the
+            // clear overwrites the ticks-0 slot with a fresh generation token
+            // inside the SAME holder (the seam's production idiom, JF-665).
+            VideoAudioController.SetEncodeActiveForTest(itemIdStr, active: true);
+
+            ActionResult third = await controller.StreamHlsEpisode(itemIdStr, TimeSpan.FromSeconds(8).Ticks);
+            Assert.IsType<ContentResult>(third);
+
+            var snapshot = TestCaptureLogger.Snapshot(logRecords);
+            Assert.Equal(
+                3,
+                snapshot.Count(r => r.Level == LogLevel.Information && r.Message.Contains("outside the encode window's honor band", StringComparison.Ordinal)));
+        }
+        finally
+        {
+            VideoAudioController.SetEncodeActiveForTest(itemIdStr, active: false);
+        }
+    }
+
     // ========== JF-817: windowed audiobook prewrite serve (live-encode resume) ==========
 
     /// <summary>
@@ -7402,6 +7463,55 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
             Assert.DoesNotContain("seg_0059", content.Content, StringComparison.Ordinal);
             Assert.DoesNotContain("#EXT-X-ENDLIST", content.Content, StringComparison.Ordinal);
             Assert.True(!File.Exists(Path.Combine(staleHlsDir, "stream.m3u8")), "stale dir must not gain a live listing");
+        }
+        finally
+        {
+            VideoAudioController.SetEncodeActiveForTest(parentIdStr, active: false, audiobook: true, artModifiedTicks: liveTicks);
+        }
+    }
+
+    /// <summary>
+    /// JF-859 code-review F1 pin: the audiobook guard row's foreign-ticks arm
+    /// serves the PICKED live generation's prewrite, so the honor-band drop
+    /// latch must key the PICKED generation's ticks, not the caller's own
+    /// (whose art-ticks dir is dead). RED on the caller-ticks threading this
+    /// pins against: the latch lookup missed the live generation's slot on
+    /// every foreign-arm poll, so the drop line never reached Information
+    /// for the whole encode window (the pre-JF-859 path-keyed latch DID log
+    /// Information here; the miss was introduced and fixed within JF-859).
+    /// Shape: the JF-820 foreign-ticks fixture with an OUT-of-band resume
+    /// (8s resolves to segment 1; the live window is head-capped at 23
+    /// entries, 23 - 1 > the 3-entry lead), so the serve drops the offset
+    /// and the latch decides the line's level.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsAudiobook_ForeignTicksRequestDropLog_KeysPickedGenerationForLatch()
+    {
+        (string parentIdStr, _, string livePrewritePath, _, long liveTicks) =
+            PlantForeignGenerationAudiobookFixture(
+                "JF-859 Foreign Latch Book", liveHeadSegmentCount: 23, totalRuntime: TimeSpan.FromSeconds(600));
+
+        File.SetLastWriteTimeUtc(livePrewritePath, DateTime.UtcNow.AddSeconds(-200));
+
+        var logRecords = new List<(LogLevel Level, string Message)>();
+        using var loggerFactory = TestCaptureLogger.CreateCaptureLoggerFactory(logRecords);
+
+        VideoAudioController.SetEncodeActiveForTest(parentIdStr, active: true, audiobook: true, artModifiedTicks: liveTicks);
+        try
+        {
+            var controller = CreateController(parentIdStr, loggerFactory, ffmpegPath: WriteRecordingFakeFfmpeg("fake-ffmpeg-jf859-foreign-latch"));
+
+            ActionResult result = await controller.StreamHlsAudiobook(parentIdStr, TimeSpan.FromSeconds(8).Ticks);
+
+            var content = Assert.IsType<ContentResult>(result);
+            // The windowed serve shape: head-capped at 23 entries, offset dropped.
+            Assert.Equal(23, VideoAudioController.CountSegmentsInPlaylist(content.Content));
+            Assert.DoesNotContain("#EXT-X-ENDLIST", content.Content, StringComparison.Ordinal);
+
+            var snapshot = TestCaptureLogger.Snapshot(logRecords);
+            Assert.Equal(
+                1,
+                snapshot.Count(r => r.Level == LogLevel.Information && r.Message.Contains("outside the encode window's honor band", StringComparison.Ordinal)));
         }
         finally
         {
