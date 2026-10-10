@@ -20,6 +20,9 @@ priority: medium
 ---
 
 ## Description
+<!-- SECTION:DESCRIPTION:BEGIN -->
+GUARD (2026-10-10, JF-853): any backlog CLI/MCP edit on this file FAILS with ENAMETOOLONG (regenerated slug exceeds 255 bytes) AND DELETES the file outright (pre-existing upstream Backlog.md bug, CLI v1.44.0). Hand-edit only, never MCP-edit.
+<!-- SECTION:DESCRIPTION:END -->
 
 ## Implementation Notes
 
