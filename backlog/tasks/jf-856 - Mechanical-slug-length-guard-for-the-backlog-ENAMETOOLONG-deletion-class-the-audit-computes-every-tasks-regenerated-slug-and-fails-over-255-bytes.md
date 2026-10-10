@@ -3,10 +3,10 @@ id: JF-856
 title: >-
   Mechanical slug-length guard for the backlog ENAMETOOLONG-deletion class: the
   audit computes every task's regenerated slug and fails over 255 bytes
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-10-10 07:57'
-updated_date: '2026-10-10 08:03'
+updated_date: '2026-10-10 11:10'
 labels:
   - tooling
   - backlog-hygiene
