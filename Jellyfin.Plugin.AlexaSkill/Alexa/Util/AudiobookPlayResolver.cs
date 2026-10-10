@@ -385,26 +385,25 @@ public static class AudiobookPlayResolver
         // bounded IsPlayed/IsResumable probe queries over the same scoped page
         // shape; a miss proves no row carries resume-relevant user data, so a
         // first-ever ask of a multi-page book on a clean device pays the probes,
-        // not the full-book fetch). ONE MORE TRIGGER beside the probes, with its
-        // HONEST COST stated (code-review F3): FindResumeTrackIndex also reads
-        // the device queue's ItemPositionState, and the JF-581 shape (a
-        // server-side UserData write loss with the position surviving only in
-        // the device queue) would be invisible to the probes, so a device queue
-        // holding ANY positioned entry releases the fetch. Because the position
-        // store is written by EVERY qualifying stop (plain songs included) and
-        // survives restarts, a household that has played anything holds entries
-        // forever: on such devices the book gate degrades to the pre-JF-797
-        // unconditional fetch (one unpaged query over a BOUNDED chapter list,
-        // the addendum's row-volume concern is the album path, which has no
-        // queue tier and discriminates unconditionally). Scoping the store to
-        // book-shaped entries is the filed follow-up, JF-812; an under-fire here
-        // would drop a real resume, the worse side of the trade.
+        // not the full-book fetch). ONE MORE TRIGGER beside the probes (code-review
+        // F3, tightened JF-812): FindResumeTrackIndex also reads the device
+        // queue's ItemPositionState, and the JF-581 shape (a server-side UserData
+        // write loss with the position surviving only in the device queue) would
+        // be invisible to the probes, so a device queue holding a positioned entry
+        // that may be book progress releases the fetch. JF-812: the stop-path
+        // write stamps the item KIND beside the position, and the valve
+        // (DeviceQueueManager.HasAnyBookShapedStoredPosition) skips song-shaped
+        // entries, so a household's plain-song playback no longer permanently
+        // releases the fetch; KINDLESS entries (a pre-JF-812 store, or a write
+        // whose item could not be resolved) still release, keeping the JF-581
+        // guarantee for old stores - the conservative side of the trade, an
+        // under-keyed valve would drop a real resume.
         // The single-file shapes never reach here (their page is
         // the whole book by construction). The in-memory positioned-entry check
         // runs before the probes (cheapest first), and the whole gate folds into
         // one condition: nothing below it runs when the page answer is complete
         // or the probes prove no row carries resume-relevant user data.
-        bool queueHoldsPositionedEntry = false;
+        bool queueHoldsBookCandidateEntry = false;
         bool resumeProbeHit = false;
 
         // JF-790: the deep-resume gate is MOOT in the detected shape (the full
@@ -416,14 +415,14 @@ public static class AudiobookPlayResolver
         {
             // Gate-marker tail F4: the JF-581 valve is evaluated LAZILY, only once
             // the page answer is incomplete - the eager shape paid a lock acquisition
-            // plus an O(cap) Values scan on _launchScopeLock for every single-page
-            // book and every page-resolved resume, the shapes that discard the value.
-            queueHoldsPositionedEntry = queueManager != null
+            // plus an O(cap) scan on _launchScopeLock for every single-page book and
+            // every page-resolved resume, the shapes that discard the value.
+            queueHoldsBookCandidateEntry = queueManager != null
                 && session.DeviceId != null
-                && queueManager.HasAnyStoredPosition(session.DeviceId);
+                && queueManager.HasAnyBookShapedStoredPosition(session.DeviceId);
         }
 
-        if (deepResumeEligible && !queueHoldsPositionedEntry)
+        if (deepResumeEligible && !queueHoldsBookCandidateEntry)
         {
             resumeProbeHit = await QueueContinuationFetcher.MayHaveResumeRelevantUserDataAsync(
                 (probeStartIndex, probeLimit) => QueueContinuationFetcher.BuildScopedAudiobookChaptersQuery(
@@ -448,13 +447,13 @@ public static class AudiobookPlayResolver
                 "{Label}: deep-resume gate for '{BookName}': page answer carries no position and more pages remain; released by {Trigger}",
                 logLabel,
                 book.Name,
-                queueHoldsPositionedEntry ? "a positioned queue entry (JF-581 valve)"
+                queueHoldsBookCandidateEntry ? "a book-shaped positioned queue entry (JF-581/JF-812 valve)"
                     : resumeProbeHit ? "a user-data probe hit"
                     : "nothing (staying cold)");
         }
 
         if (deepResumeEligible
-            && (queueHoldsPositionedEntry || resumeProbeHit))
+            && (queueHoldsBookCandidateEntry || resumeProbeHit))
         {
             QueueContinuationFetcher.DeepResumeRePage? bookRePage = await QueueContinuationFetcher.TryDeepResumeRePageAsync(
                 () => FetchUnpagedBookAsync("GetBookTracksDeepResume"),

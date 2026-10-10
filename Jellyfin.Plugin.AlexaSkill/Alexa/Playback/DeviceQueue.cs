@@ -104,6 +104,24 @@ public sealed class DeviceQueue
     public Dictionary<string, long> ItemPositionState { get; set; } = new();
 
     /// <summary>
+    /// Gets or sets the JF-812 KIND stamps beside <see cref="ItemPositionState"/>
+    /// (itemId ("N" format) → kind name, the
+    /// <see cref="DeviceQueueManager.PositionKindBook"/>/
+    /// <see cref="DeviceQueueManager.PositionKindOther"/> constants): "Book" for a
+    /// book-shaped stopped item, "Other" for every resolved non-book item (plain
+    /// songs, audio-route episodes), written only by the stop path's
+    /// <see cref="DeviceQueueManager.RecordStoppedPositionAndTrim"/> and only when
+    /// the item RESOLVED. An entry with no kind stamp is KINDLESS (every entry on a
+    /// pre-JF-812 store, and a write whose item could not be resolved); the JF-797
+    /// deep-resume valve counts kindless entries as book-shaped (today's behavior,
+    /// the conservative release), so old stores keep the JF-581 resume guarantee.
+    /// Purely additive in the persisted JSON: pre-JF-812 files deserialize with this
+    /// map empty, and the keys stay a subset of the surviving position keys (the
+    /// write and the trim prune together).
+    /// </summary>
+    public Dictionary<string, string> ItemPositionKinds { get; set; } = new();
+
+    /// <summary>
     /// Gets or sets per-item ACTIVE audio-launch bases (itemId ("N" format) →
     /// milliseconds, JF-522). A LAUNCH-SCOPED record (replacing the JF-514 last-resolve
     /// ledger, deleted by JF-522): it is written when an <c>AudioPlayer.Play</c>

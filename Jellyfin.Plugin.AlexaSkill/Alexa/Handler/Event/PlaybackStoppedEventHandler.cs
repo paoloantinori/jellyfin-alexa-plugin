@@ -218,16 +218,47 @@ public class PlaybackStoppedEventHandler : BaseHandler
         // and overwrite Jellyfin UserData for cross-client sync (web/mobile see correct position).
         if (!isDisplacement && !queueContradictsEventToken && realPositionTicks > 0 && stopItemId != Guid.Empty)
         {
+            // JF-812: resolve the stopped item ONCE for this block. The KIND stamp
+            // the position write takes below (book-shaped vs other: the JF-797
+            // deep-resume valve on the book head keys on it, skipping song-shaped
+            // entries) and the UserData self-verify beneath both read it. This is
+            // the AudioPlayer event path (background, outside the Alexa window),
+            // so the bounded GetItemById lookup (an in-memory platform LRU hit)
+            // and IsAudioBookOrChapter's bounded ancestor walk are free to run
+            // here. A failed resolution stores the position KINDLESS (the valve's
+            // conservative release) and skips the self-verify: both are best-effort
+            // decorations of the position write, which proceeds regardless.
+            BaseItem? stoppedItem = null;
+            bool? stoppedItemBookShaped = null;
+            try
+            {
+                stoppedItem = _libraryManager.GetItemById(stopItemId);
+                // Null only when the item did NOT resolve: IsAudioBookOrChapter is
+                // null-safe and answers false for null, which would stamp an
+                // unresolved item as song-shaped (Other) instead of kindless.
+                stoppedItemBookShaped = stoppedItem != null
+                    ? AudiobookItems.IsAudioBookOrChapter(stoppedItem, _libraryManager)
+                    : null;
+            }
+            catch (Exception ex)
+            {
+                stoppedItem = null;
+                stoppedItemBookShaped = null;
+                Logger.LogWarning(ex,
+                    "PlaybackStopped: stopped item resolution failed; storing the position kindless (JF-812): item={ItemId}",
+                    req.Token);
+            }
+
             // 1. Save to plugin's per-item state and bound it: ONE locked manager
             // entry point for the write AND the trim (JF-738 GM-F1: the write is a
             // structural Add, and a sibling stop's unlocked write would throw
             // inside this trim's map enumeration; the membership build and the
             // fresh-entry guard ride the same lock, and the debounced persist is
             // scheduled by the manager).
-            _queueManager.RecordStoppedPositionAndTrim(device, queue, stopItemId, realPositionTicks);
+            _queueManager.RecordStoppedPositionAndTrim(device, queue, stopItemId, realPositionTicks, stoppedItemBookShaped);
             Logger.LogDebug(
-                "Saved to ItemPositionState: item={ItemId}, ticks={Ticks}",
-                req.Token, realPositionTicks);
+                "Saved to ItemPositionState: item={ItemId}, ticks={Ticks}, bookShaped={BookShaped}",
+                req.Token, realPositionTicks, stoppedItemBookShaped);
 
             // 2. Self-verify the Jellyfin UserData write (JF-581): the report above
             //    routes through SessionManager.OnPlaybackStopped → UpdatePlayState,
@@ -238,16 +269,15 @@ public class PlaybackStoppedEventHandler : BaseHandler
             //    it silently skipped this whole block before JF-581; re-read after the
             //    report, and write the position directly when it did not land.
             //    SaveUserData bypasses UpdatePlayState, so the zero-runtime shape
-            //    writes too.
+            //    writes too. JF-812: the item is the ONE resolution made above.
             try
             {
-                var item = _libraryManager.GetItemById(stopItemId);
-                if (item != null)
+                if (stoppedItem != null)
                 {
                     var jellyfinUser = _userManager.GetUserById(session.UserId);
                     if (jellyfinUser != null)
                     {
-                        var data = _userDataManager.GetUserData(jellyfinUser, item);
+                        var data = _userDataManager.GetUserData(jellyfinUser, stoppedItem);
                         // Compare against THIS stop's position, not against 0: on a
                         // write-loss server the first stop direct-writes X and the
                         // next stop at Y would otherwise read X (non-zero, our own
@@ -258,7 +288,7 @@ public class PlaybackStoppedEventHandler : BaseHandler
                         {
                             data ??= new UserItemData { Key = stopItemId.ToString("N") };
                             data.PlaybackPositionTicks = realPositionTicks;
-                            _userDataManager.SaveUserData(jellyfinUser, item, data, UserDataSaveReason.PlaybackProgress, CancellationToken.None);
+                            _userDataManager.SaveUserData(jellyfinUser, stoppedItem, data, UserDataSaveReason.PlaybackProgress, CancellationToken.None);
                             Logger.LogInformation(
                                 "PlaybackStopped: Jellyfin UserData position did not land via the session report; wrote it directly: item={ItemId}, ticks={Ticks}",
                                 req.Token, realPositionTicks);

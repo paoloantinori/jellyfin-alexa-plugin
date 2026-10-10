@@ -738,8 +738,10 @@ public sealed class DeviceQueueManager : IDisposable
     }
 
     /// <summary>
-    /// JF-375 test/record seam: writes the durable per-item position store exactly
-    /// as the PlaybackStopped event path does (ItemPositionState, "N"-keyed).
+    /// JF-375 test/record seam: writes the durable per-item position store as the
+    /// PlaybackStopped event path does (ItemPositionState, "N"-keyed), WITHOUT a
+    /// JF-812 kind stamp: the entry stays kindless, which the deep-resume valve
+    /// conservatively releases (the pre-JF-812 shape).
     /// </summary>
     /// <param name="deviceId">The Alexa device ID.</param>
     /// <param name="itemId">The item ID in any GUID format (normalized to "N").</param>
@@ -793,30 +795,47 @@ public sealed class DeviceQueueManager : IDisposable
     }
 
     /// <summary>
-    /// JF-797 (the book head's deep-resume discriminator): whether the device's
-    /// queue holds ANY stored position entry with ticks &gt; 0, without creating a
-    /// queue entry. The aggregate sibling of <see cref="GetStoredPositionTicks"/>
-    /// on the same JF-581 read side: the discriminator cannot name the item it is
-    /// looking for (progress may sit on a chapter beyond the fetched page), so it
-    /// asks whether the store holds anything at all; the whole-collection
-    /// positivity read stays here, on the owner of the store's layout and trim
-    /// semantics, instead of reaching into the raw dictionary at the call site.
-    /// Code-review F1 (JF-797): the Values enumeration runs under
+    /// JF-797 (the book head's deep-resume discriminator), tightened JF-812:
+    /// whether the device's queue holds a stored position entry that may be BOOK
+    /// progress (ticks &gt; 0 and not stamped song-shaped), without creating a queue
+    /// entry. The aggregate sibling of <see cref="GetStoredPositionTicks"/> on the
+    /// same JF-581 read side: the discriminator cannot name the item it is looking
+    /// for (progress may sit on a chapter beyond the fetched page), so it asks
+    /// whether the store holds anything plausible; the whole-collection read stays
+    /// here, on the owner of the store's layout and trim semantics, instead of
+    /// reaching into the raw dictionaries at the call site.
+    /// KIND SEMANTICS (JF-812): the write site stamps the stopped item's kind
+    /// beside the position (<see cref="DeviceQueue.ItemPositionKinds"/>), and only
+    /// entries stamped <see cref="PositionKindOther"/> (a resolved non-book item:
+    /// plain songs, audio-route episodes) are skipped. KINDLESS entries (every
+    /// entry on a pre-JF-812 store, and a write whose item could not be resolved)
+    /// still RELEASE: an old store's book position must keep the JF-581 guarantee
+    /// (a server-side UserData write loss with the position only here), and the
+    /// ambiguity of a missing stamp resolves toward the resume. The skip set is a
+    /// DENY LIST by design (only the KNOWN song-shape skips), so an unrecognized
+    /// future stamp also releases, the conservative side the valve has always
+    /// erred on.
+    /// Code-review F1 (JF-797): the enumeration runs under
     /// <see cref="_launchScopeLock"/> like every other whole-collection read of
     /// live state, because the locked write/trim path
-    /// (<see cref="RecordStoppedPositionAndTrim"/>) can mutate the dictionary
+    /// (<see cref="RecordStoppedPositionAndTrim"/>) can mutate the dictionaries
     /// mid-enumeration and the version check would throw on the request thread
     /// (the JF-425/JF-447/JF-738 class; the ItemIds twin is the locked read at
     /// <see cref="IsItemQueued"/>).
     /// </summary>
     /// <param name="deviceId">The Alexa device ID.</param>
-    /// <returns>True when at least one stored position is positive.</returns>
-    public bool HasAnyStoredPosition(string deviceId)
+    /// <returns>True when at least one stored position is positive and not stamped song-shaped.</returns>
+    public bool HasAnyBookShapedStoredPosition(string deviceId)
     {
         lock (_launchScopeLock)
         {
             return _queues.TryGetValue(deviceId, out DeviceQueue? queue)
-                && queue.ItemPositionState.Values.Any(ticks => ticks > 0);
+                && queue.ItemPositionState.Any(kvp =>
+                    kvp.Value > 0
+                    && !string.Equals(
+                        queue.ItemPositionKinds.TryGetValue(kvp.Key, out string? kind) ? kind : string.Empty,
+                        PositionKindOther,
+                        StringComparison.Ordinal));
         }
     }
 
@@ -1159,6 +1178,21 @@ public sealed class DeviceQueueManager : IDisposable
     internal const int MaxItemPositionStateEntries = 200;
 
     /// <summary>
+    /// JF-812: the BOOK kind stamp for <see cref="DeviceQueue.ItemPositionKinds"/>,
+    /// written when the stopped item resolves as book-shaped
+    /// (<c>AudiobookItems.IsAudioBookOrChapter</c>). Stored as the plain name string
+    /// (the <see cref="DeviceQueue.LastPlayedLaunchRoute"/> serialization shape).
+    /// </summary>
+    internal const string PositionKindBook = "Book";
+
+    /// <summary>
+    /// JF-812: the NON-BOOK kind stamp for <see cref="DeviceQueue.ItemPositionKinds"/>
+    /// (a resolved plain song, an audio-route episode): the one stamp the JF-797
+    /// deep-resume valve SKIPS (every other shape, kindless included, releases).
+    /// </summary>
+    internal const string PositionKindOther = "Other";
+
+    /// <summary>
     /// JF-522/JF-738: the ONE locked write-then-trim path for ItemPositionState
     /// (the PlaybackStopped handler's position persist). The WRITE and the TRIM
     /// are one locked unit (GM-F1): the write is a structural Add for a new key
@@ -1185,27 +1219,79 @@ public sealed class DeviceQueueManager : IDisposable
     /// the same device cannot evict it inside the freshness window (see
     /// <see cref="StampRecentRecord"/>: both write families stamp, both trim
     /// families consult, one freshness rule).
+    /// JF-812 (the kind stamp): the write also stamps the stopped item's KIND
+    /// beside the position (<see cref="DeviceQueue.ItemPositionKinds"/>), so the
+    /// JF-797 deep-resume valve can skip song-shaped entries; the trim prunes the
+    /// kind map back to the surviving position keys
+    /// (<see cref="PruneKindStampsToSurvivingPositions"/>), keeping the kind map
+    /// a subset of the position map (no orphan growth at cap churn).
     /// </summary>
     /// <param name="deviceId">The device whose queue is persisted (debounced).</param>
     /// <param name="queue">The device queue whose ItemPositionState is written and bounded.</param>
     /// <param name="itemId">The stopped item (keyed "N").</param>
     /// <param name="positionTicks">The item-absolute position in ticks.</param>
+    /// <param name="bookShaped">JF-812: whether the stopped item resolved as
+    /// book-shaped (<c>AudiobookItems.IsAudioBookOrChapter</c> at the write site).
+    /// Null (the item did not resolve) writes NO stamp, so the entry stays
+    /// KINDLESS (the valve's conservative release) and any earlier truthful stamp
+    /// for the same key is kept: a failed lookup is not evidence the item changed
+    /// kind.</param>
     /// <param name="cap">The maximum entry count (defaults to
     /// <see cref="MaxItemPositionStateEntries"/>).</param>
-    internal void RecordStoppedPositionAndTrim(string deviceId, DeviceQueue queue, Guid itemId, long positionTicks, int cap = MaxItemPositionStateEntries)
+    internal void RecordStoppedPositionAndTrim(string deviceId, DeviceQueue queue, Guid itemId, long positionTicks, bool? bookShaped, int cap = MaxItemPositionStateEntries)
     {
         string key = itemId.ToString("N");
         lock (_launchScopeLock)
         {
             queue.ItemPositionState[key] = positionTicks;
+            if (bookShaped.HasValue)
+            {
+                queue.ItemPositionKinds[key] = bookShaped.Value ? PositionKindBook : PositionKindOther;
+            }
+
             StampRecentRecord(deviceId, key);
             if (queue.ItemPositionState.Count > cap)
             {
                 TrimPositionMap(queue.ItemPositionState, BuildTrimMembershipSet(deviceId, queue, key), cap);
+                PruneKindStampsToSurvivingPositions(queue);
             }
         }
 
         SchedulePersistInternal(deviceId);
+    }
+
+    /// <summary>
+    /// JF-812: prunes <see cref="DeviceQueue.ItemPositionKinds"/> back to the
+    /// surviving <see cref="DeviceQueue.ItemPositionState"/> keys after a trim, so
+    /// the kind map stays a subset of the position map (the invariant every reader
+    /// of the pair relies on; without this, cap churn on the position map would
+    /// leave the kind map growing without bound in the persisted file). Must run
+    /// under <see cref="_launchScopeLock"/> beside the trim it follows.
+    /// </summary>
+    /// <param name="queue">The device queue whose kind stamps are pruned.</param>
+    private static void PruneKindStampsToSurvivingPositions(DeviceQueue queue)
+    {
+        if (queue.ItemPositionKinds.Count == 0)
+        {
+            return;
+        }
+
+        List<string>? orphanedKeys = null;
+        foreach (KeyValuePair<string, string> stamp in queue.ItemPositionKinds)
+        {
+            if (!queue.ItemPositionState.ContainsKey(stamp.Key))
+            {
+                (orphanedKeys ??= new List<string>()).Add(stamp.Key);
+            }
+        }
+
+        if (orphanedKeys != null)
+        {
+            foreach (string orphanedKey in orphanedKeys)
+            {
+                queue.ItemPositionKinds.Remove(orphanedKey);
+            }
+        }
     }
 
     /// <summary>
@@ -1272,12 +1358,14 @@ public sealed class DeviceQueueManager : IDisposable
     }
 
     /// <summary>
-    /// Carries the reset-surviving per-item stores (positions and the launch-scope
-    /// base/rate map family) from an old queue into its replacement (JF-522: one
-    /// definition for the surviving-store set, so a fourth surviving store is
-    /// wired once, not per reset path). The base and rate maps must be carried
-    /// together (the pairing invariant <see cref="WritePendingLaunchScope"/> owns:
-    /// a rate entry exists iff its base entry exists).
+    /// Carries the reset-surviving per-item stores (positions with their JF-812
+    /// kind stamps, and the launch-scope base/rate map family) from an old queue
+    /// into its replacement (JF-522: one definition for the surviving-store set,
+    /// so a new surviving store is wired once, not per reset path). The base and
+    /// rate maps must be carried together (the pairing invariant
+    /// <see cref="WritePendingLaunchScope"/> owns: a rate entry exists iff its
+    /// base entry exists), and the kind stamps with their positions (the JF-812
+    /// subset invariant <see cref="PruneKindStampsToSurvivingPositions"/> keeps).
     /// JF-693 (code-review finding 1): the LAST-PLAYED record survives too. It is a
     /// fact about a LAUNCH, not about the queue's contents, and the PlayBook paths
     /// now call <see cref="SetQueue"/> AFTER the launch builder (the JF-687
@@ -1292,6 +1380,7 @@ public sealed class DeviceQueueManager : IDisposable
     private static void CopySurvivingStores(DeviceQueue? oldQueue, DeviceQueue queue)
     {
         queue.ItemPositionState = oldQueue?.ItemPositionState ?? new Dictionary<string, long>();
+        queue.ItemPositionKinds = oldQueue?.ItemPositionKinds ?? new Dictionary<string, string>();
         queue.ActiveLaunchBaseMs = oldQueue?.ActiveLaunchBaseMs ?? new Dictionary<string, long>();
         queue.PendingLaunchBaseMs = oldQueue?.PendingLaunchBaseMs ?? new Dictionary<string, long>();
         queue.ActivePlaybackRatePerMille = oldQueue?.ActivePlaybackRatePerMille ?? new Dictionary<string, int>();
