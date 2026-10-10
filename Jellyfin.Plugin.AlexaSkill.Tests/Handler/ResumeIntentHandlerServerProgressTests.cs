@@ -11,6 +11,7 @@ using global::Alexa.NET.Response.Directive;
 using Alexa.NET.Assertions;
 using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Directive;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Entities;
@@ -1259,6 +1260,102 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
         {
             // Config flag only (not resource teardown): the tracker teardown lives
             // in the swap scope above (JF-633).
+            Plugin.Instance.Configuration.NativeControlsForBooks = false;
+        }
+    }
+
+    /// <summary>
+    /// JF-860 read-side policy pin (the orphaned-mark announce divergence the
+    /// pre-deploy triage filed): the native-controls book resume SPEAKS the
+    /// tracker position (NowPlayingWithPosition), so its read runs through the
+    /// identity gate. The ORPHANED row: a mark recorded under the book's
+    /// PREVIOUS membership (15 chapters/45 minutes; the current enumeration is
+    /// 12/36 minutes) reads as ABSENT - no start= slice minted from it and no
+    /// position announce, the honest fresh launch answers (pre-JF-860 both
+    /// rows minted the raw max: the announce said a position the serve's gate
+    /// then dropped, "Position: 4h" over a 0:00 restart). The LIVE control
+    /// row: a mark on the current timeline still announces and slices at its
+    /// own position, byte-identical to the pre-JF-860 shape.
+    /// </summary>
+    [Fact]
+    public async Task SessionHeldBook_NativeControlsOn_OrphanedForeignTimelineMark_NotSlicedNotAnnounced()
+    {
+        Plugin.Instance!.Configuration.NativeControlsForBooks = true;
+        long threeMinutes = TimeSpan.FromMinutes(3).Ticks;
+        var tracker = TestHelpers.CreatePositionTracker("jf860-announce-gate");
+        using var trackerSwap = TestHelpers.SwapPluginPositionTracker(tracker);
+        try
+        {
+            var user = TestHelpers.CreateTestUser();
+            _fx.Config.AddUser(new Jellyfin.Plugin.AlexaSkill.Entities.User
+            {
+                Id = user.Id,
+                AnnouncePositionOnResume = false
+            });
+
+            // Two verified book folders whose CURRENT membership enumerates 12
+            // chapters of 3 minutes each (the timeline identity 12/36 minutes
+            // the read-side gate resolves; the mock answers both folders'
+            // chapters queries with the same row set).
+            Guid orphanedFolderId = Guid.NewGuid();
+            Guid liveFolderId = Guid.NewGuid();
+            var chapterByFolder = new Dictionary<Guid, AudioBook>();
+            foreach ((Guid folderId, string label) in new[] { (orphanedFolderId, "Orphaned"), (liveFolderId, "Live") })
+            {
+                var chapter = new AudioBook
+                {
+                    Name = $"{label} Book Chapter 3",
+                    Id = Guid.NewGuid(),
+                    ParentId = folderId,
+                    Path = $"/audiobooks/{label.ToLowerInvariant()}-book/chapter3.mp3",
+                    RunTimeTicks = TimeSpan.FromMinutes(30).Ticks
+                };
+                chapterByFolder[folderId] = chapter;
+                _fx.SetupBookFolder(folderId, $"{label} Book", $"/audiobooks/{label.ToLowerInvariant()}-book");
+                _fx.LibraryManager.Setup(m => m.GetItemById(chapter.Id)).Returns(chapter);
+            }
+
+            var chapters = new List<BaseItem>();
+            for (int i = 1; i <= 12; i++)
+            {
+                chapters.Add(new AudioBook { Name = $"Chapter {i}", Id = Guid.NewGuid(), RunTimeTicks = threeMinutes });
+            }
+
+            _fx.LibraryManager
+                .Setup(m => m.GetItemList(It.IsAny<MediaBrowser.Controller.Entities.InternalItemsQuery>()))
+                .Returns(chapters);
+
+            // Mark 121 (reads back 20 minutes) on both books: one under the
+            // PREVIOUS membership (orphaned), one under the current (live).
+            tracker.RecordSegment(orphanedFolderId.ToString(), 121, new TimelineIdentity(15, 15 * threeMinutes));
+            tracker.RecordSegment(liveFolderId.ToString(), 121, new TimelineIdentity(12, 12 * threeMinutes));
+
+            async Task<(SkillResponse Response, RecordingResumeHandler Handler)> ResumeAsync(AudioBook chapter)
+            {
+                var handler = CreateHandler();
+                var session = CreateEmptySession();
+                session.FullNowPlayingItem = chapter;
+                SkillResponse response = await handler.HandleAsync(
+                    CreateResumeRequest(), TestHelpers.CreateContextWithVideoApp(), user, session, CancellationToken.None);
+                return (response, handler);
+            }
+
+            // ORPHANED row: the foreign-timeline mark reads as absent - no
+            // start= slice, no position announce, the fresh launch answers.
+            (SkillResponse orphaned, RecordingResumeHandler orphanedHandler) = await ResumeAsync(chapterByFolder[orphanedFolderId]);
+            VideoAppLaunchDirective orphanedLaunch = Assert.Single(orphaned.Response.Directives.OfType<VideoAppLaunchDirective>());
+            Assert.DoesNotContain("start=", orphanedLaunch.VideoItem.Source, StringComparison.Ordinal);
+            Assert.False(orphanedHandler.Progressive.Contains("Position:"), $"expected no position announce, got: {orphanedHandler.Progressive.AllText}");
+
+            // LIVE control row: the current timeline's mark announces at its own
+            // position and mints the matching slice.
+            (SkillResponse live, RecordingResumeHandler liveHandler) = await ResumeAsync(chapterByFolder[liveFolderId]);
+            VideoAppLaunchDirective liveLaunch = Assert.Single(live.Response.Directives.OfType<VideoAppLaunchDirective>());
+            Assert.Contains($"start={TimeSpan.FromMinutes(20).Ticks}", liveLaunch.VideoItem.Source, StringComparison.Ordinal);
+            Assert.True(liveHandler.Progressive.Contains("Position: 20m 0s"), $"expected the position announce, got: {liveHandler.Progressive.AllText}");
+        }
+        finally
+        {
             Plugin.Instance.Configuration.NativeControlsForBooks = false;
         }
     }

@@ -10928,31 +10928,21 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
     }
 
     /// <summary>
-    /// The shared arrangement of the JF-787 tracker-timeline pins (the sibling
-    /// of <see cref="ServeAlbumOverSeededConcatCacheAsync"/>): a MusicAlbum
-    /// whose (scoped) enumeration is 12 Audio tracks of 3 minutes each. Step A
-    /// records a segment fetch while the sidecar carries the GIVEN identity
-    /// (the during-encode foreign-serve write), step B rewrites the cache the
-    /// way the re-encoded timeline verdict leaves it (completed 216-segment
-    /// entry, sidecar matching the live 12/36-minute enumeration), then the
-    /// resume request (?start=20 minutes, the seeded mark's read-back) serves.
-    /// Returns the served playlist content for the caller's slice asserts.
+    /// The shared album arrangement of the JF-787/JF-860 tracker-timeline pins:
+    /// a MusicAlbum whose (mocked) enumeration is 12 Audio tracks of 3 minutes
+    /// each (the identity 12/36 minutes), with the encoder path mocked. The
+    /// caller seeds the cache and tracker state around it.
     /// </summary>
-    private async Task<string> ServeAlbumAfterSidecarStampedRecordAsync(
-        Guid parentId,
-        TimelineIdentity sidecarIdentityAtRecord,
-        string fakeFfmpegTag)
+    private void SetupTimelineAlbum(Guid parentId, string albumName)
     {
-        string parentIdStr = parentId.ToString("D");
-        long threeMinutes = TimeSpan.FromMinutes(3).Ticks;
-
         var album = new MediaBrowser.Controller.Entities.Audio.MusicAlbum
         {
-            Name = $"JF-787 Timeline Album ({fakeFfmpegTag})",
+            Name = albumName,
             Id = parentId
         };
         _libraryManagerMock.Setup(m => m.GetItemById(parentId)).Returns(album);
         var tracks = new List<MediaBrowser.Controller.Entities.BaseItem>();
+        long threeMinutes = TimeSpan.FromMinutes(3).Ticks;
         for (int i = 1; i <= 12; i++)
         {
             tracks.Add(new MediaBrowser.Controller.Entities.Audio.Audio
@@ -10967,6 +10957,36 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
         _libraryManagerMock
             .Setup(m => m.GetItemList(It.IsAny<MediaBrowser.Controller.Entities.InternalItemsQuery>()))
             .Returns(tracks);
+    }
+
+    /// <summary>
+    /// The shared arrangement of the JF-787 tracker-timeline pins (the sibling
+    /// of <see cref="ServeAlbumOverSeededConcatCacheAsync"/>): step A records a
+    /// segment fetch while the sidecar carries the GIVEN identity (the
+    /// during-encode foreign-serve write), step B rewrites the cache the way
+    /// the re-encoded timeline verdict leaves it (completed 216-segment entry,
+    /// sidecar matching the live 12/36-minute enumeration), then the resume
+    /// request (?start=20 minutes, the seeded mark's read-back) serves.
+    /// Returns the served playlist content for the caller's slice asserts.
+    /// JF-860 knobs: <paramref name="foreignRecordSegment"/> restamps step A's
+    /// foreign mark (the re-slice row seeds a HIGHER foreign mark),
+    /// <paramref name="postSeedLiveRecordSegment"/> additionally records a mark
+    /// on the LIVE timeline after the seed (the both-marks shape), and
+    /// <paramref name="serveStart"/> overrides the minted ?start= the resume
+    /// request presents.
+    /// </summary>
+    private async Task<string> ServeAlbumAfterSidecarStampedRecordAsync(
+        Guid parentId,
+        TimelineIdentity sidecarIdentityAtRecord,
+        string fakeFfmpegTag,
+        int foreignRecordSegment = 121,
+        int? postSeedLiveRecordSegment = null,
+        TimeSpan? serveStart = null)
+    {
+        string parentIdStr = parentId.ToString("D");
+        long threeMinutes = TimeSpan.FromMinutes(3).Ticks;
+
+        SetupTimelineAlbum(parentId, $"JF-787 Timeline Album ({fakeFfmpegTag})");
 
         // Step A: scope B is served scope A's running encode (the accepted
         // during-encode residual) and its device fetches segments; the record
@@ -10974,7 +10994,7 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
         // carries.
         string hlsDir = _cache.GetHlsDirectoryPath(parentIdStr, 0);
         Directory.CreateDirectory(hlsDir);
-        await File.WriteAllTextAsync(Path.Combine(hlsDir, "seg_0121.ts"), new string('x', 512));
+        await File.WriteAllTextAsync(Path.Combine(hlsDir, $"seg_{foreignRecordSegment:0000}.ts"), new string('x', 512));
         WriteEncodeMetadata(hlsDir, sidecarIdentityAtRecord.ChapterCount, sidecarIdentityAtRecord.DurationTicks);
         _cache.RegisterHlsDirectory(parentIdStr, 0);
 
@@ -10982,7 +11002,7 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
         using var trackerSwap = SwapPluginPositionTracker(tracker);
 
         var recordController = CreateController(parentIdStr);
-        await recordController.GetSegment(parentIdStr, "seg_0121.ts");
+        await recordController.GetSegment(parentIdStr, $"seg_{foreignRecordSegment:0000}.ts");
 
         // Step B: the timeline verdict re-encodes under B's membership; the
         // cache now carries the 12-track/36-minute identity and serves
@@ -10990,6 +11010,15 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
         // undercount bar passes and the tracker gate is the row under test.)
         await SeedCompletedConcatCacheAsync(
             _cache, parentId, segmentCount: 216, encodedChapterCount: 12, encodedDurationTicks: 12 * threeMinutes);
+
+        // JF-860 re-slice row: an optional post-seed record stamps a mark on
+        // the LIVE timeline (the sidecar now carries it), producing the
+        // both-marks shape the gate re-slices.
+        if (postSeedLiveRecordSegment is int liveSegment)
+        {
+            await File.WriteAllTextAsync(Path.Combine(hlsDir, $"seg_{liveSegment:0000}.ts"), new string('x', 512));
+            await recordController.GetSegment(parentIdStr, $"seg_{liveSegment:0000}.ts");
+        }
 
         // The resume request: mark 121 reads back 20 minutes, sliced at
         // segment 120 when honored, at seg_0000 when the gate drops it.
@@ -11000,7 +11029,7 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
             loggerFactory,
             ffmpegPath: WriteFlushLagFakeFfmpeg($"fake-ffmpeg-{fakeFfmpegTag}"),
             tokenScope: new[] { Guid.NewGuid() });
-        ActionResult result = await controller.StreamHlsAudiobook(parentIdStr, TimeSpan.FromMinutes(20).Ticks);
+        ActionResult result = await controller.StreamHlsAudiobook(parentIdStr, (serveStart ?? TimeSpan.FromMinutes(20)).Ticks);
 
         return Assert.IsType<ContentResult>(result).Content!;
     }
@@ -11059,6 +11088,112 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
         // the unsliced first segment is gone.
         Assert.Contains("#EXT-X-MEDIA-SEQUENCE:120", content, StringComparison.Ordinal);
         Assert.DoesNotContain("seg_0000.ts?token=", content, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// JF-860 re-slice-arm pin, the JF-787 family's missing controller-level
+    /// row: when the book holds BOTH a higher FOREIGN-timeline mark and its own
+    /// live timeline's lower mark, the identity-agnostic mint reads the foreign
+    /// max (mark 301 reads back 50 minutes) while the serve's gate re-slices
+    /// down to the live timeline's own mark (mark 61 = segment 60, 10 minutes).
+    /// The served playlist opens at MEDIA-SEQUENCE:60: never at the foreign
+    /// offset (300), never the dropped-from-the-beginning shape (0000). All
+    /// production paths, like the drop pin: both marks are stamped by the
+    /// record gate off the live sidecar (the foreign one before the re-encode
+    /// verdict rewrote it, the live one after).
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsAudiobook_ResumeSlice_TrackerForeignMaxMint_IsReslicedToLiveTimelineMark()
+    {
+        long threeMinutes = TimeSpan.FromMinutes(3).Ticks;
+
+        string content = await ServeAlbumAfterSidecarStampedRecordAsync(
+            Guid.NewGuid(),
+            new TimelineIdentity(15, 15 * threeMinutes),
+            "jf860-reslice",
+            foreignRecordSegment: 301,
+            postSeedLiveRecordSegment: 61,
+            serveStart: TimeSpan.FromMinutes(50));
+
+        Assert.Contains("#EXT-X-MEDIA-SEQUENCE:60", content, StringComparison.Ordinal);
+        Assert.DoesNotContain("seg_0000.ts?token=", content, StringComparison.Ordinal);
+        Assert.DoesNotContain("#EXT-X-MEDIA-SEQUENCE:300", content, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// JF-860 tracker-gate latch pin (the JF-818/JF-859 pattern extended to
+    /// the gate's two outcome lines): inside a live encode generation the drop
+    /// line logs at Information ONCE, then Debug on the encode window's
+    /// playlist refreshes (the per-request emitter this pin latches); with NO
+    /// live generation (the steady orphaned-mark resume, days after any
+    /// encode) the line KEEPS Information - outside an encode window the
+    /// playlist is VOD, fetched once per launch, so no refresh storm exists
+    /// and the line is exactly the "why does this book restart at 0:00"
+    /// triage signal (the deliberate difference from the honor-band latch's
+    /// not-live fall to Debug, owned by TryMarkTimelineGateLogged).
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsAudiobook_TrackerGateDropLog_LatchesOncePerGeneration_KeepsInformationOutsideEncodeWindows()
+    {
+        Guid parentId = Guid.NewGuid();
+        string parentIdStr = parentId.ToString("D");
+        long threeMinutes = TimeSpan.FromMinutes(3).Ticks;
+
+        SetupTimelineAlbum(parentId, "JF-860 Latch Album");
+
+        // The orphaned-mark plant: only a foreign timeline holds a mark, so
+        // every resume presentment drops the slice (the gate's drop arm).
+        var tracker = CreatePositionTracker("jf860-latch-tracker");
+        tracker.RecordSegment(parentIdStr, 121, new TimelineIdentity(15, 15 * threeMinutes));
+        using var trackerSwap = SwapPluginPositionTracker(tracker);
+
+        await SeedCompletedConcatCacheAsync(
+            _cache, parentId, segmentCount: 216, encodedChapterCount: 12, encodedDurationTicks: 12 * threeMinutes);
+
+        var logRecords = new List<(LogLevel Level, string Message)>();
+        using var loggerFactory = TestCaptureLogger.CreateCaptureLoggerFactory(logRecords);
+        var controller = CreateController(
+            parentIdStr,
+            loggerFactory,
+            ffmpegPath: WriteFlushLagFakeFfmpeg("fake-ffmpeg-jf860-latch"),
+            tokenScope: new[] { Guid.NewGuid() });
+
+        // Serve one: NO live generation - the steady-state orphaned-mark
+        // resume keeps its Information triage line.
+        ActionResult first = await controller.StreamHlsAudiobook(parentIdStr, TimeSpan.FromMinutes(20).Ticks);
+        Assert.IsType<ContentResult>(first);
+
+        // Serves two and three: a live encode generation at the album's art
+        // ticks (0 for an art-less test album) - the encode window where the
+        // player's playlist refreshes re-fire the identical drop line. The
+        // generation latches it to Debug after its first Information.
+        VideoAudioController.SetEncodeActiveForTest(parentIdStr, active: true, audiobook: true);
+        try
+        {
+            ActionResult second = await controller.StreamHlsAudiobook(parentIdStr, TimeSpan.FromMinutes(20).Ticks);
+            Assert.IsType<ContentResult>(second);
+
+            ActionResult third = await controller.StreamHlsAudiobook(parentIdStr, TimeSpan.FromMinutes(20).Ticks);
+            Assert.IsType<ContentResult>(third);
+        }
+        finally
+        {
+            VideoAudioController.SetEncodeActiveForTest(parentIdStr, active: false, audiobook: true);
+        }
+
+        var snapshot = TestCaptureLogger.Snapshot(logRecords);
+        // Exactly TWO Information drops: serve one (no live generation) and
+        // serve two (the generation's first mark); serve three is the latched
+        // repeat.
+        Assert.Equal(
+            2,
+            snapshot.Count(r => r.Level == LogLevel.Information && r.Message.Contains("dropping resume slice", StringComparison.Ordinal)));
+        // The latched repeat still logs (at Debug), so the drop stays
+        // diagnosable with debug logging on; only the Information noise is
+        // latched.
+        Assert.Contains(
+            snapshot,
+            r => r.Level == LogLevel.Debug && r.Message.Contains("dropping resume slice", StringComparison.Ordinal));
     }
 
     // ---- W4: permission-denied deletes must not surface as 500s ----

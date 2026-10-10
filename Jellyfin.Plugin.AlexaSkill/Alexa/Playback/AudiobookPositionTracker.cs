@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Microsoft.Extensions.Logging;
@@ -32,6 +33,11 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 /// (<see cref="ResolveServeSliceTicks"/>) reads the live timeline's own slot,
 /// so a foreign-timeline position cannot poison a re-encoded timeline's resume
 /// once the encode window closes (it READS AS ABSENT for that timeline).
+/// JF-860 read-side policy: a read that feeds a SPOKEN position uses the
+/// identity-gated <see cref="GetPositionTicks(string, TimelineIdentity)"/>
+/// (the same arbitration the serve applies), so the announce never names a
+/// position the serve will drop; the agnostic read stays for mints whose
+/// announce speaks no tracker position, whose slice the serve still gates.
 /// </summary>
 public sealed class AudiobookPositionTracker : IDisposable
 {
@@ -184,6 +190,12 @@ public sealed class AudiobookPositionTracker : IDisposable
     /// timeline the mark belongs to is resolved at the serve
     /// (<see cref="ResolveServeSliceTicks"/>), the only place holding the serving
     /// enumeration.
+    /// READ-SIDE POLICY (JF-860): this agnostic read is for mints whose user-facing
+    /// announce speaks NO tracker position (the resume offer/confirm, the PlayBook
+    /// chapter announce, the album walk); a read that feeds a SPOKEN position must
+    /// use the identity-gated overload
+    /// (<see cref="GetPositionTicks(string, TimelineIdentity)"/>) so the announce
+    /// never names a position the serve's gate will drop.
     /// </summary>
     /// <param name="bookParentId">The audiobook book key (GUID "N" format).</param>
     /// <returns>Resume position in ticks (conservative), or 0 if none recorded.</returns>
@@ -208,8 +220,34 @@ public sealed class AudiobookPositionTracker : IDisposable
     }
 
     /// <summary>
+    /// The identity-gated read (JF-860): the SAME arbitration the serve-side slice
+    /// resolver applies - this overload DELEGATES to <see cref="ResolveServeSliceTicks"/>
+    /// with a zero minted value (both the cold-key and the no-opinion rows of the
+    /// resolver return the minted value unchanged, so both read 0 here), answering
+    /// "where did the user last reach on THIS timeline": the expected timeline's
+    /// own slot mark when it holds one, else the identity-less legacy slot's mark
+    /// (honored under every timeline, the JF-812 kindless-legacy precedent), else
+    /// 0 when only OTHER identity-bearing timelines hold marks (the orphaned-mark
+    /// case: the announce must not speak a position the serve will drop). The
+    /// caller derives <paramref name="expectedIdentity"/> from its own enumeration
+    /// of the book (the best available proxy for the serving enumeration); the
+    /// residual is a mint whose enumeration diverges from the serve's
+    /// (library-scope drift between the two), where this read can understate to 0
+    /// and the resume falls to the caller's cold-tracker arms - never an announce
+    /// the serve contradicts.
+    /// </summary>
+    /// <param name="bookParentId">The audiobook book key (any GUID format; normalized internally).</param>
+    /// <param name="expectedIdentity">The timeline identity the caller's enumeration of the book resolves to.</param>
+    /// <returns>The gated resume position in ticks (conservative), or 0 when no mark is usable on that timeline.</returns>
+    public long GetPositionTicks(string bookParentId, TimelineIdentity expectedIdentity)
+        => ResolveServeSliceTicks(bookParentId, expectedIdentity.ChapterCount, expectedIdentity.DurationTicks, mintedTicks: 0);
+
+    /// <summary>
     /// The serve-side slice resolver (JF-787): arbitrate the resume slice the mint
-    /// sites produced, on the ONE timeline that actually serves it.
+    /// sites produced, on the ONE timeline that actually serves it. The
+    /// identity-gated mint read (<see cref="GetPositionTicks(string, TimelineIdentity)"/>,
+    /// JF-860) delegates here with a zero minted value, so the read-side and
+    /// serve-side arbitrations are ONE implementation by construction.
     /// <list type="bullet">
     /// <item>The expected timeline holds a slot: return its mark (the common case
     /// is byte-identical to the minted ticks; a mint that read a HIGHER foreign
@@ -481,4 +519,30 @@ internal readonly record struct TimelinePosition(int HighWaterSegment, TimelineI
 /// its own degenerate pair instead: one chapter, the item's runtime). Both
 /// numbers are DB counts/sums, so identities compare exactly.
 /// </summary>
-public readonly record struct TimelineIdentity(int ChapterCount, long DurationTicks);
+/// <remarks>
+/// JF-860: the pair constructed from ITEM ROWS goes through the factories below
+/// (the ONE construction path, the JF-689 precedent), so the record gate's
+/// stamp and the read-side resolver's identity can never drift apart on the
+/// pair's semantics.
+/// </remarks>
+public readonly record struct TimelineIdentity(int ChapterCount, long DurationTicks)
+{
+    /// <summary>
+    /// The concat-timeline identity of a chapter enumeration: the row count and
+    /// the runtime sum. RunTimeTicks is a core column hydrated regardless of the
+    /// query's DtoOptions, so callers may use the cheap field set.
+    /// </summary>
+    /// <param name="chapters">The enumerated chapter rows.</param>
+    /// <returns>The (count, runtime sum) identity.</returns>
+    public static TimelineIdentity FromChapters(System.Collections.Generic.IReadOnlyList<MediaBrowser.Controller.Entities.BaseItem> chapters)
+        => new(chapters.Count, chapters.Sum(c => c.RunTimeTicks ?? 0));
+
+    /// <summary>
+    /// The degenerate single-item timeline identity: one chapter, the item's own
+    /// runtime (the pair the record gate stamps for the single-item serve shape).
+    /// </summary>
+    /// <param name="item">The single item the timeline spans.</param>
+    /// <returns>The (1, own runtime) identity.</returns>
+    public static TimelineIdentity ForSingleItem(MediaBrowser.Controller.Entities.BaseItem item)
+        => new(1, item.RunTimeTicks ?? 0);
+}
