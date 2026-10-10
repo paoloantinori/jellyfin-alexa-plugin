@@ -267,10 +267,13 @@ public static class AudiobookPlayResolver
 
         // The ONE continuation rebase onto a fetch-all list (the /simplify hoist;
         // the fetch-all list is itself the honest total in both regimes, known-
-        // total pages and the JF-673 end-unknown fallback alike), and the ONE
-        // re-page at a resume chapter found in it. Both the JF-790 fork and the
-        // JF-793 deep block below re-page through these; the "verbatim" contract
-        // between the two shapes is now structural, not by comment.
+        // total pages and the JF-673 end-unknown fallback alike). The JF-790
+        // no-resume branch below is its live caller; both re-page paths go through
+        // the JF-803 shared re-page (ApplyRePage below), whose record derives the
+        // same triple (QueueContinuationFetcher.DeepResumeRePage). CHANGE DUTY:
+        // a change to the triple derivation must touch the record (canonical) and
+        // this branch (kept hand-derived: building a record here just to read
+        // three ints would slice a page nobody uses, code-review JF-803 F4).
         void RebaseContinuationOnFullBook(int fullBookCount, int resumeIndex)
         {
             // StartIndex counts the chapters the queue has consumed (page start +
@@ -282,22 +285,26 @@ public static class AudiobookPlayResolver
                 continuationStartIndex, continuationTotalCount);
         }
 
-        void RePageFullBookAt(IReadOnlyList<BaseItem> fullBook, int resumeIndex)
+        // The ONE apply of a deep-resume re-page onto this head's locals (JF-803):
+        // the JF-790 fork below (re-paging the already-fetched sorted book through
+        // QueueContinuationFetcher.RePageAt) and the JF-793 deep block (through
+        // QueueContinuationFetcher.TryDeepResumeRePageAsync) install the shared
+        // re-page result here, so the "verbatim" contract between the two shapes
+        // stays structural, not by comment. The record's DeepTicks IS this head's
+        // resume ticks (the fork seeds it with the scan's answer, the deep block
+        // with the deep rescan's), so the install lives here, not at each caller.
+        void ApplyRePage(QueueContinuationFetcher.DeepResumeRePage rePage)
         {
-            // The re-sliced page starts exactly at the position-holding chapter,
-            // so the page-relative answer is (0, resumeTicks) by construction in
-            // every return shape of FindResumeTrackIndex (in-progress hit, cached
-            // position, after-last-played): no re-scan of the slice.
-            trackItems = fullBook
-                .Skip(resumeIndex)
-                .Take(ProgressiveQueueConstants.GetInitialFetchSize())
-                .ToList();
+            trackItems = rePage.Page;
             startIndex = 0;
-            RebaseContinuationOnFullBook(fullBook.Count, resumeIndex);
+            resumeTicks = rePage.DeepTicks;
+            continuationStartIndex = rePage.ContinuationStartIndex;
+            continuationTotalCount = rePage.ContinuationTotalCount;
+            continuationHasMore = rePage.ContinuationHasMore;
 
             logger.LogInformation(
                 "{Label}: resume scan found chapter {ChapterIndex} ('{TrackName}') in the full book; re-paging the book at it",
-                logLabel, resumeIndex, fullBook[resumeIndex].Name);
+                logLabel, rePage.DeepIndex, rePage.FullList[rePage.DeepIndex].Name);
         }
 
         // JF-790 composition with the JF-793/JF-797 deep-resume machinery: the
@@ -324,7 +331,9 @@ public static class AudiobookPlayResolver
             int resumeChapterIndex = startIndex;
             if (resumeChapterIndex > 0)
             {
-                RePageFullBookAt(fileNameOrderedBook, resumeChapterIndex);
+                // resumeTicks seeds the record's DeepTicks; ApplyRePage installs
+                // it back (the record IS the install contract, JF-803).
+                ApplyRePage(QueueContinuationFetcher.RePageAt(fileNameOrderedBook, resumeChapterIndex, resumeTicks));
             }
             else
             {
@@ -354,7 +363,13 @@ public static class AudiobookPlayResolver
         // JF-784) and re-run the ONE resume decision on the full chapter list; a
         // position found beyond the page re-slices the page at that chapter, so the
         // launch, the queue, and the continuation all start at the
-        // position-holding chapter.
+        // position-holding chapter. JF-803: the fetch + rescan + re-slice + rebase
+        // rides the ONE shared deep-resume re-page
+        // (QueueContinuationFetcher.TryDeepResumeRePageAsync, three callers: this
+        // book block, the album head's UserData leg, and its tracker-keyed twin);
+        // this site's FindResumeTrackIndex overload (queue tier, resumePosition
+        // true) and its deepIndex > 0 accept ride the rescan delegate, and the
+        // rescan's ticks are this head's resume ticks.
         // JF-797 item 1 (the masking shape): the gate no longer requires
         // startIndex == 0. A PLAYED PREFIX on page 1 makes FindResumeTrackIndex
         // answer (after-last-played > 0, ticks 0), which the old gate read as
@@ -441,14 +456,17 @@ public static class AudiobookPlayResolver
         if (deepResumeEligible
             && (queueHoldsPositionedEntry || resumeProbeHit))
         {
-            QueryResult<BaseItem> fullBook = await FetchUnpagedBookAsync("GetBookTracksDeepResume").ConfigureAwait(false);
-
-            (int deepIndex, long deepTicks) = ResumeMath.FindResumeTrackIndex(
-                fullBook.Items, jellyfinUser, userDataManager, queueManager, session.DeviceId, resumePosition: true, logger);
-            if (deepIndex > 0)
+            QueueContinuationFetcher.DeepResumeRePage? bookRePage = await QueueContinuationFetcher.TryDeepResumeRePageAsync(
+                () => FetchUnpagedBookAsync("GetBookTracksDeepResume"),
+                fullBook =>
+                {
+                    (int deepIndex, long deepTicks) = ResumeMath.FindResumeTrackIndex(
+                        fullBook, jellyfinUser, userDataManager, queueManager, session.DeviceId, resumePosition: true, logger);
+                    return deepIndex > 0 ? (deepIndex, deepTicks) : null;
+                }).ConfigureAwait(false);
+            if (bookRePage is { } deep)
             {
-                RePageFullBookAt(fullBook.Items, deepIndex);
-                resumeTicks = deepTicks;
+                ApplyRePage(deep);
             }
         }
 

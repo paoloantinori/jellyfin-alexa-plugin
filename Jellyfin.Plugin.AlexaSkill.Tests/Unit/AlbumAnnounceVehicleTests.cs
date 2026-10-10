@@ -216,15 +216,12 @@ public class AlbumAnnounceVehicleTests : PluginTestBase
             RunTimeTicks = TimeSpan.FromMinutes(4).Ticks,
         }).ToList();
         var library = new Mock<ILibraryManager>();
-        library.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
-            .Returns((InternalItemsQuery q) => new QueryResult<BaseItem>
-            {
-                Items = tracks.Skip(q.StartIndex ?? 0).Take(q.Limit ?? tracks.Count).ToList(),
-                TotalRecordCount = tracks.Count
-            });
+        // Deep UserData progress on track 22 (index 21), the JF-796 defect shape;
+        // the probe matcher models it so the discriminator's queries are answered
+        // the way the server answers them.
+        TestHelpers.SetupAlbumPages(library, tracks, resumableRow: c => c.Id == tracks[21].Id);
         library.Setup(l => l.GetItemById(album.Id)).Returns(album);
 
-        // Deep UserData progress on track 22 (index 21), the JF-796 defect shape.
         var inProgress = new UserItemData
         {
             Key = "test",
@@ -290,16 +287,7 @@ public class AlbumAnnounceVehicleTests : PluginTestBase
         }).ToList();
         var queries = new List<InternalItemsQuery>();
         var library = new Mock<ILibraryManager>();
-        library.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
-            .Returns((InternalItemsQuery q) =>
-            {
-                queries.Add(q);
-                return new QueryResult<BaseItem>
-                {
-                    Items = tracks.Skip(q.StartIndex ?? 0).Take(q.Limit ?? tracks.Count).ToList(),
-                    TotalRecordCount = tracks.Count
-                };
-            });
+        TestHelpers.SetupAlbumPages(library, tracks, queries: queries);
         library.Setup(l => l.GetItemById(album.Id)).Returns(album);
 
         // Tracker: 85 min 30s into the album (514 segments; the conservative
@@ -364,12 +352,7 @@ public class AlbumAnnounceVehicleTests : PluginTestBase
         }).ToList();
         var queries = new List<InternalItemsQuery>();
         var library = new Mock<ILibraryManager>();
-        library.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
-            .Returns((InternalItemsQuery q) => new QueryResult<BaseItem>
-            {
-                Items = tracks.Skip(q.StartIndex ?? 0).Take(q.Limit ?? tracks.Count).ToList(),
-                TotalRecordCount = tracks.Count
-            });
+        TestHelpers.SetupAlbumPages(library, tracks, queries: queries);
         library.Setup(l => l.GetItemById(album.Id)).Returns(album);
 
         // Ten hours: far beyond the 104-minute album. The full-list walk falls off
@@ -417,12 +400,7 @@ public class AlbumAnnounceVehicleTests : PluginTestBase
         }).ToList();
         var queries = new List<InternalItemsQuery>();
         var library = new Mock<ILibraryManager>();
-        library.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
-            .Returns((InternalItemsQuery q) => new QueryResult<BaseItem>
-            {
-                Items = tracks.Skip(q.StartIndex ?? 0).Take(q.Limit ?? tracks.Count).ToList(),
-                TotalRecordCount = tracks.Count
-            });
+        TestHelpers.SetupAlbumPages(library, tracks, queries: queries);
         library.Setup(l => l.GetItemById(album.Id)).Returns(album);
 
         // Twenty minutes: exactly the page's runtime sum (5 x 4 min).
@@ -470,16 +448,13 @@ public class AlbumAnnounceVehicleTests : PluginTestBase
             RunTimeTicks = TimeSpan.FromMinutes(4).Ticks,
         }).ToList();
         var library = new Mock<ILibraryManager>();
-        library.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
-            .Returns((InternalItemsQuery q) => new QueryResult<BaseItem>
-            {
-                Items = tracks.Skip(q.StartIndex ?? 0).Take(q.Limit ?? tracks.Count).ToList(),
-                TotalRecordCount = tracks.Count
-            });
+        // Deep UserData progress on track 22 (index 21), modeled on the probe
+        // matcher so the discriminator's queries are answered honestly; NO tracker
+        // swap, so the plugin instance's tracker stays cold (unassigned in the
+        // test host).
+        TestHelpers.SetupAlbumPages(library, tracks, resumableRow: c => c.Id == tracks[21].Id);
         library.Setup(l => l.GetItemById(album.Id)).Returns(album);
 
-        // Deep UserData progress on track 22 (index 21); NO tracker swap, so the
-        // plugin instance's tracker stays cold (unassigned in the test host).
         var inProgress = new UserItemData
         {
             Key = "test",

@@ -700,6 +700,43 @@ public sealed class AlbumPlayService
         // story lives at the albumStartTicks sum below.
         long deepResumePrefixTicks = 0;
         bool trackerOverrideEngaged = false;
+
+        // The ONE unpaged album fetch (JF-803, the book head's FetchUnpagedBookAsync
+        // shape): both deep-resume legs (the tracker-keyed twin inside the JF-625
+        // arm below and the UserData leg further down) run the same scoped unpaged
+        // query on the page's working arm with the same sentinel semantics; only
+        // the triage label differs, so a future scoping change cannot be applied to
+        // one leg and missed on the other.
+        async Task<QueryResult<BaseItem>> FetchUnpagedAlbumAsync(string label)
+            => await RetryAsync(
+                () => _search.SafeGetItemsResult(libraryManager,
+                    QueueContinuationFetcher.BuildScopedAlbumTracksQueryUnpaged(
+                        jellyfinUser, user, libraryManager, _logger, album.Id, pageUsedAlbumIds),
+                    // Same sentinel semantics as the paged fetches above: only
+                    // Items is consumed here today, but the flag keeps the
+                    // fallback honest for any future total read (JF-753).
+                    unknownTotalOnFallback: true),
+                label,
+                cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        // The ONE apply of a deep-resume re-page onto this head's locals (JF-803,
+        // the book head's ApplyRePage shape): both legs install the shared
+        // re-page's page window, the page-relative start, the rebased continuation
+        // triple, and the ABSOLUTE concat prefix (the summed runtime of the deep
+        // rows before the window, this head's own axis the chapter-relative book
+        // offset does not need; summed over the SCOPED row set the deep fetch
+        // returned, self-checking against the source rows rather than resting on
+        // the walk's internal arithmetic). Each leg then adds its own extra (the
+        // tracker leg's in-track partials) and speaks its own log line.
+        void ApplyAlbumRePage(QueueContinuationFetcher.DeepResumeRePage rePage)
+        {
+            albumItems = rePage.Page;
+            startIndex = 0;
+            deepResumePrefixTicks = rePage.FullList.Take(rePage.DeepIndex).Sum(i => i.RunTimeTicks ?? 0);
+            continuationStartIndex = rePage.ContinuationStartIndex;
+            continuationTotalCount = rePage.ContinuationTotalCount;
+            continuationHasMore = rePage.ContinuationHasMore;
+        }
         if (_launch.GetVideoAppForAudio(user)
             && Interface.VideoAppCapabilities.DeviceSupportsVideoApp(context)
             && Plugin.Instance?.AudiobookPositionTracker?.GetPositionTicks(album.Id.ToString()) is long tracked and > 0)
@@ -727,46 +764,38 @@ public sealed class AlbumPlayService
                 // working ParentId/AlbumIds arm so the deep rows concatenate with
                 // the page's. A position beyond even the full list (or an empty
                 // deep answer) stays cold: the page's own resume answer stands.
-                QueryResult<BaseItem> fullAlbum = await RetryAsync(
-                    () => _search.SafeGetItemsResult(libraryManager,
-                        QueueContinuationFetcher.BuildScopedAlbumTracksQueryUnpaged(
-                            jellyfinUser, user, libraryManager, _logger, album.Id, pageUsedAlbumIds),
-                        // Same sentinel semantics as the paged fetches above: only
-                        // Items is consumed here today, but the flag keeps the
-                        // fallback honest for any future total read (JF-753).
-                        unknownTotalOnFallback: true),
-                    logLabel + ":GetAlbumTracksTrackerDeepResume",
-                    cancellationToken: cancellationToken).ConfigureAwait(false);
+                // JF-803: the fetch + walk + re-slice + rebase rides the ONE shared
+                // deep-resume re-page (QueueContinuationFetcher.TryDeepResumeRePageAsync);
+                // this site's WalkTrackerOntoTrack rescan and its deepIndex < count
+                // accept ride the rescan delegate, with the fall-off miss log beside
+                // the walk that produces it.
+                QueueContinuationFetcher.DeepResumeRePage? trackerRePage = await QueueContinuationFetcher.TryDeepResumeRePageAsync(
+                    () => FetchUnpagedAlbumAsync(logLabel + ":GetAlbumTracksTrackerDeepResume"),
+                    fullAlbum =>
+                    {
+                        var (deepIndex, deepInTrackTicks) = WalkTrackerOntoTrack(fullAlbum, tracked);
+                        if (deepIndex >= fullAlbum.Count)
+                        {
+                            _logger.LogInformation(
+                                "{Label}: tracker position {Position}s did not map onto the unpaged album ({DeepCount} rows: empty fetch or position beyond the album's full runtime); keeping the page resume answer (track index {StartIndex})",
+                                logLabel, tracked / TimeSpan.TicksPerSecond, fullAlbum.Count, startIndex);
+                            return null;
+                        }
 
-                var (deepIndex, deepInTrackTicks) = WalkTrackerOntoTrack(fullAlbum.Items, tracked);
-                if (deepIndex < fullAlbum.Items.Count)
+                        return (deepIndex, deepInTrackTicks);
+                    }).ConfigureAwait(false);
+
+                if (trackerRePage is { } mapped)
                 {
                     // Re-slice the page at the tracker's track (the JF-796 re-page
                     // shape): the launch, the queue, and the continuation all start
                     // at it, and the absolute prefix leads the concat offset below.
-                    albumItems = fullAlbum.Items
-                        .Skip(deepIndex)
-                        .Take(ProgressiveQueueConstants.GetInitialFetchSize())
-                        .ToList();
-                    startIndex = 0;
-                    trackedInTrackTicks = deepInTrackTicks;
-                    // The prefix sums straight off the deep rows, the JF-796
-                    // sibling's form: self-checking against the source rows rather
-                    // than resting on the walk's internal arithmetic.
-                    deepResumePrefixTicks = fullAlbum.Items.Take(deepIndex).Sum(i => i.RunTimeTicks ?? 0);
-                    continuationStartIndex = deepIndex + albumItems.Count;
-                    continuationTotalCount = fullAlbum.Items.Count;
-                    continuationHasMore = QueueContinuationFetcher.InitialPageHasMore(continuationStartIndex, continuationTotalCount);
+                    ApplyAlbumRePage(mapped);
+                    trackedInTrackTicks = mapped.DeepTicks;
 
                     _logger.LogInformation(
                         "{Label}: seek-mode tracker resume found track {DeepIndex} ('{TrackName}') beyond the initial page; re-paging the album at it (album position {Position}s, in-track {Partial}s)",
-                        logLabel, deepIndex, albumItems[0].Name, tracked / TimeSpan.TicksPerSecond, deepInTrackTicks / TimeSpan.TicksPerSecond);
-                }
-                else
-                {
-                    _logger.LogInformation(
-                        "{Label}: tracker position {Position}s did not map onto the unpaged album ({DeepCount} rows: empty fetch or position beyond the album's full runtime); keeping the page resume answer (track index {StartIndex})",
-                        logLabel, tracked / TimeSpan.TicksPerSecond, fullAlbum.Items.Count, startIndex);
+                        logLabel, mapped.DeepIndex, mapped.Page[0].Name, tracked / TimeSpan.TicksPerSecond, mapped.DeepTicks / TimeSpan.TicksPerSecond);
                 }
             }
         }
@@ -781,16 +810,18 @@ public sealed class AlbumPlayService
         // page's working ParentId/AlbumIds arm) and re-run the ONE resume decision
         // on the full track list; a position found beyond the page re-slices the
         // page at that track, so the launch, the queue, and the continuation all
-        // start there. THE TRACKER VETO is this site's own axis (the reason the
-        // block is NOT folded into AudiobookPlayResolver's deep-resume helper
-        // shape): a warm tracker on the seek route is the resume truth (JF-625
-        // criterion 3, above), so this USER-DATA deep fetch is skipped entirely
-        // whenever the tracker engaged, mapped or not, and UserData can never
-        // overtake it (the tracker arm's own JF-804 deep fetch above resolves the
-        // tracker's position instead); the remaining divergences (resumePosition
-        // false with no device-queue tier, the AlbumIds arm, and the absolute
-        // concat prefix below, which the chapter-relative book offset does not
-        // need) are the same verdict.
+        // start there. JF-803: the fetch + rescan + re-slice + rebase rides the ONE
+        // shared deep-resume re-page (QueueContinuationFetcher.TryDeepResumeRePageAsync,
+        // three callers: this leg, the tracker-keyed twin above, and the book head).
+        // THE TRACKER VETO is this site's own caller-side axis (the reason this
+        // gate is NOT folded away with the shared helper): a warm tracker on the
+        // seek route is the resume truth (JF-625 criterion 3, above), so this
+        // USER-DATA deep fetch is skipped entirely whenever the tracker engaged,
+        // mapped or not, and UserData can never overtake it (the tracker arm's own
+        // JF-804 deep fetch above resolves the tracker's position instead); the
+        // remaining divergences ride the delegates (resumePosition false with no
+        // device-queue tier, the AlbumIds arm) and the apply (the absolute concat
+        // prefix below, which the chapter-relative book offset does not need).
         // JF-797 item 1 (the masking shape): the gate no longer requires
         // startIndex == 0. A PLAYED PREFIX on page 1 makes FindResumeTrackIndex
         // answer (after-last-played > 0, ticks 0), which the old gate read as
@@ -830,20 +861,20 @@ public sealed class AlbumPlayService
             && continuationHasMore
             && albumResumeProbeHit)
         {
-            QueryResult<BaseItem> fullAlbum = await RetryAsync(
-                () => _search.SafeGetItemsResult(libraryManager,
-                    QueueContinuationFetcher.BuildScopedAlbumTracksQueryUnpaged(
-                        jellyfinUser, user, libraryManager, _logger, album.Id, pageUsedAlbumIds),
-                    // Same sentinel semantics as the paged fetches above: only
-                    // Items is consumed here today, but the flag keeps the
-                    // fallback honest for any future total read (JF-753).
-                    unknownTotalOnFallback: true),
-                logLabel + ":GetAlbumTracksDeepResume",
-                cancellationToken: cancellationToken).ConfigureAwait(false);
+            QueueContinuationFetcher.DeepResumeRePage? albumRePage = await QueueContinuationFetcher.TryDeepResumeRePageAsync(
+                () => FetchUnpagedAlbumAsync(logLabel + ":GetAlbumTracksDeepResume"),
+                fullAlbum =>
+                {
+                    // resumePosition false (the audio route's queue-starting
+                    // semantic): FindResumeTrackIndex answers ticks 0 on EVERY
+                    // return path in that mode, so the index alone decides (the
+                    // JF-803 verified claim) and the delegate's ticks stay 0.
+                    (int deepIndex, _) = ResumeMath.FindResumeTrackIndex(
+                        fullAlbum, jellyfinUser, userDataManager, resumePosition: false);
+                    return deepIndex > 0 ? (deepIndex, 0) : null;
+                }).ConfigureAwait(false);
 
-            (int deepIndex, _) = ResumeMath.FindResumeTrackIndex(
-                fullAlbum.Items, jellyfinUser, userDataManager, resumePosition: false);
-            if (deepIndex > 0)
+            if (albumRePage is { } deep)
             {
                 // The re-sliced page starts exactly at the position-holding track,
                 // so the page-relative answer is index 0 by construction in every
@@ -852,24 +883,11 @@ public sealed class AlbumPlayService
                 // starts the resume track at its beginning (resumePosition false,
                 // the queue-starting semantic); a cold tracker on the seek route
                 // still gets the RIGHT absolute concat position through the prefix.
-                albumItems = fullAlbum.Items
-                    .Skip(deepIndex)
-                    .Take(ProgressiveQueueConstants.GetInitialFetchSize())
-                    .ToList();
-                startIndex = 0;
-                deepResumePrefixTicks = fullAlbum.Items.Take(deepIndex).Sum(i => i.RunTimeTicks ?? 0);
+                ApplyAlbumRePage(deep);
 
                 _logger.LogInformation(
                     "{Label}: deep resume found track {DeepIndex} ('{TrackName}') beyond the initial page; re-paging the album at it",
-                    logLabel, deepIndex, fullAlbum.Items[deepIndex].Name);
-
-                // The fetch-all list is itself the honest total in both regimes
-                // (known-total pages and the JF-753 end-unknown fallback), so the
-                // continuation carries a real count, judged by the ONE named
-                // maybe-more bar (the two-int form the playlist head uses).
-                continuationStartIndex = deepIndex + albumItems.Count;
-                continuationTotalCount = fullAlbum.Items.Count;
-                continuationHasMore = QueueContinuationFetcher.InitialPageHasMore(continuationStartIndex, continuationTotalCount);
+                    logLabel, deep.DeepIndex, deep.FullList[deep.DeepIndex].Name);
             }
         }
 

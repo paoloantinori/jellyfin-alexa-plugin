@@ -2491,13 +2491,12 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
             .Returns(new List<BaseItem> { album });
 
         // One page-shaped mock answering the initial page AND every continuation
-        // batch by offset (the album fetcher's pagination), so both legs fetch.
-        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.Is<InternalItemsQuery>(q => q.ParentId == albumId)))
-            .Returns((InternalItemsQuery q) => new QueryResult<BaseItem>
-            {
-                Items = allTracks.Skip(q.StartIndex ?? 0).Take(q.Limit ?? int.MaxValue).Cast<BaseItem>().ToList(),
-                TotalRecordCount = 20
-            });
+        // batch by offset (the album fetcher's pagination), so both legs fetch;
+        // the matcher keeps the setup scoped to this album's ParentId queries,
+        // the original fixture's scoping (a fresh album: the probe matchers stay
+        // unset and the discriminator's IsPlayed/IsResumable queries miss, the
+        // honest server answer for a collection with no user data).
+        TestHelpers.SetupAlbumPages(_fx.LibraryManager, allTracks, matches: q => q.ParentId == albumId);
 
         _fx.LibraryManager.Setup(l => l.GetItemById(It.IsAny<Guid>()))
             .Returns((Guid id) => byId.TryGetValue(id, out BaseItem? item) ? item : null);

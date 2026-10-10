@@ -733,6 +733,126 @@ internal static class QueueContinuationFetcher
                || await ProbeAsync(q => q.IsResumable = true).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// The result of ONE deep-resume re-page (JF-803): the re-sliced page (the
+    /// page window starting at the deep index), the deep index into the full
+    /// list, the rescan's second value, and the full list itself. The rebased
+    /// continuation triple is DERIVED (computed properties), so the four stored
+    /// facts are the only independent ones. INSTALL CONTRACT: every head
+    /// applies the record the same way (Page becomes the page window, the
+    /// page-relative start resets to 0, the continuation triple installs
+    /// verbatim), each head adding only its own axes (the book head installs
+    /// <see cref="DeepTicks"/> as its resume ticks; the album head sums its
+    /// absolute concat prefix over <see cref="FullList"/> and, on the tracker
+    /// leg, reads <see cref="DeepTicks"/> as the in-track partials). The two
+    /// apply locals (AudiobookPlayResolver.ApplyRePage,
+    /// AlbumPlayService.ApplyAlbumRePage) are deliberate structural twins: a
+    /// field added to this contract must reach both.
+    /// </summary>
+    internal sealed record DeepResumeRePage(
+        IReadOnlyList<BaseItem> Page,
+        int DeepIndex,
+        long DeepTicks,
+        IReadOnlyList<BaseItem> FullList)
+    {
+        /// <summary>How many rows the re-sliced page has consumed of the full
+        /// list (page start + page count; the database offset is independent of
+        /// the resume slice).</summary>
+        internal int ContinuationStartIndex => DeepIndex + Page.Count;
+
+        /// <summary>The fetch-all list's count: itself the honest total in both
+        /// regimes (known-total pages and the end-unknown fallback alike).</summary>
+        internal int ContinuationTotalCount => FullList.Count;
+
+        /// <summary>Whether rows remain beyond the re-sliced page, judged by the
+        /// ONE named maybe-more bar (the two-int form the playlist head
+        /// uses).</summary>
+        internal bool ContinuationHasMore =>
+            InitialPageHasMore(ContinuationStartIndex, ContinuationTotalCount);
+    }
+
+    /// <summary>
+    /// The ONE re-slice-and-rebase at an index into a fetch-all list (JF-803):
+    /// the page becomes the window starting at <paramref name="deepIndex"/>, and
+    /// the record derives the rebased continuation triple (its count is itself
+    /// the honest total in both regimes, known-total pages and the end-unknown
+    /// fallback alike, judged by the ONE named maybe-more bar, the two-int form
+    /// the playlist head uses). The re-sliced page starts exactly at the
+    /// position-holding row, so the page-relative resume answer is index 0 by
+    /// construction in every return shape of the rescan (in-progress hit, cached
+    /// position, after-last-played): no re-scan of the slice. Consumed by
+    /// <see cref="TryDeepResumeRePageAsync"/> and by the JF-790 filename-order
+    /// fork in PlayBookAsync, which re-pages an already-fetched full book.
+    /// </summary>
+    /// <param name="fullList">The fetch-all list (page order, the shared core's order).</param>
+    /// <param name="deepIndex">The index to re-page at; MUST name a row of the list (0 &lt;= index &lt; count) - the re-slice at a row the rescan never found would install an EMPTY page whose first-row consumers throw.</param>
+    /// <param name="deepTicks">The rescan's second value (ticks/partials), carried through to the result.</param>
+    /// <returns>The re-page result.</returns>
+    internal static DeepResumeRePage RePageAt(IReadOnlyList<BaseItem> fullList, int deepIndex, long deepTicks)
+    {
+        // Structural guard (code-review JF-803 F1): the three call sites today
+        // accept only found rows (the delegate predicates), but the shared
+        // factory owns the invariant now - a walk-off index (the tracker walk
+        // answers items.Count on fall-off) must fail loudly here, not as an
+        // empty page that albumItems[startIndex] later turns into an
+        // IndexOutOfRangeException.
+        ArgumentOutOfRangeException.ThrowIfNegative(deepIndex);
+        ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(deepIndex, fullList.Count);
+
+        List<BaseItem> page = fullList
+            .Skip(deepIndex)
+            .Take(ProgressiveQueueConstants.GetInitialFetchSize())
+            .ToList();
+        return new DeepResumeRePage(page, deepIndex, deepTicks, fullList);
+    }
+
+    /// <summary>
+    /// The ONE deep-resume re-page algorithm (JF-803, the third-copy lift): a
+    /// page-1 resume miss on a collection with more pages beyond it resolves
+    /// through ONE unpaged scoped fetch of the whole collection, a rescan of
+    /// the full list, a Skip/Take re-slice of the page at the found row, and a
+    /// continuation rebase onto the full list, so the launch, the queue, and
+    /// the continuation all start at the position-holding row. THREE callers:
+    /// the JF-793 book block (AudiobookPlayResolver.PlayBookAsync), the JF-796
+    /// album head (AlbumPlayService.BuildAlbumPlayResponseAsync), and the
+    /// JF-804 tracker-keyed twin (the same album head's JF-625 arm). Every
+    /// divergence rides a delegate: the fetch closure carries the site's
+    /// query arm, executor, and sentinel semantics (the album's
+    /// ParentId/AlbumIds working arm + unknownTotalOnFallback; the book's
+    /// plain unpaged fetch), the rescan closure carries the site's resume
+    /// decision (the book's FindResumeTrackIndex overload with the queue tier
+    /// and resumePosition true; the album's resumePosition:false overload; the
+    /// tracker walk onto the track) AND its accept predicate, returning null
+    /// when no re-page applies. The accept predicate is <c>deepIndex &gt; 0</c>
+    /// at BOTH probe-side sites, genuinely the same predicate (the reviewer
+    /// claim JF-803 verified at ResumeMath.FindResumeTrackIndex): with
+    /// resumePosition false every return path answers ticks 0, so the index
+    /// alone decides; the tracker walk instead accepts <c>deepIndex &lt;
+    /// count</c> (index 0 is a real mapping, not a miss). Caller-side guards
+    /// stay caller-side (the album's tracker veto, the book's JF-790 mooting,
+    /// the JF-797 probe and queue-valve gates) and a null result means "keep
+    /// the page answer". JF-797 item 3 (the pre-fetch discriminator unified
+    /// inside this helper for the probe-side callers) is the filed follow-up
+    /// this shape must not preclude: it lands as gate work ahead of
+    /// <paramref name="fetchFullAsync"/>, behind the callers' existing probe
+    /// delegates.
+    /// </summary>
+    /// <param name="fetchFullAsync">Fetches the whole collection once, unpaged, through the site's own scoped query and executor.</param>
+    /// <param name="rescanFull">Rescans the full list with the site's resume decision; null means no re-page (the caller keeps its page answer).</param>
+    /// <returns>The re-page result, or null when the rescan found nothing to re-page at.</returns>
+    internal static async Task<DeepResumeRePage?> TryDeepResumeRePageAsync(
+        Func<Task<QueryResult<BaseItem>>> fetchFullAsync,
+        Func<IReadOnlyList<BaseItem>, (int DeepIndex, long DeepTicks)?> rescanFull)
+    {
+        QueryResult<BaseItem> full = await fetchFullAsync().ConfigureAwait(false);
+        if (rescanFull(full.Items) is not { } hit)
+        {
+            return null;
+        }
+
+        return RePageAt(full.Items, hit.DeepIndex, hit.DeepTicks);
+    }
+
     private static IReadOnlyList<BaseItem> FetchAudiobookChapters(
         QueueContinuation continuation,
         ILibraryManager libraryManager,

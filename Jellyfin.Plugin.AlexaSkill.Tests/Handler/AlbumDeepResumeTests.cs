@@ -117,21 +117,23 @@ public class AlbumDeepResumeTests : PluginTestBase, IDisposable
         HashSet<Guid> playedIds = playedIndexes?.Select(i => tracks[i].Id).ToHashSet() ?? new HashSet<Guid>();
         Guid? progressRowId = progressTrackIndex is int idx ? tracks[idx].Id : null;
 
+        // The probe matchers model the user data once for BOTH mock arms below
+        // (the GetItemsResult page mock and the endUnknownPage fallback).
+        Func<BaseItem, bool> playedRow = c => playedIds.Contains(c.Id);
+        Func<BaseItem, bool> resumableRow = c => c.Id == progressRowId && positionTicks > 0;
+
         // The album search resolves the album (any GetItemList query).
         _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem> { album });
 
-        // The tracks query honors paging, then the flags.
-        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
-            .Returns((InternalItemsQuery q) =>
-            {
-                queries?.Add(q);
-                return TestHelpers.ServePagedTracks(
-                    tracks,
-                    q,
-                    playedRow: c => playedIds.Contains(c.Id),
-                    resumableRow: c => c.Id == progressRowId && positionTicks > 0);
-            });
+        // The tracks query honors paging, then the flags (the ONE paging-honoring
+        // album mock, JF-803's hoist).
+        TestHelpers.SetupAlbumPages(
+            _fx.LibraryManager,
+            tracks,
+            queries,
+            playedRow: playedRow,
+            resumableRow: resumableRow);
 
         if (progressRowId != null || playedIds.Count > 0)
         {
@@ -166,8 +168,8 @@ public class AlbumDeepResumeTests : PluginTestBase, IDisposable
                 .Returns((InternalItemsQuery q) => TestHelpers.ServePagedTracks(
                     tracks,
                     q,
-                    playedRow: c => playedIds.Contains(c.Id),
-                    resumableRow: c => c.Id == progressRowId && positionTicks > 0).Items);
+                    playedRow: playedRow,
+                    resumableRow: resumableRow).Items);
         }
 
         return (album, tracks);
