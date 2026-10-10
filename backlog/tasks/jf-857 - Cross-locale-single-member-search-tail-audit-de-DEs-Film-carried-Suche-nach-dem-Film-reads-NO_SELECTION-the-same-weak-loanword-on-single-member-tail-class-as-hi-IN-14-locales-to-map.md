@@ -4,9 +4,10 @@ title: >-
   Cross-locale single-member search-tail audit: de-DE's Film-carried 'Suche nach
   dem Film' reads NO_SELECTION, the same weak-loanword-on-single-member-tail
   class as hi-IN (14 locales to map)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-10-10 12:14'
+updated_date: '2026-10-10 13:14'
 labels:
   - nlu
   - interaction-model
