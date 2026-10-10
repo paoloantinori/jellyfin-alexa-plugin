@@ -104,32 +104,32 @@ public sealed class TvNextUpService
             return (null, ResponseBuilder.Tell(ResponseStrings.Get("MediaTypeNotAvailable", locale)));
         }
 
-        var seriesQuery = new InternalItemsQuery
-        {
-            User = jellyfinUser,
-            Recursive = true,
-            // JF-645 (the JF-643 pattern): the series name feeds the SearchTerm
-            // index, Latin-script; a ja-JP series slot arrives as katakana, so the
-            // QUERY is romanized. The not-found speech keeps the raw seriesName
-            // and the fuzzy fallback romanizes internally (SearchService choke point).
-            SearchTerm = Util.KatakanaRomanizer.Romanize(seriesName),
-            IncludeItemTypes = seriesKinds,
-            DtoOptions = new DtoOptions(true)
-        };
-        Util.LibraryFilter.ApplyLibraryFilter(seriesQuery, user, libraryManager, _logger);
-        _logger.LogDebug("ResolveSeries: querying Jellyfin with searchTerm='{SeriesName}', types=Series", seriesName);
-        IReadOnlyList<BaseItem> seriesList = await RetryAsync(() => libraryManager.GetItemList(seriesQuery), "GetSeries", cancellationToken).ConfigureAwait(false);
-        _logger.LogDebug("ResolveSeries: Jellyfin returned {ResultCount} series", seriesList.Count);
+        // JF-862: the shared named-item resolve chain (the JF-329 convergence hoist
+        // of this site's inline chain). JF-645 (the JF-643 pattern): the series name
+        // feeds the SearchTerm index, Latin-script; a ja-JP series slot arrives as
+        // katakana, so the QUERY is romanized before the call (the fuzzy tier
+        // romanizes internally too, and the romanizer is idempotent). The
+        // FirstMatchWins policy keeps this site's shape: Jellyfin's SearchTerm
+        // relevance order is the authority for series, no arbitration. The
+        // not-found speech keeps the raw seriesName (the user's own words).
+        NamedItemResolution resolution = await _search.ResolveNamedItemAsync(
+            Util.KatakanaRomanizer.Romanize(seriesName),
+            jellyfinUser,
+            user,
+            libraryManager,
+            seriesKinds,
+            NamedItemMultiMatchPolicy.FirstMatchWins,
+            "GetSeries",
+            "SeriesFuzzyFallback",
+            locale,
+            cancellationToken).ConfigureAwait(false);
 
-        if (seriesList.Count > 0)
+        if (resolution.Item is BaseItem series)
         {
-            return (seriesList[0], null);
-        }
-
-        var fuzzy = await _search.SearchItemsFuzzyAsync(seriesName, jellyfinUser, user, libraryManager, seriesKinds, cancellationToken, "SeriesFuzzyFallback", locale: locale).ConfigureAwait(false);
-        if (fuzzy != null)
-        {
-            return (fuzzy.Value.Item, null);
+            _logger.LogDebug(
+                "ResolveSeries: resolved series={Name} ({Id}) for query='{SeriesName}'",
+                series.Name, series.Id, seriesName);
+            return (series, null);
         }
 
         return (null, ResponseBuilder.Tell(ResponseStrings.Get("NotFoundSeries", locale, seriesName)));

@@ -154,11 +154,14 @@ public class ShowPhotoAlbumIntentHandler : BaseHandler
     }
 
     /// <summary>
-    /// Resolve the spoken album name to a Jellyfin <c>PhotoAlbum</c> folder:
-    /// a SearchTerm query first (the PlayBook shape), the best fuzzy match when
-    /// several match, and the shared bounded fuzzy DB scan
-    /// (<see cref="SearchService.SearchItemsFuzzyAsync"/>) on a SearchTerm miss.
-    /// All tiers run under the per-user library filter.
+    /// Resolve the spoken album name to a Jellyfin <c>PhotoAlbum</c> folder on the
+    /// shared named-item resolve chain (<see cref="SearchService.ResolveNamedItemAsync"/>,
+    /// the JF-862 hoist of this handler's inline chain): the SearchTerm tier first,
+    /// the <see cref="NamedItemMultiMatchPolicy.ArbitrateThenTopRanked"/> policy on a
+    /// multi-match (fuzzy arbitration through the JF-776 ScoringName reading, and the
+    /// below-bar fallback to the top-ranked SearchTerm match, announced by name), and
+    /// the shared bounded fuzzy scan on a SearchTerm miss. All tiers run under the
+    /// per-user library filter.
     /// </summary>
     /// <param name="albumName">The romanized spoken album name.</param>
     /// <param name="jellyfinUser">The resolved Jellyfin user for query context.</param>
@@ -173,61 +176,19 @@ public class ShowPhotoAlbumIntentHandler : BaseHandler
         string locale,
         CancellationToken cancellationToken)
     {
-        var albumQuery = new InternalItemsQuery
-        {
-            User = jellyfinUser,
-            Recursive = true,
-            SearchTerm = albumName,
-            IncludeItemTypes = new[] { BaseItemKind.PhotoAlbum },
-            DtoOptions = new DtoOptions(true)
-        };
-        ApplyLibraryFilter(albumQuery, user, _libraryManager);
-
-        IReadOnlyList<BaseItem> albums = await RetryAsync(
-            () => _libraryManager.GetItemList(albumQuery),
-            "GetPhotoAlbums",
-            cancellationToken).ConfigureAwait(false);
-
-        if (albums.Count == 1)
-        {
-            return albums[0];
-        }
-
-        if (albums.Count > 1)
-        {
-            // JF-776: the query reaching this scan is ALWAYS romanized (the
-            // JF-643 entry wiring above), so scoring reads the candidates
-            // through the romaji reading (KeywordMatcher.ScoringName), never
-            // the raw name; the announcement below keeps the display name.
-            BaseItem? best = Search.FuzzyMatch(albumName, albums, a => KeywordMatcher.ScoringName(a.Name), user);
-            if (best != null)
-            {
-                return best;
-            }
-
-            // Below the fuzzy bar with SearchTerm matches in hand: the honest
-            // answer is the top-ranked match (Jellyfin's SearchTerm relevance
-            // order, the TvNextUp ResolveSeriesAsync first-match precedent),
-            // announced by name below. A hard not-found here would contradict
-            // the matches the query just returned.
-            Logger.LogDebug(
-                "ShowPhotoAlbum: fuzzy miss on {Count} SearchTerm matches for query={Query}, taking the top-ranked",
-                albums.Count,
-                albumName);
-            return albums[0];
-        }
-
-        var fuzzy = await Search.SearchItemsFuzzyAsync(
+        NamedItemResolution resolution = await Search.ResolveNamedItemAsync(
             albumName,
             jellyfinUser,
             user,
             _libraryManager,
             new[] { BaseItemKind.PhotoAlbum },
-            cancellationToken,
+            NamedItemMultiMatchPolicy.ArbitrateThenTopRanked,
+            "GetPhotoAlbums",
             "ShowPhotoAlbumFuzzyFallback",
-            locale: locale).ConfigureAwait(false);
+            locale,
+            cancellationToken).ConfigureAwait(false);
 
-        return fuzzy?.Item;
+        return resolution.Item;
     }
 
     /// <summary>

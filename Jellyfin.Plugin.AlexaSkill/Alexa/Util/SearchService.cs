@@ -18,7 +18,8 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 /// the library-search and fuzzy-recall machinery: the NRE-safe query executor, the
 /// ASR compound-word fallback wrapper, the plain and
 /// phonetic fuzzy matchers, the shared artist-songs query (the JF-382 "no third
-/// copy" home), the zero-result fuzzy fallback, and the search response-mode
+/// copy" home), the zero-result fuzzy fallback, the shared named-item resolve chain
+/// (<see cref="ResolveNamedItemAsync"/>, JF-862), and the search response-mode
 /// resolution.
 /// RECALL LAYER ONLY. The auto-play DECISION predicates stay at their decision
 /// points, per the fuzzy-recall-vs-judgment-layers memory (JF-408: two relocation
@@ -32,7 +33,13 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 /// points judge. (The rule bars NEW judgments: SearchItemsFuzzyAsync's JF-508/JF-526
 /// coverage gate arrived here verbatim inside its moved body, a pre-existing decision
 /// at its pre-existing point; relocating it would be a JF-408-class decision, not
-/// cleanup.)
+/// cleanup. JF-862 extends the same verbatim-move carve-out to ResolveNamedItemAsync's
+/// two canned multi-match policies: ArbitrateThenTopRanked and FirstMatchWins arrived
+/// verbatim from ShowPhotoAlbum's ResolveAlbumAsync and TvNextUp's series resolution,
+/// pre-existing decisions at their pre-existing points, now shared as CALLER-SELECTED
+/// policy values; the caller still owns WHICH policy runs, and the third policy
+/// (CallerArbitrates) keeps its prompt judgment at the Handler layer by returning
+/// the matches unarbitrated.)
 /// STATELESS by construction (readonly config + logger), so the
 /// singleton-handlers constraint BaseHandler documents is preserved.
 /// COMPOSITION DECISION (the PlaybackLaunchBuilder precedent): BaseHandler
@@ -452,6 +459,139 @@ public sealed class SearchService
                 operationLabel, picked.Item.Name, picked.Score, query);
             return match;
         }
+    }
+
+    /// <summary>
+    /// The shared named-item resolve chain (JF-862, the third-caller hoist): the
+    /// SearchTerm query, the per-site multi-match policy, and the zero-result fuzzy
+    /// fallback that ShowPhotoAlbum (ResolveAlbumAsync), PlayBook (the book leg),
+    /// and TvNextUp.ResolveSeriesForPlaybackAsync carried as three drifting inline
+    /// copies. Tier order at every original site, kept byte-identical:
+    /// <list type="number">
+    /// <item>SearchTerm tier: the site's item kinds under the per-user library
+    /// filter, retried on the request budget.</item>
+    /// <item>A SINGLE SearchTerm match resolves directly at every original site
+    /// (no arbitration ran on one-match queries); the shared short-circuit keeps
+    /// that.</item>
+    /// <item>Multiple matches go to <paramref name="multiMatchPolicy"/>, the one
+    /// axis the sites genuinely differ on, so it is a REQUIRED parameter (see
+    /// <see cref="NamedItemMultiMatchPolicy"/> for the three shapes and their
+    /// sites).</item>
+    /// <item>An EMPTY SearchTerm result falls back to the shared bounded fuzzy scan
+    /// (<see cref="SearchItemsFuzzyAsync"/>, the JF-508/JF-526 coverage gate and
+    /// acceptance-bar walk included), whose hit resolves and whose miss is the
+    /// not-found state.</item>
+    /// </list>
+    /// The not-found state carries NO response: each caller speaks its own
+    /// localized not-found (wording and media noun differ by site), keeping
+    /// response-building out of this recall layer.
+    /// </summary>
+    /// <param name="query">The spoken item name, ROMANIZED by the caller (the
+    /// JF-643 pattern: the SearchTerm index is Latin-script, so every original
+    /// caller romanizes kana before this point; <see cref="SearchItemsFuzzyAsync"/>
+    /// romanizes internally too, and the romanizer is idempotent, so the fuzzy tier
+    /// is unchanged by the double pass).</param>
+    /// <param name="jellyfinUser">The Jellyfin user for query context.</param>
+    /// <param name="user">The plugin user for library access filtering and the
+    /// arbitration threshold.</param>
+    /// <param name="libraryManager">The library manager for the queries.</param>
+    /// <param name="itemTypes">The item kinds to search (the caller owns any
+    /// content-access gating: TvNextUp filters its series kinds BEFORE calling).</param>
+    /// <param name="multiMatchPolicy">What to do when the SearchTerm tier returns
+    /// more than one match.</param>
+    /// <param name="searchRetryLabel">Label for the SearchTerm tier's retry
+    /// logging (the sites' historical labels: "GetPhotoAlbums", "GetAudiobooks",
+    /// "GetSeries").</param>
+    /// <param name="fuzzyOperationLabel">Label for the fuzzy fallback's logging
+    /// (the sites' historical labels: "ShowPhotoAlbumFuzzyFallback",
+    /// "PlayBookFuzzyFallback", "SeriesFuzzyFallback").</param>
+    /// <param name="locale">The request locale, for the fuzzy fallback's
+    /// tokenizer.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The chain's terminal state (see <see cref="NamedItemResolution"/>).</returns>
+    public async Task<NamedItemResolution> ResolveNamedItemAsync(
+        string query,
+        Jellyfin.Database.Implementations.Entities.User? jellyfinUser,
+        Entities.User user,
+        ILibraryManager libraryManager,
+        BaseItemKind[] itemTypes,
+        NamedItemMultiMatchPolicy multiMatchPolicy,
+        string searchRetryLabel,
+        string fuzzyOperationLabel,
+        string locale,
+        CancellationToken cancellationToken)
+    {
+        var searchQuery = new InternalItemsQuery
+        {
+            User = jellyfinUser,
+            Recursive = true,
+            SearchTerm = query,
+            IncludeItemTypes = itemTypes,
+            DtoOptions = new DtoOptions(true)
+        };
+        LibraryFilter.ApplyLibraryFilter(searchQuery, user, libraryManager, _logger);
+
+        IReadOnlyList<BaseItem> matches = await RetryAsync(
+            () => libraryManager.GetItemList(searchQuery),
+            searchRetryLabel,
+            cancellationToken).ConfigureAwait(false);
+
+        _logger.LogDebug(
+            "{Label}: SearchTerm tier returned {Count} matches for query='{Query}'",
+            searchRetryLabel, matches.Count, query);
+
+        if (matches.Count == 1)
+        {
+            return NamedItemResolution.Resolved(matches[0]);
+        }
+
+        if (matches.Count > 1)
+        {
+            switch (multiMatchPolicy)
+            {
+                case NamedItemMultiMatchPolicy.FirstMatchWins:
+                    return NamedItemResolution.Resolved(matches[0]);
+
+                case NamedItemMultiMatchPolicy.ArbitrateThenTopRanked:
+                    // JF-776: the query reaching this arbitration is ALWAYS
+                    // romanized (the caller contract above), so scoring reads the
+                    // candidates through the romaji reading (ScoringName), never
+                    // the raw name; the caller keeps announcing the display name.
+                    BaseItem? best = FuzzyMatch(query, matches, m => KeywordMatcher.ScoringName(m.Name), user);
+                    if (best != null)
+                    {
+                        return NamedItemResolution.Resolved(best);
+                    }
+
+                    // Below the fuzzy bar with SearchTerm matches in hand: the
+                    // honest answer is the top-ranked match (Jellyfin's SearchTerm
+                    // relevance order, the TvNextUp first-match precedent),
+                    // announced by name. A hard not-found here would contradict
+                    // the matches the query just returned.
+                    _logger.LogDebug(
+                        "{Label}: fuzzy miss on {Count} SearchTerm matches for query='{Query}', taking the top-ranked",
+                        searchRetryLabel, matches.Count, query);
+                    return NamedItemResolution.Resolved(matches[0]);
+
+                case NamedItemMultiMatchPolicy.CallerArbitrates:
+                    return NamedItemResolution.Ambiguous(matches);
+
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(multiMatchPolicy), multiMatchPolicy, "Unknown named-item multi-match policy");
+            }
+        }
+
+        var fuzzy = await SearchItemsFuzzyAsync(
+            query,
+            jellyfinUser,
+            user,
+            libraryManager,
+            itemTypes,
+            cancellationToken,
+            fuzzyOperationLabel,
+            locale: locale).ConfigureAwait(false);
+
+        return fuzzy != null ? NamedItemResolution.Resolved(fuzzy.Value.Item) : NamedItemResolution.NotFound();
     }
 
     /// <summary>
