@@ -422,3 +422,61 @@ tests:
     expected_intent: PlayAlbumIntent
     expected_slots:
       musician: {}
+
+  # ------------------------------------------------------------------------
+  # JF-857 (2026-10-10): pins for the new PlayVideo strong-carrier crossings
+  # (search/anschauen/schauen/zeigen tails on the Video carrier). RED until
+  # the rebuilt de-DE model deploys (the JF-766 convention). The Film-carried
+  # forms are trainer-anomalous (JF-770/JF-771 class) and deliberately NOT
+  # pinned; the probe map and cross-locale scope live in the template's
+  # PlayVideoIntent comment and task JF-857.
+  # ------------------------------------------------------------------------
+  - utterance: "Suche nach dem Video inception"
+    expected_intent: PlayVideoIntent
+    expected_slots:
+      title:
+        value: "inception"
+
+  - utterance: "Video inception anschauen"
+    expected_intent: PlayVideoIntent
+    expected_slots:
+      title:
+        value: "inception"
+
+  - utterance: "Video inception schauen"
+    expected_intent: PlayVideoIntent
+    expected_slots:
+      title:
+        value: "inception"
+
+  - utterance: "Video inception zeigen"
+    expected_intent: PlayVideoIntent
+    expected_slots:
+      title:
+        value: "inception"
+
+  # JF-857 green guards (probe-proven 4/4 live 2026-10-10, title raw
+  # 'inception'): anchor the weak-carried search tail's exact shape and the
+  # anschauen native carrier against rebuild flips.
+  - utterance: "Suche nach dem Film inception"
+    expected_intent: PlayVideoIntent
+    expected_slots:
+      title:
+        value: "inception"
+
+  - utterance: "Ich will inception anschauen"
+    expected_intent: PlayVideoIntent
+    expected_slots:
+      title:
+        value: "inception"
+
+  # JF-857 code-review catch: the new 'Suche nach dem Video {title}' sits one
+  # dative article from SearchMedia's 'Suche nach einem Video {query}'
+  # family; this guard pins the neighbor so a post-rebuild selection steal
+  # (anti-pattern #3 class) surfaces in the suite, not on a device.
+  # Probe-proven 4/4 live 2026-10-10 (query raw 'inception').
+  - utterance: "Suche nach einem Video inception"
+    expected_intent: SearchMediaIntent
+    expected_slots:
+      query:
+        value: "inception"
