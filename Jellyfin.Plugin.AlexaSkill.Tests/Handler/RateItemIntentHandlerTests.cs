@@ -7,6 +7,7 @@ using global::Alexa.NET.Request.Type;
 using global::Alexa.NET.Response;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Directive;
 using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
@@ -160,7 +161,10 @@ public class RateItemIntentHandlerTests : PluginTestBase
     /// <summary>
     /// The VideoApp route (seek-mode movies, episodes) never sets an
     /// AudioPlayer token; the device last-played ledger is the only signal
-    /// there, so it must rate the ledger item.
+    /// there, so it must rate the ledger item. JF-789: this fresh-stamp twin is
+    /// the within-window half of RateItem's JF-626 stance (the tail is
+    /// recency-bounded now; the days-old half is
+    /// <see cref="HandleAsync_DaysOldLedgerTail_AnswersNoItem_JF789"/>).
     /// </summary>
     [Fact]
     public async Task HandleAsync_NoToken_LedgerFallbackRatesLedgerItem()
@@ -178,6 +182,38 @@ public class RateItemIntentHandlerTests : PluginTestBase
 
         Assert.Equal(8.0, data.Rating);
         Assert.Contains("Ledger Movie", TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// JF-789 step 3 red proof: RateItem's documented JF-626 stance ("rate-this on
+    /// an idle device rates the days-old item") is BOUNDED by the ledger recency
+    /// window; the days-old tail must answer the no-item tell instead. The stance
+    /// itself survives WITHIN the window (the fresh twin above). RED on the
+    /// pre-JF-789 tree: the rating landed on the days-old item.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_DaysOldLedgerTail_AnswersNoItem_JF789()
+    {
+        var queueManager = TestHelpers.CreateDeviceQueueManager("rate-stale-jf789");
+        var movie = new Movie { Name = "Days Old Movie", Id = Guid.NewGuid(), Path = "/movies/old.mkv" };
+        var data = SetupHappyPath(movie);
+        string deviceId = "rate-stale-jf789-device";
+        queueManager.RecordLastPlayed(deviceId, movie.Id.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
+        TestHelpers.BackdateLastPlayedStamp(queueManager, deviceId, TimeSpan.FromDays(3));
+        var handler = CreateHandler(queueManager);
+
+        var response = await handler.HandleAsync(
+            Request("4"), TestHelpers.CreateTestContext(deviceId),
+            TestHelpers.CreateTestUser(), null!, CancellationToken.None);
+
+        Assert.Null(data.Rating);
+        _fx.UserDataManager.Verify(u => u.SaveUserData(
+            It.IsAny<Jellyfin.Database.Implementations.Entities.User>(),
+            It.IsAny<BaseItem>(),
+            It.IsAny<UserItemData>(),
+            It.IsAny<UserDataSaveReason>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+        Assert.Contains(ResponseStrings.Get("RatingNoItem", "en-US"), TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
     }
 
     /// <summary>

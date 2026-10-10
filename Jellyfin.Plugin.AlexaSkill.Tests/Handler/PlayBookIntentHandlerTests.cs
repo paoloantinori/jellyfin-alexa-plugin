@@ -1805,7 +1805,7 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
         Assert.NotNull(response.Response.Directives?.FirstOrDefault(d => d.GetType().Name.Contains("VideoApp")));
-        (string? itemId, DeviceQueueManager.LaunchRoute? route) = _queueManager.GetLastPlayedSnapshot(session.DeviceId);
+        (string? itemId, DeviceQueueManager.LaunchRoute? route, _) = _queueManager.GetLastPlayedSnapshot(session.DeviceId);
         Assert.Equal(trackItem.Id.ToString(), itemId);
         Assert.Equal(DeviceQueueManager.LaunchRoute.VideoApp, route);
     }

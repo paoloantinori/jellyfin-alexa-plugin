@@ -97,6 +97,40 @@ public class RepeatIntentHandlerTests : PluginTestBase, IDisposable
     private static void AssertNoAudioPlayDirective(SkillResponse response)
         => TestHelpers.AssertNoAudioPlayDirective(response);
 
+    /// <summary>
+    /// JF-789 step 3 red proof: Repeat rode the resolver's unbounded ledger tail
+    /// as an unguarded transport rider, so "repeat this" on a device whose last
+    /// skill playback was days ago RESTARTED that item (an AudioPlayer.Play
+    /// ReplaceAll out of nowhere). The tail is bounded by the ledger recency
+    /// window now, so the no-media tell answers. RED on the pre-JF-789 tree: the
+    /// restart directive shipped.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_DaysOldLedgerTail_NoMediaInsteadOfRestart_JF789()
+    {
+        var queueManager = TestHelpers.CreateDeviceQueueManager("repeat-stale-jf789");
+        var oldSong = new Audio
+        {
+            Name = "Days Old Song",
+            Id = Guid.NewGuid(),
+            Path = "/music/days-old.mp3"
+        };
+        _fx.LibraryManager.Setup(l => l.GetItemById(oldSong.Id)).Returns(oldSong);
+        string deviceId = "test-device"; // CreateTestContext()'s default key
+        queueManager.RecordLastPlayed(deviceId, oldSong.Id.ToString(), DeviceQueueManager.LaunchRoute.Audio);
+        TestHelpers.BackdateLastPlayedStamp(queueManager, deviceId, TimeSpan.FromDays(3));
+        var handler = CreateHandler(queueManager);
+
+        SkillResponse response = await handler.HandleAsync(
+            CreateRepeatRequest(), TestHelpers.CreateTestContext(deviceId),
+            TestHelpers.CreateTestUser(), session: null!, CancellationToken.None);
+
+        AssertNoAudioPlayDirective(response);
+        Assert.Contains(
+            Jellyfin.Plugin.AlexaSkill.Alexa.Locale.ResponseStrings.Get("NoMediaPlaying", "en-US"),
+            TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+    }
+
     [Fact]
     public void CanHandle_RepeatIntent_ReturnsTrue()
     {

@@ -411,6 +411,38 @@ public class SetPlaybackSpeedIntentHandlerTests : PluginTestBase, IDisposable
         Assert.Null(user.PodcastSpeedPerMille);
     }
 
+    /// <summary>
+    /// JF-789 step 3 red proof, the speed family's flip: the resolver's unbounded
+    /// tail answered a DAYS-OLD VideoApp-routed ledger entry before the medium
+    /// gate ran, so "speed" on an idle device spoke the video refusal
+    /// (CannotChangeSpeedOverVideo) about a playback that ended days ago. The
+    /// bounded tail answers null first, so the honest no-media tell speaks. RED
+    /// on the pre-JF-789 tree: the refusal answered.
+    /// </summary>
+    [Fact]
+    public async Task DaysOldVideoAppLedger_NoMediaInsteadOfVideoRefusal_JF789()
+    {
+        Audio episode = CreateEpisode(60);
+        SetupItemLookup(episode);
+        _queueManager.RecordLastPlayed(DeviceId, episode.Id.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
+        TestHelpers.BackdateLastPlayedStamp(_queueManager, DeviceId, TimeSpan.FromDays(3));
+
+        var handler = CreateHandler();
+        var user = TestHelpers.CreateTestUser();
+
+        SkillResponse response = await handler.HandleAsync(
+            CreateIntentRequest(RateSlot("uno e mezzo", "1500")),
+            TestHelpers.CreateTestContext(DeviceId),
+            user,
+            CreateSession(null),
+            CancellationToken.None);
+
+        Assert.Null(TestHelpers.GetPlayDirective(response));
+        Assert.Contains("Nessun contenuto in riproduzione", SpeechText(response), StringComparison.Ordinal);
+        Assert.DoesNotContain("non posso cambiare la velocità", SpeechText(response), StringComparison.Ordinal);
+        Assert.Null(user.PodcastSpeedPerMille);
+    }
+
     // ---- the JF-655 active-playback gate ----
 
     /// <summary>

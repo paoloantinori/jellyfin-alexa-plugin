@@ -205,10 +205,11 @@ public class DeviceQueueManagerTests : IDisposable
         _manager.SetQueue("device-1", new List<string> { "q1", "q2" }, 0);
 
         Assert.Equal("launched-item", _manager.GetLastPlayedItemId("device-1"));
-        (string? itemId, DeviceQueueManager.LaunchRoute? route) = _manager.GetLastPlayedSnapshot("device-1");
+        (string? itemId, DeviceQueueManager.LaunchRoute? route, DateTime? writtenAtOut) = _manager.GetLastPlayedSnapshot("device-1");
         Assert.Equal("launched-item", itemId);
         Assert.Equal(DeviceQueueManager.LaunchRoute.VideoApp, route);
         Assert.Equal(writtenAt, _manager.GetQueue("device-1").LastPlayedWrittenAt);
+        Assert.Equal(writtenAt, writtenAtOut);
     }
 
     // =====================================================================

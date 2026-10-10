@@ -91,8 +91,9 @@ public class MediaInfoIntentHandler : BaseHandler
         // JF-629 idle guard, the ONE predicate (JF-785 migrated this family's
         // DTO-only guard onto it): "what is playing" is PRESENT TENSE, and
         // without current evidence nothing is playing NOW, so the resolver's
-        // unbounded ledger tail (days-old persisted last-played) must not
-        // answer it; the predicate's doc owns the evidence legs.
+        // ledger tail (recency-bounded since JF-789, but still answering a
+        // within-window idle device) must not answer it; the predicate's doc
+        // owns the evidence legs and the REJECTED JF-789 fold.
         if (!PlaybackLaunchBuilder.HasCurrentPlaybackEvidence(context, session))
         {
             Logger.LogInformation("MediaInfoIntent: no media currently playing");

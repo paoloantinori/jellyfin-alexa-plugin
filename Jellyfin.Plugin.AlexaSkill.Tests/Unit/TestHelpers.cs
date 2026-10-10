@@ -804,6 +804,14 @@ internal static class TestHelpers
             logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<DeviceQueueManager>.Instance);
 
     /// <summary>
+    /// JF-789: backdates a device's last-played freshness stamp to the days-old
+    /// shape for the ledger-recency proofs (<c>RecordLastPlayed</c> always stamps
+    /// now, and the public DTO setter is the one backdating handle).
+    /// </summary>
+    internal static void BackdateLastPlayedStamp(DeviceQueueManager queue, string deviceId, TimeSpan age)
+        => queue.GetQueue(deviceId)!.LastPlayedWrittenAt = DateTime.UtcNow - age;
+
+    /// <summary>
     /// JF-630: the ONE Plugin.Instance.DeviceQueueManager swap scope (was four
     /// suite-level capture/assign/restore/dispose copies plus two method-level
     /// swap-to-null pairs). Contract lives on the shared core

@@ -766,7 +766,7 @@ public sealed class PlaybackLaunchBuilder
             return PlayingMedium.Unknown;
         }
 
-        (string? lastPlayedId, DeviceQueueManager.LaunchRoute? recordedRoute) =
+        (string? lastPlayedId, DeviceQueueManager.LaunchRoute? recordedRoute, _) =
             ReadLastPlayedSnapshot(context, queueManager);
         if (!Guid.TryParse(lastPlayedId, out Guid lastPlayedItemId))
         {
@@ -812,16 +812,18 @@ public sealed class PlaybackLaunchBuilder
         /// helper - they hold no queueManager to unify; a future edit keyed on 'the ONE
         /// read' must not miss them.)
     /// classifier-half null contract (null falls back to <c>Plugin.Instance</c>'s)
-    /// and returns the device's last-played snapshot, or <c>(null, null)</c> when
+    /// and returns the device's last-played snapshot, or <c>(null, null, null)</c> when
     /// no device id or no manager resolves. Every GetLastPlayedSnapshot reader
     /// (the medium classifier, the current-item resolver, the screen-owner belt,
     /// and RateItem's keep-alive check) goes through here so the null contract is
-    /// defined once.
+    /// defined once. JF-789 threads the freshness stamp as the third value (the
+    /// ledger's recency bounds read it; the pair's JF-626 honest-bounds note
+    /// extends to it unchanged).
     /// </summary>
     /// <param name="context">The Alexa context (the device id keys the ledger).</param>
     /// <param name="queueManager">The caller's device queue manager; null falls back to <c>Plugin.Instance</c>'s.</param>
-    /// <returns>The (item id, recorded route) snapshot, or nulls when nothing is readable.</returns>
-    internal (string? ItemId, DeviceQueueManager.LaunchRoute? Route) ReadLastPlayedSnapshot(
+    /// <returns>The (item id, recorded route, freshness stamp) snapshot, or nulls when nothing is readable.</returns>
+    internal (string? ItemId, DeviceQueueManager.LaunchRoute? Route, DateTime? WrittenAt) ReadLastPlayedSnapshot(
         Context? context,
         DeviceQueueManager? queueManager)
     {
@@ -835,7 +837,7 @@ public sealed class PlaybackLaunchBuilder
             ? queueManager ?? Plugin.Instance?.DeviceQueueManager
             : null;
         return ledgerManager?.GetLastPlayedSnapshot(deviceId!)
-            ?? (null, null);
+            ?? (null, null, null);
     }
 
     /// <summary>
@@ -846,8 +848,10 @@ public sealed class PlaybackLaunchBuilder
     /// the native-controls delegation re-records the same track on the VideoApp
     /// route while the AudioPlayer token keeps naming it, so the classifier's
     /// token-ownership arm answers Audio; (b) the unresolvable ledger item
-    /// (deleted movie/book), which answers Unknown. For both, ANY VideoApp-routed
-    /// ledger entry means a VideoApp stream owns the screen: the ledger item is
+    /// (deleted movie/book), which answers Unknown. For both, a VideoApp-routed
+    /// ledger entry WITHIN the recency window
+    /// (<see cref="DeviceQueueManager.LastPlayedRecencyWindow"/>, JF-789) means a
+    /// VideoApp stream owns the screen: the ledger item is
     /// re-resolved THROUGH the ONE kind kernel (<see cref="ClassifyLedgerItemKind"/>,
     /// which also owns the audiobook-before-Audio precedence), and an item that no
     /// longer resolves defaults to the video family (<see cref="PlayingMedium.Video"/>).
@@ -885,10 +889,40 @@ public sealed class PlaybackLaunchBuilder
         }
 
         // The belt: a VideoApp-RECORDED route wins even when the classifier just
-        // answered Audio (the same-item shape) or Unknown (nothing resolvable).
-        (string? lastPlayedId, DeviceQueueManager.LaunchRoute? recordedRoute) =
+        // answered Audio (the same-item shape) or Unknown (nothing resolvable) -
+        // but only within the ledger recency window (JF-789 step 4; null stamps
+        // are the legacy tie and keep the belt answering, the window doc's
+        // policy). A stamped entry outside the window lets the classifier's own
+        // answer stand, so the
+        // belt-consuming gates (loop, sleep, speed) see the aged entry like any
+        // other aged non-VideoApp entry. This fork is the KNOWN TRADEOFF the
+        // loop gate's shipped comment warned about, taken deliberately, with its
+        // exact flip matrix: an EMPTY session (the realistic idle shape) falls
+        // to each family's no-media path, and a session that still HOLDS the
+        // played item flows through the family's ordinary held-item handling
+        // (the loop mode write, the sleep re-issue, the speed re-launch), the
+        // same handling an aged AUDIO-routed held item has always had; the
+        // refusal STRINGS do not die (every fresh belt shape still refuses, and
+        // the resolvable video-kind ladder below still refuses at any age).
+        // ACCEPTED RESIDUAL: a belt-only
+        // session (an unresolvable ledger item, or the same-item seek-mode shape)
+        // running LONGER than the window loses the belt's protection mid-playback
+        // (the concrete shape: NativeControlsForAudio seek mode, an album concat
+        // past its first hour, the AudioPlayer token still naming the ledger
+        // item, then a sleep/loop ask: the classifier answers Audio and the
+        // handler may ship the parallel audio the belt exists to prevent). The
+        // window's 60 minutes covers every ordinary session shape; the residual
+        // requires the opt-in seek-mode flag plus an hour of continuous playback
+        // plus the frozen-token shape, and no request-carried signal separates
+        // "minute 61 of that session" from "idle days later" (JF-847: the frozen
+        // token reads STOPPED either way). A server-side stamp refresh during
+        // genuinely live playback (the JF-655 PlaybackStarted flag, or the
+        // video-audio segment tracker) is the follow-up that would shrink this
+        // residual; it is a write-side change outside JF-789's read-side scope.
+        (string? lastPlayedId, DeviceQueueManager.LaunchRoute? recordedRoute, DateTime? writtenAt) =
             ReadLastPlayedSnapshot(context, queueManager);
-        if (recordedRoute != DeviceQueueManager.LaunchRoute.VideoApp)
+        if (recordedRoute != DeviceQueueManager.LaunchRoute.VideoApp
+            || !DeviceQueueManager.IsWithinLastPlayedRecencyWindow(writtenAt))
         {
             return medium;
         }
@@ -988,24 +1022,34 @@ public sealed class PlaybackLaunchBuilder
     /// omission (it never took a queue manager), now resolves the displaced
     /// VideoApp item exactly as Repeat and RateItem do, and guards its stateful
     /// write with the JF-629 idle guard at its call site.
-    /// The ledger tail is UNBOUNDED with respect to recency: on a device whose
-    /// last playback was days ago it still answers that item (RateItem's
-    /// deliberate stance, JF-626). A caller whose WRITE is stateful on "this is
-    /// playing now" (the guarded families: favorite, media info, the loop
-    /// toggle, playlist-edit) must guard current evidence first
-    /// (<see cref="HasCurrentPlaybackEvidence"/>, the JF-629 idle guard; all
-    /// four families were migrated onto the ONE predicate in JF-785) AND pass
-    /// <paramref name="allowLedgerTailAnswers"/> false, so an UNRESOLVABLE
-    /// evidence shape (a now-playing DTO whose item was deleted mid-play or
-    /// whose id is empty) falls to the family's no-media tell instead of the
-    /// tail substituting a days-old unrelated item (the JF-785 Leg A door).
+    /// The ledger tail is bounded by the ledger recency window
+    /// (<see cref="DeviceQueueManager.LastPlayedRecencyWindow"/>, JF-789): on a
+    /// device whose last playback was days ago it answers nothing, so the
+    /// tail-riding families (RateItem, whose JF-626 stance deliberately rated
+    /// the days-old item, plus Repeat and SetPlaybackSpeed, its unguarded
+    /// riders) answer their no-item/no-media tells instead; WITHIN the window
+    /// the tail still answers (the stance survives for the playback session it
+    /// was recorded for). Null stamps (pre-JF-619 files) keep the tail
+    /// answering (the legacy tie, the window doc's policy). A caller whose
+    /// WRITE is stateful on "this is playing now" (the guarded families:
+    /// favorite, media info, the loop toggle, playlist-edit) must STILL guard
+    /// current evidence first (<see cref="HasCurrentPlaybackEvidence"/>, the
+    /// JF-629 idle guard; all four families were migrated onto the ONE
+    /// predicate in JF-785) AND pass <paramref name="allowLedgerTailAnswers"/>
+    /// false, so an UNRESOLVABLE evidence shape (a now-playing DTO whose item
+    /// was deleted mid-play or whose id is empty) falls to the family's
+    /// no-media tell instead of the tail substituting an unrelated item (the
+    /// JF-785 Leg A door; JF-789 step 5 evaluated folding the guard and the
+    /// flag into this recency check and REJECTED the fold; see
+    /// <see cref="HasCurrentPlaybackEvidence"/>'s doc for the recorded
+    /// evidence).
     /// </summary>
     /// <param name="context">The Alexa context (device id for the ledger read, AudioPlayer token).</param>
     /// <param name="session">The Jellyfin session (full now-playing item first, DTO second).</param>
     /// <param name="libraryManager">The library manager, to resolve item ids.</param>
     /// <param name="queueManager">The caller's device queue manager (Repeat, RateItem pass theirs); the parameter has NO default so every caller states its choice: null falls back to <c>Plugin.Instance</c>'s (the classifier-half idiom, JF-627); tests pass theirs to stay hermetic.</param>
     /// <param name="logLabel">Caller identity for the displacement log line.</param>
-    /// <param name="allowLedgerTailAnswers">Whether the non-displacement tail may answer; false for the guarded families (JF-785 Leg A), true (default) for RateItem's JF-626 stance plus Repeat and SetPlaybackSpeed.</param>
+    /// <param name="allowLedgerTailAnswers">Whether the non-displacement tail may answer (in addition to the recency window); false for the guarded families (JF-785 Leg A), true (default) for RateItem's JF-626 stance plus Repeat and SetPlaybackSpeed.</param>
     /// <returns>The currently playing item, or null when nothing is resolvable.</returns>
     internal BaseItem? ResolveCurrentPlayingItem(
         Context? context,
@@ -1018,7 +1062,10 @@ public sealed class PlaybackLaunchBuilder
         // The ONE ledger read (its helper owns the unified null contract; the
         // former "null disables the ledger arms" divergence was the playlist-edit
         // family's omission, not a policy; see the contract story in the doc above).
-        (string? lastPlayedId, DeviceQueueManager.LaunchRoute? recordedRoute) =
+        // JF-789 threads the freshness stamp: the final tail answers only within
+        // the ledger recency window (the bound's rationale lives on the window
+        // constant).
+        (string? lastPlayedId, DeviceQueueManager.LaunchRoute? recordedRoute, DateTime? writtenAt) =
             ReadLastPlayedSnapshot(context, queueManager);
         string? token = context?.AudioPlayer?.Token;
 
@@ -1094,13 +1141,36 @@ public sealed class PlaybackLaunchBuilder
             }
         }
 
-        // The displacement-path resolve already missed this id (deleted/stale ledger
-        // item); re-resolving the same known-absent GUID is a second DB miss for
-        // nothing. Only the non-displacement tail (audio-routed ledger, no token,
-        // no session item) resolves here, and only when the caller allows it
-        // (JF-785 Leg A: this flag gates exactly this tail; every arm above is
-        // live-evidence-backed and unaffected).
-        BaseItem? resolved = ledgerItem ?? (displacementPossible || !allowLedgerTailAnswers ? null : ResolveId(lastPlayedId));
+        // The non-displacement tail: the ledger answers only when the caller
+        // allows it (JF-785 Leg A: this flag gates every non-displacement ledger
+        // answer; the live-evidence arms above are unaffected) AND the entry is
+        // within the recency window (JF-789 step 3: the tail was deliberately
+        // unbounded from JF-626 until this bound; RateItem's "rate the days-old
+        // item" stance, with Repeat and SetPlaybackSpeed riding it, is bounded
+        // now, and each family's red proof lives in its own suite). Null stamps
+        // are the legacy tie and keep the tail answering (the window doc owns
+        // the policy). The displacement resolve's cached item rides the SAME two
+        // gates (code-review finding on the first JF-789 cut: with the resolve
+        // run but the kind verdict Audio, the old `ledgerItem ??` prefix
+        // returned the item regardless of either gate, so a guarded caller could
+        // still receive it; that cached leg is reachable only through the legacy
+        // null-route shape, whose stamps are also null, so the window's legacy
+        // tie keeps those files answering and the FLAG leak is what this closes).
+        // Reusing the cache when the tail may answer avoids a second resolve of
+        // the same id.
+        bool withinWindow = DeviceQueueManager.IsWithinLastPlayedRecencyWindow(writtenAt);
+        if (allowLedgerTailAnswers && !withinWindow)
+        {
+            // Null stamps resolve as within-window, so a refusal here always has a
+            // stamp to name (the window doc owns the null policy).
+            _logger.LogDebug(
+                "{Label}: ledger tail refused (entry stamp {WrittenAt} outside the {Window}-minute recency window)",
+                logLabel, writtenAt, DeviceQueueManager.LastPlayedRecencyWindow.TotalMinutes);
+        }
+
+        BaseItem? resolved = allowLedgerTailAnswers && withinWindow
+            ? ledgerItem ?? ResolveId(lastPlayedId)
+            : null;
         if (resolved is null)
         {
             _logger.LogDebug(
@@ -1117,20 +1187,33 @@ public sealed class PlaybackLaunchBuilder
     /// live evidence source exist, namely an AudioPlayer token or a session
     /// now-playing item in either shape (the held full item, which the resolver
     /// resolves first, or the DTO)? A stateful-write caller that skips its guard
-    /// with nothing live is answered by the resolver's deliberately unbounded
-    /// ledger tail (RateItem's JF-626 stance), so those callers refuse first and
-    /// keep their own idle REACTION strings. The three pre-JF-627 inline guards
-    /// (FavoriteToggle, MediaInfo, ProgressReporter.ApplyRepeatModeAsync)
-    /// migrated onto this predicate in JF-785, each with its own red proof on
-    /// the full-item-without-DTO shape. All four guarded families additionally
-    /// pass <c>allowLedgerTailAnswers: false</c> at their resolver call (the
-    /// JF-785 Leg A door; the resolver's doc owns that contract), which makes
-    /// this guard BELT over the flag: with the tail refused, the resolver's
-    /// remaining answering arms are exactly this predicate's legs, so the two
-    /// mechanisms encode one policy. The fold (guard layer dissolved into the
-    /// resolver's own recency-bound answer) is JF-789 step 5; until then the
-    /// explicit guard keeps the idle refusal ahead of any ledger read and
-    /// carries the JF-627 red-proof ladder.
+    /// with nothing live would be answered by the resolver's recency-BOUNDED
+    /// ledger tail (JF-789) whenever the last launch is within the window, so
+    /// those callers refuse first and keep their own idle REACTION strings. The
+    /// three pre-JF-627 inline guards (FavoriteToggle, MediaInfo,
+    /// ProgressReporter.ApplyRepeatModeAsync) migrated onto this predicate in
+    /// JF-785, each with its own red proof on the full-item-without-DTO shape.
+    /// All four guarded families additionally pass
+    /// <c>allowLedgerTailAnswers: false</c> at their resolver call (the JF-785
+    /// Leg A door; the resolver's doc owns that contract), which makes this
+    /// guard BELT over the flag: with the tail refused, the resolver's remaining
+    /// answering arms are exactly this predicate's legs, so the two mechanisms
+    /// encode one policy.
+    /// THE FOLD WAS EVALUATED AND REJECTED (JF-789 step 5, the recorded
+    /// evidence): the plan expected the recency bound to make this guard layer
+    /// and the Leg A flag redundant, but a launch-recency STAMP cannot encode
+    /// "evidence exists NOW": nothing clears the stamp when playback ends, so a
+    /// FRESH-but-idle device (the song ended ten minutes ago) still passes any
+    /// stamp-based check while this predicate correctly refuses -
+    /// dissolving the guard would flip all four families' idle refusals into
+    /// acting on the within-window item (MediaInfo would report a stopped track
+    /// as "now playing", the exact JF-629 incident class; the discriminator is
+    /// pinned by <c>CurrentItem_GuardedCaller_TailRefused_DefaultKeepsTail_JF785</c>,
+    /// whose fresh no-token/no-session entry the default resolver still answers).
+    /// The Leg A flag is likewise NOT redundant: it refuses tail substitution
+    /// under UNRESOLVABLE live evidence even within the window (the
+    /// queue-advance shape, where the ledger item is NOT what the DTO names),
+    /// which the bound alone would let through.
     /// VIDEOAPP PARITY (JF-785 Leg B, deliberate boundary, pinned, no new
     /// leg): every FRESH VideoApp launch writes the launched item into the
     /// session's FullNowPlayingItem (AttachNowPlayingIfLaunched at the launch
@@ -1148,12 +1231,16 @@ public sealed class PlaybackLaunchBuilder
     /// never clears FullNowPlayingItem and a VideoApp launch reports nothing to
     /// the server, so the held item stays evidence until the session object is
     /// dropped or a later playback report replaces it, and the guarded families
-    /// keep acting on it exactly as unguarded RateItem does on its unbounded
-    /// tail; (b) the device ledger is deliberately NOT an evidence source: it
-    /// is unbounded in recency (the JF-629 hazard), so a video-first device
-    /// whose session has LOST the held item (a server restart, the session
-    /// dropped for inactivity, a session-lookup miss) keeps the no-media
-    /// answer; the boundary pins live in PlaylistEditIntentHandlerTests.
+    /// keep acting on it exactly as unguarded RateItem does on its (now
+    /// window-bounded) tail; (b) the device ledger is deliberately NOT an
+    /// evidence source even after JF-789's recency bound: a launch-recency
+    /// stamp still cannot say the playback is LIVE, because nothing clears it
+    /// when playback ends and a fresh-but-idle entry would answer as evidence
+    /// (the same conflation that rejected the guard fold above), so a
+    /// video-first device whose session has LOST the held item (a server restart, the
+    /// session dropped for inactivity, a session-lookup miss) keeps the
+    /// no-media answer; the boundary pins live in
+    /// PlaylistEditIntentHandlerTests (revisited unchanged by JF-789 step 5).
     /// </summary>
     /// <param name="context">The Alexa context (the AudioPlayer token leg).</param>
     /// <param name="session">The Jellyfin session (the held-item and DTO legs).</param>

@@ -144,10 +144,12 @@ public class SetPlaybackSpeedIntentHandler : BaseHandler
 
         // JF-655: the Audio verdict above comes from the PERSISTENT last-played
         // ledger, which reads Audio long after playback stops, and this handler had
-        // no other guard (the current-item resolve's ledger tail is unbounded by
-        // design), so a speed ask on an idle device re-launched the stale track at
-        // the new rate (live e2e finding 2026-09-27: 'a velocità uno e mezzo' with
-        // nothing playing restarted hours-old audio). The re-launch now also
+        // no other guard (the current-item resolve's ledger tail is bounded by the
+        // JF-789 recency window, but a WITHIN-window idle device still answers it),
+        // so a speed ask on an idle device re-launched the stale track at the new
+        // rate (live e2e finding 2026-09-27: 'a velocità uno e mezzo' with nothing
+        // playing restarted hours-old audio; days-old shapes are refused earlier by
+        // the bounded tail's no-media Tell). The re-launch also
         // requires the active-playback signal (the event-owned flag set by
         // PlaybackStarted, or this request's own PLAYING report); a stale ledger
         // alone answers the honest no-media Tell, the same refusal the cold

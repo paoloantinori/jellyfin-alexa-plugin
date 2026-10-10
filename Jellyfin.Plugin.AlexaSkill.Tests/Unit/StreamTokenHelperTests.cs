@@ -139,9 +139,20 @@ public class StreamTokenHelperTests
     public void MintScoped_Canonicalizes_OrderAndDuplicates()
     {
         // Same membership must mint the same bytes regardless of config order or duplicates:
-        // only a real membership change invalidates outstanding tokens.
-        string first = StreamTokenHelper.MintScoped(ItemId, Secret, Scope);
-        string second = StreamTokenHelper.MintScoped(ItemId, Secret, new[] { Scope[1], Scope[0], Scope[1] });
+        // only a real membership change invalidates outstanding tokens. The mint embeds
+        // the CURRENT Unix second (StreamTokenHelper expiry stamp), so the two mints
+        // must land in the same second for byte equality; a boundary tick between them
+        // is a clock artifact, not a canonicalization failure, so the pair re-mints
+        // (bounded) when it straddles a tick. A real canonicalization bug fails every
+        // attempt and the final assert reddens.
+        string? first = null;
+        string? second = null;
+        for (int attempt = 0; attempt < 20 && first != second; attempt++)
+        {
+            first = StreamTokenHelper.MintScoped(ItemId, Secret, Scope);
+            second = StreamTokenHelper.MintScoped(ItemId, Secret, new[] { Scope[1], Scope[0], Scope[1] });
+        }
+
         Assert.Equal(first, second);
     }
 

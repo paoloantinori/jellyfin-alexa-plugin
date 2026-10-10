@@ -15,9 +15,13 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 /// must ALSO pass <c>allowLedgerTailAnswers: false</c> at its
 /// <see cref="PlaybackLaunchBuilder.ResolveCurrentPlayingItem"/> call. A future
 /// handler that copies the documented guard alone and calls the resolver with
-/// the default reopens the unresolvable-evidence door (the days-old ledger tail
-/// taking the stateful write), exactly the JF-627 gate-marker finding-1 class,
-/// and compiles clean while doing it. Ground truth is discovered by scanning
+/// the default reopens the unresolvable-evidence door (the ledger tail
+/// substituting an unrelated item under evidence that cannot resolve), exactly
+/// the JF-627 gate-marker finding-1 class, and compiles clean while doing it.
+/// JF-789 bound the tail by recency but KEPT this belt (the fold was rejected:
+/// a within-window tail still answers, and substitution under unresolvable
+/// evidence is wrong at any age), so the roster invariant stands unchanged.
+/// Ground truth is discovered by scanning
 /// the plugin assembly's IL (the WarmingGateCoverageTests precedent, over the
 /// shared <see cref="IlCallScanner"/>): a resolver call is classified FLAGGED
 /// when the instruction immediately before the call (nops skipped) is
@@ -28,10 +32,12 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 public class GuardedResolverTailRosterTests
 {
     /// <summary>
-    /// The families deliberately riding the resolver's unbounded tail with the
-    /// default flag: RateItem's JF-626 stance plus the two unguarded transport
-    /// riders. A new unguarded family is a deliberate decision: add it here and
-    /// the failure message tells the next reader which roster moved.
+    /// The families deliberately riding the resolver's ledger tail with the
+    /// default flag (the tail is recency-bounded since JF-789; within the
+    /// window it still answers): RateItem's JF-626 stance plus the two
+    /// unguarded transport riders. A new unguarded family is a deliberate
+    /// decision: add it here and the failure message tells the next reader
+    /// which roster moved.
     /// </summary>
     private static readonly HashSet<string> ExpectedUnguardedCallers = new()
     {

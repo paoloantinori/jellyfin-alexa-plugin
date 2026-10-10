@@ -158,8 +158,9 @@ public abstract class PlaylistEditHandlerBase : BaseHandler
     /// token item.
     /// The JF-629 idle guard runs FIRST (<see cref="PlaybackLaunchBuilder.HasCurrentPlaybackEvidence"/>,
     /// the ONE predicate) because this family's write is stateful on "this is
-    /// playing now": the resolver's unbounded ledger tail must not add the idle
-    /// device's days-old last-played item where the pre-JF-627 code answered
+    /// playing now": the resolver's ledger tail (recency-bounded since JF-789,
+    /// but still answering a within-window idle device) must not add the idle
+    /// device's last-played item where the pre-JF-627 code answered
     /// NoMediaPlaying. JF-785 Leg A tightened the same door from the resolver
     /// side: the tail is refused (allowLedgerTailAnswers false; the resolver's
     /// doc owns the contract), so an UNRESOLVABLE evidence shape also answers
