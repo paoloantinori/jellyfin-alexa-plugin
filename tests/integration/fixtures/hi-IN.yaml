@@ -90,3 +90,55 @@ tests:
     expected_slots:
       title:
         value: "इंसेप्शन"
+
+  # ------------------------------------------------------------------------
+  # JF-771 (2026-10-10): pins for the new PlayVideo carrier x tail samples
+  # (खोजो on वीडियो/मूवी, चलाओ and लगाओ on मूवी). RED until the rebuilt
+  # hi-IN model deploys (the JF-766 convention). The फिल्म-carried forms are
+  # trainer-anomalous (JF-770 class) and deliberately NOT pinned; the probe
+  # map lives in the template's PlayVideoIntent comment and task JF-771.
+  # ------------------------------------------------------------------------
+  - utterance: "वीडियो इंसेप्शन खोजो"
+    expected_intent: PlayVideoIntent
+    expected_slots:
+      title:
+        value: "इंसेप्शन"
+
+  - utterance: "मूवी इंसेप्शन खोजो"
+    expected_intent: PlayVideoIntent
+    expected_slots:
+      title:
+        value: "इंसेप्शन"
+
+  - utterance: "मूवी इंसेप्शन चलाओ"
+    expected_intent: PlayVideoIntent
+    expected_slots:
+      title:
+        value: "इंसेप्शन"
+
+  - utterance: "मूवी इंसेप्शन लगाओ"
+    expected_intent: PlayVideoIntent
+    expected_slots:
+      title:
+        value: "इंसेप्शन"
+
+  # JF-771 code-review catch: the pre-existing strongest चलाओ member had no
+  # durable pin (its only proof was JF-770's 2026-10-05 matrix). Probe-proven
+  # green 2026-10-10 (4/4, title raw 'इंसेप्शन'); guards the family's lead
+  # carrier against rebuild flips now that the family grows again.
+  - utterance: "वीडियो इंसेप्शन चलाओ"
+    expected_intent: PlayVideoIntent
+    expected_slots:
+      title:
+        value: "इंसेप्शन"
+
+  # JF-771 guard: PlaySong's bare '{song} चलाओ' is load-bearing (rationale in
+  # the template's PlaySongIntent comment). If this row goes red after a
+  # bare-sample removal, that removal broke the primary song one-shot
+  # (JF-399 recall class).
+  - utterance: "bohemian rhapsody चलाओ"
+    expected_intent: PlaySongIntent
+    expected_slots:
+      song:
+        value: "bohemian rhapsody"
+

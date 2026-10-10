@@ -138,6 +138,12 @@ intents:
         type: AMAZON.SearchQuery
   - name: PlaySongIntent
     samples:
+      # JF-771: the bare slot-initial song forms STAY: load-bearing for the
+      # bare song ask ('bohemian rhapsody चलाओ' PlaySong 4/4 live 2026-10-10;
+      # removal breaks the primary song one-shot, JF-399 recall class). The
+      # फिल्म/मूवी-carried movie steals are fixed carrier-side in
+      # PlayVideoIntent, never by removing these; guard pin in the hi-IN
+      # fixtures.
       - '{song} चलाओ'
       - गाना {song} चलाओ
       - '{song} गाना चलाओ'
@@ -218,6 +224,21 @@ intents:
       - फिल्म देखो {title}
       - मैं फिल्म {title} देखना चाहता हूँ
       - फिल्म {title} खोजो
+      # JF-771: the strong carriers lacked these carrier x tail crossings
+      # entirely, so the forms failed ('वीडियो इंसेप्शन खोजो' NO_SELECTION
+      # 4/4; 'मूवी इंसेप्शन चलाओ' and 'मूवी इंसेप्शन लगाओ' PlaySong-stolen with
+      # song whole-absorbed; live 2026-10-10, full map in task JF-771). The
+      # JF-770 L1b precedent: strong carrier + sample routes ('वीडियो/मूवी
+      # इंसेप्शन देखो' PlayVideo 4/4 live). NO फिल्म-carried additions: that
+      # carrier is trainer-anomalous (JF-770 above; even SearchMedia's exact
+      # 'एक फिल्म {query} खोजो' reads Fallback). Two-failed-fixes rule.
+      # 'मूवी इंसेप्शन शुरू करो' already routes PlayVideo via the bare
+      # '{title} शुरू करो' above (title whole-absorbed, the JF-770 मैं-फिल्म
+      # nuance, accepted there too): deliberately not duplicated here.
+      - वीडियो {title} खोजो
+      - मूवी {title} खोजो
+      - मूवी {title} चलाओ
+      - मूवी {title} लगाओ
     slots:
       - name: title
         type: AMAZON.SearchQuery
