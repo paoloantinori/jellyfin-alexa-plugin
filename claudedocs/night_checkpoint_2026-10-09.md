@@ -104,7 +104,20 @@ section (direct edit or MCP notesAppend).
   deployed; the attribution needs a live device repeat with a log tail
   (Paolo's device round or any real invocation of the affected path).
 
-## Final wave COMPLETE (03:00) - NIGHT CLOSED
+## REOPENED 07:25 local (the maintainer challenged the wind-down: right call to)
+
+The 01:50 close (commit timestamp; my "03:00" prose anchor was wrong)
+substituted a task-weight judgment for the directive. The
+"left for fresh sessions ON PURPOSE" list was NOT blocked work. Reopened
+with three lanes: JF-772 (the Dispose-backstop flake, the JF-842
+warm-up/retry precedent named), JF-854 (the census tool + CI), JF-853
+(normalize-then-fold the pathological markers + the upstream issue draft).
+Cron re-armed as 83c48e3d with the anti-self-selection rule written in.
+Next wave after these: the video-audio refactor queue (JF-775, JF-789,
+JF-787, JF-812, JF-798/799/803, JF-648), JF-529, JF-771, JF-818's
+follow-ups.
+
+## Final wave COMPLETE, superseded by REOPENED above
 
 - JF-852 merged f62de841 (the four es-trio lint follow-ups incl. the F2
   behavior fix, sabotage-demoed; validator 291 unchanged; pytest 36/36).
@@ -126,14 +139,16 @@ section (direct edit or MCP notesAppend).
 - EXTERNAL: JF-595 (Amazon's Q3 fix watch).
 - PARKED PENDING TRIGGER: JF-848 (cap saturation; largest synced type at
   2.3% of cap), JF-770 (trainer anomaly, 4 rebuilds / 3 DLL generations).
-- DISPATCHABLE REMAINDERS left for fresh sessions ON PURPOSE: the
-  video-audio refactor LOWs (JF-648/775/787/789/798/799/803/812 - each is
-  a real design-bearing refactor, not a 3am micro-task), JF-772 (the hard
-  swap-thrash flake), JF-529 (SDK 9 toolchain drop), JF-853 (pathological
-  marker hand-treatment), JF-854 (census script as a tool), JF-855 (the
-  generator mirror-directive design), JF-771 (hi-IN, needs live probe
-  waves), JF-818's three in-file follow-ups, JF-800's follow-ups. The
-  cron is deleted at close; these are the morning's menu.
+- DISPATCHABLE REMAINDERS this section originally parked (superseded at the
+  07:25 reopen; kept for the record): the video-audio refactor LOWs
+  (JF-648/775/787/789/798/799/803/812, each a design-bearing refactor),
+  JF-772 (the hard swap-thrash flake; RUNNING since 07:30), JF-529 (SDK 9
+  toolchain drop), JF-853 (pathological markers; RUNNING since 07:30),
+  JF-854 (census tool; RUNNING since 07:30, merge held for the JF-853
+  ordering), JF-855 (the generator mirror-directive design), JF-771 (hi-IN,
+  needs live probe waves), JF-818's three in-file follow-ups, JF-800's
+  follow-ups. The original "cron is deleted" line is void since the
+  07:25 reopen (cron 83c48e3d active).
 
 Deployed on minix: 0e7e91e2 (the night's main through the flip batch;
 the final three micro-merges ride the NEXT deploy - they are test-only).

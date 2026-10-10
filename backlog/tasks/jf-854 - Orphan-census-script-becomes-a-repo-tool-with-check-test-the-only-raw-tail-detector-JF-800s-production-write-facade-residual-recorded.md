@@ -3,9 +3,10 @@ id: JF-854
 title: >-
   Orphan-census script becomes a repo tool with --check + test (the only
   raw-tail detector); JF-800's production write-facade residual recorded
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-10-09 22:45'
+updated_date: '2026-10-10 07:56'
 labels:
   - tooling
   - test-coverage
@@ -37,3 +38,9 @@ Filed 2026-10-10 by the orchestrator from the fold sweep (its "commit the census
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+MERGE-ORDER NOTE + harness home (orchestrator, 2026-10-10 10:10): the merge is deliberately HELD until JF-853 lands (normalize-then-fold of the exact 3 files the known-raw allowlist names), so the new CI validate-backlog job is green from its first run on main; both branches verified independently. DURABLE-HOME addendum (the JF-853 roundtrip harness rt_probe.py / rt_battery.py currently lives in /tmp/jf853_ref and dies with reboot): when this task's tool next gets touched (the slug-length guard follow-up is the natural occasion), consider whether the roundtrip probe belongs in the repo beside the census (it is the loss-proof half of the same invariant); until then the harness is reproducible from JF-853's task notes, which document the method (scratch project, REAL filenames - a renamed copy false-passes, backlog task edit --add-label, HEAD-vs-edited body diff).
+<!-- SECTION:NOTES:END -->
