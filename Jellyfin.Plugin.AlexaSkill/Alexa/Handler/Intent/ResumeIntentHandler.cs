@@ -562,7 +562,32 @@ public class ResumeIntentHandler : BaseHandler
         // Only the TRACKER's book-timeline position may slice; a cold tracker returns
         // null so the caller flat-resumes the chapter at its own offset instead (the
         // same discipline the LaunchRequest resume offer already applies).
-        long trackedTicks = Plugin.Instance?.AudiobookPositionTracker?.GetPositionTicks(bookKey) ?? 0;
+        Alexa.Playback.AudiobookPositionTracker? positionTracker = Plugin.Instance?.AudiobookPositionTracker;
+        long trackedTicks = positionTracker?.GetPositionTicks(bookKey) ?? 0;
+
+        // JF-860 read-side policy (canonical statement on the tracker's class
+        // doc): this arm SPEAKS the tracker position (NowPlayingWithPosition
+        // below), so the read runs through the SAME timeline-identity
+        // arbitration the serve applies - an orphaned foreign-timeline mark
+        // reads as ABSENT here too, and the announce can never name a position
+        // the serve's gate will drop. Only a WARM key pays the identity
+        // enumeration (the cost contract on TryResolveTrackedTimelineIdentity);
+        // a gated read of 0 falls into the honest arms below (the flat chapter
+        // resume at the server-progress offset, or a fresh launch with no
+        // position announce).
+        if (trackedTicks > 0
+            && positionTracker != null
+            && AudiobookItems.TryResolveTrackedTimelineIdentity(item, _libraryManager, user, Logger) is { } liveIdentity)
+        {
+            long gatedTicks = positionTracker.GetPositionTicks(bookKey, liveIdentity);
+            if (gatedTicks != trackedTicks)
+            {
+                Logger.LogInformation(
+                    "ResumeIntent: audiobook '{BookName}' ({BookKey}) identity-gated tracker read {GatedTicks} ticks (raw max {RawTicks} ticks, timeline {ChapterCount} chapters / {DurationTicks} ticks): an orphaned foreign-timeline mark reads as absent so the announce matches the serve",
+                    item.Name, bookKey, gatedTicks, trackedTicks, liveIdentity.ChapterCount, liveIdentity.DurationTicks);
+                trackedTicks = gatedTicks;
+            }
+        }
 
         Logger.LogInformation(
             "ResumeIntent: audiobook '{BookName}' ({BookKey}) tracker={TrackedTicks} ticks, fallback={FallbackTicks} ticks (chapter-relative, not book-timeline)",

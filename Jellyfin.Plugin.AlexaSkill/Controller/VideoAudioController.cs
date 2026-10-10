@@ -3444,19 +3444,82 @@ public class VideoAudioController : ControllerBase
         {
             lock (_gate)
             {
-                if (_slotsByTicks.TryGetValue(artModifiedTicks, out EncodeGenerationState? state))
-                {
-                    if (state.HonorBandDropLogged)
-                    {
-                        return false;
-                    }
+                return _slotsByTicks.TryGetValue(artModifiedTicks, out EncodeGenerationState? state)
+                    && MarkOnce(ref state.HonorBandDropLogged);
+            }
+        }
 
-                    state.HonorBandDropLogged = true;
-                    return true;
+        /// <summary>Which tracker timeline-gate outcome line the once-per-generation latch marks (JF-860).</summary>
+        internal enum TimelineGateOutcome
+        {
+            /// <summary>The gate dropped the resume slice: the tracked position belongs to a different timeline than this enumeration.</summary>
+            ForeignMarkDropped,
+
+            /// <summary>The gate re-sliced the resume down to this timeline's own tracked position.</summary>
+            ReslicedToOwnTimeline,
+        }
+
+        /// <summary>
+        /// Mark the tracker timeline-gate log lines' once-per-generation latch
+        /// (JF-860, mirroring <see cref="TryMarkHonorBandDropLogged"/> on the
+        /// neighboring honor-band line): the gate's two outcome lines fire per
+        /// REQUEST, and inside an encode window the player's event-playlist
+        /// refreshes re-fetch the same <c>?start=</c> URL, re-firing the
+        /// identical line once per refresh for the whole minutes-long encode
+        /// window - the exact refresh-noise class JF-818/JF-859 latched there.
+        /// Each outcome carries its OWN flag (a drop can be followed by a
+        /// re-slice within one generation once the live timeline gains its own
+        /// mark; each line latches independently). The flags ride the slot's
+        /// own generation token, so a re-encode at UNCHANGED art ticks mints a
+        /// fresh token (the JF-665 newest-owns displacement) and the fresh
+        /// encode's first outcome logs at Information, while the flags evict
+        /// with the registry entry instead of accumulating for the process
+        /// lifetime.
+        /// DELIBERATE DIFFERENCE from the honor-band latch: this mark answers
+        /// TRUE (emit at Information) when NO live generation holds the tick.
+        /// For the honor band, not-live is a race edge (the encode ended
+        /// between the serve gate's liveness read and the mark) and Debug is
+        /// safe; for THIS gate not-live is a steady state (an orphaned
+        /// foreign-timeline mark re-dropped on every later resume of the book,
+        /// days after any encode), and outside an encode window the served
+        /// playlist is VOD - fetched once per launch, never refreshed - so no
+        /// storm is possible and the line keeps Information: it is exactly the
+        /// triage signal for "why does this book restart at 0:00". BOUNDED
+        /// BLIND SPOT (the one uncollapsed case): a slot MISS inside a LIVE
+        /// holder (art changed mid-encode, the JF-665 same-key
+        /// multi-generation shape) also answers true, so that transition
+        /// window's refreshes log at Information; a new encode at the new
+        /// ticks re-arms the latch, so the window is bounded by the encode
+        /// duration, the same self-healing class as the JF-782 straddle.
+        /// </summary>
+        /// <param name="artModifiedTicks">The book's art ticks (the registry's generation slot key).</param>
+        /// <param name="outcome">Which gate outcome line is about to be emitted.</param>
+        /// <returns>True when the caller emits the line at Information (the live generation's first mark of this outcome, or no live generation); false on a repeat within the generation (emit at Debug).</returns>
+        internal bool TryMarkTimelineGateLogged(long artModifiedTicks, TimelineGateOutcome outcome)
+        {
+            lock (_gate)
+            {
+                if (!_slotsByTicks.TryGetValue(artModifiedTicks, out EncodeGenerationState? state))
+                {
+                    return true; // no live generation: no encode window, no refresh storm (see above)
                 }
 
+                return outcome == TimelineGateOutcome.ForeignMarkDropped
+                    ? MarkOnce(ref state.TimelineGateDropLogged)
+                    : MarkOnce(ref state.TimelineGateResliceLogged);
+            }
+        }
+
+        /// <summary>Flip a once-latch: false when already set, true on the flip.</summary>
+        private static bool MarkOnce(ref bool flag)
+        {
+            if (flag)
+            {
                 return false;
             }
+
+            flag = true;
+            return true;
         }
     }
 
@@ -3485,6 +3548,22 @@ public class VideoAudioController : ControllerBase
         /// owns the flip and the rationale).
         /// </summary>
         public bool HonorBandDropLogged;
+
+        /// <summary>
+        /// Whether this generation already emitted the tracker timeline-gate
+        /// DROP log at Information (the once-per-generation latch;
+        /// <see cref="ActiveEncodeGenerations.TryMarkTimelineGateLogged"/>
+        /// owns the flip and the rationale).
+        /// </summary>
+        public bool TimelineGateDropLogged;
+
+        /// <summary>
+        /// Whether this generation already emitted the tracker timeline-gate
+        /// RE-SLICE log at Information (the once-per-generation latch;
+        /// <see cref="ActiveEncodeGenerations.TryMarkTimelineGateLogged"/>
+        /// owns the flip and the rationale).
+        /// </summary>
+        public bool TimelineGateResliceLogged;
     }
 
     /// <summary>
@@ -3807,6 +3886,40 @@ public class VideoAudioController : ControllerBase
     }
 
     /// <summary>
+    /// Resolve the log level for a tracker timeline-gate outcome line (JF-860):
+    /// Information on the outcome's FIRST emission inside the live encode
+    /// generation, and when no generation is live (the deliberate difference
+    /// from the honor-band latch's not-live fall to Debug is owned by
+    /// <see cref="ActiveEncodeGenerations.TryMarkTimelineGateLogged"/>); Debug
+    /// on repeats within the generation (the refresh-noise latch, the
+    /// JF-818/JF-859 pattern). MUTATING: the call FLIPS the outcome's
+    /// once-per-generation latch, so resolve it only on the code path that
+    /// then logs (both call sites do; a speculative resolve would burn the
+    /// generation's single Information emission). Paid only when the gate
+    /// actually intervenes: the pass-through case (byte-identical resolved
+    /// ticks) logs nothing, and the art-ticks read runs only behind a live
+    /// registry entry.
+    /// </summary>
+    /// <param name="parentId">The book's parent ID (the audiobook encode registry's cache key).</param>
+    /// <param name="parent">The book parent item (whose art ticks name the generation slot).</param>
+    /// <param name="outcome">Which gate outcome line is about to be emitted.</param>
+    /// <returns>The level the caller logs the outcome line at.</returns>
+    private LogLevel TimelineGateLogLevel(
+        string parentId,
+        MediaBrowser.Controller.Entities.BaseItem parent,
+        ActiveEncodeGenerations.TimelineGateOutcome outcome)
+    {
+        if (!_activeAudiobookEncodes.TryGetValue(parentId, out ActiveEncodeGenerations? generations))
+        {
+            return LogLevel.Information;
+        }
+
+        return generations.TryMarkTimelineGateLogged(GetArtModifiedTicks(parent), outcome)
+            ? LogLevel.Information
+            : LogLevel.Debug;
+    }
+
+    /// <summary>
     /// Stream an HLS playlist that concatenates all chapters of an audiobook into
     /// one continuous stream. Gives the full book duration in the Echo Show seek bar
     /// and allows seeking across the entire book via VideoApp.Launch.
@@ -3953,12 +4066,22 @@ public class VideoAudioController : ControllerBase
         // when it holds one (the same pair the JF-784 verdict compares decides
         // which slot is live). Identity-less entries (legacy persisted positions,
         // sidecar-less cache writes) and a cold tracker pass the minted slice
-        // through unchanged. The resume MINT sites stay identity-agnostic on
-        // purpose: they hold no enumeration provably identical to this serve's,
-        // so the authoritative check lives here, on the enumeration that serves;
-        // the accepted cost is an announce that may overstate in the rare
-        // foreign-slot window while the serve lands on the live timeline's own
-        // truth or the beginning. RESIDUAL (accepted, same window as the
+        // through unchanged. JF-860 READ-SIDE POLICY (canonical statement on
+        // AudiobookPositionTracker's class doc): the authoritative check stays
+        // here (no mint holds an enumeration provably identical to this
+        // serve's), and the mint reads split by what they feed - the one
+        // position-SPEAKING mint (ResumeIntent's NowPlayingWithPosition) reads
+        // through the same arbitration with an identity from its own scoped
+        // enumeration, so an orphaned mark reads as absent there too, while the
+        // position-silent mints (the resume offer/confirm, the PlayBook
+        // chapter announce, the album walk) stay identity-agnostic: their
+        // announce speaks no tracker ticks and the slice they mint is still
+        // gated here (the residual is the "resuming" wording over a fresh
+        // start, never a spoken number the serve contradicts). The further
+        // residual of the gated read: a mint whose scoped enumeration diverges
+        // from this serve's token scope can understate to 0 while this gate
+        // would have honored the live mark; it can never announce an unhonored
+        // position. RESIDUAL (accepted, same window as the
         // during-encode serve itself): while a foreign encode is still RUNNING,
         // the concurrent-encode rows below serve that encode's listing while
         // this gate keeps the live enumeration as its ONE comparison basis; a
@@ -3970,14 +4093,19 @@ public class VideoAudioController : ControllerBase
                 parentId, chapters.Count, chapterDurationTicks, startTicks.Value);
             if (resolvedTicks <= 0)
             {
-                _logger.LogInformation(
+                // ONCE PER GENERATION at Information, then Debug (the JF-860
+                // latch; the level helper owns the mapping and the rationale
+                // reference).
+                _logger.Log(
+                    TimelineGateLogLevel(parentId, parent, ActiveEncodeGenerations.TimelineGateOutcome.ForeignMarkDropped),
                     "VideoAudio concat HLS: dropping resume slice for parent {ParentId} (startTicks={StartTicks}): the tracked position was recorded against a different timeline than this enumeration ({ChapterCount} chapters / {DurationTicks} ticks); serving from the beginning",
                     parentId, startTicks, chapters.Count, chapterDurationTicks);
                 startTicks = null;
             }
             else if (resolvedTicks != startTicks)
             {
-                _logger.LogInformation(
+                _logger.Log(
+                    TimelineGateLogLevel(parentId, parent, ActiveEncodeGenerations.TimelineGateOutcome.ReslicedToOwnTimeline),
                     "VideoAudio concat HLS: re-slicing resume for parent {ParentId} from {StartTicks} to {ResolvedTicks}: this timeline's own tracked position",
                     parentId, startTicks, resolvedTicks);
                 startTicks = resolvedTicks;
@@ -4634,12 +4762,14 @@ public class VideoAudioController : ControllerBase
                 // records nothing: the key would be write-only dead weight.
                 // JF-787: the single-item timeline the leaf serves is identified by
                 // (1, the leaf's own runtime), the pair the one-chapter redirect's
-                // enumeration compares at the serve gate.
+                // enumeration compares at the serve gate. JF-860: the pair goes
+                // through the ONE factory so the record stamp and the read-side
+                // resolver cannot drift on the pair's semantics.
                 tracker.RecordScaledSegment(
                     AudiobookItems.ResolveTrackedBookKey(item, _libraryManager),
                     segmentNumber,
                     SongHlsSegmentSeconds,
-                    new Alexa.Playback.TimelineIdentity(1, item.RunTimeTicks ?? 0));
+                    Alexa.Playback.TimelineIdentity.ForSingleItem(item));
             }
         }
         catch (Exception ex)

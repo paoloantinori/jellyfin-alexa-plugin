@@ -1,7 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
+using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 
@@ -169,20 +172,137 @@ internal static class AudiobookItems
     /// <param name="libraryManager">The library manager resolving the ParentId; null falls to the raw-key outcome.</param>
     /// <returns>The tracker key the write gate and the reads must agree on.</returns>
     internal static string ResolveTrackedBookKey(BaseItem item, ILibraryManager? libraryManager)
+        => ResolveTrackedBookShape(item, libraryManager) switch
+        {
+            { Shape: TrackedBookShape.VerifiedFolder, Folder: { } bookFolder } => bookFolder.Id.ToString("N"),
+            { Shape: TrackedBookShape.CollapsedLeaf } => item.Id.ToString("N"),
+            _ => ResumeMath.GetAudiobookBookKey(item),
+        };
+
+    /// <summary>
+    /// The ONE verdict-aware tracked-shape discriminator (JF-860): both the key
+    /// resolver (<see cref="ResolveTrackedBookKey"/>, JF-794) and the
+    /// timeline-identity resolver
+    /// (<see cref="TryResolveTrackedTimelineIdentity"/>) derive from this shape,
+    /// so a refinement of the discriminator can never land on one twin only and
+    /// leave the key and the identity disagreeing (tests mock both resolvers to
+    /// agree, so such a split would be invisible to the suite). The three shapes
+    /// mirror <see cref="ResolveTrackedBookKey"/>'s documented outcomes: the
+    /// verified climb's book folder, the collapsed single-file book's own leaf,
+    /// and the cold-key shapes the write gate never arms.
+    /// </summary>
+    private enum TrackedBookShape
+    {
+        /// <summary>The verified climb accepts: the book folder's key/timeline.</summary>
+        VerifiedFolder,
+
+        /// <summary>An AudioBook leaf whose ParentId names a container of sibling books: the leaf's own key, the degenerate single-item timeline.</summary>
+        CollapsedLeaf,
+
+        /// <summary>Every other shape (empty ParentId, dangling id, no manager): the raw key, never written, no enumerable timeline.</summary>
+        ColdKey,
+    }
+
+    /// <summary>
+    /// Resolve the tracked shape of an audiobook item; see <see cref="TrackedBookShape"/>.
+    /// The folder is non-null only on the VerifiedFolder shape.
+    /// </summary>
+    private static (TrackedBookShape Shape, Folder? Folder) ResolveTrackedBookShape(BaseItem item, ILibraryManager? libraryManager)
     {
         if (TryResolveVerifiedParentFolder(item, libraryManager) is { } bookFolder)
         {
-            return bookFolder.Id.ToString("N");
+            return (TrackedBookShape.VerifiedFolder, bookFolder);
         }
 
         if (item is AudioBook
             && item.ParentId != Guid.Empty
             && libraryManager?.GetItemById(item.ParentId) is Folder)
         {
-            return item.Id.ToString("N");
+            return (TrackedBookShape.CollapsedLeaf, null);
         }
 
-        return ResumeMath.GetAudiobookBookKey(item);
+        return (TrackedBookShape.ColdKey, null);
+    }
+
+    /// <summary>
+    /// The timeline-identity twin of <see cref="ResolveTrackedBookKey"/> (JF-860,
+    /// both derived from the ONE <see cref="ResolveTrackedBookShape"/> verdict):
+    /// the timeline identity the tracker's identity-gated read
+    /// (<see cref="AudiobookPositionTracker.GetPositionTicks(string, TimelineIdentity)"/>)
+    /// arbitrates with, resolved from the CALLER's enumeration of the book - the
+    /// best available proxy for the serving enumeration (the serve's own identity
+    /// comes from its token-scoped enumeration; the residual when the two scopes
+    /// diverge is documented on the gated read). The verified folder enumerates
+    /// its scoped chapters (the row shape the concat endpoint serves); the
+    /// collapsed leaf answers the degenerate single-item pair the record gate
+    /// stamps; every cold-key shape answers null, and the caller keeps the
+    /// identity-agnostic read (those keys never hold marks, so no divergence is
+    /// possible there).
+    /// COST CONTRACT: the folder arm is ONE unpaged scoped query - call it only
+    /// behind a warm tracker key (the announce site reads the agnostic mark first
+    /// and resolves the identity only when a position would be spoken), never on
+    /// a per-segment or per-refresh path.
+    /// </summary>
+    /// <param name="item">The audiobook item the tracker key was resolved from (chapter leaf or single-file book).</param>
+    /// <param name="libraryManager">The library manager resolving the shape; null falls to the cold-key outcome.</param>
+    /// <param name="pluginUser">The plugin user whose library scope the enumeration applies (the serve's scope proxy).</param>
+    /// <param name="logger">Logger for the triage line on a failed enumeration.</param>
+    /// <returns>The timeline identity, or null when the shape carries no enumerable timeline (the caller keeps the agnostic read).</returns>
+    internal static TimelineIdentity? TryResolveTrackedTimelineIdentity(
+        BaseItem item,
+        ILibraryManager? libraryManager,
+        Entities.User? pluginUser,
+        ILogger logger)
+        => ResolveTrackedBookShape(item, libraryManager) switch
+        {
+            { Shape: TrackedBookShape.VerifiedFolder, Folder: { } bookFolder } => EnumerateBookTimelineIdentity(bookFolder, pluginUser, libraryManager!, logger),
+            { Shape: TrackedBookShape.CollapsedLeaf } => TimelineIdentity.ForSingleItem(item),
+            _ => null,
+        };
+
+    /// <summary>
+    /// The folder arm of the identity resolver: the scoped unpaged chapters
+    /// enumeration's (count, runtime sum) pair, through the ONE factory
+    /// (<see cref="TimelineIdentity.FromChapters"/>).
+    /// </summary>
+    private static TimelineIdentity? EnumerateBookTimelineIdentity(
+        Folder bookFolder,
+        Entities.User? pluginUser,
+        ILibraryManager libraryManager,
+        ILogger logger)
+    {
+        try
+        {
+            // The user-scoped sibling of the endpoint's own enumeration (the
+            // endpoint runs BuildAudiobookChaptersQueryUnpaged under the token
+            // scope): the same MediaTypes=Audio row set and the same chapters
+            // order, scoped to the plugin user instead of the token. Only the
+            // count and the runtime sum are consumed, and RunTimeTicks hydrates
+            // regardless of DtoOptions, so swap the builder's full-field row
+            // shape for the cheap one (the JF-797 row-volume discipline).
+            InternalItemsQuery query = QueueContinuationFetcher.BuildScopedAudiobookChaptersQueryUnpaged(
+                jellyfinUser: null, pluginUser, libraryManager, logger, bookFolder.Id);
+            query.DtoOptions = new MediaBrowser.Controller.Dto.DtoOptions(false) { EnableImages = false, EnableUserData = false, AddCurrentProgram = false };
+            IReadOnlyList<BaseItem> chapters = libraryManager.GetItemList(query);
+            return TimelineIdentity.FromChapters(chapters);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Best-effort identity (the gate is an announce refinement, never
+            // a resume dependency): a failed enumeration falls back to the
+            // caller's identity-agnostic read. RESIDUAL (accepted): that one
+            // request can again announce a position the serve drops (the
+            // pre-JF-860 divergence); the conservative alternative (read as
+            // absent) would trade it for a lost resume. Both are transient and
+            // the enumeration is not the request's first database touch, so a
+            // failure here means the resume is already failing upstream.
+            // Cancellation propagates (the ask is being torn down, not failing).
+            logger.LogWarning(
+                ex,
+                "TryResolveTrackedTimelineIdentity: chapters enumeration failed for book folder {BookFolderId}; keeping the identity-agnostic tracker read",
+                bookFolder.Id);
+            return null;
+        }
     }
 
     /// <summary>

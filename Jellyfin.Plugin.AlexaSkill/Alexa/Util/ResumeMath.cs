@@ -420,6 +420,13 @@ public static class ResumeMath
     /// timeline the tracker records), the caller's fallback ticks when the tracker is
     /// cold. JF-563: shared so every resume site resolves the position in PlayBook's
     /// order (tracker beats server-side progress).
+    /// JF-860 read-side policy (canonical statement on the tracker's class
+    /// doc): this helper is the IDENTITY-AGNOSTIC read, for mints whose
+    /// user-facing announce speaks no tracker position (the resume
+    /// offer/confirm); the slice it mints is still arbitrated at the serve. A
+    /// read that feeds a SPOKEN position must use the identity-gated
+    /// <see cref="Playback.AudiobookPositionTracker.GetPositionTicks(string, Playback.TimelineIdentity)"/>
+    /// instead (see ResumeIntentHandler's native-controls book resume).
     /// </summary>
     /// <param name="bookKey">The tracker key (<see cref="GetAudiobookBookKey"/>).</param>
     /// <param name="fallbackTicks">The position to use when the tracker holds none.</param>

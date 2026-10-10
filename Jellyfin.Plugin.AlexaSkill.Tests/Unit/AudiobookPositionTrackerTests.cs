@@ -329,6 +329,48 @@ public class AudiobookPositionTrackerTests : IDisposable
     }
 
     /// <summary>
+    /// The JF-860 read-side policy pin: the identity-gated mint read (the
+    /// overload the position-SPEAKING announce site uses) answers the SAME
+    /// arbitration the serve-side resolver applies - it delegates to it, so
+    /// the announce reads exactly what the serve will honor: the expected
+    /// timeline's own mark, the identity-less legacy mark, or 0 when only
+    /// foreign timelines hold marks (the orphaned-mark divergence the policy
+    /// closes: the announce can no longer speak a position the serve drops).
+    /// The agnostic read keeps the raw max for the position-silent mints.
+    /// </summary>
+    [Fact]
+    public void TimelineIdentity_GatedRead_AppliesTheServeArbitration_JF860()
+    {
+        long timelineA = TimeSpan.FromHours(8).Ticks;
+        long timelineB = TimeSpan.FromHours(6).Ticks;
+
+        // The orphaned-mark row: only the foreign timeline holds a mark. The
+        // gated read answers 0 (no position spoken) exactly as the serve
+        // resolves 0 (the slice dropped), while the agnostic read keeps the
+        // raw max for the position-silent mints.
+        _tracker.RecordSegment("book-gated", 300, new TimelineIdentity(45, timelineA));
+        Assert.Equal(0, _tracker.GetPositionTicks("book-gated", new TimelineIdentity(30, timelineB)));
+        Assert.Equal(0, _tracker.ResolveServeSliceTicks("book-gated", 30, timelineB, 299 * TicksPerSegment));
+        Assert.Equal(299 * TicksPerSegment, _tracker.GetPositionTicks("book-gated"));
+
+        // The both-marks row (the re-slice arm): the agnostic max takes the
+        // HIGHER foreign mark, the gated read takes the live timeline's own
+        // (lower) mark, and the serve re-slices the agnostic mint down to the
+        // same value the gated read returned: announce and serve agree.
+        _tracker.RecordSegment("book-gated", 61, new TimelineIdentity(30, timelineB));
+        long gated = _tracker.GetPositionTicks("book-gated", new TimelineIdentity(30, timelineB));
+        Assert.Equal(60 * TicksPerSegment, gated);
+        Assert.Equal(gated, _tracker.ResolveServeSliceTicks("book-gated", 30, timelineB, _tracker.GetPositionTicks("book-gated")));
+
+        // The legacy row: an identity-less slot is honored by the gated read
+        // under EVERY timeline (the JF-812 kindless-legacy precedent), again
+        // matching the serve.
+        _tracker.RecordSegment("book-gated-legacy", 40);
+        Assert.Equal(39 * TicksPerSegment, _tracker.GetPositionTicks("book-gated-legacy", new TimelineIdentity(7, 123)));
+        Assert.Equal(39 * TicksPerSegment, _tracker.ResolveServeSliceTicks("book-gated-legacy", 7, 123, 99 * TicksPerSegment));
+    }
+
+    /// <summary>
     /// The JF-787 duration axis: an equal chapter COUNT with a different runtime
     /// sum is a different timeline (the JF-784 verdict's same discipline).
     /// </summary>
