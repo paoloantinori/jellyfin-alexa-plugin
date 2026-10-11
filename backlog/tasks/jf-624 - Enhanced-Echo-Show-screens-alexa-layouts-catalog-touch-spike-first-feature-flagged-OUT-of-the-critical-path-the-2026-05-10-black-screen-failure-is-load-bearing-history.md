@@ -4,10 +4,10 @@ title: >-
   Enhanced Echo Show screens (alexa-layouts catalog + touch) - spike-first,
   feature-flagged, OUT of the critical path (the 2026-05-10 black-screen failure
   is load-bearing history)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-23 19:50'
-updated_date: '2026-10-11 09:11'
+updated_date: '2026-10-11 10:27'
 labels: []
 dependencies: []
 references:
@@ -54,6 +54,8 @@ Constraints (verified in the research): no push updates outside a request (re-re
 2026-09-24 rounds 6-8, the full map (bar sub-item CLOSED as platform-unattainable during music playback; task continues on owned surfaces): (r6) root cause of r5 inertness found in the docs property table - the tick handler object REQUIRES a commands array; r5 had SetValue props directly on the handler = malformed, silently ignored. Reshaped; the web simulator (Paolo logged into the dev console in the instrumented browser; Device Display checkbox on) PROVED the corrected handler runs: the 'tick NNNN' probe text grew live in the Amazon web runtime. (r7) Paolo revealed the time line has NEVER been visible on the device across all rounds -> the surface he watches is not ours. Device Log shows the device synthesizing CardRenderer.PlayerInfo ~1s after PlaybackStarted; live card-drop experiment (no StandardCard in APL-carrying responses, verified on the wire) changed NOTHING -> the native player builds from AudioItem.Metadata alone and covers our document for the whole playback. Stream headers verified PERFECT on direct+public paths (Content-Length/Accept-Ranges/audio/mpeg) so the native sweep is not a headers defect; the determinate scrubber is MSAPI-only (JF-292/JF-561). Reverted the card-drop, removed the probe, KEPT the documented-shape tick handler (lights up in any visible window: launch flash, post-pause resurface - untested). SO 50622919 corroborates the flash-then-native behavior. CLAUDE.md Key Gotchas now carries the full constraint. NEXT (plan item 3): AlexaTextList + primaryAction tappable disambiguation lists - a surface we own (no native player arbitration), real user value (tap instead of 'il secondo'). The one remaining live-bar option for music, considered and rejected: the audiobook video-audio pipeline (real seek bar) costs queue/radio/gapless/album-art - documented here so the tradeoff is on record if Paolo ever wants an opt-in 'seek mode'.
 
 ITEM 3 LANDED (2026-10-11 11:10, orchestrator; merge 2be39a2a, combined-tree suite 5732/5732 both TFMs): the tappable disambiguation lists on three surfaces (AskFirstMatch replaces the carousel flag-ON; AskMultipleArtists full-list with Context threaded at all seven legs; FindSong prompt with artist subtitles), the tap-delegates-to-real-handler mapping (disambigSelect = yes-with-cursor-moved through the real YesIntentHandler entry; findSongSelect = the digit pick through the real FindSong entry), flag-off byte-identity pinned. DEVICE PROBE LIST (7 legs, the maintainer's Show): (1) artist multi-match renders the numbered list, no black screen; (2) tap row 2 plays the SECOND artist; (3) voice 'no' then tap row 1 still plays; (4) spoken 'il secondo' keeps working with the list up; (5) FindSong prompt renders with subtitles, tap plays with the announce; (6) REVERT TRIGGER: podman logs must show the ordinal as arguments[1] on the AplUserEvent - a silent ${ordinal} failure is the abort criterion; (7) flag OFF renders today's shapes. ITEM 4 (AlexaPaginatedList chapters) dispatched as the next lane.
+
+ITEM 4 LANDED (2026-10-11 12:30, orchestrator; the final-tree suite 5756/5756 both TFMs): the chapter/episode pickers on the two real picking moments, with the honest dispatch-divergence record (the described listing/multi-episode surfaces do not exist in code; the wired surfaces are the closest real moments) and the backgroundColorOverlay naming correction. The 6-leg device probe list sits above beside item 3's 7 legs. ITEM 5 (LongPress/AlexaRating/widget: the task's own 'optional polish') remains UNSTARTED by design - the committed plan (spike, transport, tappable lists, paginated lists) is COMPLETE; item 5 is the next taker's choice, not an open obligation. TASK FLIPPED DONE on the committed plan with all four items device-pending (the probe lists are the closure bar).
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done
