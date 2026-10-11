@@ -241,6 +241,30 @@ internal static class TestHelpers
     }
 
     /// <summary>
+    /// The ONE JF-793 census fixture: a collapsed single-file book whose ParentId
+    /// is the SHARED container while its file sits inside its own subfolder below
+    /// it (the live "Managing Humans" shape; the climb must reject and the leaf
+    /// plays as its own track). Shared by the JF-794 builder-discriminator pins and
+    /// the JF-798 altitude pins.
+    /// </summary>
+    internal static (MediaBrowser.Controller.Entities.AudioBook Book, Folder Container, Mock<ILibraryManager> Library) CreateCollapsedBookUnderContainer()
+    {
+        Guid containerId = Guid.NewGuid();
+        var book = new MediaBrowser.Controller.Entities.AudioBook
+        {
+            Name = "Managing Humans",
+            Id = Guid.NewGuid(),
+            ParentId = containerId,
+            RunTimeTicks = TimeSpan.FromMinutes(20).Ticks,
+            Path = "/audiobooks/Managing Humans/Managing Humans.m4b"
+        };
+        var container = new Folder { Name = "Audiobooks", Id = containerId, Path = "/audiobooks" };
+        var library = new Mock<ILibraryManager>();
+        library.Setup(l => l.GetItemById(containerId)).Returns(container);
+        return (book, container, library);
+    }
+
+    /// <summary>
     /// The ONE interaction-model type-node extractor for the catalog suites'
     /// PUT-body assertions (JF-717 hoist of LegIsolationTests' GetTypeNode,
     /// the CreateSyncUser convention on the third private copy): parses a raw
