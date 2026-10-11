@@ -8,6 +8,7 @@ using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Apl;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Chapters;
@@ -112,7 +113,34 @@ public class GoToChapterIntentHandler : BaseHandler
             targetIndex = requestedChapter - 1;
             if (targetIndex < 0 || targetIndex >= chapters.Count)
             {
-                return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get("ChapterNotFound", locale, requestedChapter.ToString(System.Globalization.CultureInfo.InvariantCulture), chapters.Count.ToString(System.Globalization.CultureInfo.InvariantCulture))));
+                // JF-624 item 4: flag on, the ChapterNotFound Tell ALSO carries the
+                // tappable paginated chapter picker (this is the one moment the flow
+                // speaks about its chapter list; the list lets the user SEE the valid
+                // chapters and tap one instead of re-guessing a number). The spoken
+                // response itself is unchanged for both flag states; the picker's
+                // ${ordinal} IS the chapter number because the rows are the whole
+                // chapter list in order, so a tap maps onto this same handler with
+                // the tapped number (a stateless delegation: nothing rides session
+                // attributes, so the picker keeps working after this Tell ends the
+                // session, for as long as the document's MAX idle window lives).
+                // The row cap is applied in the projection (before the per-row
+                // build) so nothing past it is ever constructed; unnamed chapters
+                // get the bare ordinal (the row's time subtitle still identifies
+                // it) because an inline "Chapter N" word would be English in every
+                // locale, outside the locale layer.
+                var chapterNotFound = ResponseBuilder.Tell(ResponseStrings.Get("ChapterNotFound", locale, requestedChapter.ToString(System.Globalization.CultureInfo.InvariantCulture), chapters.Count.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+                AplHelper.AttachPaginatedListIfEnabled(
+                    chapterNotFound,
+                    () => chapters
+                        .Take(AplHelper.PaginatedListRowCap)
+                        .Select((c, i) => new Apl.PaginatedListRow(
+                            $"{i + 1}. {c.Name}".TrimEnd(),
+                            AplHelper.FormatTime((long)TimeSpan.FromTicks(c.StartPositionTicks).TotalMilliseconds)))
+                        .ToList(),
+                    session.FullNowPlayingItem.Name ?? string.Empty,
+                    AplHelper.ChapterPickTapAction,
+                    context);
+                return Task.FromResult<SkillResponse>(chapterNotFound);
             }
         }
         else

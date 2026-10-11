@@ -37,6 +37,8 @@ public class AplUserEventHandler : BaseHandler
     private readonly DeviceQueueManager _queueManager;
     private readonly YesIntentHandler _yesHandler;
     private readonly FindSongIntentHandler _findSongHandler;
+    private readonly GoToChapterIntentHandler _goToChapterHandler;
+    private readonly PlayEpisodeIntentHandler _playEpisodeHandler;
 
     public AplUserEventHandler(
         ISessionManager sessionManager,
@@ -47,7 +49,9 @@ public class AplUserEventHandler : BaseHandler
         DeviceQueueManager queueManager,
         ILoggerFactory loggerFactory,
         YesIntentHandler yesHandler,
-        FindSongIntentHandler findSongHandler) : base(sessionManager, config, loggerFactory)
+        FindSongIntentHandler findSongHandler,
+        GoToChapterIntentHandler goToChapterHandler,
+        PlayEpisodeIntentHandler playEpisodeHandler) : base(sessionManager, config, loggerFactory)
     {
         _libraryManager = libraryManager;
         _userManager = userManager;
@@ -59,6 +63,11 @@ public class AplUserEventHandler : BaseHandler
         // resume/pagination precedence all come from the real entry points).
         _yesHandler = yesHandler;
         _findSongHandler = findSongHandler;
+        // JF-624 item 4: same rule for the paginated picker taps (chapters and
+        // episodes): the tap synthesizes the intent the spoken ask would have
+        // delivered and runs the real handler entry.
+        _goToChapterHandler = goToChapterHandler;
+        _playEpisodeHandler = playEpisodeHandler;
     }
 
     /// <inheritdoc/>
@@ -101,7 +110,134 @@ public class AplUserEventHandler : BaseHandler
             return HandleDisambiguationTap(aplEvent, action!, sessionAttributes, user, session, context, cancellationToken);
         }
 
+        // JF-624 item 4: taps on the paginated chapter/episode pickers ride the
+        // same chain; each maps onto the real intent entry of its flow.
+        if (action == AplHelper.ChapterPickTapAction || action == AplHelper.EpisodePickTapAction)
+        {
+            return HandlePickerTap(aplEvent, action!, context, user, session, cancellationToken);
+        }
+
         return HandleAsync(request, context, user, session, cancellationToken);
+    }
+
+    /// <summary>
+    /// Map a paginated-picker tap onto the real intent entry of the flow the
+    /// picker was rendered for (JF-624 item 4). The taps are STATELESS by design:
+    /// the pickers mount on session-ending Tells, so nothing can ride session
+    /// attributes; the tap payload carries everything (the chapter picker's
+    /// documented ${ordinal} is the 1-based chapter number because its rows are
+    /// the whole chapter list; the episode picker's rows carry their own exact
+    /// season/episode/series arguments via the documented per-item primaryAction
+    /// override). The synthesized intent request is what the spoken ask would
+    /// have delivered, and the REAL handler re-runs everything it always runs
+    /// (the GoToChapter live-session and range checks; the PlayEpisode feature
+    /// gate, series resolution, codec routing, and announce), so a stale
+    /// document degrades to the flow's own honest answer (NoMediaPlaying,
+    /// ChapterNotFound, NotFoundEpisode) instead of a wrong pick. A malformed
+    /// payload (missing or non-numeric pick arguments) degrades to the empty
+    /// keep-alive, the queue/carousel tap convention.
+    /// </summary>
+    private Task<SkillResponse> HandlePickerTap(
+        AplUserEventRequest aplEvent,
+        string action,
+        Context context,
+        Entities.User user,
+        SessionInfo session,
+        CancellationToken cancellationToken)
+    {
+        if (action == AplHelper.ChapterPickTapAction)
+        {
+            // Slot names match the handler's own reads ("chapter_number"): the
+            // synthesized request must look exactly like the spoken ask.
+            if (!TryTapArg(aplEvent, 1, out int chapterNumber) || chapterNumber < 1)
+            {
+                Logger.LogDebug("AplUserEvent chapter picker tap: no valid chapter number (args={Args})", aplEvent.Arguments);
+                return Task.FromResult(ResponseBuilder.Empty());
+            }
+
+            IntentRequest tapRequest = SynthesizeTapIntent(
+                IntentNames.GoToChapter,
+                aplEvent,
+                ("chapter_number", chapterNumber.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+
+            Logger.LogDebug("AplUserEvent chapter picker tap: chapter {Chapter} mapped onto the GoToChapter entry", chapterNumber);
+            return _goToChapterHandler.HandleAsync(tapRequest, context, user, session, cancellationToken);
+        }
+
+        // Episode picker: [action, season, episode, seriesName] (the row's own
+        // numbers, so gaps/specials can never misresolve through position). A
+        // season of 0 is valid (the specials season).
+        if (!TryTapArg(aplEvent, 1, out int seasonNumber)
+            || !TryTapArg(aplEvent, 2, out int episodeNumber)
+            || seasonNumber < 0
+            || episodeNumber < 1
+            || string.IsNullOrWhiteSpace(aplEvent.Arguments?.ElementAtOrDefault(3)?.ToString()))
+        {
+            Logger.LogDebug(
+                "AplUserEvent episode picker tap: invalid payload (season={Season}, episode={Episode}, series={Series})",
+                aplEvent.Arguments?.ElementAtOrDefault(1)?.ToString(),
+                aplEvent.Arguments?.ElementAtOrDefault(2)?.ToString(),
+                aplEvent.Arguments?.ElementAtOrDefault(3)?.ToString());
+            return Task.FromResult(ResponseBuilder.Empty());
+        }
+
+        string seriesName = aplEvent.Arguments![3]!.ToString();
+        IntentRequest episodeTapRequest = SynthesizeTapIntent(
+            IntentNames.PlayEpisode,
+            aplEvent,
+            ("series_name", seriesName),
+            ("season_number", seasonNumber.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+            ("episode_number", episodeNumber.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+
+        Logger.LogDebug(
+            "AplUserEvent episode picker tap: S{Season}E{Episode} of '{Series}' mapped onto the PlayEpisode entry",
+            seasonNumber, episodeNumber, seriesName);
+        return _playEpisodeHandler.HandleAsync(episodeTapRequest, context, user, session, cancellationToken);
+    }
+
+    /// <summary>
+    /// Read the Nth SendEvent argument of a tap as an invariant-culture integer
+    /// (JF-624 item 4): the ONE tap-number parse contract for every tap family
+    /// in this file (the disambiguation ordinal, the chapter number, and the
+    /// episode season/number all read through it).
+    /// </summary>
+    private static bool TryTapArg(AplUserEventRequest aplEvent, int index, out int value)
+    {
+        string? raw = aplEvent.Arguments?.ElementAtOrDefault(index)?.ToString();
+        return int.TryParse(raw, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out value);
+    }
+
+    /// <summary>
+    /// Build the intent request a tap delegates to (JF-624 item 4): the request
+    /// must look EXACTLY like what the spoken ask would have delivered, so the
+    /// delegated handler's own slot reads and locale resolution behave
+    /// identically (each slot's Name equals its key and matches the target
+    /// handler's own reads; the locale rides the tap's locale, without which the
+    /// delegated response would fall back to the default locale's speech; the
+    /// RequestId rides the tap's own id, without which every progressive send
+    /// the delegated flow makes would address a null request and always fail).
+    /// </summary>
+    // Internal (not private) as the tap-synthesis contract seam: the pin suite
+    // asserts the request shape the delegated handlers depend on (RequestId,
+    // Locale, slot names), the exact contract the JF-624 item 4 review's F1
+    // found silently droppable.
+    internal static IntentRequest SynthesizeTapIntent(
+        string intentName,
+        AplUserEventRequest source,
+        params (string Slot, string Value)[] slots)
+    {
+        return new IntentRequest
+        {
+            RequestId = source.RequestId,
+            Intent = new()
+            {
+                Name = intentName,
+                Slots = slots.ToDictionary(
+                    s => s.Slot,
+                    s => new Slot { Name = s.Slot, Value = s.Value })
+            },
+            Locale = source.Locale
+        };
     }
 
     /// <summary>
@@ -135,9 +271,10 @@ public class AplUserEventHandler : BaseHandler
         Context context,
         CancellationToken cancellationToken)
     {
-        string? ordinalRaw = aplEvent.Arguments?.ElementAtOrDefault(1)?.ToString();
-        if (!int.TryParse(ordinalRaw, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out int ordinal)
-            || ordinal < 1)
+        // The ordinal parse rides the shared tap-argument reader (JF-624 item 4
+        // review F3): one definition of the invariant-culture tap-number contract
+        // for every tap family in this file.
+        if (!TryTapArg(aplEvent, 1, out int ordinal) || ordinal < 1)
         {
             Logger.LogDebug("AplUserEvent disambiguation tap: no valid ordinal (action={Action}, args={Args})", action, aplEvent.Arguments);
             return Task.FromResult(ResponseBuilder.Empty());

@@ -21,6 +21,7 @@ using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Entities;
 using Jellyfin.Plugin.AlexaSkill.Lwa;
 using MediaBrowser.Common.Configuration;
+using MediaBrowser.Controller.Chapters;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Audio;
 using MediaBrowser.Controller.Library;
@@ -867,7 +868,9 @@ internal static class TestHelpers
         IUserManager userManager,
         IUserDataManager userDataManager,
         DeviceQueueManager queueManager,
-        ILoggerFactory loggerFactory)
+        ILoggerFactory loggerFactory,
+        IChapterManager? chapterManager = null,
+        ITVSeriesManager? tvSeriesManager = null)
         => new(
             sessionManager,
             config,
@@ -879,7 +882,11 @@ internal static class TestHelpers
             new YesIntentHandler(
                 sessionManager, config, libraryManager, userManager, userDataManager, loggerFactory, queueManager),
             new FindSongIntentHandler(
-                sessionManager, config, libraryManager, userManager, userDataManager, loggerFactory));
+                sessionManager, config, libraryManager, userManager, userDataManager, loggerFactory),
+            new GoToChapterIntentHandler(
+                sessionManager, config, libraryManager, chapterManager ?? Mock.Of<IChapterManager>(), loggerFactory),
+            new PlayEpisodeIntentHandler(
+                sessionManager, config, libraryManager, userManager, userDataManager, tvSeriesManager ?? Mock.Of<ITVSeriesManager>(), loggerFactory));
 
     /// <summary>
     /// JF-789: backdates a device's last-played freshness stamp to the days-old
