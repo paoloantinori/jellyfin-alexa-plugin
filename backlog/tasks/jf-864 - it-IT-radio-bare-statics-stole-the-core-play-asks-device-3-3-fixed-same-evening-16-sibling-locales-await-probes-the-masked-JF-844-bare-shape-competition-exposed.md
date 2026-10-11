@@ -4,9 +4,10 @@ title: >-
   it-IT radio bare statics stole the core play asks (device 3/3, fixed same
   evening); 16 sibling locales await probes; the masked JF-844 bare-shape
   competition exposed
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-11 13:52'
+updated_date: '2026-10-11 18:56'
 labels:
   - nlu
   - interaction-model
