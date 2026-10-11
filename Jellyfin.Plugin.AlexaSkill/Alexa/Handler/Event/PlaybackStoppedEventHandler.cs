@@ -23,7 +23,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// <summary>
 /// Handler for PlaybackStopped events.
 /// Saves the last playback position and item to DeviceQueue for resume-after-pause recovery.
-/// Also persists real position to ItemPositionState to bypass Jellyfin's MinAudiobookResume
+/// Also persists real position to ItemPositions to bypass Jellyfin's MinAudiobookResume
 /// threshold, and overwrites Jellyfin's UserData for cross-client consistency.
 /// JF-522: every persisted position is ITEM-ABSOLUTE (the stream's launch-scoped base
 /// composed into the raw device offset), so non-skill consumers of these stores see
@@ -124,7 +124,7 @@ public class PlaybackStoppedEventHandler : BaseHandler
         // directive chokepoint, promoted at PlaybackStarted) converts it to the
         // item-absolute position every consumer of these stores expects: the server
         // PlayState and UserData, DeviceQueue.CurrentPositionTicks, and
-        // ItemPositionState. Displacement stops keep offset 0 below (nothing to
+        // ItemPositions. Displacement stops keep offset 0 below (nothing to
         // compose); base 0 and absent scopes return the raw ticks unchanged.
         long realPositionTicks = Progress.ComposeEventPositionTicks(
             device, stopItemId, req.OffsetInMilliseconds, "PlaybackStopped", _queueManager, _libraryManager);
@@ -214,7 +214,7 @@ public class PlaybackStoppedEventHandler : BaseHandler
                 device, req.Token, req.OffsetInMilliseconds);
         }
 
-        // Persist real position to ItemPositionState (bypasses Jellyfin's MinAudiobookResume)
+        // Persist real position to ItemPositions (bypasses Jellyfin's MinAudiobookResume)
         // and overwrite Jellyfin UserData for cross-client sync (web/mobile see correct position).
         if (!isDisplacement && !queueContradictsEventToken && realPositionTicks > 0 && stopItemId != Guid.Empty)
         {

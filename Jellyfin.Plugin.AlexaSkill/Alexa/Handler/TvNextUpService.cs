@@ -428,7 +428,7 @@ public sealed class TvNextUpService
 
         // A next-up episode with playback progress is a resume: the JF-565 launch
         // slice restarts at the stored position and the announce says so. The
-        // position resolves UserData-first with the plugin-owned ItemPositionState
+        // position resolves UserData-first with the plugin-owned ItemPositions
         // as fallback (DeviceQueueManager.ResolveResumeTicks, the JF-581 pattern):
         // unlike the progress-scan resume seeds, the episode here comes from the
         // NextUp query, so the UserData-loss case genuinely reads 0 and the store

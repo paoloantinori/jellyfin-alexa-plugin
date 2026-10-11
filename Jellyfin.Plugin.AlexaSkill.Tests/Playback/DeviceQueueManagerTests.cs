@@ -814,12 +814,12 @@ public class DeviceQueueManagerTests : IDisposable
     public void DeriveAndCommit_PreservesItemPositionStateAcrossReset()
     {
         _manager.SetQueue("dev", new List<string> { "a", "b", "c" }, 0);
-        _manager.GetOrCreateQueue("dev").ItemPositionState["a"] = 1234L;
+        _manager.GetOrCreateQueue("dev").ItemPositions["a"] = new ItemPositionRecord { Ticks = 1234L };
 
         _manager.CommitShuffledQueue("dev", _manager.DeriveShuffledQueue(new List<string> { "a", "b", "c" }, new Random(9)));
 
         DeviceQueue q = _manager.GetOrCreateQueue("dev");
-        Assert.Equal(1234L, q.ItemPositionState["a"]);
+        Assert.Equal(1234L, q.ItemPositions["a"].Ticks);
     }
 
     // =====================================================================
@@ -1414,7 +1414,10 @@ public class DeviceQueueManagerTests : IDisposable
         // survives it.
         _manager.RecordStoppedPositionAndTrim("dev-kinds", queue, itemId, TimeSpan.FromMinutes(4).Ticks, bookShaped: null);
 
-        Assert.Equal(DeviceQueueManager.PositionKindBook, queue.ItemPositionKinds[itemId.ToString("N")]);
+        // JF-860: ticks and stamp are ONE record now; both assertions read the
+        // same entry, so the pair cannot drift apart in storage.
+        Assert.Equal(TimeSpan.FromMinutes(4).Ticks, queue.ItemPositions[itemId.ToString("N")].Ticks);
+        Assert.Equal(DeviceQueueManager.PositionKindBook, queue.ItemPositions[itemId.ToString("N")].Kind);
         Assert.Equal(TimeSpan.FromMinutes(4).Ticks, _manager.GetStoredPositionTicks("dev-kinds", itemId.ToString()));
     }
 
@@ -1433,38 +1436,59 @@ public class DeviceQueueManagerTests : IDisposable
     }
 
     /// <summary>
-    /// JF-812 round-trip pin for the new field: the kind stamps survive the
+    /// JF-812/JF-860 round-trip pin for the NEW shape: records (ticks + kind,
+    /// and a kindless null-kind entry preserved as null) survive the
     /// persist/reload cycle (Dispose flushes, a fresh manager on the same dir
-    /// reloads), so the valve discriminates after a restart too.
+    /// reloads), so the valve discriminates after a restart too, and the
+    /// written file carries the NEW member only (the legacy
+    /// itemPositionState/itemPositionKinds members are gone from the persisted
+    /// shape; the next load needs no fold).
     /// </summary>
     [Fact]
     public void RecordStoppedPositionAndTrim_KindStampsRoundTripThroughDisk()
     {
         Guid bookId = Guid.NewGuid();
         Guid songId = Guid.NewGuid();
+        Guid kindlessId = Guid.NewGuid();
         DeviceQueue queue = _manager.GetOrCreateQueue("dev-kinds");
         _manager.RecordStoppedPositionAndTrim("dev-kinds", queue, bookId, TimeSpan.FromMinutes(3).Ticks, bookShaped: true);
         _manager.RecordStoppedPositionAndTrim("dev-kinds", queue, songId, TimeSpan.FromMinutes(1).Ticks, bookShaped: false);
+
+        // The designed kindless shape (an unresolved write's product): it must
+        // round-trip as null Kind, not silently gain a stamp on disk.
+        _manager.RecordStoppedPositionAndTrim("dev-kinds", queue, kindlessId, TimeSpan.FromMinutes(2).Ticks, bookShaped: null);
         _manager.Dispose();
+        string fileText = File.ReadAllText(Path.Combine(_tempDir, "queue_dev-kinds.json"));
+
+        // The persisted shape: the NEW member, none of the legacy parallel pair.
+        Assert.Contains("\"itemPositions\":", fileText, StringComparison.Ordinal);
+        Assert.DoesNotContain("itemPositionState", fileText, StringComparison.Ordinal);
+        Assert.DoesNotContain("itemPositionKinds", fileText, StringComparison.Ordinal);
+        Assert.Null(JsonSerializer.Deserialize<DeviceQueue>(fileText, DeviceQueueManager.JsonOptions)!.LegacyAndUnknownMembers);
 
         using var reloaded = new DeviceQueueManager(_tempDir, _logger);
         DeviceQueue reloadedQueue = reloaded.GetOrCreateQueue("dev-kinds");
-        Assert.Equal(DeviceQueueManager.PositionKindBook, reloadedQueue.ItemPositionKinds[bookId.ToString("N")]);
-        Assert.Equal(DeviceQueueManager.PositionKindOther, reloadedQueue.ItemPositionKinds[songId.ToString("N")]);
+        Assert.Equal(DeviceQueueManager.PositionKindBook, reloadedQueue.ItemPositions[bookId.ToString("N")].Kind);
+        Assert.Equal(DeviceQueueManager.PositionKindOther, reloadedQueue.ItemPositions[songId.ToString("N")].Kind);
+        Assert.Null(reloadedQueue.ItemPositions[kindlessId.ToString("N")].Kind);
         Assert.True(reloaded.HasAnyBookShapedStoredPosition("dev-kinds"));
 
         // The song-only shape must ALSO discriminate after the reload (both
         // stamps truly persisted, not just the book one): drop the book entry
-        // WHOLE (position and stamp) and only the Other-stamped song remains.
-        reloadedQueue.ItemPositionState.Remove(bookId.ToString("N"));
-        reloadedQueue.ItemPositionKinds.Remove(bookId.ToString("N"));
+        // and the KINDLESS entry (which conservatively releases the valve by
+        // design, so it must not sit in the store under test) and only the
+        // Other-stamped song remains.
+        reloadedQueue.ItemPositions.Remove(bookId.ToString("N"));
+        reloadedQueue.ItemPositions.Remove(kindlessId.ToString("N"));
         Assert.False(reloaded.HasAnyBookShapedStoredPosition("dev-kinds"));
     }
 
     /// <summary>
-    /// JF-812 backward-compat pin: a pre-JF-812 queue file (positions persisted
-    /// with no itemPositionKinds member) loads with the kind map empty and its
-    /// entries still release the valve (today's behavior for existing stores).
+    /// JF-812/JF-860 backward-compat pin, OLD file folds to the NEW shape: a
+    /// pre-JF-812 queue file (positions persisted with no itemPositionKinds
+    /// member) loads with its entries folded as KINDLESS records (null Kind, the
+    /// designed state) whose ticks stay readable, and the entries still release
+    /// the valve (today's behavior for existing stores).
     /// </summary>
     [Fact]
     public void LoadAllFromDisk_PreJf812QueueFile_KindlessEntriesStillReleaseValve()
@@ -1478,19 +1502,126 @@ public class DeviceQueueManagerTests : IDisposable
 
         using var reloaded = new DeviceQueueManager(_tempDir, _logger);
         DeviceQueue legacyQueue = reloaded.GetOrCreateQueue("dev-legacy");
-        Assert.Empty(legacyQueue.ItemPositionKinds);
+        Assert.Null(legacyQueue.ItemPositions[songId.ToString("N")].Kind);
+        Assert.Equal(TimeSpan.FromMinutes(1).Ticks, reloaded.GetStoredPositionTicks("dev-legacy", songId.ToString()));
         Assert.True(reloaded.HasAnyBookShapedStoredPosition("dev-legacy"));
     }
 
     /// <summary>
-    /// JF-812 subset-invariant pin: when the cap trim evicts position entries,
-    /// their kind stamps are pruned with them, so the kind map never holds orphan
-    /// keys (unbounded growth in the persisted file). Seeds are direct (the
-    /// JF-739 idiom: no freshness stamps), so the single crossing write's trim is
-    /// free to evict the oldest seeded entries.
+    /// JF-860 migration pin, a JF-812-era file (BOTH legacy parallel members)
+    /// folds with the PAIRS INTACT: every position key becomes ONE record
+    /// carrying its kind when the kind map names it (Book and Other alike),
+    /// a position with no kind entry folds KINDLESS (null Kind), an orphan kind
+    /// (a kind key with NO position key, the old subset invariant's forbidden
+    /// direction a torn file could carry) is DROPPED rather than resurrected,
+    /// and a torn number entry (does not parse as a whole long) is skipped with
+    /// the rest of the file intact (the JF-648 total-fold rule).
     /// </summary>
     [Fact]
-    public void RecordStoppedPositionAndTrim_CapTrimPrunesKindStampsOfEvictedPositions()
+    public void LoadAllFromDisk_LegacyParallelMapFile_FoldsPairsIntoRecords_JF860()
+    {
+        Guid bookId = Guid.NewGuid();
+        Guid songId = Guid.NewGuid();
+        Guid kindlessId = Guid.NewGuid();
+        Guid orphanKindId = Guid.NewGuid();
+        Guid tornId = Guid.NewGuid();
+
+        // The file is hand-written (not the typed fixture writer, which cannot
+        // serialize a non-long) so the TORN entry (1.5, not a whole long) can
+        // ride the same member as the good ones, exactly like the JF-648
+        // torn-entry pin's file.
+        File.WriteAllText(
+            Path.Combine(_tempDir, "queue_dev-jf860-fold.json"),
+            "{\"itemPositionState\":{\"" + bookId.ToString("N") + "\":" + TimeSpan.FromMinutes(3).Ticks
+                + ",\"" + songId.ToString("N") + "\":" + TimeSpan.FromMinutes(1).Ticks
+                + ",\"" + kindlessId.ToString("N") + "\":" + TimeSpan.FromMinutes(2).Ticks
+                + ",\"" + tornId.ToString("N") + "\":1.5},"
+                + "\"itemPositionKinds\":{\"" + bookId.ToString("N") + "\":\"" + DeviceQueueManager.PositionKindBook + "\""
+                + ",\"" + songId.ToString("N") + "\":\"" + DeviceQueueManager.PositionKindOther + "\""
+                + ",\"" + orphanKindId.ToString("N") + "\":\"" + DeviceQueueManager.PositionKindBook + "\"}}");
+        _manager.Dispose();
+
+        using var reloaded = new DeviceQueueManager(_tempDir, _logger);
+
+        // Book and song kinds fold INTO their records; kindless stays null.
+        DeviceQueue folded = reloaded.GetQueue("dev-jf860-fold")!;
+        Assert.Equal(DeviceQueueManager.PositionKindBook, folded.ItemPositions[bookId.ToString("N")].Kind);
+        Assert.Equal(TimeSpan.FromMinutes(3).Ticks, folded.ItemPositions[bookId.ToString("N")].Ticks);
+        Assert.Equal(DeviceQueueManager.PositionKindOther, folded.ItemPositions[songId.ToString("N")].Kind);
+        Assert.Null(folded.ItemPositions[kindlessId.ToString("N")].Kind);
+
+        // The orphan kind (no position) is dropped, not resurrected.
+        Assert.DoesNotContain(orphanKindId.ToString("N"), folded.ItemPositions.Keys);
+
+        // The torn entry is skipped; the good entries survive.
+        Assert.DoesNotContain(tornId.ToString("N"), folded.ItemPositions.Keys);
+        Assert.True(reloaded.HasAnyBookShapedStoredPosition("dev-jf860-fold"));
+
+        // The fold consumed the buffer: nothing legacy rides a later persist.
+        Assert.Null(folded.LegacyAndUnknownMembers);
+    }
+
+    /// <summary>
+    /// JF-860 migration pin, conflict BY INSPECTION: a file carrying BOTH the
+    /// legacy parallel members and the itemPositions member (only possible from
+    /// a hand-edited or foreign-written file; the plugin writes exactly one
+    /// shape per version) resolves per key toward the RECORD entry, written by
+    /// strictly newer code than the parallel members (the JF-648 conflict
+    /// rule), while a key only the legacy members name still folds in (no data
+    /// loss on the legacy-only tail of a hybrid file).
+    /// </summary>
+    [Fact]
+    public void LoadAllFromDisk_BothShapesPresent_RecordEntryWinsPerKey_JF860()
+    {
+        Guid contestedId = Guid.NewGuid();
+        Guid legacyOnlyId = Guid.NewGuid();
+
+        WriteLegacyPositionMapQueueFile(
+            _tempDir,
+            "dev-jf860-conflict",
+            positions: new Dictionary<string, long>
+            {
+                [contestedId.ToString("N")] = TimeSpan.FromMinutes(20).Ticks,
+                [legacyOnlyId.ToString("N")] = TimeSpan.FromMinutes(4).Ticks,
+            },
+            kinds: new Dictionary<string, string> { [contestedId.ToString("N")] = DeviceQueueManager.PositionKindBook },
+            itemPositions: new Dictionary<string, ItemPositionRecord>
+            {
+                [contestedId.ToString("N")] = new ItemPositionRecord
+                {
+                    Ticks = TimeSpan.FromMinutes(7).Ticks,
+                    Kind = DeviceQueueManager.PositionKindOther,
+                },
+            });
+        _manager.Dispose();
+
+        using var reloaded = new DeviceQueueManager(_tempDir, _logger);
+        DeviceQueue folded = reloaded.GetQueue("dev-jf860-conflict")!;
+
+        // The contested key reads the RECORD entry (newer shape wins), whole.
+        Assert.Equal(TimeSpan.FromMinutes(7).Ticks, folded.ItemPositions[contestedId.ToString("N")].Ticks);
+        Assert.Equal(DeviceQueueManager.PositionKindOther, folded.ItemPositions[contestedId.ToString("N")].Kind);
+
+        // ...and a key only the legacy members name still folds in; it carries
+        // no kind entry in the fixture, so it folds KINDLESS (null Kind, the
+        // designed state; the JF-648 analog's null-rate leg).
+        Assert.Equal(TimeSpan.FromMinutes(4).Ticks, folded.ItemPositions[legacyOnlyId.ToString("N")].Ticks);
+        Assert.Null(folded.ItemPositions[legacyOnlyId.ToString("N")].Kind);
+    }
+
+    /// <summary>
+    /// JF-812/JF-860 structural-invariant pin (the collapse's own regression
+    /// guard): at cap pressure the trim evicts WHOLE records. Under the
+    /// pre-JF-860 parallel maps the failure mode was a kind stamp orphaned by
+    /// its position's eviction (unbounded growth in the persisted file,
+    /// preventable only by the hand evicted-key mirror); with ONE map the
+    /// evicted key has NO entry at all (no ticks readable, no kind held) and
+    /// every survivor carries its ticks and kind in the SAME entry. Seeds are
+    /// direct (the JF-739 idiom: no freshness stamps), so the single crossing
+    /// write's trim is free to evict the oldest seeded entries.
+    /// </summary>
+    [Fact]
+    public void RecordStoppedPositionAndTrim_CapTrimEvictsWholeRecords_JF860()
     {
         DeviceQueue queue = _manager.GetOrCreateQueue("dev-kinds");
         List<Guid> residentIds = Enumerable.Range(0, DeviceQueueManager.MaxItemPositionStateEntries)
@@ -1502,16 +1633,31 @@ public class DeviceQueueManagerTests : IDisposable
         }
 
         Guid crossingId = Guid.NewGuid();
-        _manager.RecordStoppedPositionAndTrim("dev-kinds", queue, crossingId, TimeSpan.FromMinutes(1).Ticks, bookShaped: false);
+        long crossingTicks = TimeSpan.FromMinutes(1).Ticks;
+        _manager.RecordStoppedPositionAndTrim("dev-kinds", queue, crossingId, crossingTicks, bookShaped: false);
 
-        Assert.Equal(DeviceQueueManager.MaxItemPositionStateEntries, queue.ItemPositionState.Count);
-        Assert.Equal(DeviceQueueManager.MaxItemPositionStateEntries, queue.ItemPositionKinds.Count);
-        // The kind map is a subset of the surviving position keys: no orphan stamps.
-        Assert.All(queue.ItemPositionKinds.Keys, key => Assert.Contains(key, queue.ItemPositionState.Keys));
-        // The fresh entry kept both halves (the JF-738 guard) and one aged seed
-        // lost both (the trim + the prune).
-        Assert.Contains(crossingId.ToString("N"), queue.ItemPositionState.Keys);
-        Assert.Contains(crossingId.ToString("N"), queue.ItemPositionKinds.Keys);
+        // Back at the cap, one aged seed evicted WHOLE: its key is simply gone
+        // (a revert to parallel maps or a half-aware eviction reds the count or
+        // the survivor assertions below). Single throws unless EXACTLY one
+        // resident is missing, which pins the eviction count too.
+        Assert.Equal(DeviceQueueManager.MaxItemPositionStateEntries, queue.ItemPositions.Count);
+        Guid evictedId = residentIds.Single(id => !queue.ItemPositions.ContainsKey(id.ToString("N")));
+        Assert.Null(_manager.GetStoredPositionTicks("dev-kinds", evictedId.ToString()));
+
+        // Every survivor is a WHOLE record: ticks and kind in the same entry
+        // (key identity, not tick value, separates the crossing record from
+        // the seeds, so a coincidental tick collision cannot exempt a seed).
+        string crossingKey = crossingId.ToString("N");
+        Assert.All(
+            queue.ItemPositions,
+            kvp => Assert.Equal(DeviceQueueManager.PositionKindOther, kvp.Value.Kind));
+        Assert.All(
+            queue.ItemPositions.Where(kvp => !string.Equals(kvp.Key, crossingKey, StringComparison.Ordinal)),
+            kvp => Assert.Equal(1234, kvp.Value.Ticks));
+
+        // The fresh entry kept its whole record through its own trim (the
+        // JF-738 guard); its kind half is covered by the All above.
+        Assert.Equal(crossingTicks, queue.ItemPositions[crossingKey].Ticks);
     }
 
     // =====================================================================
@@ -1884,6 +2030,34 @@ public class DeviceQueueManagerTests : IDisposable
     }
 
     /// <summary>
+    /// Seeds the JF-860 legacy parallel-map queue file (the position fold pins'
+    /// fixture writer, parameterized; the JF-648 four-map writer's idiom):
+    /// writes the OLD persisted shape's members (plus an optional pre-populated
+    /// itemPositions member, the both-shapes conflict pin's hybrid) through the
+    /// manager's own persistence options, so the fixtures' member naming can
+    /// never drift from the loader's contract.
+    /// </summary>
+    private static void WriteLegacyPositionMapQueueFile(
+        string dir,
+        string deviceId,
+        Dictionary<string, long>? positions,
+        Dictionary<string, string>? kinds,
+        Dictionary<string, ItemPositionRecord>? itemPositions = null)
+    {
+        File.WriteAllText(
+            Path.Combine(dir, $"queue_{deviceId}.json"),
+            JsonSerializer.Serialize(
+                new
+                {
+                    itemIds = new List<string>(),
+                    itemPositionState = positions,
+                    itemPositionKinds = kinds,
+                    itemPositions = itemPositions
+                },
+                DeviceQueueManager.JsonOptions));
+    }
+
+    /// <summary>
     /// Seeds the JF-723/JF-738 cap-pressure shape: a queue of
     /// <paramref name="count"/> ids in the given GUID format, each with a
     /// launch-scope entry (active or pending per <paramref name="enqueued"/>), so
@@ -1977,17 +2151,14 @@ public class DeviceQueueManagerTests : IDisposable
 
     /// <summary>
     /// Seeds a stored position directly ("N"-keyed, no freshness stamps; the
-    /// JF-739 direct-seed idiom). JF-812: pass <paramref name="kind"/> to seed
-    /// the kind stamp beside it; the default leaves the entry KINDLESS.
+    /// JF-739 direct-seed idiom). JF-812/JF-860: pass <paramref name="kind"/> to
+    /// seed the kind stamp inside the record; the default leaves it KINDLESS
+    /// (null Kind, the designed state).
     /// </summary>
     private void SeedStoredPosition(string deviceId, Guid itemId, long ticks, string? kind = null)
     {
         DeviceQueue queue = _manager.GetOrCreateQueue(deviceId);
-        queue.ItemPositionState[itemId.ToString("N")] = ticks;
-        if (kind != null)
-        {
-            queue.ItemPositionKinds[itemId.ToString("N")] = kind;
-        }
+        queue.ItemPositions[itemId.ToString("N")] = new ItemPositionRecord { Ticks = ticks, Kind = kind };
     }
 
     /// <summary>

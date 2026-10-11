@@ -98,29 +98,21 @@ public sealed class DeviceQueue
     }
 
     /// <summary>
-    /// Gets or sets per-item position state (itemId → ticks). Survives item switches
-    /// and bypasses Jellyfin's MinAudiobookResume threshold. Used for alternate-resume:
-    /// play A, switch to B, return to A → A resumes from saved position.
+    /// Gets or sets per-item stored playback positions (itemId ("N" format) →
+    /// <see cref="ItemPositionRecord"/>, JF-860): the stop position in ticks plus
+    /// the JF-812 kind stamp as ONE value per key. Survives item switches, queue
+    /// resets, and bypasses Jellyfin's MinAudiobookResume threshold. Used for
+    /// alternate-resume: play A, switch to B, return to A → A resumes from saved
+    /// position. PERSISTED SHAPE (JF-860): this map replaces the legacy
+    /// ItemPositionState/ItemPositionKinds parallel-map pair in the queue files
+    /// (ticks map + kind-stamp map, a convention-enforced pairing whose trim
+    /// needed a hand evicted-key mirror); old-shape files fold into it at load
+    /// (<see cref="FoldLegacyPositionMaps"/>). With the ticks and the kind sharing
+    /// one dictionary entry the JF-812 subset invariant (a kind stamp exists iff
+    /// its position entry exists) is STRUCTURAL: no write, trim, or reset-carry
+    /// can remove one half without the other.
     /// </summary>
-    public Dictionary<string, long> ItemPositionState { get; set; } = new();
-
-    /// <summary>
-    /// Gets or sets the JF-812 KIND stamps beside <see cref="ItemPositionState"/>
-    /// (itemId ("N" format) → kind name, the
-    /// <see cref="DeviceQueueManager.PositionKindBook"/>/
-    /// <see cref="DeviceQueueManager.PositionKindOther"/> constants): "Book" for a
-    /// book-shaped stopped item, "Other" for every resolved non-book item (plain
-    /// songs, audio-route episodes), written only by the stop path's
-    /// <see cref="DeviceQueueManager.RecordStoppedPositionAndTrim"/> and only when
-    /// the item RESOLVED. An entry with no kind stamp is KINDLESS (every entry on a
-    /// pre-JF-812 store, and a write whose item could not be resolved); the JF-797
-    /// deep-resume valve counts kindless entries as book-shaped (today's behavior,
-    /// the conservative release), so old stores keep the JF-581 resume guarantee.
-    /// Purely additive in the persisted JSON: pre-JF-812 files deserialize with this
-    /// map empty, and the keys stay a subset of the surviving position keys (the
-    /// write and the trim prune together).
-    /// </summary>
-    public Dictionary<string, string> ItemPositionKinds { get; set; } = new();
+    public Dictionary<string, ItemPositionRecord> ItemPositions { get; set; } = new();
 
     /// <summary>
     /// Gets or sets per-item ACTIVE launch scopes (itemId ("N" format) →
@@ -153,11 +145,12 @@ public sealed class DeviceQueue
     public Dictionary<string, LaunchScope> PendingLaunchScopes { get; set; } = new();
 
     /// <summary>
-    /// JF-648 migration buffer: every JSON member this version does not bind to a
-    /// declared property lands here at DESERIALIZATION time (the four legacy
-    /// half-map members on an old queue file, plus any member a NEWER plugin wrote
-    /// that this one does not know). Consumed and nulled by
-    /// <see cref="FoldLegacyLaunchScopeMaps"/> on the manager's load path (the ONE
+    /// JF-648/JF-860 migration buffer: every JSON member this version does not
+    /// bind to a declared property lands here at DESERIALIZATION time (the four
+    /// legacy launch half-map members and the two legacy parallel position-map
+    /// members on an old queue file, plus any member a NEWER plugin wrote that
+    /// this one does not know). Consumed and nulled by
+    /// <see cref="FoldLegacyMembers"/> on the manager's load path (the ONE
     /// deserialization site), so unknown members are dropped on the next persist
     /// exactly as the pre-JF-648 reader skipped them (no forward-member
     /// resurrection) and nothing here is ever re-serialized.
@@ -166,9 +159,132 @@ public sealed class DeviceQueue
     public Dictionary<string, JsonElement>? LegacyAndUnknownMembers { get; set; }
 
     /// <summary>
+    /// JF-648/JF-860: the ONE load-path fold entry. Folds BOTH legacy persisted
+    /// shapes into their collapsed maps (the position parallel maps into the
+    /// record-per-key map, the launch-scope half-maps into the scope-per-key
+    /// maps), then nulls the shared <see cref="LegacyAndUnknownMembers"/>
+    /// buffer once. Each leg is a PURE READER of the buffer and the legs are
+    /// <see langword="private"/> (this entry point is their only caller), so
+    /// the consume-then-null ordering rule is structural, not remembered: no
+    /// leg can null the buffer under the other's members.
+    /// </summary>
+    internal void FoldLegacyMembers()
+    {
+        FoldLegacyPositionMaps();
+        FoldLegacyLaunchScopeMaps();
+        LegacyAndUnknownMembers = null;
+    }
+
+    /// <summary>
+    /// JF-860 migration: folds the legacy position parallel-map members (read out
+    /// of <see cref="LegacyAndUnknownMembers"/>) into the record-per-key map, so
+    /// every legacy position key becomes ONE <see cref="ItemPositionRecord"/>
+    /// carrying its ticks and, when the kind map names the key, its JF-812 kind
+    /// stamp (null Kind otherwise: the DESIGNED kindless state, which the JF-797
+    /// deep-resume valve conservatively releases). A pure reader: the entry
+    /// point (<see cref="FoldLegacyMembers"/>) nulls the buffer after both legs.
+    /// CONFLICT BY INSPECTION (a file carrying BOTH shapes, only possible from a
+    /// hand-edited or foreign-written file: the plugin writes exactly one shape
+    /// per version): where both shapes name a key, the RECORD entry wins, because
+    /// it was written by strictly newer code than the parallel-map members (the
+    /// JF-648 conflict rule). BOUNDED RESIDUAL on the same hybrid files
+    /// (code-review F1, JF-648, inherited by this fold): the win is per-key
+    /// VALUE preference only; the folded legacy keys append at LATER insertion
+    /// slots than the deserialized record entries, so a cap-pressure trim on a
+    /// hybrid file may evict record entries before folded legacy ones (the
+    /// trust order inverted by eviction order). Not worth machinery for a shape
+    /// no plugin writes; the readers never see a SPLIT either way (ticks and
+    /// kind of any surviving entry stay one record). An ORPHAN KIND (a kind key
+    /// with no position key;
+    /// the old subset invariant's forbidden direction, which no plugin writer
+    /// produced but a torn file could carry) is DROPPED: the fold is where the
+    /// parallel-map convention becomes the structural invariant, and carrying
+    /// the orphan over would preserve exactly the orphan-growth corruption the
+    /// JF-812 trim mirror existed to prevent. Torn number entries are skipped
+    /// total-by-design (the <see cref="ReadLegacyBaseMap"/> rule), so one bad
+    /// entry cannot cost the device its queue.
+    /// </summary>
+    private void FoldLegacyPositionMaps()
+    {
+        // A file can carry an explicit null map member (torn or hand-edited; the
+        // deserializer binds null over the property initializer) and every
+        // reader assumes a non-null map, so re-materialize before anything else
+        // (the FoldLegacyLaunchScopeMaps idiom).
+        ItemPositions ??= new Dictionary<string, ItemPositionRecord>();
+
+        if (LegacyAndUnknownMembers == null)
+        {
+            return;
+        }
+
+        FoldLegacyPositionFamily(
+            ReadLegacyBaseMap(LegacyAndUnknownMembers, "itemPositionState"),
+            ReadLegacyKindMap(LegacyAndUnknownMembers, "itemPositionKinds"),
+            ItemPositions);
+    }
+
+    /// <summary>
+    /// The kind half of the JF-860 fold (kind-name strings, same total-by-design
+    /// skip of unconvertible entries as <see cref="ReadLegacyBaseMap"/>; see
+    /// that doc). The camelCase member names are the manager's
+    /// <c>JsonNamingPolicy.CamelCase</c> persistence contract.
+    /// </summary>
+    private static Dictionary<string, string>? ReadLegacyKindMap(Dictionary<string, JsonElement> data, string memberName)
+    {
+        if (!data.TryGetValue(memberName, out JsonElement member) || member.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        var halfMap = new Dictionary<string, string>();
+        foreach (JsonProperty entry in member.EnumerateObject())
+        {
+            if (entry.Value.ValueKind == JsonValueKind.String && entry.Value.GetString() is string kind)
+            {
+                halfMap[entry.Name] = kind;
+            }
+        }
+
+        return halfMap;
+    }
+
+    /// <summary>
+    /// The JF-860 fold leg: every legacy position key becomes a record (kind
+    /// null when the kind map lacks the key, the pre-JF-812 kindless shape);
+    /// record keys already present keep their record (the conflict rule on the
+    /// <see cref="FoldLegacyPositionMaps"/> doc).
+    /// </summary>
+    private static void FoldLegacyPositionFamily(
+        Dictionary<string, long>? legacyPositions,
+        Dictionary<string, string>? legacyKinds,
+        Dictionary<string, ItemPositionRecord> positions)
+    {
+        if (legacyPositions == null)
+        {
+            return;
+        }
+
+        foreach (KeyValuePair<string, long> kvp in legacyPositions)
+        {
+            if (positions.ContainsKey(kvp.Key))
+            {
+                continue;
+            }
+
+            positions[kvp.Key] = new ItemPositionRecord
+            {
+                Ticks = kvp.Value,
+                Kind = legacyKinds != null && legacyKinds.TryGetValue(kvp.Key, out string? kind) ? kind : null,
+            };
+        }
+    }
+
+    /// <summary>
     /// JF-648 migration: folds the legacy four half-map members (read out of
-    /// <see cref="LegacyAndUnknownMembers"/>) into the scope-per-key maps, then
-    /// nulls the buffer so its members can neither be re-read nor re-serialized.
+    /// <see cref="LegacyAndUnknownMembers"/>) into the scope-per-key maps.
+    /// JF-860: a pure reader (the buffer null moved to
+    /// <see cref="FoldLegacyMembers"/>, which owns the consume-then-null rule
+    /// for both legs); the entry point is this leg's only caller.
     /// CONFLICT BY INSPECTION (a file carrying BOTH shapes, only possible from a
     /// hand-edited or foreign-written file: the plugin writes exactly one shape
     /// per version): where both shapes name a key, the SCOPE entry wins, because
@@ -186,7 +302,7 @@ public sealed class DeviceQueue
     /// becomes the structural invariant, and carrying the orphan over would
     /// preserve exactly the corruption JF-648 closes.
     /// </summary>
-    internal void FoldLegacyLaunchScopeMaps()
+    private void FoldLegacyLaunchScopeMaps()
     {
         // A file can carry an explicit null scope member (torn or hand-edited;
         // the deserializer binds null over the property initializer) and every
@@ -209,7 +325,6 @@ public sealed class DeviceQueue
             ReadLegacyBaseMap(LegacyAndUnknownMembers, "pendingLaunchBaseMs"),
             ReadLegacyRateMap(LegacyAndUnknownMembers, "pendingPlaybackRatePerMille"),
             PendingLaunchScopes);
-        LegacyAndUnknownMembers = null;
     }
 
     /// <summary>
@@ -378,4 +493,37 @@ public sealed class LaunchScope
     /// pre-JF-636 legacy shape (see the class doc).
     /// </summary>
     public int? RatePerMille { get; set; }
+}
+
+/// <summary>
+/// JF-860: ONE item's stored playback position in the device queue, the stop
+/// ticks plus the JF-812 kind stamp as a SINGLE value (the value type of
+/// <see cref="DeviceQueue.ItemPositions"/>). The pre-JF-860 shape carried the
+/// halves in TWO sibling parallel maps (ItemPositionState ticks +
+/// ItemPositionKinds stamps), and the trim's independent per-map handling
+/// needed a hand evicted-key mirror to uphold the subset invariant; with the
+/// halves sharing one dictionary entry the pairing invariant ("a kind stamp
+/// exists iff its position entry exists", JF-812) is STRUCTURAL: no write,
+/// trim, or reset-carry can remove one half without the other.
+/// <see cref="Kind"/> is nullable because NULL IS THE DESIGNED KINDLESS STATE
+/// (the JF-812 semantics): every entry on a pre-JF-812 store, and a write whose
+/// item could not be resolved, carries no stamp, and the JF-797 deep-resume
+/// valve's deny list conservatively RELEASES kindless entries (only
+/// "Other"-stamped ones skip), so old stores keep the JF-581 resume guarantee.
+/// The fold (<see cref="DeviceQueue.FoldLegacyPositionMaps"/>) preserves null
+/// rather than inventing a stamp, and the write path preserves an earlier
+/// truthful stamp across an unresolved re-stop.
+/// </summary>
+public sealed class ItemPositionRecord
+{
+    /// <summary>Gets or sets the item-absolute stop position in ticks.</summary>
+    public long Ticks { get; set; }
+
+    /// <summary>
+    /// Gets or sets the JF-812 kind stamp (the
+    /// <see cref="DeviceQueueManager.PositionKindBook"/>/
+    /// <see cref="DeviceQueueManager.PositionKindOther"/> constants). Null is
+    /// the DESIGNED kindless state (see the class doc).
+    /// </summary>
+    public string? Kind { get; set; }
 }

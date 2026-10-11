@@ -45,7 +45,7 @@ public class YesIntentHandler : BaseHandler
     /// <param name="userManager">Instance of the <see cref="IUserManager"/> interface.</param>
     /// <param name="userDataManager">Instance of the <see cref="IUserDataManager"/> interface (JF-795: the book confirm leg's resume axis, consumed by the shared resolved-book play flow).</param>
     /// <param name="loggerFactory">Instance of the <see cref="ILoggerFactory"/> interface.</param>
-    /// <param name="queueManager">Optional per-device queue manager (JF-514/JF-522: the launch-scope store behind the resume offset rebase and the directive-time base recording; JF-795: also the confirmed book's device-queue write and ItemPositionState resume tier).</param>
+    /// <param name="queueManager">Optional per-device queue manager (JF-514/JF-522: the launch-scope store behind the resume offset rebase and the directive-time base recording; JF-795: also the confirmed book's device-queue write and stored-position resume tier).</param>
     /// <param name="artistIndex">Optional in-memory artist index (JF-806: the confirm legs' warming gate; the artist index stands in for the shared cold database on the collection-fetch legs, the PlayAlbum gate's coarse precedent).</param>
     public YesIntentHandler(
         ISessionManager sessionManager,

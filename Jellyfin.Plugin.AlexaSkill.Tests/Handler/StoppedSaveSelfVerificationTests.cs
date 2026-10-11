@@ -208,7 +208,7 @@ public class StoppedSaveSelfVerificationTests : PluginTestBase, IDisposable
             CancellationToken.None);
 
         DeviceQueue queue = _queueManager.GetOrCreateQueue(DeviceId);
-        Assert.Equal(DeviceQueueManager.PositionKindBook, queue.ItemPositionKinds[id.ToString("N")]);
+        Assert.Equal(DeviceQueueManager.PositionKindBook, queue.ItemPositions[id.ToString("N")].Kind);
         Assert.True(_queueManager.HasAnyBookShapedStoredPosition(DeviceId));
     }
 
@@ -232,7 +232,7 @@ public class StoppedSaveSelfVerificationTests : PluginTestBase, IDisposable
             CancellationToken.None);
 
         DeviceQueue queue = _queueManager.GetOrCreateQueue(DeviceId);
-        Assert.Equal(DeviceQueueManager.PositionKindOther, queue.ItemPositionKinds[id.ToString("N")]);
+        Assert.Equal(DeviceQueueManager.PositionKindOther, queue.ItemPositions[id.ToString("N")].Kind);
         Assert.False(_queueManager.HasAnyBookShapedStoredPosition(DeviceId));
     }
 
@@ -259,8 +259,8 @@ public class StoppedSaveSelfVerificationTests : PluginTestBase, IDisposable
 
         DeviceQueue queue = _queueManager.GetOrCreateQueue(DeviceId);
         string key = id.ToString("N");
-        Assert.Equal(364_118L * TimeSpan.TicksPerMillisecond, queue.ItemPositionState[key]);
-        Assert.DoesNotContain(key, queue.ItemPositionKinds.Keys);
+        Assert.Equal(364_118L * TimeSpan.TicksPerMillisecond, queue.ItemPositions[key].Ticks);
+        Assert.Null(queue.ItemPositions[key].Kind);
         Assert.True(_queueManager.HasAnyBookShapedStoredPosition(DeviceId));
     }
 }

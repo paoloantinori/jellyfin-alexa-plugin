@@ -364,7 +364,7 @@ public class TvNextUpServiceTests : PluginTestBase
         SkillResponse response = await PlayNextUpAsync(
             episode, series,
             new UserItemData { Key = "test", Played = false, PlaybackPositionTicks = 0 },
-            queueSeeding: queue => queue.ItemPositionState[episodeId.ToString("N")] = storedTicks);
+            queueSeeding: queue => queue.ItemPositions[episodeId.ToString("N")] = new ItemPositionRecord { Ticks = storedTicks });
 
         var directive = Assert.IsType<VideoAppLaunchDirective>(Assert.Single(response.Response.Directives));
         Assert.Contains($"?start={storedTicks}&token=", directive.VideoItem.Source, StringComparison.Ordinal);

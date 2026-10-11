@@ -323,7 +323,7 @@ public static class ResumeMath
     }
 
     /// <summary>
-    /// Find the resume track index with only UserData (no ItemPositionState).
+    /// Find the resume track index with only UserData (no stored per-item positions).
     /// Delegates to the full overload with null queueManager.
     /// </summary>
     public static (int Index, long PositionTicks) FindResumeTrackIndex(
@@ -335,9 +335,9 @@ public static class ResumeMath
         => FindResumeTrackIndex(tracks, jellyfinUser, userDataManager, null, null, resumePosition, logger);
 
     /// <summary>
-    /// Find the resume track index, checking ItemPositionState first
+    /// Find the resume track index, checking ItemPositions first
     /// (bypasses Jellyfin's MinAudiobookResume threshold), then UserData.
-    /// When queueManager/deviceId are null, skips the ItemPositionState check.
+    /// When queueManager/deviceId are null, skips the stored-position check.
     /// </summary>
     public static (int Index, long PositionTicks) FindResumeTrackIndex(
         IReadOnlyList<BaseItem> tracks,
@@ -348,24 +348,25 @@ public static class ResumeMath
         bool resumePosition,
         ILogger? logger = null)
     {
-        Playback.DeviceQueue? queue = queueManager != null && deviceId != null
-            ? queueManager.GetOrCreateQueue(deviceId)
-            : null;
         int lastPlayedIndex = -1;
 
         for (int i = 0; i < tracks.Count; i++)
         {
-            // Check ItemPositionState first (bypasses MinAudiobookResume threshold)
-            if (queue != null)
+            // Check ItemPositions first (bypasses MinAudiobookResume threshold).
+            // JF-860: through the manager's LOCKED read seam rather than a raw
+            // map read off a live queue, so an unlocked TryGetValue cannot race
+            // the locked write/trim mid-resize (the JF-425/JF-447/JF-738 class;
+            // same swap as the APL tap site), and without the queue-creating
+            // GetOrCreateQueue side effect this index-finder never needed.
+            long? storedTicks = queueManager != null && deviceId != null
+                ? queueManager.GetStoredPositionTicks(deviceId, tracks[i].Id.ToString())
+                : null;
+            if (storedTicks is > 0)
             {
-                string itemIdStr = tracks[i].Id.ToString("N");
-                if (queue.ItemPositionState.TryGetValue(itemIdStr, out long cachedTicks) && cachedTicks > 0)
-                {
-                    logger?.LogDebug(
-                        "FindResumeTrackIndex: found ItemPositionState for track[{Idx}] '{Name}' — ticks={Ticks}",
-                        i, tracks[i].Name, cachedTicks);
-                    return (i, resumePosition ? cachedTicks : 0);
-                }
+                logger?.LogDebug(
+                "FindResumeTrackIndex: found ItemPositionState for track[{Idx}] '{Name}' — ticks={Ticks}",
+                    i, tracks[i].Name, storedTicks.Value);
+                return (i, resumePosition ? storedTicks.Value : 0);
             }
 
             // Fall back to Jellyfin UserData

@@ -267,7 +267,7 @@ public class LaunchRequestHandler : BaseHandler
         }
 
         // JF-581 seed resolution, shared with the JF-565 episode resume slice:
-        // UserData first, the plugin-owned ItemPositionState when the server-side
+        // UserData first, the plugin-owned ItemPositions when the server-side
         // write was lost, never over a Played item. The rationale comment lives
         // once, on DeviceQueueManager.ResolveResumeTicks.
         positionTicks = DeviceQueueManager.ResolveResumeTicks(

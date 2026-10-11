@@ -836,7 +836,7 @@ public sealed class AlbumPlayService
         // shape and working arm; a miss proves no row carries resume-relevant
         // user data, so a first-ever ask of a multi-page album pays the probes,
         // not the full-album fetch the JF-796 addendum's row-volume trade named).
-        // The album path has no ItemPositionState tier (FindResumeTrackIndex runs
+        // The album path has no stored-position tier (FindResumeTrackIndex runs
         // here without a queue manager), so the two probes are the whole gate.
         bool albumResumeProbeHit = false;
         // One gate, two consumers (the probe and the deep fetch it releases):

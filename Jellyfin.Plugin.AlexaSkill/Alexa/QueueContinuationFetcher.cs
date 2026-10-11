@@ -701,7 +701,7 @@ internal static class QueueContinuationFetcher
     /// masking fix makes that over-fire the price of never landing on a shallow
     /// prefix position; code-review F4, JF-797).
     /// The BOOK twin layers one more trigger beside this probe: the device queue's
-    /// ItemPositionState (the JF-581 UserData write-loss shape), see the caller.
+    /// ItemPositions (the JF-581 UserData write-loss shape), see the caller.
     /// </summary>
     /// <param name="buildScopedPageQuery">Builds the caller's scoped page query for
     /// a (startIndex, limit) pair; the probe passes (0, 1) and the flags, so the

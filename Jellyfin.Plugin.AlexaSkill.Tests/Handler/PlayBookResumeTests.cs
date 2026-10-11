@@ -574,7 +574,7 @@ public class PlayBookResumeTests : PluginTestBase, IDisposable
     }
 
     // JF-797 item 2 (the JF-581 over-fire pin, JF-812 kindless-legacy semantics):
-    // the resume scan also reads the device queue's ItemPositionState, and a
+    // the resume scan also reads the device queue's ItemPositions, and a
     // server-side UserData write loss can leave the ONLY progress there. A
     // KINDLESS positioned entry (the pre-JF-812 store shape: positions persisted
     // before the kind stamps existed, or a write whose item could not be

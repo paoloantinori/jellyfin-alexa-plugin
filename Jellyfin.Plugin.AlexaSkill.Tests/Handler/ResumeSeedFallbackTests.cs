@@ -80,7 +80,7 @@ public class ResumeSeedFallbackTests : PluginTestBase, IDisposable
     private void SeedDeviceLastPlayed(Guid itemId, long storedTicks)
     {
         _queueManager.RecordLastPlayed(DeviceId, itemId.ToString(), DeviceQueueManager.LaunchRoute.Audio);
-        _queueManager.GetOrCreateQueue(DeviceId).ItemPositionState[itemId.ToString("N")] = storedTicks;
+        _queueManager.GetOrCreateQueue(DeviceId).ItemPositions[itemId.ToString("N")] = new ItemPositionRecord { Ticks = storedTicks };
     }
 
     private ResumeHelper.ResumeState ReadResumeState(SkillResponse response)
@@ -215,7 +215,7 @@ public class ResumeSeedFallbackTests : PluginTestBase, IDisposable
         // SetQueue replaces the queue record, so it must run BEFORE RecordLastPlayed.
         _queueManager.SetQueue(DeviceId, new List<string> { audioId.ToString() }, 0);
         SeedDeviceLastPlayed(videoId, TimeSpan.FromMinutes(1).Ticks);
-        _queueManager.GetOrCreateQueue(DeviceId).ItemPositionState[audioId.ToString("N")] = storedTicks;
+        _queueManager.GetOrCreateQueue(DeviceId).ItemPositions[audioId.ToString("N")] = new ItemPositionRecord { Ticks = storedTicks };
 
         SkillResponse response = await CreateHandler().HandleAsync(
             LaunchRequest(),
