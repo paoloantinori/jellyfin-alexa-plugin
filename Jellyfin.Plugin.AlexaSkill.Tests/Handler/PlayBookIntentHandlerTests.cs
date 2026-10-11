@@ -1869,33 +1869,26 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
         Assert.Equal(book.Id.ToString(), audioDirective.AudioItem.Stream.Token);
     }
 
-    // Code-review F4 (the JF-794 round): the METADATA-REMAPPED book shape - the
-    // chapters query returns Audio-typed rows (the JF-784 leg-3 row set) - has a
-    // deliberately ASYMMETRIC behavior this pin holds in place while JF-799 decides
-    // the unification: the fresh arm's isAudioBook gate serves such chapters as
-    // single items, but the tracked-resume builder's climb is TYPE-AGNOSTIC, so a
-    // warm folder key resumes the WHOLE-BOOK concat. Without this pin a future
-    // AudioBook gate on BuildAudiobookResumeResponse compiles green while silently
-    // deleting the remapped book's seek-bar resume.
-    [Fact]
-    public async Task PlayBook_TrackedResume_AudioTypedRemapChapter_ResumesViaFolderConcat()
+    // Code-review F4 (the JF-794 round), EXTENDED by the JF-799 decision: the
+    // METADATA-REMAPPED book shape (the chapters query returns Audio-typed rows,
+    // the JF-784 leg-3 row set) used to carry a deliberately ASYMMETRIC pair of
+    // arms (fresh = single-item, tracked resume = whole-book concat). JF-799
+    // unified the fresh arm for BOOK-CHAPTER LAUNCHES (the launch context threads
+    // the type-agnostic climb; the default music-shaped arm keeps the AudioBook
+    // gate), so both arms now answer the same for the remap shape. This pin keeps
+    // guarding the RESUME arm's half of the agreement: the tracked-resume
+    // builder's climb is TYPE-AGNOSTIC, so a warm folder key resumes the
+    // WHOLE-BOOK concat. Without this pin a future AudioBook gate on
+    // BuildAudiobookResumeResponse compiles green while silently deleting the
+    // remapped book's seek-bar resume; its fresh-arm twin is
+    // PlayBook_FreshLaunch_AudioTypedRemapChapter_ConcatsWholeBook below.
+    // The shared mixed-row-set fixture of the JF-799 pin pair: the search still
+    // returns an AudioBook leaf (so the head climb resolves the folder), but the
+    // chapters page under the folder yields an Audio-TYPED row (the
+    // metadata-remap the concat endpoint's MediaTypes=Audio row set exists for).
+    // The two pins differ ONLY in tracker state and the asserted arm.
+    private (Guid FolderId, Audio RemapChapter) SetupRemappedHobbitBook()
     {
-        _fx.Config.NativeControlsForBooks = true;
-        var tracker = TestHelpers.CreatePositionTracker("playbook-remap-jf794");
-        using var trackerSwap = TestHelpers.SwapPluginPositionTracker(tracker);
-
-        var handler = CreateHandler();
-        var request = CreateIntentRequest(bookName: "The Hobbit");
-        var context = _fx.CreateContext();
-        var user = _fx.CreateUser();
-        var session = CreateSession();
-
-        _fx.SetupUserMock();
-
-        // The remap shape: the search still returns an AudioBook leaf (so the head
-        // climb resolves the folder), but the chapters page under the folder yields
-        // an Audio-TYPED row (the metadata-remap the concat endpoint's
-        // MediaTypes=Audio row set exists for).
         Guid folderId = Guid.NewGuid();
         var searchLeaf = new AudioBook
         {
@@ -1931,6 +1924,25 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
                     TotalRecordCount = 0
                 });
 
+        return (folderId, remapChapter);
+    }
+
+    [Fact]
+    public async Task PlayBook_TrackedResume_AudioTypedRemapChapter_ResumesViaFolderConcat()
+    {
+        _fx.Config.NativeControlsForBooks = true;
+        var tracker = TestHelpers.CreatePositionTracker("playbook-remap-jf794");
+        using var trackerSwap = TestHelpers.SwapPluginPositionTracker(tracker);
+
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(bookName: "The Hobbit");
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = CreateSession();
+
+        _fx.SetupUserMock();
+        var (folderId, _) = SetupRemappedHobbitBook();
+
         // The tracker is warm under the FOLDER key (GetAudiobookBookKey of the
         // Audio-typed chapter is still its ParentId): segment 31 = a conservative
         // 5-minute book-timeline position.
@@ -1942,6 +1954,45 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
             Assert.Single(response.Response.Directives));
         Assert.Contains(
             $"alexaskill/api/video-audio/audiobook/{folderId}/stream.m3u8?start={TimeSpan.FromMinutes(5).Ticks}&token=",
+            videoDirective.VideoItem!.Source,
+            StringComparison.Ordinal);
+    }
+
+    // JF-799: the fresh arm's half of the unified agreement (RED on the pre-JF-799
+    // tree, where this same fixture served the single-item stream). Same mixed
+    // shape as the tracked-resume pin above, tracker COLD and no chapter progress,
+    // so the flow takes the FRESH VideoApp arm with the Audio-typed row as the
+    // launch item: the book-chapter launch context must mint the WHOLE-BOOK
+    // concat, not the one-chapter single-item serve. The single-item serve was
+    // not merely a missing seek bar: its segment fetches are leaf-keyed on an
+    // Audio-typed row, which the write gate's leaf branch never records, so the
+    // mixed book's listening never armed the key its own resume reads.
+    [Fact]
+    public async Task PlayBook_FreshLaunch_AudioTypedRemapChapter_ConcatsWholeBook()
+    {
+        _fx.Config.NativeControlsForBooks = true;
+        var tracker = TestHelpers.CreatePositionTracker("playbook-remap-fresh-jf799");
+        using var trackerSwap = TestHelpers.SwapPluginPositionTracker(tracker);
+
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(bookName: "The Hobbit");
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = CreateSession();
+
+        _fx.SetupUserMock();
+        var (folderId, remapChapter) = SetupRemappedHobbitBook();
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        var videoDirective = Assert.IsType<global::Jellyfin.Plugin.AlexaSkill.Alexa.Directive.VideoAppLaunchDirective>(
+            Assert.Single(response.Response.Directives));
+        Assert.Contains(
+            $"alexaskill/api/video-audio/audiobook/{folderId}/stream.m3u8?token=",
+            videoDirective.VideoItem!.Source,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            $"alexaskill/api/video-audio/{remapChapter.Id}",
             videoDirective.VideoItem!.Source,
             StringComparison.Ordinal);
     }

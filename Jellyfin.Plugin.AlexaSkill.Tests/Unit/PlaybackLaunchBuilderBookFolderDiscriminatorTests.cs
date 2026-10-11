@@ -43,7 +43,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 public class PlaybackLaunchBuilderBookFolderDiscriminatorTests
 {
     private static PlaybackLaunchBuilder CreatePlainBuilder()
-        => TestHelpers.CreateLaunchBuilder(new PluginConfiguration { ServerAddress = "http://localhost:8096/" });
+        => TestHelpers.CreateLocalhostLaunchBuilder();
 
     /// <summary>
     /// The chokepoint pin's builder: the native-controls flag rides the CONFIG object

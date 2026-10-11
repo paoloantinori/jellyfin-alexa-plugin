@@ -124,7 +124,7 @@ public sealed class PlaybackLaunchBuilder
     /// JF-732: the AudioPlayer family's throw-or-launch contract, PINNED AT THE
     /// SOURCE. Every family member verifies its OWN CURRENT terminal returns
     /// through this guard (the <c>BuildAudioPlayerResponse</c> chokepoint,
-    /// <see cref="BuildVideoAppAudioResponse(string, BaseItem, Entities.User, string?, Context?, Guid?, long, ILibraryManager?)"/>,
+    /// <see cref="BuildVideoAppAudioResponse(string, BaseItem, Entities.User, string?, Context?, Guid?, long, ILibraryManager?, bool)"/>,
     /// <see cref="BuildAudiobookResumeResponse(BaseItem, long, Entities.User, Context?, ILibraryManager?)"/>,
     /// <see cref="BuildAudiobookVideoAppLaunchResponseAsync(string, BaseItem, IOutputSpeech, Entities.User, Context?, Request, ILibraryManager?)"/>;
     /// a delegation edge carries no second verdict because the callee's own return
@@ -174,7 +174,7 @@ public sealed class PlaybackLaunchBuilder
     /// JF-758: the launch-pairing belt, called at the entry of the two builder
     /// members that accept an INDEPENDENT (itemId, item) pair (the
     /// <c>BuildAudioPlayerResponse</c> chokepoint every AudioPlayer.Play funnels
-    /// through, and <see cref="BuildVideoAppAudioResponse(string, BaseItem, Entities.User, string?, Context?, Guid?, long, ILibraryManager?)"/>,
+    /// through, and <see cref="BuildVideoAppAudioResponse(string, BaseItem, Entities.User, string?, Context?, Guid?, long, ILibraryManager?, bool)"/>,
     /// reached directly by callers that never pass the chokepoint); it is the
     /// argument-side sibling of <see cref="EnsureLaunchResponse"/>
     /// (the same "cannot happen" contract style: firing it is a contract break, not
@@ -1862,7 +1862,7 @@ public sealed class PlaybackLaunchBuilder
     /// <param name="startTicks">Resume position in .NET ticks.</param>
     /// <param name="user">The plugin user (fallback audio stream URL on screenless devices).</param>
     /// <param name="context">The Alexa context, for the JF-505 screenless-device check. Null (or a context without capability data) keeps the VideoApp path.</param>
-    /// <param name="libraryManager">The caller's library manager for the verified climb (JF-794; the contract lives on <see cref="BuildVideoAppAudioResponse(string, BaseItem, Entities.User, string?, Context?, Guid?, long, ILibraryManager?)"/>'s parameter of the same name: null fails closed to the flat chapter resume).</param>
+    /// <param name="libraryManager">The caller's library manager for the verified climb (JF-794; the contract lives on <see cref="BuildVideoAppAudioResponse(string, BaseItem, Entities.User, string?, Context?, Guid?, long, ILibraryManager?, bool)"/>'s parameter of the same name: null fails closed to the flat chapter resume).</param>
     /// <returns>A VideoApp.Launch SkillResponse targeting the resume playlist, or an AudioPlayer resume on a screenless device.</returns>
     internal SkillResponse BuildAudiobookResumeResponse(
         MediaBrowser.Controller.Entities.BaseItem item,
@@ -2037,7 +2037,7 @@ public sealed class PlaybackLaunchBuilder
     /// <param name="user">The plugin user (announce toggles + stream URLs).</param>
     /// <param name="context">The Alexa context, for device capability detection.</param>
     /// <param name="request">The skill request, for the progressive-response vehicle.</param>
-    /// <param name="libraryManager">The caller's library manager for the JF-794 concat discriminator (see <see cref="BuildVideoAppAudioResponse(string, BaseItem, Entities.User, string?, Context?, Guid?, long, ILibraryManager?)"/>).</param>
+    /// <param name="libraryManager">The caller's library manager for the JF-794 concat discriminator (see <see cref="BuildVideoAppAudioResponse(string, BaseItem, Entities.User, string?, Context?, Guid?, long, ILibraryManager?, bool)"/>).</param>
     /// <returns>The VideoApp.Launch response with the announce attached.</returns>
     internal async Task<SkillResponse> BuildAudiobookVideoAppLaunchResponseAsync(
         string itemId,
@@ -2048,7 +2048,14 @@ public sealed class PlaybackLaunchBuilder
         Request? request,
         ILibraryManager? libraryManager = null)
     {
-        SkillResponse response = BuildVideoAppAudioResponse(itemId, item, user, context: context, libraryManager: libraryManager);
+        // JF-799: the book-chapter launch context. Every caller here (PlayBook's
+        // fresh arm, YesIntent's confirm, StartOver's book restart) holds an item
+        // that is a book chapter BY CONSTRUCTION: the PlayBook flow's item comes
+        // from the book's own chapters enumeration, StartOver's from a book launch
+        // it just replayed, so the concat climb may be type-agnostic (remapped
+        // Audio-typed rows concat; the flag's full music-safety contract lives on
+        // the callee's parameter doc).
+        SkillResponse response = BuildVideoAppAudioResponse(itemId, item, user, context: context, libraryManager: libraryManager, bookChapterLaunch: true);
         // JF-501: the announce rides the progressive vehicle on a VideoApp launch; a
         // screenless device degrades to AudioPlayer, where it stays on the final response.
         // JF-687: not onto the empty-secret refusal Tell, which already carries the
@@ -2713,9 +2720,10 @@ public sealed class PlaybackLaunchBuilder
     /// <param name="user">The user for the stream URL.</param>
     /// <param name="announceLocale">Optional locale for the now-playing announce.</param>
     /// <param name="context">The Alexa context, for the screenless-device check. Null (or a context without capability data) keeps the VideoApp path.</param>
+    /// <param name="bookChapterLaunch">JF-799: the caller vouches the item is a BOOK CHAPTER by construction (it came from a book chapters enumeration or an already-climbed book flow), so the concat climb below is TYPE-AGNOSTIC (an Audio-typed remapped chapter concats like an AudioBook one, agreeing with the type-agnostic resume builder and the JF-784 concat endpoint that serves both row kinds). The DEFAULT keeps the AudioBook GATE (only an AudioBook item may climb; semantically the gated <see cref="AudiobookItems.TryResolveBookFolder(BaseItem?, ILibraryManager?)"/> twin, which stays the search paths' seam) because this member is also the MUSIC video-audio path (the chokepoint's GetVideoAppForAudio delegation): a plain song sits directly inside its MusicAlbum, so an unconditionally type-agnostic climb would album-concat every music launch through the audiobook URL/tracker machinery. Thread this ONLY from book launch compositions whose items are book chapters by construction (see <see cref="BuildAudiobookVideoAppLaunchResponseAsync"/>); it is a caller-intent discriminator, stronger than any parent-shape heuristic (a MusicAlbum/Playlist deny-list still passes plain music folders, and a CollectionType walk costs an ancestry query per launch).</param>
     /// <param name="libraryManager">The caller's library manager, verifying the audiobook concat's ParentId through the ONE JF-793 shared-container discriminator (JF-794). Null (or an unresolvable/unverified parent) fails CLOSED: the leaf plays as its own single-item stream, never a potentially-merged container concat.</param>
     /// <returns>A VideoApp.Launch response, or an AudioPlayer response on a screenless device.</returns>
-    public SkillResponse BuildVideoAppAudioResponse(string itemId, BaseItem? item, Entities.User user, string? announceLocale = null, Context? context = null, Guid? collectionParentId = null, long collectionStartTicks = 0, ILibraryManager? libraryManager = null)
+    public SkillResponse BuildVideoAppAudioResponse(string itemId, BaseItem? item, Entities.User user, string? announceLocale = null, Context? context = null, Guid? collectionParentId = null, long collectionStartTicks = 0, ILibraryManager? libraryManager = null, bool bookChapterLaunch = false)
     {
         // JF-758: the same launch-pairing belt as the AudioPlayer chokepoint. This
         // member accepts the same INDEPENDENT (itemId, item) pair, and two direct
@@ -2746,22 +2754,40 @@ public sealed class PlaybackLaunchBuilder
         bool isAudioBook = AudiobookItems.IsAudioBook(item);
 
         // JF-794: the audiobook concat's ParentId climbs through the ONE shared
-        // gated climb (AudiobookItems.TryResolveBookFolder: the AudioBook gate plus
-        // the verified parent resolution whose contract lives on
-        // TryResolveVerifiedParentFolder). When the climb ACCEPTS, bookFolder.Id is
-        // the verified book ancestor: the raw ParentId for the flat shapes (the
-        // pre-JF-794 URL byte-identical), the BOOK folder above the part since the
-        // JF-798 walk for the multi-part shapes; when it is REJECTED or unverifiable
-        // (the shared-container census shape, a dangling ParentId, or no manager
-        // threaded) the leaf falls through
-        // to the single-item stream below, never a potentially-merged container
-        // concat.
-        Folder? bookFolder = AudiobookItems.TryResolveBookFolder(item, libraryManager);
-        if (isAudioBook && bookFolder is null)
+        // verified climb (the JF-793 shared-container discriminator plus the
+        // JF-798 outermost-book-ancestor walk; the full contract lives on
+        // AudiobookItems.TryResolveVerifiedParentFolder). When the climb ACCEPTS,
+        // bookFolder.Id is the verified book ancestor: the raw ParentId for the
+        // flat shapes (the pre-JF-794 URL byte-identical), the BOOK folder above
+        // the part since the JF-798 walk for the multi-part shapes; when it is
+        // REJECTED or unverifiable (the shared-container census shape, a dangling
+        // ParentId, or no manager threaded) the leaf falls through to the
+        // single-item stream below, never a potentially-merged container concat.
+        // JF-799: WHO may climb is the one gate this arm owns: an AudioBook item
+        // (the pre-JF-799 rule, identical to the AudioBook-gated
+        // AudiobookItems.TryResolveBookFolder twin by construction) OR a
+        // BOOK-CHAPTER LAUNCH (the caller-intent flag above), so a
+        // metadata-remapped chapter (Audio-typed rows under the book folder, the
+        // shape the JF-784 concat endpoint serves) concats on the fresh arm
+        // exactly as it does on the type-agnostic tracked-resume arm; and the
+        // concat serves write folder-keyed book-timeline marks a single-item
+        // serve never writes (the write gate's leaf branch requires an AudioBook
+        // leaf). Everything else (the music this builder also serves) never
+        // climbs, which is the music-safety half of the flag's contract.
+        bool typeAgnosticClimb = isAudioBook || bookChapterLaunch;
+        Folder? bookFolder = typeAgnosticClimb
+            ? AudiobookItems.TryResolveVerifiedParentFolder(item, libraryManager)
+            : null;
+        if (typeAgnosticClimb && bookFolder is null)
         {
+            // 'book item', not 'audiobook item': since JF-799 this arm also fires
+            // for Audio-typed book-chapter launches (the remapped shape). item?.
+            // matches the single-item arm's log: bookChapterLaunch alone can
+            // reach this guard with a null item (the pairing belt admits the
+            // deliberate null shape).
             _logger.LogInformation(
-                "BuildVideoAppAudioResponse: audiobook item {ItemId} ('{Title}') has no verified book folder (shared container, unresolvable ParentId, or no library manager threaded); playing as its own single-item stream (JF-794)",
-                itemId, item!.Name);
+                "BuildVideoAppAudioResponse: book item {ItemId} ('{Title}') has no verified book folder (shared container, unresolvable ParentId, or no library manager threaded); playing as its own single-item stream (JF-794)",
+                itemId, item?.Name);
         }
 
         string videoAudioUrl;
@@ -2776,7 +2802,7 @@ public sealed class PlaybackLaunchBuilder
             // JF-580: the URL carries the signed JF-309 stream token; log it masked.
             _logger.LogDebug("BuildVideoAppAudioResponse: itemId={ItemId}, parentId={ParentId}, title={Title}, url={Url} (audiobook concat)", itemId, bookFolder.Id, item!.Name, RequestLogRedactor.RedactUrl(videoAudioUrl));
         }
-        else if ((!isAudioBook || item!.ParentId == Guid.Empty) && collectionParentId is Guid concatParent)
+        else if (!bookChapterLaunch && (!isAudioBook || item!.ParentId == Guid.Empty) && collectionParentId is Guid concatParent)
         {
             // JF-625 queue-as-concat: a music-album play in seek mode launches the
             // WHOLE album as one continuous video-audio stream (the audiobook chapter
@@ -2789,7 +2815,10 @@ public sealed class PlaybackLaunchBuilder
             // now takes the single-item arm instead of this album concat, because the
             // album key and the book tracker machinery must not mix; an AudioBook
             // with an EMPTY ParentId riding an album collection keeps the album
-            // concat exactly as before (gate-marker finding 6).
+            // concat exactly as before (gate-marker finding 6). JF-799: a
+            // book-chapter launch never takes this arm either (the book compositions
+            // thread no collection; the belt keeps a book launch off the album
+            // machinery even if a future caller passes both).
             streamKey = concatParent.ToString();
             videoAudioUrl = GetAudiobookResumeUrl(streamKey, collectionStartTicks, user);
             _logger.LogDebug("BuildVideoAppAudioResponse: itemId={ItemId}, collectionParent={ParentId}, startTicks={StartTicks}, title={Title}, url={Url} (album concat)", itemId, concatParent, collectionStartTicks, item?.Name, RequestLogRedactor.RedactUrl(videoAudioUrl));
