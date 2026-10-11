@@ -4,10 +4,10 @@ title: >-
   Pre-deploy triage of the merged JF-787/JF-859 (orphaned-mark announce
   divergence, two un-latched emitters, the missing re-slice pin) + the
   ItemPosition parallel-map collapse
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-10-10 18:41'
-updated_date: '2026-10-11 06:07'
+updated_date: '2026-10-11 08:23'
 labels:
   - tech-debt
   - playback
