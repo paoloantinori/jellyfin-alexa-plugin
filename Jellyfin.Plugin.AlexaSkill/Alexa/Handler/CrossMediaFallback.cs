@@ -902,7 +902,7 @@ public sealed class CrossMediaFallback
             if (kana)
             {
                 SkillResponse? tieOutcome = ResolveKanaOriginTie(
-                    bestItem, bestScore, artists, cleaned, normalThreshold, user, pinnedArtistIndex, scopedPool, libraryManager, locale, logLabel);
+                    bestItem, bestScore, artists, cleaned, normalThreshold, user, pinnedArtistIndex, scopedPool, libraryManager, locale, logLabel, context);
                 if (tieOutcome != null)
                 {
                     return tieOutcome;
@@ -1069,7 +1069,8 @@ public sealed class CrossMediaFallback
         IReadOnlyList<BaseItem>? preloadedPool,
         ILibraryManager libraryManager,
         string locale,
-        string logLabel)
+        string logLabel,
+        Context? context = null)
     {
         IReadOnlyList<BaseItem> pool = preloadedPool
             ?? pinnedIndex?.GetArtists(LibraryFilter.ResolveForUser(user, libraryManager, _logger))
@@ -1088,7 +1089,7 @@ public sealed class CrossMediaFallback
             new() { Id = pair.Value.First.Id.ToString(), Name = pair.Value.First.Name },
             new() { Id = pair.Value.Second.Id.ToString(), Name = pair.Value.Second.Name }
         };
-        return DisambiguationHelper.AskMultipleArtists(matchInfos, locale);
+        return DisambiguationHelper.AskMultipleArtists(matchInfos, locale, context);
     }
 
     /// <summary>

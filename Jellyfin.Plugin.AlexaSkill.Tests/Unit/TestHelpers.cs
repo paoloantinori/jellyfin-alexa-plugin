@@ -13,6 +13,7 @@ using Alexa.NET.Response.Directive;
 using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Handler.Intent;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
@@ -851,6 +852,34 @@ internal static class TestHelpers
         => new DeviceQueueManager(
             CreateRegisteredTempDir(nameSuffix + "-dq"),
             logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<DeviceQueueManager>.Instance);
+
+    /// <summary>
+    /// JF-624 item 3: composes the APL tap handler with its two delegate handlers
+    /// (real stateless instances over the caller's own mocks), the one factory for
+    /// every construction site so a delegate-handler ctor change lands in one
+    /// place. The delegates share the caller's queue manager so tap-driven plays
+    /// land in the same per-test queue the assertions read.
+    /// </summary>
+    internal static AplUserEventHandler CreateAplTapHandler(
+        ISessionManager sessionManager,
+        PluginConfiguration config,
+        ILibraryManager libraryManager,
+        IUserManager userManager,
+        IUserDataManager userDataManager,
+        DeviceQueueManager queueManager,
+        ILoggerFactory loggerFactory)
+        => new(
+            sessionManager,
+            config,
+            libraryManager,
+            userManager,
+            userDataManager,
+            queueManager,
+            loggerFactory,
+            new YesIntentHandler(
+                sessionManager, config, libraryManager, userManager, userDataManager, loggerFactory, queueManager),
+            new FindSongIntentHandler(
+                sessionManager, config, libraryManager, userManager, userDataManager, loggerFactory));
 
     /// <summary>
     /// JF-789: backdates a device's last-played freshness stamp to the days-old

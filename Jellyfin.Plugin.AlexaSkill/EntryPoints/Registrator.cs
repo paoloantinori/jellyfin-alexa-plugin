@@ -117,6 +117,20 @@ public class Registrator : IPluginServiceRegistrator
             serviceCollection.AddSingleton(typeof(BaseHandler), handlerType);
         }
 
+        // JF-624 item 3: typed singletons for the two handlers the APL
+        // disambiguation taps delegate to. These are SEPARATE instances from the
+        // BaseHandler-keyed ones above: resolving a sibling through the
+        // BaseHandler key from inside AplUserEventHandler's constructor is a DI
+        // cycle (enumerating all BaseHandler services mid-construction), and
+        // forwarding factories would strip the ImplementationType the
+        // RealRegistrator dispatch-mirror pin reads. The dual instances are safe
+        // under the BaseHandler singleton-statelessness rule (its class remark):
+        // a handler with mutable per-request state is a bug for the voice
+        // dispatch path too, not just the tap path. Both types sit in the
+        // Handler namespace despite living in the Intent folder.
+        serviceCollection.AddSingleton<Alexa.Handler.YesIntentHandler>();
+        serviceCollection.AddSingleton<Alexa.Handler.FindSongIntentHandler>();
+
         // Request pipeline interceptors (order matters: circuit breaker first for fail-fast,
         // then audio device capability check before any Jellyfin API calls)
         serviceCollection.AddSingleton<IRequestInterceptor, CircuitBreakerInterceptor>();

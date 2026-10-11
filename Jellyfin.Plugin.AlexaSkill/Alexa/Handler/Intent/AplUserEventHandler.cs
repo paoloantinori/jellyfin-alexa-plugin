@@ -35,6 +35,8 @@ public class AplUserEventHandler : BaseHandler
     private readonly IUserManager _userManager;
     private readonly IUserDataManager _userDataManager;
     private readonly DeviceQueueManager _queueManager;
+    private readonly YesIntentHandler _yesHandler;
+    private readonly FindSongIntentHandler _findSongHandler;
 
     public AplUserEventHandler(
         ISessionManager sessionManager,
@@ -43,12 +45,20 @@ public class AplUserEventHandler : BaseHandler
         IUserManager userManager,
         IUserDataManager userDataManager,
         DeviceQueueManager queueManager,
-        ILoggerFactory loggerFactory) : base(sessionManager, config, loggerFactory)
+        ILoggerFactory loggerFactory,
+        YesIntentHandler yesHandler,
+        FindSongIntentHandler findSongHandler) : base(sessionManager, config, loggerFactory)
     {
         _libraryManager = libraryManager;
         _userManager = userManager;
         _userDataManager = userDataManager;
         _queueManager = queueManager;
+        // JF-624 item 3: the disambiguation taps delegate to the SAME handlers the
+        // spoken answers run, so a tap can never drift from the spoken word (the
+        // per-type play routing, the feature/warming confirm gates, and the
+        // resume/pagination precedence all come from the real entry points).
+        _yesHandler = yesHandler;
+        _findSongHandler = findSongHandler;
     }
 
     /// <inheritdoc/>
@@ -83,7 +93,111 @@ public class AplUserEventHandler : BaseHandler
             return Task.FromResult(ListPaginationHelper.BuildNextPageResponse(_libraryManager, paginationState, locale));
         }
 
+        // JF-624 item 3: taps on the disambiguation text list ride this handler
+        // like every other APL tap (no new handler architecture); they map onto
+        // the answer state machine the rendered list belongs to.
+        if (action == AplHelper.DisambiguationTapAction || action == AplHelper.FindSongTapAction)
+        {
+            return HandleDisambiguationTap(aplEvent, action!, sessionAttributes, user, session, context, cancellationToken);
+        }
+
         return HandleAsync(request, context, user, session, cancellationToken);
+    }
+
+    /// <summary>
+    /// Map a disambiguation text-list tap onto the state machine the list was
+    /// rendered for (JF-624 item 3). The tap payload's second argument is the
+    /// tapped row's 1-based <c>${ordinal}</c> (the AlexaTextList-documented
+    /// binding). A disambigSelect tap rewrites the disambiguation state's cursor
+    /// to the tapped row and runs the SAME yes-leg the spoken "yes" runs, so a
+    /// tap behaves like the spoken answer with the chosen candidate
+    /// (per-type play routing, confirm gates, resume/pagination precedence; the
+    /// JF-690 multi-value ER state included, whose state list can outrank the
+    /// spoken three-name cap). A findSongSelect tap becomes the digit pick the
+    /// spoken flow's ResolvePick already understands and runs the FindSong
+    /// Disambiguating leg. A stale document (state gone, ordinal outside the
+    /// list) degrades to the empty keep-alive, the same convention as an unknown
+    /// item id on the queue/carousel taps.
+    /// ONE known divergence from the spoken answer, a platform limit not a
+    /// handler defect: the progressive-response vehicle exists only for
+    /// IntentRequest/LaunchRequest (the Amazon contract PlaybackLaunchBuilder's
+    /// announce gate cites), so a VIDEO-type tap's now-playing announce rides
+    /// the final response (the pre-JF-501 shape) instead of the progressive
+    /// send the spoken confirm gets. The pre-JF-624 carousel tap had the same
+    /// shape; no regression.
+    /// </summary>
+    private Task<SkillResponse> HandleDisambiguationTap(
+        AplUserEventRequest aplEvent,
+        string action,
+        Dictionary<string, object>? sessionAttributes,
+        Entities.User user,
+        SessionInfo session,
+        Context context,
+        CancellationToken cancellationToken)
+    {
+        string? ordinalRaw = aplEvent.Arguments?.ElementAtOrDefault(1)?.ToString();
+        if (!int.TryParse(ordinalRaw, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out int ordinal)
+            || ordinal < 1)
+        {
+            Logger.LogDebug("AplUserEvent disambiguation tap: no valid ordinal (action={Action}, args={Args})", action, aplEvent.Arguments);
+            return Task.FromResult(ResponseBuilder.Empty());
+        }
+
+        if (action == AplHelper.FindSongTapAction)
+        {
+            var findSongState = FindSongIntentHandler.ReadSessionData(sessionAttributes);
+            if (findSongState?.State != FindSongState.Disambiguating
+                || findSongState.Candidates is not { Count: > 0 }
+                || ordinal > findSongState.Candidates.Count)
+            {
+                Logger.LogDebug("AplUserEvent FindSong tap: ordinal {Ordinal} outside the Disambiguating state (state={State}, candidates={Count})", ordinal, findSongState?.State.ToString() ?? "none", findSongState?.Candidates?.Count ?? 0);
+                return Task.FromResult(ResponseBuilder.Empty());
+            }
+
+            // A tap IS the digit answer ("2" = the second candidate): the digit
+            // form is ResolvePick's exact-match path, so the tap runs the same
+            // gates and the same play tail as the spoken ordinal. The candidate
+            // list is capped at four by construction; a hypothetical longer list
+            // degrades to the invalid-pick elicit, never a wrong play. The
+            // target-typed news avoid naming the Intent/Slot types, which this
+            // file's own trailing namespace segment (Handler.Intent) would
+            // shadow.
+            var tapRequest = new IntentRequest
+            {
+                Intent = new()
+                {
+                    Name = IntentNames.FindSongIntent,
+                    Slots = new Dictionary<string, Slot>
+                    {
+                        [IntentNames.Slots.TitleKeywords] = new()
+                        {
+                            Name = IntentNames.Slots.TitleKeywords,
+                            Value = ordinal.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                        }
+                    }
+                },
+                Locale = aplEvent.Locale
+            };
+
+            Logger.LogDebug("AplUserEvent FindSong tap: ordinal {Ordinal} mapped onto the Disambiguating pick", ordinal);
+            return _findSongHandler.HandleAsync(tapRequest, context, user, session, sessionAttributes, cancellationToken);
+        }
+
+        var disambiguation = DisambiguationHelper.ReadState(sessionAttributes);
+        if (disambiguation == null || ordinal > disambiguation.Value.Matches.Count)
+        {
+            Logger.LogDebug("AplUserEvent disambiguation tap: ordinal {Ordinal} outside the disambiguation state (matches={Count})", ordinal, disambiguation?.Matches.Count ?? 0);
+            return Task.FromResult(ResponseBuilder.Empty());
+        }
+
+        // The tap moves the yes/no cursor to the tapped row and answers "yes":
+        // the state machine is the SAME one the spoken cycle drives (disambig_*
+        // attributes), extended only by the cursor being set by the tap payload.
+        sessionAttributes![DisambiguationHelper.AttrIndex] = ordinal - 1;
+        Logger.LogDebug(
+            "AplUserEvent disambiguation tap: ordinal {Ordinal} mapped onto the yes leg (mediaType={MediaType}, matches={Count})",
+            ordinal, disambiguation.Value.MediaType, disambiguation.Value.Matches.Count);
+        return _yesHandler.HandleAsync(aplEvent, context, user, session, sessionAttributes, cancellationToken);
     }
 
     /// <summary>

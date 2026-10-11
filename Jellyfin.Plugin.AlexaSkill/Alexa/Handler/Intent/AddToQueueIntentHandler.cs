@@ -136,7 +136,8 @@ public class AddToQueueIntentHandler : BaseHandler
                 canonicalMusician ?? musicianQuery,
                 musicianQuery,
                 "GetArtistsForQueue",
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken,
+                context: context).ConfigureAwait(false);
             if (gateTerminal != null)
             {
                 return gateTerminal;

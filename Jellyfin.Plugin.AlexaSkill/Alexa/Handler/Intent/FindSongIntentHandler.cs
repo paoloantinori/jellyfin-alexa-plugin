@@ -9,6 +9,7 @@ using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Jellyfin.Data.Enums;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Apl;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler.Intent;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
@@ -254,7 +255,8 @@ public class FindSongIntentHandler : BaseHandler
             var gate = await MultiValueErDisambiguation.TryArbitrateOrSearchArtistsAsync(
                 intentRequest, user, _artistIndex, _libraryManager, Logger, locale, artistSearchInput,
                 arbitrate: string.IsNullOrWhiteSpace(titleKeywords),
-                cancellationToken: cancellationToken).ConfigureAwait(false);
+                cancellationToken: cancellationToken,
+                context: context).ConfigureAwait(false);
             if (gate.Ask != null)
             {
                 return gate.Ask;
@@ -344,7 +346,8 @@ public class FindSongIntentHandler : BaseHandler
         var gate = await MultiValueErDisambiguation.TryArbitrateOrSearchArtistsAsync(
             intentRequest, user, _artistIndex, _libraryManager, Logger, locale, artistSearchInput,
             arbitrate: !string.IsNullOrWhiteSpace(musician),
-            cancellationToken: cancellationToken).ConfigureAwait(false);
+            cancellationToken: cancellationToken,
+            context: context).ConfigureAwait(false);
         if (gate.Ask != null)
         {
             return gate.Ask;
@@ -745,8 +748,25 @@ public class FindSongIntentHandler : BaseHandler
         string countKey = disambigCandidates.Count == 1 ? "FindSongFoundMultipleSingular" : "FindSongFoundMultiple";
         string fullPrompt = ResponseStrings.Get(countKey, locale, disambigCandidates.Count, candidateNames);
 
-        return ElicitAnswer(fullPrompt,
+        SkillResponse promptResponse = ElicitAnswer(fullPrompt,
             sessionData, FindSongState.Disambiguating);
+
+        // JF-624 item 3: the same tappable text list rides the picker prompt when
+        // the enhanced flag is on (the shared attach helper owns the gate and the
+        // title; the row projection is lazy so flag off allocates nothing). The
+        // rows are the CANDIDATES in state order (FindSongState.Disambiguating's
+        // session list): a tap fires findSongSelect with the 1-based ordinal,
+        // which AplUserEventHandler maps onto this state machine as the pick (the
+        // digit answer ResolvePick already understands). The elicit keeps the mic
+        // open for the spoken answer; the list adds the tap answer.
+        DisambiguationHelper.AttachDisambiguationListIfEnabled(
+            promptResponse,
+            () => disambigCandidates.Select(c => new ListDisplayItem(c.Name, c.ItemId.ToString(), c.ArtistName)).ToList(),
+            AplHelper.FindSongTapAction,
+            locale,
+            context);
+
+        return promptResponse;
     }
 
     /// <summary>

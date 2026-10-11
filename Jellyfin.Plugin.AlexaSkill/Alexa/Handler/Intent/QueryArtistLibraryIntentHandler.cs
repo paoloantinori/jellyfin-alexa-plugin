@@ -143,7 +143,8 @@ public class QueryArtistLibraryIntentHandler : BaseHandler
         var gate = await MultiValueErDisambiguation.TryArbitrateOrSearchArtistsAsync(
             intentRequest, user, _artistIndex, _libraryManager, Logger, locale, musicianSearch,
             arbitrate: true,
-            cancellationToken: cancellationToken).ConfigureAwait(false);
+            cancellationToken: cancellationToken,
+            context: context).ConfigureAwait(false);
         if (gate.Ask != null)
         {
             return gate.Ask;

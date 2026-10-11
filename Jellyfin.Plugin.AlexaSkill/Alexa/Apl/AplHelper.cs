@@ -918,6 +918,61 @@ internal static class AplHelper
 
     private static readonly JObject SlideshowDocument = JObject.Parse(SlideshowTemplate);
 
+    // JF-624 item 3: the tappable disambiguation text list (AlexaTextList). The
+    // alexa-layouts 1.7.0 import is the same one the task's spike re-verified on
+    // the live Show (the 2026-05-10 black screen does not reproduce at 1.7.0);
+    // each NEW component still gets its own device verification per the task
+    // discipline, so the render probe is on the maintainer's device list.
+    // primaryAction uses the DOCUMENTED ${ordinal} binding (the number of the
+    // selected row, 1-based; AlexaTextList docs, verified 2026-10-11): the tap
+    // payload is [action, ordinal], and the AplUserEventHandler maps the ordinal
+    // onto the yes/no disambiguation state by position. The action name rides
+    // the datasource (the same payload-driven-action shape the hand-rolled
+    // ListTemplate uses), so one document serves both state machines the
+    // disambiguation family uses (disambig_* and the FindSong picker).
+    private static readonly string DisambiguationListTemplate = @"{
+  ""type"": ""APL"",
+  ""version"": ""1.7"",
+  ""theme"": ""dark"",
+  ""import"": [
+    {
+      ""name"": ""alexa-layouts"",
+      ""version"": ""1.7.0""
+    }
+  ],
+  ""mainTemplate"": {
+    ""parameters"": [""payload""],
+    ""items"": [
+      {
+        ""type"": ""AlexaTextList"",
+        ""theme"": ""dark"",
+        ""headerTitle"": ""${payload.disambigData.properties.title}"",
+        ""listItems"": ""${payload.disambigData.properties.listItems}"",
+        ""primaryAction"": [
+          {
+            ""type"": ""SendEvent"",
+            ""arguments"": [ ""${payload.disambigData.properties.action}"", ""${ordinal}"" ]
+          }
+        ]
+      }
+    ]
+  }
+}";
+
+    private static readonly JObject DisambiguationListDocument = JObject.Parse(DisambiguationListTemplate);
+
+    /// <summary>
+    /// SendEvent action for a tap on a disambiguation text-list row: the yes/no
+    /// disambiguation state machine (disambig_* session attributes). JF-624 item 3.
+    /// </summary>
+    internal const string DisambiguationTapAction = "disambigSelect";
+
+    /// <summary>
+    /// SendEvent action for a tap on a FindSong candidate row: the
+    /// FindSongState.Disambiguating picker. JF-624 item 3.
+    /// </summary>
+    internal const string FindSongTapAction = "findSongSelect";
+
     /// <summary>
     /// Check if the requesting device supports APL rendering.
     /// </summary>
@@ -1100,6 +1155,91 @@ internal static class AplHelper
                 }
             },
             PresentationSession = BuildPresentationSession(context)
+        };
+    }
+
+    /// <summary>
+    /// JF-624 item 3 gate: true when the enhanced tappable disambiguation text list
+    /// (AlexaTextList) may attach. Requires the dedicated AplEnhancedScreens flag
+    /// (default false, out of the critical path), APL visuals enabled, and an
+    /// APL-capable device context. Flag off leaves every ask response byte-identical
+    /// (no carousel swap, no new directive), the task's AC#2.
+    /// </summary>
+    /// <param name="context">The Alexa request context for APL capability detection, or null.</param>
+    /// <returns>True when the disambiguation text list should attach.</returns>
+    internal static bool DisambiguationListEnabled(Context? context)
+    {
+        return Plugin.Instance?.Configuration?.AplEnhancedScreens == true
+            && VisualsEnabled
+            && context != null
+            && DeviceSupportsApl(context);
+    }
+
+    /// <summary>
+    /// Build the tappable disambiguation text-list directive (JF-624 item 3):
+    /// an AlexaTextList whose primaryAction SendEvent carries
+    /// [<paramref name="action"/>, "${ordinal}"]. The row list must be ordered
+    /// EXACTLY like the session state it disambiguates, because the tap handler
+    /// maps the 1-based ordinal onto that state by position (a tap behaves like
+    /// the spoken answer with the cursor moved to the tapped row).
+    /// The <see cref="ListDisplayItem.Id"/> is not rendered: the layout's own
+    /// ${ordinal} is the tap identity. Subtitle becomes secondaryText, ArtUrl
+    /// the row thumbnail. The document declares no backstack extension and
+    /// carries no presentation session: it is a transient picker whose flow
+    /// continues by voice or tap, never by back navigation.
+    /// </summary>
+    /// <param name="title">Localized header shown above the list.</param>
+    /// <param name="items">Rows in the same order as the disambiguation session state.</param>
+    /// <param name="action">SendEvent action name (DisambiguationTapAction or FindSongTapAction).</param>
+    /// <returns>An APL RenderDocument directive, or null if the item list is empty.</returns>
+    internal static AplRenderDocumentDirective? BuildDisambiguationListDirective(
+        string title,
+        List<ListDisplayItem> items,
+        string action)
+    {
+        if (items.Count == 0)
+        {
+            return null;
+        }
+
+        var itemArray = new JArray();
+        foreach (var item in items)
+        {
+            var row = new JObject
+            {
+                ["primaryText"] = item.Title
+            };
+
+            if (!string.IsNullOrEmpty(item.Subtitle))
+            {
+                row["secondaryText"] = item.Subtitle;
+            }
+
+            if (!string.IsNullOrEmpty(item.ArtUrl))
+            {
+                row["imageThumbnailSource"] = item.ArtUrl;
+            }
+
+            itemArray.Add(row);
+        }
+
+        return new AplRenderDocumentDirective
+        {
+            Token = "disambiguationList",
+            Document = DisambiguationListDocument,
+            DataSources = new JObject
+            {
+                ["disambigData"] = new JObject
+                {
+                    ["type"] = "object",
+                    ["properties"] = new JObject
+                    {
+                        ["title"] = title,
+                        ["action"] = action,
+                        ["listItems"] = itemArray
+                    }
+                }
+            }
         };
     }
 
