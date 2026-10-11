@@ -3,10 +3,10 @@ id: JF-798
 title: >-
   JF-798 - the multi-part book altitude: the outermost-book-ancestor resolution
   (both paths stop at the part folder today)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-10-06'
-updated_date: '2026-10-11 20:50'
+updated_date: '2026-10-11 22:40'
 labels:
   - bug
   - audiobooks
