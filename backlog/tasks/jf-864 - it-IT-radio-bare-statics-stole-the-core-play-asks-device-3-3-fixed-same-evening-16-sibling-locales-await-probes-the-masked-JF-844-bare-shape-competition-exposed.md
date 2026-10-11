@@ -43,3 +43,9 @@ OPEN ITEMS: (1) the 16 other locales carry the same bare [verb][radio] statics (
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+PROBE MAP COMPLETE + nl-NL FIXED (2026-10-11 evening, orchestrator): the 16-locale crossing sweep ran live (bare play-ask + radio guard per locale). RESULTS: exactly ONE sibling had the radio steal - nl-NL ('speel nemo' -> PlayRadioIntent), fixed the same way ('speel de radio'/'speel de radiomodus'/'start de radio'), deployed (DLL rebuild + nl-NL rebuild SUCCEEDED) and verified live ('speel nemo' -> NO_SELECTION, 'speel de radio' -> PlayRadioIntent 3/3). The other 14: en-US 'play nemo'->PlaySong; de 'Spiele nemo'->PlaySong; es-US 'reproduce nemo'->PlaySong; fr-CA 'lis nemo'->PlaySong; en-AU 'play nemo'->PlayByGenre; es-ES 'reproduce nemo'->PlayByGenre; ja ->PlayArtistSongs; en-GB/es-MX/fr-FR/pt-BR/hi ->NO_SELECTION; ar-SA 'play nemo'->PlayVideo (CLEAN); radio guards hold everywhere except ar-SA's (TurnRadioOnIntent, Amazon's built-in winning its own utterance - different class, no action without harm evidence). Those are the JF-844-family landscape, untouched per probe-first. FIXTURE PINS landed same-evening (commit 420271a3): it-IT 'suona matrix' re-pinned from PlayRadio to the NO_SELECTION skip-record (the JF-585 convention) + the two qualified-form guards; nl-NL 'speel de radio' guard. Dry-run 8 passed/1175 skipped. REMAINING OPEN: only the JF-844 bare-shape product call (with the full 16-locale evidence table above).
+<!-- SECTION:NOTES:END -->
