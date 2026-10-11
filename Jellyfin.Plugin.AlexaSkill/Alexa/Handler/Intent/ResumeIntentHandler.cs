@@ -529,8 +529,10 @@ public class ResumeIntentHandler : BaseHandler
     /// sets the AudioPlayer token, so a book resume usually arrives via
     /// FullNowPlayingItem). Rides the same sliced VideoApp HLS playlist PlayBook uses,
     /// tracker position first, the caller's fallback ticks when the tracker is cold.
-    /// Returns null when the item is not a book or the flag is off, so the caller falls
-    /// through to its normal path. On a screenless device both builders degrade to the
+    /// Returns null when the item is not a book or NativeControlsForBooks is off, so
+    /// the caller falls through to its normal path. The position announce honors
+    /// AnnouncePositionOnResume (JF-861, like the flat-resume siblings); the launch
+    /// itself is unconditional. On a screenless device both builders degrade to the
     /// AudioPlayer flat resume, so the flag cannot break the play.
     /// </summary>
     /// <param name="item">The book item to resume (chapter or single-file book).</param>
@@ -539,7 +541,7 @@ public class ResumeIntentHandler : BaseHandler
     /// <param name="context">The Alexa context, for the JF-505 screenless-device check.</param>
     /// <param name="request">The skill request, for the JF-501 progressive announce vehicle.</param>
     /// <param name="locale">The request locale for response strings.</param>
-    /// <returns>The book resume response, or null when this is not a flag-on book resume.</returns>
+    /// <returns>The book resume response, or null when this is not a NativeControlsForBooks-on book resume.</returns>
     private async Task<SkillResponse?> TryBuildNativeControlsBookResumeAsync(
         BaseItem? item,
         long fallbackTicks,
@@ -612,6 +614,7 @@ public class ResumeIntentHandler : BaseHandler
 
         SkillResponse bookResponse = Launch.BuildAudiobookResumeResponse(item, startTicks, user, context, _libraryManager);
 
+        // JF-861: the announce honors AnnouncePositionOnResume like its siblings.
         // JF-501: the announce rides the progressive vehicle on a VideoApp launch (a
         // directive-only final response can have its speech cut); non-intent requests
         // and failed sends keep it on the final response. JF-699 item 1: throw-or-
@@ -620,7 +623,8 @@ public class ResumeIntentHandler : BaseHandler
         // belt, kept as a DIRECT assignment (not the attach helper) because the
         // vehicle's null-on-success result must CLEAR the speech, which the
         // null-means-keep attach helper cannot express.
-        if (PlaybackLaunchBuilder.HasLaunchDirective(bookResponse))
+        if (PlaybackLaunchBuilder.HasLaunchDirective(bookResponse)
+            && _config.GetUserById(user.Id)?.AnnouncePositionOnResume == true)
         {
             bookResponse.Response.OutputSpeech = await Launch.SpeakVideoLaunchAnnounceAsync(
                 context,
