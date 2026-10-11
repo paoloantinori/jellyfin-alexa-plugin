@@ -3,14 +3,15 @@ id: JF-861
 title: >-
   AnnouncePositionOnResume bypass on the book native-controls arm: gate the
   announce like its siblings, or pin it as intentionally unconditional
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-10-10 20:09'
+updated_date: '2026-10-11 20:31'
 labels:
   - playback
   - ux
   - decision
-  - gate:maintainer-call
+  - 'gate:maintainer-call'
 dependencies: []
 priority: low
 ---

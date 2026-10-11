@@ -3,9 +3,10 @@ id: JF-865
 title: >-
   Multi-medium disambiguation on greedy-handler misses: the JF-844 decision
   (PlaySong catching 'play nemo' offers the movie; carrier stays first-shot)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-10-11 20:20'
+updated_date: '2026-10-11 20:31'
 labels:
   - nlu
   - cross-media
