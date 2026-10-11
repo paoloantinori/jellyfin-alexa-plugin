@@ -3,10 +3,10 @@ id: JF-861
 title: >-
   AnnouncePositionOnResume bypass on the book native-controls arm: gate the
   announce like its siblings, or pin it as intentionally unconditional
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-10-10 20:09'
-updated_date: '2026-10-11 20:31'
+updated_date: '2026-10-11 21:58'
 labels:
   - playback
   - ux

@@ -3,14 +3,14 @@ id: JF-798
 title: >-
   JF-798 - the multi-part book altitude: the outermost-book-ancestor resolution
   (both paths stop at the part folder today)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-10-06'
-updated_date: '2026-10-10 15:34'
+updated_date: '2026-10-11 20:50'
 labels:
   - bug
   - audiobooks
-  - gate:fixture-permission
+  - 'gate:fixture-permission'
 dependencies:
   - JF-793
   - JF-794
