@@ -285,6 +285,11 @@ public sealed class DispatchHarness : IDisposable
             _ when dependencyType == typeof(DeviceQueueManager) => new DeviceQueueManager(
                 _queueDataDir,
                 LoggerFactory.CreateLogger<DeviceQueueManager>()),
+            // A handler depending on another HANDLER (JF-624 item 3: AplUserEventHandler
+            // delegates disambiguation taps to YesIntentHandler/FindSongIntentHandler)
+            // resolves through the same construction path; the shared-dependencies
+            // cache above keeps one instance per handler type per harness.
+            _ when dependencyType.IsSubclassOf(typeof(BaseHandler)) => CreateHandler(dependencyType),
             _ when dependencyType.IsInterface || dependencyType.IsAbstract => CreateInterfaceMock(dependencyType),
             _ => throw new NotSupportedException(
                 $"DispatchHarness cannot construct dependency {dependencyType.FullName}. " +

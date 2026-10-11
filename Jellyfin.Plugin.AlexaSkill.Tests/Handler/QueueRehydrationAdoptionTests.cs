@@ -99,7 +99,7 @@ public class QueueRehydrationAdoptionTests : PluginTestBase, IDisposable
         => new(_sessionManagerMock.Object, _config, _libraryManagerMock.Object, _loggerFactory, _queueManager);
 
     private AplUserEventHandler AplHandler()
-        => new(
+        => TestHelpers.CreateAplTapHandler(
             _sessionManagerMock.Object,
             _config,
             _libraryManagerMock.Object,

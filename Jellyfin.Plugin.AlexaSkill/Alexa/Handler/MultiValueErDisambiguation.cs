@@ -303,7 +303,8 @@ internal static class MultiValueErDisambiguation
         ILibraryManager libraryManager,
         ILogger logger,
         string locale,
-        string? rawConstraintSlot = null)
+        string? rawConstraintSlot = null,
+        Context? context = null)
     {
         if (!string.IsNullOrWhiteSpace(rawConstraintSlot) && !IsGenericSongConstraint(rawConstraintSlot))
         {
@@ -352,7 +353,7 @@ internal static class MultiValueErDisambiguation
         var matches = resolved
             .Select(a => new DisambiguationHelper.MatchInfo { Id = a.Id.ToString(), Name = a.Name })
             .ToList();
-        return new ErArtistArbitration(DisambiguationHelper.AskMultipleArtists(matches, locale), null, pool);
+        return new ErArtistArbitration(DisambiguationHelper.AskMultipleArtists(matches, locale, context), null, pool);
     }
 
     /// <summary>
@@ -413,7 +414,8 @@ internal static class MultiValueErDisambiguation
         string searchMusician,
         string musicianSpeechValue,
         string retryLabel,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Context? context = null)
     {
         // The structural one-publish guarantee (simplify round): pin here, not
         // at the callers, so a caller that passes the live index cannot split
@@ -427,7 +429,7 @@ internal static class MultiValueErDisambiguation
         IArtistIndex? pinnedArtistIndex = artistIndex?.Pin();
 
         ErArtistArbitration arbitration = TryArbitrate(
-            request, user, pinnedArtistIndex, libraryManager, logger, locale, rawSongSlot);
+            request, user, pinnedArtistIndex, libraryManager, logger, locale, rawSongSlot, context);
         if (arbitration.Ask != null)
         {
             return new SongMusicianGateResult(arbitration.Ask, new List<Guid>(), null);
@@ -554,6 +556,7 @@ internal static class MultiValueErDisambiguation
         SearchResponseMode mode = SearchResponseMode.Thorough,
         bool asrCompoundWordFixEnabled = false,
         bool parallelDbTiers = false,
+        Context? context = null,
         CancellationToken cancellationToken = default)
     {
         // The structural one-publish guarantee, same as the song composite: pin
@@ -567,7 +570,7 @@ internal static class MultiValueErDisambiguation
         if (arbitrate)
         {
             arbitration = TryArbitrate(
-                request, user, pinnedArtistIndex, libraryManager, logger, locale);
+                request, user, pinnedArtistIndex, libraryManager, logger, locale, context: context);
             if (arbitration.Ask != null)
             {
                 return new ArtistGateSearchResult(arbitration.Ask, Array.Empty<BaseItem>(), null, pinnedArtistIndex);

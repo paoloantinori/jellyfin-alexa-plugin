@@ -123,7 +123,19 @@ internal static class DisambiguationHelper
         ConversationalFlows.MarkOthersInactive(
             response, AttrMatches, AttrIndex, AttrType);
 
-        if (context != null && AplHelper.DeviceSupportsApl(context) && AplHelper.VisualsEnabled)
+        // JF-624 item 3: flag on, the tappable AlexaTextList replaces the carousel
+        // (the attach helper owns the whole gate: flag + visuals + APL device; the
+        // row projection is lazy so flag off allocates nothing). Flag off returns
+        // false and falls to the pre-JF-624 carousel branch below, kept verbatim
+        // for byte-identical flag-off output.
+        bool attachedList = AttachDisambiguationListIfEnabled(
+            response,
+            () => matchList.Select(m => new ListDisplayItem(m.Name, m.Id, null, m.ArtUrl)).ToList(),
+            AplHelper.DisambiguationTapAction,
+            locale,
+            context);
+
+        if (!attachedList && context != null && AplHelper.DeviceSupportsApl(context) && AplHelper.VisualsEnabled)
         {
             var carouselItems = matchList
                 .Select(m => new ListDisplayItem(m.Name, m.Id, null, m.ArtUrl))
@@ -344,8 +356,12 @@ internal static class DisambiguationHelper
     /// </summary>
     /// <param name="matches">The candidates in spoken order (winner first).</param>
     /// <param name="locale">The request locale.</param>
+    /// <param name="context">The Alexa request context (JF-624 item 3): when the
+    /// enhanced flag is on and the device renders APL, a tappable AlexaTextList
+    /// rides the ask so the user can tap instead of cycling yes/no. Null (the
+    /// default for every pre-JF-624 caller) renders no document, today's shape.</param>
     /// <returns>The Ask response carrying the disambiguation session state.</returns>
-    internal static SkillResponse AskMultipleArtists(List<MatchInfo> matches, string locale)
+    internal static SkillResponse AskMultipleArtists(List<MatchInfo> matches, string locale, Context? context = null)
     {
         // Plain name list: the flow is yes/no cycling (yes plays the first, no
         // advances via DisambiguateNext), so no numbering.
@@ -371,7 +387,65 @@ internal static class DisambiguationHelper
         // answer the OLD song/album not-found instead of cycling.
         ConversationalFlows.MarkOthersInactive(
             response, AttrMatches, AttrIndex, AttrType);
+
+        // JF-624 item 3: the FULL match list renders (the speak cap is speech
+        // only), so a tap reaches ranks the spoken list could not name in one
+        // breath (the JF-690 unbounded-caller shape).
+        AttachDisambiguationListIfEnabled(
+            response,
+            () => matches.Select(m => new ListDisplayItem(m.Name, m.Id, null, m.ArtUrl)).ToList(),
+            AplHelper.DisambiguationTapAction,
+            locale,
+            context);
         return response;
+    }
+
+    /// <summary>
+    /// Attach the tappable disambiguation text list (JF-624 item 3) when the
+    /// enhanced gate is on and return true; a no-op returning false otherwise
+    /// (null context, flag off, no APL, or visuals off), so every caller's
+    /// flag-off response is byte-identical and pays nothing: the row projection
+    /// runs only when the gate opened. The ONE owner of the attach decision
+    /// (gate, title key, directive build, add): both ask surfaces here and the
+    /// FindSong found-multiple prompt call it. The rows must be the SAME list
+    /// (same order) stored in the disambiguation session state the list
+    /// disambiguates: the tap handler maps the tapped 1-based ordinal onto that
+    /// state by position.
+    /// </summary>
+    /// <param name="response">The ask response to attach the document to.</param>
+    /// <param name="items">Lazy row projection in disambiguation-state order
+    /// (invoked only when the gate opens).</param>
+    /// <param name="action">The SendEvent action the rows fire.</param>
+    /// <param name="locale">The request locale (header title).</param>
+    /// <param name="context">The Alexa request context, or null.</param>
+    /// <returns>True when the list attached; false when the gate closed.</returns>
+    internal static bool AttachDisambiguationListIfEnabled(
+        SkillResponse response,
+        Func<List<ListDisplayItem>> items,
+        string action,
+        string locale,
+        Context? context)
+    {
+        if (!AplHelper.DisambiguationListEnabled(context))
+        {
+            return false;
+        }
+
+        // DisambiguateCarouselTitle ("Did you mean..."/"Intendevi...") is the
+        // disambiguation prompt title key; the text list reuses it rather than
+        // minting a 17-locale duplicate of the same sentence.
+        var directive = AplHelper.BuildDisambiguationListDirective(
+            ResponseStrings.Get("DisambiguateCarouselTitle", locale),
+            items(),
+            action);
+
+        if (directive != null)
+        {
+            response.Response.Directives.Add(directive);
+            return true;
+        }
+
+        return false;
     }
 
     /// <summary>

@@ -132,7 +132,8 @@ public class PlayNextIntentHandler : BaseHandler
                 canonicalMusician ?? musicianQuery,
                 musicianQuery,
                 "GetArtistsForPlayNext",
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken,
+                context: context).ConfigureAwait(false);
             if (gateTerminal != null)
             {
                 return gateTerminal;

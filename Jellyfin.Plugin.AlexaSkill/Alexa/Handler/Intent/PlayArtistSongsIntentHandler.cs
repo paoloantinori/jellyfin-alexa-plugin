@@ -255,7 +255,8 @@ public class PlayArtistSongsIntentHandler : BaseHandler
             mode: mode,
             asrCompoundWordFixEnabled: _config.AsrCompoundWordFixEnabled,
             parallelDbTiers: mode != SearchResponseMode.Fast,
-            cancellationToken: cancellationToken).ConfigureAwait(false);
+            cancellationToken: cancellationToken,
+            context: context).ConfigureAwait(false);
         if (gate.Ask != null)
         {
             return gate.Ask;
@@ -433,7 +434,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                             new() { Id = artists[0].Id.ToString(), Name = artists[0].Name },
                             new() { Id = bestAlternative.Id.ToString(), Name = bestAlternative.Name }
                         };
-                        return DisambiguationHelper.AskMultipleArtists(matchInfos, locale);
+                        return DisambiguationHelper.AskMultipleArtists(matchInfos, locale, context);
                     }
                 }
             }
@@ -725,7 +726,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                     new() { Id = pair.Value.First.Id.ToString(), Name = pair.Value.First.Name },
                     new() { Id = pair.Value.Second.Id.ToString(), Name = pair.Value.Second.Name }
                 };
-                return DisambiguationHelper.AskMultipleArtists(matchInfos, locale);
+                return DisambiguationHelper.AskMultipleArtists(matchInfos, locale, context);
             }
         }
 

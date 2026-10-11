@@ -10,6 +10,7 @@ using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Apl;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Directive;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler.Intent;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
@@ -53,7 +54,7 @@ public class AplUserEventHandlerTests : PluginTestBase, IDisposable
 
         _queueManager = TestHelpers.CreateDeviceQueueManager("AplUserEventHandlerTests");
 
-        _handler = new AplUserEventHandler(
+        _handler = TestHelpers.CreateAplTapHandler(
             _sessionManager.Object,
             _config,
             _libraryManager.Object,
@@ -1062,7 +1063,7 @@ public class AplUserEventHandlerVideoAppTests : PluginTestBase, IDisposable
 
         _queueManager = TestHelpers.CreateDeviceQueueManager("AplUserEventHandlerVideoAppTests");
 
-        _handler = new AplUserEventHandler(
+        _handler = TestHelpers.CreateAplTapHandler(
             _sessionManager.Object,
             _config,
             _libraryManager.Object,
