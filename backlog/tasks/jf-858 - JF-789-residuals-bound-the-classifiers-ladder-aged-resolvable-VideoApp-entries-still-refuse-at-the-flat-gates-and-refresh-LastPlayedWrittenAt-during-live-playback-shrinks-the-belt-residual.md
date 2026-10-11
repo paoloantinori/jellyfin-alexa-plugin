@@ -4,10 +4,10 @@ title: >-
   JF-789 residuals: bound the classifier's ladder (aged resolvable VideoApp
   entries still refuse at the flat gates) and refresh LastPlayedWrittenAt during
   live playback (shrinks the belt residual)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-10-10 12:42'
-updated_date: '2026-10-11 06:11'
+updated_date: '2026-10-11 08:45'
 labels:
   - playback
   - tech-debt
