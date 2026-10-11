@@ -42,7 +42,10 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// code (the JF-382 end-gates inside TryEntityFallbackAsync, the JF-363 band
 /// precedence, and PassesArtistMatchAcceptance keep their exact pre-extraction
 /// semantics); this class must never grow a NEW judgment shape (that is a
-/// JF-408-class decision, not cleanup).
+/// JF-408-class decision, not cleanup). JF-865's video leg (TryVideoFallbackAsync,
+/// the maintainer's JF-844 decision) is such a deliberate extension: a NEW
+/// acceptance surface reusing the existing judgment pieces (the word guard, the
+/// JF-412 walk, the JF-363 modes) rather than a new matcher semantics.
 /// NAMESPACE PLACEMENT, deliberate (divergence from the Util home of
 /// SearchService/PlaybackLaunchBuilder): BuildCrossMediaArtistOfferAsk is wired
 /// into DisambiguationHelper's session-attribute vocabulary, which lives in THIS
@@ -79,6 +82,30 @@ public sealed class CrossMediaFallback
     /// cross-media fallback and the greedy-intent TryEntityFallbackAsync.
     /// </summary>
     public const int CrossMediaArtistMaxWords = 2;
+
+    /// <summary>
+    /// JF-865: minimum fuzzy-match score for the cross-media VIDEO fallback (a
+    /// song-miss resolving against movies/episodes). Shares the artist bar's
+    /// calibration (<see cref="CrossMediaArtistThreshold"/>: the observed
+    /// wrong-substitution false positives scored 75, so the bar sits above them)
+    /// under its own name, the <see cref="AlbumPlayService.CrossMediaAlbumThreshold"/>
+    /// precedent (each leg names its own bar; the values may differ). Deliberately
+    /// no JF-363 sub-strict band on this leg: a video substitution is the most
+    /// distant cross-medium guess (a different device surface, not another music
+    /// shape), so only a containment-grade/near-exact hit is ever offered or
+    /// served; sub-strict matches land the honest song not-found. Apply via
+    /// <c>FuzzyMatcher.GetEffectiveThreshold(user, CrossMediaVideoThreshold)</c>.
+    /// </summary>
+    public const int CrossMediaVideoThreshold = 85;
+
+    /// <summary>
+    /// JF-865: minimum query length to attempt the video leg's bounded fuzzy tier,
+    /// the album cascade's <see cref="AlbumPlayService.MinFuzzyAlbumQueryLength"/>
+    /// rationale (short queries produce too many substring false positives over a
+    /// catalog scan). The tier-1 indexed SearchTerm query stays ungated, so a short
+    /// exact title ("up") still resolves through it.
+    /// </summary>
+    public const int MinFuzzyVideoQueryLength = 4;
 
     /// <summary>
     /// JF-439: minimum KeywordMatcher score for the inverse cross-media song
@@ -220,7 +247,7 @@ public sealed class CrossMediaFallback
     /// </summary>
     /// <param name="slotText">The raw slot text.</param>
     /// <param name="locale">The request locale (stop-word set selection).</param>
-    /// <param name="fallbackNoun">The fallback noun for the skip log ("artist"/"album").</param>
+    /// <param name="fallbackNoun">The fallback noun for the skip log ("artist"/"album"/"video").</param>
     /// <param name="logLabel">Log label.</param>
     /// <param name="tokens">The content-word tokens when the guard passes.</param>
     /// <returns>True when the query is short enough to attempt the fallback.</returns>
@@ -300,30 +327,78 @@ public sealed class CrossMediaFallback
                 notFoundMediaType);
         }
 
+        return BuildCrossMediaOfferAsk(
+            query, artist, locale,
+            "CrossMediaArtistOfferSsml", "CrossMediaArtistOffer",
+            DisambiguationHelper.MediaTypeArtist, notFoundMediaType,
+            "CrossMediaArtistSuggestion");
+    }
+
+    /// <summary>
+    /// JF-865: builds the cross-media VIDEO offer response (Ask): "I didn't find a
+    /// song '{query}'. Did you mean the movie {name}?". The JF-363 offer shape with
+    /// the VIDEO discriminator: <c>disambig_type=video</c> routes a "yes" through
+    /// YesIntentHandler's existing video confirm leg (which launches the item), so
+    /// no new yes-path plumbing exists here. The decline keys carry the SONG media
+    /// type unconditionally: the video leg only fires from a confirmed song miss
+    /// (the sole caller contract), so a "no" speaks today's
+    /// <c>NotFoundSongByName</c>, byte-identical to the pre-JF-865 miss path.
+    /// </summary>
+    /// <param name="query">The not-found song query (the slot value the decline speech names).</param>
+    /// <param name="video">The single best video match to offer.</param>
+    /// <param name="locale">The request locale.</param>
+    public SkillResponse BuildCrossMediaVideoOfferAsk(string query, BaseItem video, string locale)
+    {
+        return BuildCrossMediaOfferAsk(
+            query, video, locale,
+            "CrossMediaVideoOfferSsml", "CrossMediaVideoOffer",
+            DisambiguationHelper.MediaTypeVideo, DisambiguationHelper.MediaTypeSong,
+            "CrossMediaVideoOffer");
+    }
+
+    /// <summary>
+    /// JF-865 (simplify fold): the ONE cross-media offer-ask shape shared by the
+    /// artist and video builders, i.e. the JF-363 Ask (the family's
+    /// FuzzySuggestionReprompt), the single-candidate disambiguation state under the
+    /// offer's discriminator, the crossmedia_notfound_* decline pair, and the JF-398
+    /// flow supersession. The wiring that must not drift between the offer surfaces
+    /// lives HERE once; the public builders keep their per-leg signatures, docs, and
+    /// guards.
+    /// </summary>
+    private SkillResponse BuildCrossMediaOfferAsk(
+        string query,
+        BaseItem item,
+        string locale,
+        string ssmlKey,
+        string plainKey,
+        string disambigType,
+        string notFoundMediaType,
+        string logLabel)
+    {
         SkillResponse response = SpeechBuilder.AskLocalized(
-            "CrossMediaArtistOfferSsml", "CrossMediaArtistOffer", "FuzzySuggestionReprompt", locale, query, artist.Name);
+            ssmlKey, plainKey, "FuzzySuggestionReprompt", locale, query, item.Name);
 
         var matchInfos = new List<DisambiguationHelper.MatchInfo>
         {
-            new() { Id = artist.Id.ToString(), Name = artist.Name }
+            new() { Id = item.Id.ToString(), Name = item.Name }
         };
 
         response.SessionAttributes = DisambiguationHelper.BuildAttributes(
             matchInfos,
             0,
-            DisambiguationHelper.MediaTypeArtist,
+            disambigType,
             // JF-363: carry the original not-found request so NoIntentHandler can decline to
             // the right "song/album not found" instead of the generic "no more matches".
             (DisambiguationHelper.AttrCrossmediaQuery, query),
             (DisambiguationHelper.AttrCrossmediaType, notFoundMediaType));
 
-        // JF-398: activating the cross-media artist offer (a disambiguation flavor)
+        // JF-398: activating a cross-media offer (a disambiguation flavor)
         // supersedes any other flow's state.
         ConversationalFlows.MarkOthersInactive(response, ConversationalFlows.DisambiguationKeys);
 
         _logger.LogDebug(
-            "CrossMediaArtistSuggestion: offering artist '{Artist}' for not-found query='{Query}' (type={Type})",
-            artist.Name, query, notFoundMediaType);
+            "{LogLabel}: offering {MediaType} '{ItemName}' for not-found query='{Query}' (decline type={Type})",
+            logLabel, disambigType, item.Name, query, notFoundMediaType);
         return response;
     }
 
@@ -1043,6 +1118,213 @@ public sealed class CrossMediaFallback
     }
 
     /// <summary>
+    /// JF-865: the cross-media VIDEO leg, the maintainer's JF-844 FIX decision
+    /// (handler-side multi-medium rescue instead of per-locale model
+    /// densification). On a confirmed song miss it resolves the query against
+    /// movies and episodes and offers/plays the single best hit through the JF-363
+    /// suggestion modes; the CARRIER form ("riproduci il film X" and siblings)
+    /// remains the guaranteed first-shot path and is NEVER cross-medium
+    /// disambiguated: this leg runs only after the caller's own song search, the
+    /// artist cascade, and the album cascade ALL missed (the wiring order at the
+    /// PlaySong miss path; an artist/album match or offer wins the precedence).
+    /// BOUNDARY (recorded once, from the JF-864 16-locale probe map): this rescues
+    /// only the STEAL locales where the bare ask reaches a handler (en-US, de,
+    /// es-US, fr-CA route "play &lt;movie&gt;" to PlaySong); it cannot help the
+    /// NO_SELECTION locales (it-IT, en-GB, es-MX, fr-FR, pt-BR, hi) where the bare
+    /// shape selects no intent and never reaches any handler, and the en-AU/es-ES
+    /// (PlayByGenre) and ja (PlayArtistSongs) steals need their own fallback legs
+    /// (the deferred follow-up: wiring those callers needs bespoke miss-path
+    /// plumbing this PlaySong-scoped leg does not share).
+    /// Gating: the live video flag, the shared 2-content-word tokenized guard
+    /// (<see cref="PassesCrossMediaWordGuard"/>, fallbackNoun "video"), then
+    /// <see cref="CrossMediaVideoThreshold"/> through
+    /// <see cref="FindBestNonEmbeddedMatch"/> (the JF-412 embedded-containment
+    /// guard, the album cascade's acceptance chokepoint). The suggestion modes are
+    /// the SAME <see cref="CrossMediaArtistSuggestion"/> knob the artist band uses
+    /// (per-user override, global default; one setting governs both cross-media
+    /// suggestion surfaces): Confirm (default) returns the yes/no offer ask,
+    /// AutoServe launches with the <c>FoundVideoInstead</c> announcement (the
+    /// shared <see cref="PluginConfiguration.AnnounceCrossMediaSubstitution"/> flag),
+    /// Off returns null so the caller keeps today's not-found byte-identical.
+    /// Queries mirror the album cascade's two-tier shape: the indexed SearchTerm
+    /// tier (PlayVideo's own primary query over Movie+Episode), then on an exact
+    /// miss ONE bounded 500-row cheap-DTO catalog scan (the SearchItemsFuzzyAsync
+    /// bound, the f5c701c lesson), never an Audio-catalog scan.
+    /// KANA BAR, deliberately absent (code-review round): the artist/album legs
+    /// carry JF-652/JF-661 collision bars because their romaji wrong-accepts were
+    /// OBSERVED live; the ja steal shape routes to PlayArtistSongs, never here
+    /// (the JF-864 probe map), so this leg has no observed kana wrong-accept
+    /// class. Add a video bar only with that evidence (the class-doc rule: no new
+    /// judgment shape without a live incident).
+    /// </summary>
+    /// <param name="slotText">The raw slot text that missed (the song slot value; already romanized by the PlaySong caller, the romanization below is idempotent).</param>
+    /// <param name="jellyfinUser">The Jellyfin user for queries.</param>
+    /// <param name="user">The plugin user (threshold override, library filter, suggestion mode).</param>
+    /// <param name="session">The Jellyfin session receiving the now-playing write on AutoServe.</param>
+    /// <param name="context">The Alexa context (device capability for the launch).</param>
+    /// <param name="locale">The locale for response strings.</param>
+    /// <param name="libraryManager">Library manager for queries.</param>
+    /// <param name="logLabel">Label for log messages.</param>
+    /// <param name="request">The skill request (the JF-501 progressive announce vehicle on the AutoServe launch).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The offer ask or the launch response, or null when no video clears the bar / the flag or mode is off (caller falls through to its own not-found).</returns>
+    public async Task<SkillResponse?> TryVideoFallbackAsync(
+        string slotText,
+        JellyfinUser jellyfinUser,
+        Entities.User user,
+        SessionInfo session,
+        Context context,
+        string locale,
+        ILibraryManager libraryManager,
+        string logLabel,
+        global::Alexa.NET.Request.Type.Request? request,
+        CancellationToken cancellationToken)
+    {
+        // The video flag gates here (the IsMusicEnabled live-read idiom): offering a
+        // movie the admin disabled would dead-end the "yes" at a launch the direct
+        // ask refuses.
+        if (!IsVideoPlaybackEnabled)
+        {
+            _logger.LogInformation(
+                "{Label}: video fallback skipped, video playback is disabled via configuration, query='{Query}'",
+                logLabel, slotText);
+            return null;
+        }
+
+        // The JF-363 suggestion modes, the same knob the artist band resolves
+        // through, read ONCE (the resolution logs its source; two reads spoke the
+        // same decision twice). Off gates at the ENTRY (simplify/efficiency
+        // round): this leg has no mode-independent consumer of the match, so an
+        // Off admin must not pay the video queries only to discard the result;
+        // today's not-found comes back byte-identical.
+        var suggestionMode = GetCrossMediaArtistSuggestion(user);
+        if (suggestionMode == CrossMediaArtistSuggestion.Off)
+        {
+            _logger.LogDebug(
+                "{Label}: video fallback skipped, cross-media suggestion is Off, query='{Query}'",
+                logLabel, slotText);
+            return null;
+        }
+
+        slotText = KatakanaRomanizer.Romanize(slotText);
+
+        if (!PassesCrossMediaWordGuard(slotText, locale, fallbackNoun: "video", logLabel, out _))
+        {
+            return null;
+        }
+
+        // Raw trimmed text, the album cascade's choice: the SearchTerm index and the
+        // fuzzy tier both favor the raw title over a stop-word-stripped join.
+        string query = slotText.Trim();
+
+        // Tier 1 (indexed): exact SearchTerm over Movie+Episode, the query PlayVideo's
+        // own primary search runs.
+        InternalItemsQuery videoQuery = BuildVideoQuery(jellyfinUser, user, libraryManager, searchTerm: query, cheapDto: false, limit: null);
+        IReadOnlyList<BaseItem> candidates = await RetryAsync(
+            () => libraryManager.GetItemList(videoQuery),
+            logLabel + ":GetVideosFallbackExact",
+            cancellationToken).ConfigureAwait(false);
+
+        // Tier 2 (bounded fuzzy): only on an exact miss, one cheap-DTO scan of the
+        // video catalog capped at the SearchItemsFuzzyAsync bound.
+        if (candidates.Count == 0 && query.Length >= MinFuzzyVideoQueryLength)
+        {
+            InternalItemsQuery fuzzyQuery = BuildVideoQuery(jellyfinUser, user, libraryManager, searchTerm: null, cheapDto: true, limit: 500);
+            candidates = await RetryAsync(
+                () => libraryManager.GetItemList(fuzzyQuery),
+                logLabel + ":GetVideosFallbackFuzzy",
+                cancellationToken).ConfigureAwait(false);
+        }
+
+        if (candidates.Count == 0)
+        {
+            return null;
+        }
+
+        // Single best through the shared JF-412 walk (embedded-containment guard);
+        // both tiers are judged at this one acceptance point, the album cascade's
+        // rule. A below-bar library lands the caller's honest miss.
+        int threshold = FuzzyMatcher.GetEffectiveThreshold(user, CrossMediaVideoThreshold);
+        var eligible = FindBestNonEmbeddedMatch(
+            query, candidates, v => KeywordMatcher.ScoringName(v.Name), threshold);
+        if (eligible is not { } match)
+        {
+            _logger.LogDebug(
+                "{Label}: no video above threshold={Threshold} (or all embedded) for query='{Query}', not offering",
+                logLabel, threshold, query);
+            return null;
+        }
+
+        _logger.LogInformation(
+            "{Label}: video fallback found '{VideoName}' score={Score} for query='{Query}' (threshold={Threshold})",
+            logLabel, match.Item.Name, match.Score, query, threshold);
+
+        // Confirm (the code default): the yes/no offer through the JF-363 plumbing.
+        if (suggestionMode == CrossMediaArtistSuggestion.Confirm)
+        {
+            return BuildCrossMediaVideoOfferAsk(query, match.Item, locale);
+        }
+
+        // AutoServe: launch the movie/episode through the shared episode-launch
+        // chokepoint (the JF-587 screenless episode degrade and the JF-501
+        // progressive announce ride it), fresh play like the yes-confirm leg, with
+        // the substitution announcement the other cross-media substitutions share.
+        SkillResponse response = await _launch.BuildEpisodeLaunchResponseAsync(
+            context,
+            request,
+            locale,
+            match.Item,
+            user,
+            _launch.GetVideoAppLaunchUrl(match.Item, user),
+            resumeTicks: 0,
+            _config.AnnounceCrossMediaSubstitution
+                ? SpeechBuilder.BuildOutputSpeech("FoundVideoInsteadSsml", "FoundVideoInstead", locale, match.Item.Name)
+                : null).ConfigureAwait(false);
+
+        // JF-714/JF-718: the now-playing write rides a DELIVERED launch (the
+        // screenless capability Tell is not one).
+        PlaybackLaunchBuilder.AttachNowPlayingIfLaunched(response, session, match.Item);
+        return response;
+    }
+
+    /// <summary>
+    /// JF-865 (simplify fold): the ONE video query shape for the leg's two tiers
+    /// (the BuildAlbumQuery precedent), so a scoping or kind-set change lands once.
+    /// Tier 1 passes a searchTerm with full DTOs (the winner feeds the launch);
+    /// tier 2 passes no searchTerm with the shared cheap-DTO shape and the
+    /// SearchItemsFuzzyAsync row bound. The library filter is applied here like
+    /// every sibling leg's query.
+    /// </summary>
+    private static InternalItemsQuery BuildVideoQuery(
+        JellyfinUser jellyfinUser,
+        Entities.User user,
+        ILibraryManager libraryManager,
+        string? searchTerm,
+        bool cheapDto,
+        int? limit)
+    {
+        var query = new InternalItemsQuery
+        {
+            User = jellyfinUser,
+            Recursive = true,
+            IncludeItemTypes = new[] { BaseItemKind.Movie, BaseItemKind.Episode },
+            DtoOptions = cheapDto ? AlbumPlayService.CheapDtoOptions() : new DtoOptions(true)
+        };
+        if (searchTerm != null)
+        {
+            query.SearchTerm = searchTerm;
+        }
+
+        if (limit.HasValue)
+        {
+            query.Limit = limit.Value;
+        }
+
+        LibraryFilter.ApplyLibraryFilter(query, user, libraryManager);
+        return query;
+    }
+
+    /// <summary>
     /// JF-652: the kana-origin near-tie check at the cross-media strict acceptance
     /// point. When the winner and the best rival both clear the full kana bar (see
     /// <see cref="Util.ArtistSearch.FindNearTiedRunnerUp"/>), the strict-bar
@@ -1104,6 +1386,14 @@ public sealed class CrossMediaFallback
     /// plugin instance is absent (off-host unit tests).
     /// </summary>
     private bool IsMusicEnabled => (Plugin.Instance?.Configuration ?? _config).MusicEnabled;
+
+    /// <summary>
+    /// JF-865: live read of the global video flag for the video fallback leg, the
+    /// <see cref="IsMusicEnabled"/> idiom (Plugin.Instance FIRST so a standard-API
+    /// configuration replacement takes effect without a restart, the injected
+    /// configuration only when the plugin instance is absent).
+    /// </summary>
+    private bool IsVideoPlaybackEnabled => (Plugin.Instance?.Configuration ?? _config).VideoPlaybackEnabled;
 
     /// <summary>Delegates to RetryHelper.ExecuteWithRequestBudgetAsync with
     /// the composition-injected request budget and this class's logger; kept as a thin alias so the moved

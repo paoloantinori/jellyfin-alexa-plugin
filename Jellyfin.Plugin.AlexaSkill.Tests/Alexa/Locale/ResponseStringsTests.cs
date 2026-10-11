@@ -42,7 +42,11 @@ public class ResponseStringsTests
         // album-resolution outcomes, and the showing announcements (incl. the
         // APL header title).
         "PhotosRequireScreen", "PhotoAlbumNotFound", "PhotoAlbumEmpty",
-        "NoPhotosFound", "ShowingPhotoAlbum", "ShowingRecentPhotos", "RecentPhotosTitle"
+        "NoPhotosFound", "ShowingPhotoAlbum", "ShowingRecentPhotos", "RecentPhotosTitle",
+        // JF-865 cross-media video leg: the yes/no offer (plain + SSML) and the
+        // AutoServe substitution announcement, the JF-821/JF-824 ledger rule for
+        // new user-facing keys.
+        "CrossMediaVideoOffer", "CrossMediaVideoOfferSsml", "FoundVideoInstead"
     };
 
     /// <summary>

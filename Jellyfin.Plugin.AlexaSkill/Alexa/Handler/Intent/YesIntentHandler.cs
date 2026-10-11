@@ -260,8 +260,18 @@ public class YesIntentHandler : BaseHandler
         // JF-806 (point-lookup decision, the song leg's twin): the video confirm
         // launches the ALREADY-RESOLVED item and issues no library query, so it
         // carries no warming gate; its ask (PlayVideo) is Layer-1 ungated too.
+        // JF-865: the video flag gates here (the books/podcasts legs' shape): since
+        // the cross-media video OFFER can open a video disambiguation while video
+        // is enabled, an admin disabling it mid-prompt must not let the confirm
+        // launch what the direct ask now refuses.
         if (mediaType == DisambiguationHelper.MediaTypeVideo)
         {
+            SkillResponse? videoDisabled = IfFeatureDisabled(c => c.VideoPlaybackEnabled, request);
+            if (videoDisabled != null)
+            {
+                return Task.FromResult(videoDisabled);
+            }
+
             return PlayVideo(item, user, session, locale, context, request);
         }
 
