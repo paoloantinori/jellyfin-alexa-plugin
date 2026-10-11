@@ -946,7 +946,7 @@ Invocation name: **"jellyfin player"**
 | Play Next Episode | `speel {episode_position} aflevering van {series_name}` · `ga verder met {series_name}` · `speel {episode_position} aflevering van de serie {series_name}` |
 | Play Playlist | `speel de afspeellijst {playlist}` · `speel mijn afspeellijst {playlist}` · `zet de afspeellijst {playlist} op` · `start de afspeellijst {playlist}` · `zet mijn afspeellijst {playlist} op` · `luister naar de afspeellijst {playlist}` |
 | Play Podcast | `speel de podcast {podcast_name}` · `speel podcast {podcast_name}` · `luister naar de podcast {podcast_name}` · `speel de laatste aflevering van {podcast_name}` · `start de podcast {podcast_name}` · `ik wil naar podcast {podcast_name} luisteren` |
-| Play Radio | `speel radio` · `start het radiostation {station}` · `speel radiomodus` · `start radio` · `speel meer zoals dit` · `blijf vergelijkbare muziek afspelen` |
+| Play Radio | `speel de radio` · `start het radiostation {station}` · `speel de radiomodus` · `start de radio` · `speel meer zoals dit` · `blijf vergelijkbare muziek afspelen` |
 | Play Random | `speel een willekeurig {media_type}` · `speel iets willekeurigs` · `speel een willekeurig {media_type} uit {genre}` · `speel willekeurige {genre} {media_type}` · `speel willekeurig {media_type}` · `shuffle mijn {media_type}` |
 | Play Song | `speel {song}` · `speel {song} van {musician}` · `speel het nummer {song}` · `speel nummer {song}` · `speel het nummer {song} van {musician}` · `luister naar {song}` |
 | Play Video | `speel de video {title}` · `zet de video {title} op` · `start {title}` · `kijk {title}` · `kun je {title} afspelen` · `ik wil {title} kijken` |

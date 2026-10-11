@@ -592,9 +592,12 @@ intents:
       - wat wordt hierna afgespeeld
   - name: PlayRadioIntent
     samples:
-      - speel radio
-      - speel radiomodus
-      - start radio
+      # JF-864: the bare [verb][radio] statics stole the core play asks
+      # (live-probed 2026-10-11: 'speel nemo' -> PlayRadioIntent, the same
+      # shape as it-IT's device-confirmed 3/3); the article qualifies.
+      - speel de radio
+      - speel de radiomodus
+      - start de radio
       - speel meer zoals dit
       - blijf vergelijkbare muziek afspelen
       - speel vergelijkbare nummers

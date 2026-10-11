@@ -768,9 +768,9 @@
       {
         "name": "PlayRadioIntent",
         "samples": [
-          "speel radio",
-          "speel radiomodus",
-          "start radio",
+          "speel de radio",
+          "speel de radiomodus",
+          "start de radio",
           "speel meer zoals dit",
           "blijf vergelijkbare muziek afspelen",
           "speel vergelijkbare nummers",

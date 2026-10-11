@@ -881,9 +881,9 @@ Complete phrase list (403 phrases across 67 commands):
 
 **Start radio mode**
 
-- `speel radio`
-- `speel radiomodus`
-- `start radio`
+- `speel de radio`
+- `speel de radiomodus`
+- `start de radio`
 - `speel meer zoals dit`
 - `blijf vergelijkbare muziek afspelen`
 - `speel vergelijkbare nummers`
