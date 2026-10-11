@@ -546,4 +546,188 @@ public class VideoAppGapHonestResponseTests : PluginTestBase, IDisposable
             Newtonsoft.Json.JsonConvert.SerializeObject(BaseHandler.BuildPauseResponse(true, "en-US")),
             Newtonsoft.Json.JsonConvert.SerializeObject(response));
     }
+
+    // === JF-858: the flat transport gates' corroboration bound ===
+    //
+    // The classifier's ledger-only route/kind ladder stayed deliberately unbounded
+    // through JF-789 (the window doc's carve-out), so an AGED RESOLVABLE VideoApp
+    // entry kept answering the flat gates' refusals on idle devices. JF-858 bounds
+    // the GATES (not the classifier): a VideoApp-family medium survives only when
+    // corroborated by live evidence (the ONE HasCurrentPlaybackEvidence predicate)
+    // OR a within-window stamp; the one quadrant the bound opens is AGED and
+    // evidence-free, where each family falls to its ordinary no-ledger path.
+
+    /// <summary>
+    /// JF-858 red proof, the pause family's flip: an aged resolvable VideoApp-routed
+    /// movie with NO live evidence (no AudioPlayer token, no session now-playing) is
+    /// the idle-device shape, and the ordinary pause line must answer exactly as on a
+    /// cold device (the AudioPlayer.Stop directive is identical on both paths; only
+    /// the spoken line differed). RED on the pre-JF-858 tree: the CannotPauseVideoByVoice
+    /// line answered over the idle device.
+    /// </summary>
+    [Fact]
+    public async Task Pause_DaysOldResolvableVideoAppLedger_NoEvidence_AnswersOrdinaryPauseShape_JF858()
+    {
+        var movie = Movie("Days Old Movie");
+
+        string deviceId = "jf858-pause-aged";
+        DeviceQueueManager ledger = CreateLedger(deviceId, movie);
+        TestHelpers.BackdateLastPlayedStamp(ledger, deviceId, TimeSpan.FromDays(3));
+        var handler = CreatePauseHandler(ledger);
+
+        var response = await handler.HandleAsync(
+            CreateIntent("AMAZON.PauseIntent"),
+            TestHelpers.CreateTestContext(deviceId),
+            TestHelpers.CreateTestUser(),
+            CreateSession(),
+            CancellationToken.None);
+
+        // The byte-identical cold-device comparison (the Pause_ColdLedger pin's
+        // shape): the corroborated gate degraded the classification to Unknown and
+        // the ordinary JF-482 pause response answered.
+        Assert.Equal(
+            Newtonsoft.Json.JsonConvert.SerializeObject(BaseHandler.BuildPauseResponse(true, "en-US")),
+            Newtonsoft.Json.JsonConvert.SerializeObject(response));
+    }
+
+    /// <summary>
+    /// JF-858 boundary pin, the EVIDENCE arm: an aged stamp does NOT degrade the
+    /// classification when the session still holds the launched item, because the
+    /// held item is the observable live-evidence leg (the minute-90-of-a-movie
+    /// shape; a plain VideoApp movie stream has no server-side stamp refresh, so
+    /// a window-only bound would lose the honest line exactly there).
+    /// </summary>
+    [Fact]
+    public async Task Pause_DaysOldResolvableVideoAppLedger_SessionHoldsMovie_KeepsHonestLine_JF858()
+    {
+        var movie = Movie("Long Movie Minute Ninety");
+
+        string deviceId = "jf858-pause-aged-live";
+        DeviceQueueManager ledger = CreateLedger(deviceId, movie);
+        TestHelpers.BackdateLastPlayedStamp(ledger, deviceId, TimeSpan.FromDays(3));
+        var handler = CreatePauseHandler(ledger);
+
+        var response = await handler.HandleAsync(
+            CreateIntent("AMAZON.PauseIntent"),
+            TestHelpers.CreateTestContext(deviceId),
+            TestHelpers.CreateTestUser(),
+            CreateSession(movie),
+            CancellationToken.None);
+
+        Assert.Contains("can't pause video by voice", TestHelpers.GetSpeechText(response), StringComparison.OrdinalIgnoreCase);
+        Assert.True(response.Response.ShouldEndSession);
+        TestHelpers.AssertHasAudioPlayerStopDirective(response);
+    }
+
+    /// <summary>
+    /// JF-858 boundary pin, the WINDOW arm: a FRESH VideoApp entry keeps the honest
+    /// line even with no live evidence (the just-launched video whose Jellyfin
+    /// session was dropped), matching the pre-JF-858 answer for every within-window
+    /// shape.
+    /// </summary>
+    [Fact]
+    public async Task Pause_FreshVideoAppLedger_NoEvidence_KeepsHonestLine_JF858()
+    {
+        var movie = Movie("Fresh Movie");
+
+        string deviceId = "jf858-pause-fresh";
+        DeviceQueueManager ledger = CreateLedger(deviceId, movie);
+        var handler = CreatePauseHandler(ledger);
+
+        var response = await handler.HandleAsync(
+            CreateIntent("AMAZON.PauseIntent"),
+            TestHelpers.CreateTestContext(deviceId),
+            TestHelpers.CreateTestUser(),
+            CreateSession(),
+            CancellationToken.None);
+
+        Assert.Contains("can't pause video by voice", TestHelpers.GetSpeechText(response), StringComparison.OrdinalIgnoreCase);
+        TestHelpers.AssertHasAudioPlayerStopDirective(response);
+    }
+
+    /// <summary>
+    /// JF-858 red proof, the Next/Previous family's flip: the same aged
+    /// evidence-free shape must answer the queue logic's silent Empty, not the
+    /// VideoApp navigation refusal (the queue logic structurally cannot act: its
+    /// current-item resolution reads exactly the evidence legs the corroboration
+    /// found absent). RED on the pre-JF-858 tree: CannotNavigateVideoByVoice
+    /// answered over the idle device.
+    /// </summary>
+    [Fact]
+    public async Task Next_DaysOldResolvableVideoAppLedger_NoEvidence_SilentEmpty_JF858()
+    {
+        var movie = Movie("Days Old Movie");
+
+        string deviceId = "jf858-next-aged";
+        DeviceQueueManager ledger = CreateLedger(deviceId, movie);
+        TestHelpers.BackdateLastPlayedStamp(ledger, deviceId, TimeSpan.FromDays(3));
+        var handler = CreateNextHandler(ledger);
+
+        var response = await handler.HandleAsync(
+            CreateIntent("AMAZON.NextIntent"),
+            TestHelpers.CreateTestContext(deviceId),
+            TestHelpers.CreateTestUser(),
+            CreateSession(),
+            CancellationToken.None);
+
+        Assert.Null(response.Response.OutputSpeech);
+        Assert.Empty(response.Response.Directives ?? new List<IDirective>());
+    }
+
+    /// <summary>
+    /// JF-858 boundary pin, the twin's flip: Previous shares
+    /// ServeAdjacentQueueItem's one gate, so the aged evidence-free shape flips
+    /// identically (the silent Empty).
+    /// </summary>
+    [Fact]
+    public async Task Previous_DaysOldResolvableVideoAppLedger_NoEvidence_SilentEmpty_JF858()
+    {
+        var movie = Movie("Days Old Movie");
+
+        string deviceId = "jf858-prev-aged";
+        DeviceQueueManager ledger = CreateLedger(deviceId, movie);
+        TestHelpers.BackdateLastPlayedStamp(ledger, deviceId, TimeSpan.FromDays(3));
+        var handler = CreatePreviousHandler(ledger);
+
+        var response = await handler.HandleAsync(
+            CreateIntent("AMAZON.PreviousIntent"),
+            TestHelpers.CreateTestContext(deviceId),
+            TestHelpers.CreateTestUser(),
+            CreateSession(),
+            CancellationToken.None);
+
+        Assert.Null(response.Response.OutputSpeech);
+        Assert.Empty(response.Response.Directives ?? new List<IDirective>());
+    }
+
+    /// <summary>
+    /// JF-858 boundary pin, the EVIDENCE arm at the navigation gate: the aged
+    /// JF-564 audit shape (the stale music token still naming a queue member while
+    /// the aged VideoApp movie entry sits in the ledger) KEEPS the refusal, because
+    /// the token is live evidence; a window-only bound would have let the queue
+    /// logic emit the parallel AudioPlayer.Play mid-video (the JF-564 double-audio
+    /// class) at minute 61 of a movie.
+    /// </summary>
+    [Fact]
+    public async Task Next_DaysOldVideoAppLedger_StaleTokenEvidence_StillRefuses_JF858()
+    {
+        var song1 = Song("Stale Track One");
+        var song2 = Song("Stale Track Two");
+        var movie = Movie("Long Movie Minute Ninety");
+
+        string deviceId = "jf858-next-aged-live";
+        DeviceQueueManager ledger = CreateLedger(deviceId, movie, song1, song2);
+        TestHelpers.BackdateLastPlayedStamp(ledger, deviceId, TimeSpan.FromDays(3));
+        var handler = CreateNextHandler(ledger);
+
+        var response = await handler.HandleAsync(
+            CreateIntent("AMAZON.NextIntent"),
+            TestHelpers.CreateContextWithToken(song1.Id.ToString(), deviceId),
+            TestHelpers.CreateTestUser(),
+            CreateSession(song1, song2),
+            CancellationToken.None);
+
+        Assert.Contains("can't move between videos", TestHelpers.GetSpeechText(response), StringComparison.OrdinalIgnoreCase);
+        TestHelpers.AssertNoAudioPlayDirective(response);
+    }
 }

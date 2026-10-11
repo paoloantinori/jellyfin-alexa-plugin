@@ -4619,6 +4619,14 @@ public class VideoAudioController : ControllerBase
         // read-key rationale live once, on RecordPositionProgress below.
         RecordPositionProgress(itemId, segmentName);
 
+        // JF-858: the segment fetch is also the plugin's live-consumption observation
+        // for the last-played STAMP refresh (the belt-residual shrink): it refreshes
+        // the stamp of devices whose VideoApp-audio launch linked this exact stream
+        // key, throttled, never touching the position tracker above (whose JF-694
+        // write gate is untouched by this). Best-effort by the same contract: the
+        // refresh is all dictionary/field writes and cannot throw.
+        Plugin.Instance?.DeviceQueueManager?.RefreshLastPlayedStampForStream(itemId);
+
         string? segmentPath = _cache.FindSegmentPath(itemId, segmentName);
         if (segmentPath == null)
         {

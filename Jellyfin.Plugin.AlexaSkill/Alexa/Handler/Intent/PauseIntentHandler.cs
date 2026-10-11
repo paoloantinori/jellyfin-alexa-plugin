@@ -126,7 +126,12 @@ public class PauseIntentHandler : BaseHandler
         // stream must still be told to stop) and ends the session as a Tell: these
         // are IntentRequests, so the JF-299 event-response rules do not apply. An
         // empty ledger (Unknown) falls through to the audio paths below unchanged.
-        PlaybackLaunchBuilder.PlayingMedium medium = Launch.ResolvePlayingMedium(context, _libraryManager, _queueManager);
+        // JF-858: the corroborated flat-gate answer - aged and evidence-free
+        // degrades to Unknown, so this branch never speaks the VideoApp line over an
+        // idle device (the AudioPlayer.Stop directive is identical on both paths;
+        // only the line differed). The decision record lives on
+        // ResolvePlayingMediumForFlatTransportGate.
+        PlaybackLaunchBuilder.PlayingMedium medium = Launch.ResolvePlayingMediumForFlatTransportGate(context, session, _libraryManager, _queueManager);
         if (PlaybackLaunchBuilder.IsVideoAppMedium(medium))
         {
             bool pipelineOwnsStream = string.Equals(context.AudioPlayer?.PlayerActivity, "PLAYING", System.StringComparison.Ordinal);

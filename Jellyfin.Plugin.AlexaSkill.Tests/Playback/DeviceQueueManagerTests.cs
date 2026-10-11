@@ -2349,4 +2349,220 @@ public class DeviceQueueManagerTests : IDisposable
 
         Assert.Null(_manager.GetLastPlayedSnapshot("dev").Route);
     }
+
+    // =====================================================================
+    // JF-858: the segment-observed last-played stamp refresh
+    // =====================================================================
+
+    /// <summary>
+    /// JF-858 LINK gate: a segment fetch for a key NO device linked (the anonymous
+    /// fetch shape: a stale token-gated URL from before a restart) refreshes
+    /// nothing - the aged stamp keeps its age.
+    /// </summary>
+    [Fact]
+    public void RefreshLastPlayedStampForStream_NoLink_LeavesStampUntouched_JF858()
+    {
+        string item = Guid.NewGuid().ToString();
+        _manager.RecordLastPlayed("dev", item, DeviceQueueManager.LaunchRoute.VideoApp);
+        TestHelpers.BackdateLastPlayedStamp(_manager, "dev", TimeSpan.FromDays(3));
+        DateTime backdated = _manager.GetQueue("dev")!.LastPlayedWrittenAt!.Value;
+
+        _manager.RefreshLastPlayedStampForStream(item);
+
+        Assert.Equal(backdated, _manager.GetQueue("dev")!.LastPlayedWrittenAt);
+    }
+
+    /// <summary>
+    /// JF-858 core refresh: a linked device whose stamp aged past the refresh
+    /// interval but is still within the recency window gets its stamp refreshed
+    /// to now while the ledger ENTRY (item id and route) stays exactly as the
+    /// launch wrote it - only the freshness stamp moves.
+    /// </summary>
+    [Fact]
+    public void RefreshLastPlayedStampForStream_LinkedAgedStamp_RefreshesStampKeepsEntry_JF858()
+    {
+        string item = Guid.NewGuid().ToString();
+        _manager.RecordLastPlayed("dev", item, DeviceQueueManager.LaunchRoute.VideoApp);
+        TestHelpers.BackdateLastPlayedStamp(
+            _manager, "dev", DeviceQueueManager.LastPlayedStampRefreshInterval + TimeSpan.FromMinutes(5));
+        _manager.RecordVideoAudioStreamLink("dev", item, item);
+
+        _manager.RefreshLastPlayedStampForStream(item);
+
+        (string? itemId, DeviceQueueManager.LaunchRoute? route, DateTime? writtenAt) =
+            _manager.GetLastPlayedSnapshot("dev");
+        Assert.Equal(item, itemId);
+        Assert.Equal(DeviceQueueManager.LaunchRoute.VideoApp, route);
+        Assert.NotNull(writtenAt);
+        Assert.True(
+            writtenAt.Value > DateTime.UtcNow - TimeSpan.FromMinutes(1),
+            "the stamp was refreshed to now");
+        Assert.True(DeviceQueueManager.IsWithinLastPlayedRecencyWindow(writtenAt));
+    }
+
+    /// <summary>
+    /// JF-858 key-format contract: the link's stream key and the segment fetch's
+    /// item id land on ONE dictionary comparison through the shared map-key rule
+    /// (dashed at the writer, "N" at the fetch - both normalize to the same key).
+    /// </summary>
+    [Fact]
+    public void RefreshLastPlayedStampForStream_KeyFormatNormalization_MatchesDashedAgainstN_JF858()
+    {
+        Guid streamId = Guid.NewGuid();
+        _manager.RecordLastPlayed("dev", streamId.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
+        TestHelpers.BackdateLastPlayedStamp(
+            _manager, "dev", DeviceQueueManager.LastPlayedStampRefreshInterval + TimeSpan.FromMinutes(5));
+        _manager.RecordVideoAudioStreamLink("dev", streamId.ToString("N"), streamId.ToString());
+
+        _manager.RefreshLastPlayedStampForStream(streamId.ToString());
+
+        DateTime? refreshed = _manager.GetQueue("dev")!.LastPlayedWrittenAt;
+        Assert.NotNull(refreshed);
+        Assert.True(refreshed.Value > DateTime.UtcNow - TimeSpan.FromMinutes(1));
+    }
+
+    /// <summary>
+    /// JF-858 THROTTLE gate: a stamp younger than the refresh interval is left
+    /// alone, so per-segment fetches (every few seconds) coalesce into one persist
+    /// cadence instead of one write per segment.
+    /// </summary>
+    [Fact]
+    public void RefreshLastPlayedStampForStream_YoungStampThrottle_LeavesStamp_JF858()
+    {
+        string item = Guid.NewGuid().ToString();
+        _manager.RecordLastPlayed("dev", item, DeviceQueueManager.LaunchRoute.VideoApp);
+        TestHelpers.BackdateLastPlayedStamp(
+            _manager, "dev", DeviceQueueManager.LastPlayedStampRefreshInterval - TimeSpan.FromMinutes(1));
+        _manager.RecordVideoAudioStreamLink("dev", item, item);
+        DateTime throttled = _manager.GetQueue("dev")!.LastPlayedWrittenAt!.Value;
+
+        _manager.RefreshLastPlayedStampForStream(item);
+
+        Assert.Equal(throttled, _manager.GetQueue("dev")!.LastPlayedWrittenAt);
+    }
+
+    /// <summary>
+    /// JF-858 LEDGER-MATCH gate: the stale link of an older launch must not
+    /// freshen the entry a LATER launch recorded (that launch's own link or route
+    /// governs its stamp); only the observation of the stream the ledger still
+    /// names refreshes it.
+    /// </summary>
+    [Fact]
+    public void RefreshLastPlayedStampForStream_LedgerNamesOtherItem_NoRefresh_JF858()
+    {
+        string linkedItem = Guid.NewGuid().ToString();
+        _manager.RecordLastPlayed("dev", Guid.NewGuid().ToString(), DeviceQueueManager.LaunchRoute.Audio);
+        TestHelpers.BackdateLastPlayedStamp(_manager, "dev", TimeSpan.FromDays(3));
+        _manager.RecordVideoAudioStreamLink("dev", linkedItem, linkedItem);
+        DateTime backdated = _manager.GetQueue("dev")!.LastPlayedWrittenAt!.Value;
+
+        _manager.RefreshLastPlayedStampForStream(linkedItem);
+
+        Assert.Equal(backdated, _manager.GetQueue("dev")!.LastPlayedWrittenAt);
+    }
+
+    /// <summary>
+    /// JF-858 null-stamp policy: a null stamp (the pre-JF-619 legacy tie) is
+    /// deliberately NOT refreshed - the window read already treats null as
+    /// within-window, and writing a stamp would flip
+    /// GetDeviceResumePointer's null-stamp tie rule.
+    /// </summary>
+    [Fact]
+    public void RefreshLastPlayedStampForStream_NullStampLegacyTie_NoRefresh_JF858()
+    {
+        string item = Guid.NewGuid().ToString();
+        DeviceQueue queue = _manager.GetOrCreateQueue("dev");
+        queue.LastPlayedItemId = item;
+        queue.LastPlayedLaunchRoute = "VideoApp";
+        queue.LastPlayedWrittenAt = null;
+        _manager.RecordVideoAudioStreamLink("dev", item, item);
+
+        _manager.RefreshLastPlayedStampForStream(item);
+
+        Assert.Null(_manager.GetQueue("dev")!.LastPlayedWrittenAt);
+    }
+
+    /// <summary>
+    /// JF-858 reclaim: a cleared device's dead link is dropped by the refresh walk
+    /// (its only reclaim opportunity), and the walk must NOT resurrect the cleared
+    /// queue - the read is GetQueue, never GetOrCreateQueue.
+    /// </summary>
+    [Fact]
+    public void RefreshLastPlayedStampForStream_ClearedQueue_DropsLinkAndRecreatesNothing_JF858()
+    {
+        string item = Guid.NewGuid().ToString();
+        _manager.RecordLastPlayed("dev", item, DeviceQueueManager.LaunchRoute.VideoApp);
+        _manager.RecordVideoAudioStreamLink("dev", item, item);
+        _manager.Clear("dev");
+
+        _manager.RefreshLastPlayedStampForStream(item);
+
+        Assert.Null(_manager.GetQueue("dev"));
+    }
+
+    /// <summary>
+    /// JF-858 stateful-write verification: the refreshed stamp actually lands in
+    /// the persisted queue file (fire the debounce, reload a manager from the same
+    /// directory, read the stamp back).
+    /// </summary>
+    [Fact]
+    public void RefreshLastPlayedStampForStream_PersistRoundTrip_SurvivesReload_JF858()
+    {
+        string item = Guid.NewGuid().ToString();
+        _manager.RecordLastPlayed("dev", item, DeviceQueueManager.LaunchRoute.VideoApp);
+        TestHelpers.BackdateLastPlayedStamp(
+            _manager, "dev", DeviceQueueManager.LastPlayedStampRefreshInterval + TimeSpan.FromMinutes(5));
+        _manager.RecordVideoAudioStreamLink("dev", item, item);
+        _manager.RefreshLastPlayedStampForStream(item);
+        DateTime refreshed = _manager.GetQueue("dev")!.LastPlayedWrittenAt!.Value;
+        _manager.FirePersistForTest("dev");
+
+        using var reloaded = new DeviceQueueManager(_tempDir, _logger);
+        Assert.Equal(refreshed, reloaded.GetQueue("dev")!.LastPlayedWrittenAt);
+    }
+
+    /// <summary>
+    /// JF-858 WINDOW gate (code-review F2): segment requests are anonymous, so a
+    /// SIBLING device playing the same stream cannot be told from this device; the
+    /// window bound keeps the refresh an EXTENSION of a within-window session and
+    /// never a RESURRECTION. Two devices linked to the same stream key with
+    /// matching ledger entries: the live device's past-interval stamp refreshes,
+    /// the idle device's days-aged stamp does not.
+    /// </summary>
+    [Fact]
+    public void RefreshLastPlayedStampForStream_CrossDeviceSameStream_IdleAgedDeviceNotResurrected_JF858()
+    {
+        string item = Guid.NewGuid().ToString();
+        _manager.RecordLastPlayed("live-dev", item, DeviceQueueManager.LaunchRoute.VideoApp);
+        _manager.RecordLastPlayed("idle-dev", item, DeviceQueueManager.LaunchRoute.VideoApp);
+        TestHelpers.BackdateLastPlayedStamp(
+            _manager, "live-dev", DeviceQueueManager.LastPlayedStampRefreshInterval + TimeSpan.FromMinutes(5));
+        TestHelpers.BackdateLastPlayedStamp(_manager, "idle-dev", TimeSpan.FromDays(3));
+        _manager.RecordVideoAudioStreamLink("live-dev", item, item);
+        _manager.RecordVideoAudioStreamLink("idle-dev", item, item);
+        DateTime idleBackdated = _manager.GetQueue("idle-dev")!.LastPlayedWrittenAt!.Value;
+
+        _manager.RefreshLastPlayedStampForStream(item);
+
+        Assert.True(
+            _manager.GetQueue("live-dev")!.LastPlayedWrittenAt!.Value > DateTime.UtcNow - TimeSpan.FromMinutes(1),
+            "the live device's past-interval stamp refreshed");
+        Assert.Equal(idleBackdated, _manager.GetQueue("idle-dev")!.LastPlayedWrittenAt);
+    }
+
+    /// <summary>
+    /// JF-858 structural invariant (code-review F3): the refresh interval must
+    /// stay strictly under the recency window, or a live stream's stamp would age
+    /// past the window between refreshes and silently reopen the mid-playback
+    /// belt residual this mechanism exists to close. The throttle pins seed their
+    /// boundaries from the interval alone, so THIS pin is the only guard of the
+    /// relationship between the two constants.
+    /// </summary>
+    [Fact]
+    public void LastPlayedStampRefreshInterval_StaysWithinTheRecencyWindow_JF858()
+    {
+        Assert.True(
+            DeviceQueueManager.LastPlayedStampRefreshInterval < DeviceQueueManager.LastPlayedRecencyWindow,
+            "the refresh interval must stay strictly under the recency window (a live stream's stamp never ages past interval + one segment cadence)");
+    }
 }

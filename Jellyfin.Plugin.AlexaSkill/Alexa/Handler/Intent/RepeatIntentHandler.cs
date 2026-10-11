@@ -88,7 +88,11 @@ public class RepeatIntentHandler : BaseHandler
         // item playing), so the honest answer is the same cannot-repeat tell the
         // non-restartable kinds get below (the PauseIntentHandler JF-564 precedent).
         // Unknown (no ledger record) keeps the audio paths unchanged.
-        PlaybackLaunchBuilder.PlayingMedium medium = Launch.ResolvePlayingMedium(context, _libraryManager, _queueManager);
+        // JF-858: the corroborated flat-gate answer - for Repeat the window arm is
+        // load-bearing, because the fall-through's resolver tail would feed a fresh
+        // VideoApp-routed plain-Audio item to the restart branch below. The
+        // per-family decision record lives on ResolvePlayingMediumForFlatTransportGate.
+        PlaybackLaunchBuilder.PlayingMedium medium = Launch.ResolvePlayingMediumForFlatTransportGate(context, session, _libraryManager, _queueManager);
         if (PlaybackLaunchBuilder.IsVideoAppMedium(medium))
         {
             Logger.LogDebug("RepeatIntent: {Medium} playing, cannot honestly restart", medium);

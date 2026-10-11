@@ -86,7 +86,7 @@ public class LastPlayedResponseInterceptor : IResponseInterceptor
             // video source) or .../video-audio/episode/{guid}/stream.m3u8?... (JF-498
             // remux source) and validate it. Returns null for anything else
             // (audio-via-VideoApp, audiobook concat).
-            string? itemId = ExtractVideoItemId(source);
+            string? itemId = ExtractVideoItemId(source, out bool fromPluginRemux);
             if (itemId == null)
             {
                 _logger.LogDebug("LastPlayed: no video item GUID in source {Source}", source);
@@ -94,6 +94,17 @@ public class LastPlayedResponseInterceptor : IResponseInterceptor
             }
 
             _queueManager.RecordLastPlayed(deviceId, itemId, DeviceQueueManager.LaunchRoute.VideoApp);
+            if (fromPluginRemux)
+            {
+                // JF-858: the remux stream is served by the plugin's own segment
+                // endpoint under the SAME item GUID (the endpoint doc: "segments are
+                // served by the existing segment endpoint, keyed by the item GUID"),
+                // so this third RecordLastPlayed writer also links the stream for the
+                // segment-observed stamp refresh. The NATIVE /Videos arm records no
+                // link: Jellyfin's own endpoint is not observable plugin-side.
+                _queueManager.RecordVideoAudioStreamLink(deviceId, itemId, itemId);
+            }
+
             _logger.LogDebug(
                 "Recorded last played (video) for device {DeviceId}: item={ItemId}, corr={CorrelationId}",
                 deviceId, itemId, context.CorrelationId);
@@ -108,10 +119,13 @@ public class LastPlayedResponseInterceptor : IResponseInterceptor
     /// stream (<c>/Videos/{guid}/stream</c>) or the episode remux playlist
     /// (<c>/alexaskill/api/video-audio/episode/{guid}/stream.m3u8</c>, JF-498).
     /// Returns null when the source matches neither shape or its segment is not a
-    /// valid GUID.
+    /// valid GUID. <paramref name="fromPluginRemux"/> tells the caller whether the
+    /// matched URL is the plugin-endpoint remux (whose segments the JF-858 refresh
+    /// observes) as opposed to the native static stream.
     /// </summary>
-    private static string? ExtractVideoItemId(string source)
+    private static string? ExtractVideoItemId(string source, out bool fromPluginRemux)
     {
+        fromPluginRemux = false;
         int start = source.IndexOf(VideoPathSegment, StringComparison.Ordinal);
         if (start < 0)
         {
@@ -121,6 +135,7 @@ public class LastPlayedResponseInterceptor : IResponseInterceptor
                 return null;
             }
 
+            fromPluginRemux = true;
             start += EpisodeHlsPathSegment.Length;
         }
         else

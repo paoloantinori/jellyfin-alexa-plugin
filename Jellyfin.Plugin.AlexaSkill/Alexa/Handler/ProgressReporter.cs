@@ -384,7 +384,12 @@ public sealed class ProgressReporter
         // JF-564: during a VideoApp-family medium the queue logic below must not run
         // (the shared refusal helper owns the rationale); an empty ledger (Unknown)
         // keeps the music semantics unchanged.
-        PlaybackLaunchBuilder.PlayingMedium medium = _launch.ResolvePlayingMedium(context, libraryManager, queueManager);
+        // JF-858: the corroborated flat-gate answer - site fact: without evidence
+        // the queue logic below structurally answers Empty (its current-item
+        // resolution reads exactly the evidence legs), while the stale-token JF-564
+        // audit shape still refuses at any stamp age. The decision record lives on
+        // ResolvePlayingMediumForFlatTransportGate.
+        PlaybackLaunchBuilder.PlayingMedium medium = _launch.ResolvePlayingMediumForFlatTransportGate(context, session, libraryManager, queueManager);
         if (PlaybackLaunchBuilder.BuildVideoAppTransportRefusal(medium, locale) is { } refusal)
         {
             _logger.LogDebug("{Label}: {Medium} playing, answered by the transport refusal (silent={Silent})", logLabel, medium, tapOrigin);

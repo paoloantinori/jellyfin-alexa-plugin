@@ -56,6 +56,24 @@ public sealed class DeviceQueueManager : IDisposable
     private readonly ConcurrentDictionary<string, byte> _activeAudioPlaybackDevices = new(StringComparer.Ordinal);
 
     /// <summary>
+    /// JF-858: the in-memory link from a device to the video-audio STREAM KEY its
+    /// most recent plugin-served VideoApp launch minted (deviceId -&gt;
+    /// <see cref="VideoAudioStreamLedgerLink"/>). Written beside the launch's
+    /// <see cref="RecordLastPlayed"/> call by the linked launch sites (the two
+    /// VideoApp-audio builders plus the episode-remux arm of the last-played
+    /// interceptor; the writer set is enumerated on
+    /// <see cref="RecordVideoAudioStreamLink"/>), read by
+    /// <see cref="RefreshLastPlayedStampForStream"/> when a segment fetch
+    /// observes the stream being consumed live. Manager-level in-memory like the
+    /// JF-655 flag and deliberately NOT a <see cref="DeviceQueue"/> field: it must
+    /// never reach the persisted queue files, because a restart-persisted link
+    /// would let a fresh process's segment fetches keep refreshing a stamp for a
+    /// launch it never served (stale over-freshness); a process start begins with
+    /// every link clear, and only a real launch in THIS process re-arms one.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, VideoAudioStreamLedgerLink> _videoAudioStreamLinks = new(StringComparer.Ordinal);
+
+    /// <summary>
     /// JF-522: the launch-scope maps are the first per-item stores with writers on TWO
     /// threads (the request pipeline records at directive time; the AudioPlayer event
     /// thread promotes at PlaybackStarted), so unlike the sibling stores their
@@ -259,6 +277,146 @@ public sealed class DeviceQueueManager : IDisposable
     }
 
     /// <summary>
+    /// JF-858: how stale the last-played stamp may be before a live segment
+    /// observation refreshes it (<see cref="RefreshLastPlayedStampForStream"/>).
+    /// Well under <see cref="LastPlayedRecencyWindow"/> (a live stream's stamp never
+    /// ages past this interval plus one segment cadence, so window-bounded readers -
+    /// the belt's hole arms, the resolver tail, the flat gates' window arm - keep
+    /// their answers mid-playback at any session length), while capping the persist
+    /// churn at roughly one debounced disk write per interval per playing device
+    /// (segments arrive every few seconds; a per-segment refresh would schedule a
+    /// persist per segment). Internal for the InternalsVisibleTo test seam (the
+    /// caps idiom): the throttle pins seed their boundary from this constant so an
+    /// interval change cannot silently degrade them to vacuous green.
+    /// </summary>
+    internal static readonly TimeSpan LastPlayedStampRefreshInterval = TimeSpan.FromMinutes(15);
+
+    /// <summary>
+    /// JF-858 write side of the segment-observed stamp refresh: records that the
+    /// device's most recent VideoApp-audio launch minted its stream URL under
+    /// <paramref name="streamKey"/> while recording <paramref name="ledgerItemId"/>
+    /// in the last-played ledger, so a later segment observation for that key can
+    /// refresh the SAME ledger entry's freshness stamp
+    /// (<see cref="RefreshLastPlayedStampForStream"/>). The writer set is the
+    /// VideoApp launch sites whose streams the plugin's own segment endpoint
+    /// serves: the two VideoApp-audio builders (<c>PlaybackLaunchBuilder.BuildVideoAppAudioResponse</c>
+    /// and <c>BuildAudiobookResumeResponse</c>) plus the EPISODE-REMUX arm of
+    /// <c>LastPlayedResponseInterceptor</c> (the JF-498 codec-routed movie/episode,
+    /// whose segments the same endpoint serves under the item GUID), each calling
+    /// this immediately beside its <see cref="RecordLastPlayed"/> call so the link
+    /// and the ledger entry cannot describe different launches. Launches whose
+    /// VideoApp stream is NOT a plugin endpoint (codec-compatible movies/episodes
+    /// and live TV on the NATIVE <c>/Videos</c> URL) record no link deliberately:
+    /// no plugin-side observation exists for those streams, and their belt
+    /// protection never depends on the window anyway (a resolvable video-kind
+    /// entry classifies through the UNBOUNDED kind ladder, the belt's
+    /// classifier-first arm).
+    /// </summary>
+    /// <param name="deviceId">The Alexa device ID (the link key, same as the ledger key).</param>
+    /// <param name="streamKey">The URL key the stream was minted under (any GUID format; normalized internally to the ONE map-key rule).</param>
+    /// <param name="ledgerItemId">The item id the same launch recorded in the ledger (any GUID format; normalized internally to the ONE map-key rule).</param>
+    public void RecordVideoAudioStreamLink(string deviceId, string streamKey, string ledgerItemId)
+    {
+        if (string.IsNullOrEmpty(deviceId) || string.IsNullOrEmpty(streamKey) || string.IsNullOrEmpty(ledgerItemId))
+        {
+            return;
+        }
+
+        _videoAudioStreamLinks[deviceId] = new VideoAudioStreamLedgerLink(
+            NormalizeToMapKeyFormat(streamKey),
+            NormalizeToMapKeyFormat(ledgerItemId));
+    }
+
+    /// <summary>
+    /// JF-858 refresh side: a GetSegment fetch for the stream keyed
+    /// <paramref name="streamKey"/> is the plugin's only observable proof that a
+    /// VideoApp stream is being consumed LIVE (segment requests are
+    /// anonymous - no device, user, or api key, the position tracker's own doc), so
+    /// this refreshes the freshness stamp of every device whose launch link names
+    /// the key, throttled to <see cref="LastPlayedStampRefreshInterval"/>. This is
+    /// the write-side half that shrinks the belt's JF-789 ACCEPTED RESIDUAL to
+    /// nothing: a belt-only session longer than the recency window (the seek-mode
+    /// same-item shape, an album concat past its first hour) kept belt protection
+    /// only while its launch stamp stayed fresh; with segments refreshing the
+    /// stamp, a genuinely live stream never ages out and only truly idle devices
+    /// do. GUARDS (the JF-694 write-gate discipline, applied to this new write):
+    /// (1) the LINK gate - only devices that launched this exact stream through a
+    /// linked launch site in THIS process are refreshed (a bare segment fetch for
+    /// an unlinked key, e.g. a stale browser tab on an old token-gated URL from
+    /// before a restart, refreshes nothing); (2) the LEDGER-MATCH gate - only when
+    /// the device's ledger still names the linked item (compared through the ONE
+    /// map-key rule on BOTH sides, so a dashed-vs-"N" format drift can never
+    /// silently disarm the refresh; a later launch that rewrote the ledger owns
+    /// the stamp now, its own link or route governs); (3) the THROTTLE gate - a
+    /// stamp younger than the interval is left alone, so per-segment fetches
+    /// coalesce into one persist cadence; (4) the WINDOW gate - a stamp already
+    /// outside <see cref="LastPlayedRecencyWindow"/> is NOT refreshed: the refresh
+    /// EXTENDS a within-window session, it never RESURRECTS an aged entry.
+    /// Segment requests are anonymous, so a SIBLING device playing the same
+    /// stream cannot be told from this device, and without the window gate that
+    /// sibling's fetches would keep a co-listed idle device's entry fresh forever
+    /// (the cross-device resurrect shape); with it, a device stops being
+    /// refreshable exactly when its own stamp would have aged out anyway. The
+    /// honest residual: a stream PAUSED past the whole window and then resumed by
+    /// touch (no voice relaunch to re-record) keeps the belt's documented aged
+    /// behavior until the next launch - the restart-straddle's sibling. A NULL
+    /// stamp is deliberately NOT refreshed: null is the legacy tie (the window
+    /// doc's policy) and already reads as within-window, so refreshing it would
+    /// only disturb <see cref="GetDeviceResumePointer"/>'s null-stamp tie rule.
+    /// The stamp write is the same un-locked field assignment
+    /// <see cref="RecordLastPlayed"/> performs, inside the same
+    /// <see cref="GetLastPlayedSnapshot"/> honest-bounds caveat (a torn read is at
+    /// worst as permissive as the unbounded pre-JF-789 read for one request). A
+    /// device whose queue was cleared drops its link here (defense-in-depth;
+    /// <see cref="Clear"/> is the canonical reclaim).
+    /// </summary>
+    /// <param name="streamKey">The segment URL's item id (any GUID format; normalized through the ONE map-key rule).</param>
+    public void RefreshLastPlayedStampForStream(string streamKey)
+    {
+        if (string.IsNullOrEmpty(streamKey))
+        {
+            return;
+        }
+
+        string key = NormalizeToMapKeyFormat(streamKey);
+        foreach (KeyValuePair<string, VideoAudioStreamLedgerLink> link in _videoAudioStreamLinks)
+        {
+            if (!string.Equals(link.Value.StreamKey, key, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            DeviceQueue? queue = GetQueue(link.Key);
+            if (queue == null)
+            {
+                // The cleared/reset device: the link is dead weight, reclaim it.
+                _videoAudioStreamLinks.TryRemove(link.Key, out _);
+                continue;
+            }
+
+            if (string.IsNullOrEmpty(queue.LastPlayedItemId)
+                || !string.Equals(NormalizeToMapKeyFormat(queue.LastPlayedItemId), link.Value.LedgerItemId, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            DateTime now = DateTime.UtcNow;
+            if (queue.LastPlayedWrittenAt is not { } stamp
+                || now - stamp < LastPlayedStampRefreshInterval
+                || now - stamp >= LastPlayedRecencyWindow)
+            {
+                continue;
+            }
+
+            queue.LastPlayedWrittenAt = now;
+            SchedulePersistInternal(link.Key);
+            _logger.LogDebug(
+                "Refreshed last-played stamp for device {DeviceId}: live segment observation for stream {StreamKey}",
+                link.Key, key);
+        }
+    }
+
+    /// <summary>
     /// JF-691: record the enqueue as the device was told it: the AudioPlayer token
     /// the directive's <c>ExpectedPreviousToken</c> names, and the item the
     /// directive carries. The ONE writer is the
@@ -413,12 +571,22 @@ public sealed class DeviceQueueManager : IDisposable
     /// token, the session items) are deliberately NOT bounded by this window:
     /// each is backed by a request-carried or session-held fact, not by the
     /// launch-time ledger write alone. The classifier's ledger-only route/kind
-    /// ladder (<c>PlaybackLaunchBuilder.ResolvePlayingMedium</c>) is ALSO
-    /// unbounded, for a different reason: its consumers (the Pause/Next/Previous
-    /// and Repeat flat transport gates) are outside JF-789's scope, and bounding
-    /// their answers is a per-family behavior change that needs its own red
-    /// proofs, not a rider on this one; the belt is the one classifier-family
-    /// reader JF-789 bounds, because its two hole arms are pure ledger reads.
+    /// ladder (<c>PlaybackLaunchBuilder.ResolvePlayingMedium</c>) itself REMAINS
+    /// unbounded: the belt's classifier-first arm keeps its JF-789 stance (the
+    /// resolvable video-kind ladder refuses at any age, pinned by the loop
+    /// suite's days-old-resolvable proof), and the belt's two hole arms stay
+    /// window-bounded exactly as JF-789 shipped them. JF-858 bounded the FLAT
+    /// TRANSPORT GATES instead, at the call sites (the per-family red proofs
+    /// JF-789 demanded): Pause/Next/Previous/Repeat now read the corroborated
+    /// classifier answer (<c>PlaybackLaunchBuilder.ResolvePlayingMediumForFlatTransportGate</c>),
+    /// which keeps a VideoApp-family answer only when live evidence exists
+    /// (the ONE HasCurrentPlaybackEvidence predicate) OR the entry is within
+    /// THIS window, so the aged evidence-free idle shape no longer refuses at
+    /// those gates. That corroborated composite deliberately pairs this window
+    /// with the evidence arm, because the flat gates must keep refusing on LIVE
+    /// long-session shapes (minute 61 of a movie, whose stamp is aged but whose
+    /// session-held item is evidence) - the shape a window-only bound would
+    /// have wrongly released.
     /// One further route-only reader stays deliberately unbounded (JF-789
     /// review): RateItem's keep-alive check
     /// (<c>RateItemIntentHandler.PlayingMediumIsVideoAppAudio</c>, route ==
@@ -460,6 +628,19 @@ public sealed class DeviceQueueManager : IDisposable
         /// <summary>The last-played record, written by launch-time recording (video-inclusive).</summary>
         LastPlayed,
     }
+
+    /// <summary>
+    /// JF-858: the launch-time pairing a VideoApp launch leaves for the
+    /// segment-observed stamp refresh - the stream URL's key (the concat parent or
+    /// the single item, whichever the URL was minted under) beside the ledger item
+    /// id the SAME launch recorded, so a segment observation can be routed back to
+    /// exactly the ledger entry it proves live (the URL key alone cannot: the
+    /// concat shapes record a CHAPTER/TRACK leaf in the ledger while the segments
+    /// name the parent folder).
+    /// </summary>
+    /// <param name="StreamKey">The stream URL's item key, "N"-normalized at the writer.</param>
+    /// <param name="LedgerItemId">The item id the same launch passed to <see cref="RecordLastPlayed"/>, "N"-normalized at the writer (the refresh compares the ledger side through the same rule).</param>
+    internal readonly record struct VideoAudioStreamLedgerLink(string StreamKey, string LedgerItemId);
 
     /// <summary>The route-name parse shared by the snapshot read (null on legacy or unparsable names).</summary>
     private static LaunchRoute? ParseRoute(string? routeName)
@@ -1854,6 +2035,13 @@ public sealed class DeviceQueueManager : IDisposable
         {
             _recentRecordStamps.Remove(deviceId);
         }
+
+        // JF-858: the device's stream link is a second device-keyed side map, and
+        // this is its canonical lifecycle reclaim (the refresh walk's lazy drop is
+        // defense-in-depth that only fires when someone fetches a segment for the
+        // dead key); Clear stays the ONE home that reclaims every such map, so the
+        // next side map cannot miss it (the JF-739 class).
+        _videoAudioStreamLinks.TryRemove(deviceId, out _);
 
         _queues.TryRemove(deviceId, out _);
 
