@@ -9,6 +9,7 @@ labels:
   - feature
   - apl
   - photos
+  - gate:device-round
 milestone: m-10
 dependencies: []
 references:

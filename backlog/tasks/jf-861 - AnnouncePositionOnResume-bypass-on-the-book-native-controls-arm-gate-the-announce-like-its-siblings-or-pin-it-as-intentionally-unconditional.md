@@ -10,6 +10,7 @@ labels:
   - playback
   - ux
   - decision
+  - gate:maintainer-call
 dependencies: []
 priority: low
 ---

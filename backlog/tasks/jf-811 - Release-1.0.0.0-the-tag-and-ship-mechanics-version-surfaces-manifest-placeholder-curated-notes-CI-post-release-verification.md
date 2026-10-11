@@ -6,7 +6,8 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-10-07 08:43'
-labels: []
+labels:
+  - gate:device-round
 milestone: m-18
 dependencies: []
 priority: high

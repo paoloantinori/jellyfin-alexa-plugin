@@ -7,7 +7,8 @@ status: In Progress
 assignee: []
 created_date: '2026-09-24 16:16'
 updated_date: '2026-09-27 19:12'
-labels: []
+labels:
+  - gate:maintainer-call
 milestone: 1.0 polish
 dependencies: []
 priority: medium

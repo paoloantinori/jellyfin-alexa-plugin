@@ -8,7 +8,8 @@ status: In Progress
 assignee: []
 created_date: '2026-09-22 16:21'
 updated_date: '2026-09-22 20:09'
-labels: []
+labels:
+  - gate:device-round
 dependencies: []
 references:
   - >-

@@ -11,6 +11,7 @@ labels:
   - research
   - alexa-platform
   - on-device
+  - gate:external
 milestone: Polish
 dependencies: []
 priority: high

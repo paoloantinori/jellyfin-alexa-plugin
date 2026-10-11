@@ -11,6 +11,7 @@ labels:
   - toolchain
   - tech-debt
   - net10
+  - gate:root
 dependencies: []
 references:
   - JF-307

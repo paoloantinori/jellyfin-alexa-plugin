@@ -11,6 +11,7 @@ updated_date: '2026-10-11 06:08'
 labels:
   - bug
   - audiobooks
+  - gate:fixture-permission
 dependencies:
   - JF-794
 references:

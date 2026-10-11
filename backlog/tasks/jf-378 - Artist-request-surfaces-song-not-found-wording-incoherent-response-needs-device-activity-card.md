@@ -11,6 +11,7 @@ labels:
   - nlu
   - artist-search
   - wording
+  - gate:device-round
 dependencies: []
 priority: low
 ---

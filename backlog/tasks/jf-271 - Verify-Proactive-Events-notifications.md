@@ -9,6 +9,7 @@ labels:
   - e2e
   - smapi
   - notifications
+  - gate:device-round
 milestone: m-18
 dependencies: []
 priority: medium

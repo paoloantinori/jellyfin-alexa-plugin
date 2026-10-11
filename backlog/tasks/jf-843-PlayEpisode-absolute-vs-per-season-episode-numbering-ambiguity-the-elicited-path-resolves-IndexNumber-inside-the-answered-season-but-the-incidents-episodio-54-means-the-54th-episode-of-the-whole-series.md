@@ -8,6 +8,7 @@ status: To Do
 labels:
   - nlu
   - bug
+  - gate:device-round
 priority: medium
 ---
 

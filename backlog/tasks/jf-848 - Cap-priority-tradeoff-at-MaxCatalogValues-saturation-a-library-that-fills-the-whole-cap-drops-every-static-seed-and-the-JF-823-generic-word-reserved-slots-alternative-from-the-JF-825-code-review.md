@@ -11,6 +11,7 @@ updated_date: '2026-10-09 19:55'
 labels:
   - catalog-sync
   - review-followup
+  - gate:future-trigger
 dependencies: []
 references:
   - >-

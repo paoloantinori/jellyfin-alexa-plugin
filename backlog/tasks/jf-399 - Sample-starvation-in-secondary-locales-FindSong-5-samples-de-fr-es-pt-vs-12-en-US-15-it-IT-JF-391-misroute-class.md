@@ -11,6 +11,7 @@ labels:
   - nlu
   - interaction-model
   - localization
+  - gate:maintainer-call
 milestone: m-16
 dependencies: []
 priority: high

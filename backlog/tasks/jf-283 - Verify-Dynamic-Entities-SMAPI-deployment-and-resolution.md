@@ -9,6 +9,7 @@ labels:
   - e2e
   - smapi
   - dynamic-entities
+  - gate:device-round
 milestone: m-18
 dependencies: []
 priority: low

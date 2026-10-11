@@ -9,6 +9,7 @@ labels:
   - e2e
   - voice-profiles
   - multi-device
+  - gate:device-round
 milestone: m-5
 dependencies: []
 modified_files:

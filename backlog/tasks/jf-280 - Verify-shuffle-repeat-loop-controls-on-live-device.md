@@ -8,6 +8,7 @@ updated_date: '2026-10-11 11:07'
 labels:
   - e2e
   - playback
+  - gate:device-round
 milestone: m-18
 dependencies: []
 priority: medium

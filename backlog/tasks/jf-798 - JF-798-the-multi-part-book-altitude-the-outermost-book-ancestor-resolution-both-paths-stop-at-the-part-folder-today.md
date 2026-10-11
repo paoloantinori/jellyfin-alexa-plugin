@@ -10,6 +10,7 @@ updated_date: '2026-10-10 15:34'
 labels:
   - bug
   - audiobooks
+  - gate:fixture-permission
 dependencies:
   - JF-793
   - JF-794

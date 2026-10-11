@@ -8,6 +8,7 @@ assignee: []
 created_date: '2026-10-08'
 labels:
   - tech-debt
+  - record-only
 dependencies:
   - JF-788
 priority: low

@@ -8,6 +8,7 @@ updated_date: '2026-07-13 20:18'
 labels:
   - external
   - awesome-jellyfin
+  - gate:maintainer-approval
 dependencies: []
 priority: low
 ---

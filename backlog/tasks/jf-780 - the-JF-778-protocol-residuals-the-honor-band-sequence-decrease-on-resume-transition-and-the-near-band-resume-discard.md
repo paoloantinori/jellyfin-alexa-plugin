@@ -10,6 +10,7 @@ labels:
   - streaming
   - hls
   - protocol
+  - gate:device-round
 dependencies:
   - JF-778
 priority: medium

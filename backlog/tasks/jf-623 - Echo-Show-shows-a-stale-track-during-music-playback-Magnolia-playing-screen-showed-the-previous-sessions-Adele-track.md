@@ -7,7 +7,8 @@ status: In Progress
 assignee: []
 created_date: '2026-09-23 17:04'
 updated_date: '2026-09-27 19:12'
-labels: []
+labels:
+  - gate:device-round
 dependencies: []
 priority: low
 ---

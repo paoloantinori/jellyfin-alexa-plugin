@@ -10,6 +10,7 @@ labels:
   - nlu
   - diagnostics
   - follow-up
+  - gate:maintainer-call
 milestone: m-18
 dependencies: []
 priority: medium

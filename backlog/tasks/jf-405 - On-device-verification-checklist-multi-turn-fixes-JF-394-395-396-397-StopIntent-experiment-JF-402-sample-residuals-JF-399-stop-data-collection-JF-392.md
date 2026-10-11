@@ -12,6 +12,7 @@ labels:
   - testing
   - on-device
   - verification
+  - gate:device-round
 milestone: m-18
 dependencies: []
 priority: high

@@ -13,6 +13,7 @@ labels:
   - nlu
   - hi-IN
   - regression
+  - gate:trainer-anomaly
 dependencies:
   - JF-766
 references:

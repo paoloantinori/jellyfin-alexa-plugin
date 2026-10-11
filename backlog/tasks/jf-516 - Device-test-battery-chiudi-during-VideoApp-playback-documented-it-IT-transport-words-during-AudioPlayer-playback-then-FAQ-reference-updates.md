@@ -13,6 +13,7 @@ labels:
   - playback
   - docs
   - platform-behavior
+  - gate:device-round
 milestone: m-18
 dependencies: []
 references:

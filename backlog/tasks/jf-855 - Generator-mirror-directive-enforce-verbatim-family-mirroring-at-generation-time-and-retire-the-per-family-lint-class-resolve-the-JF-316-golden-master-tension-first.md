@@ -11,6 +11,7 @@ labels:
   - tooling
   - nlu
   - design
+  - gate:maintainer-call
 dependencies: []
 priority: low
 ---

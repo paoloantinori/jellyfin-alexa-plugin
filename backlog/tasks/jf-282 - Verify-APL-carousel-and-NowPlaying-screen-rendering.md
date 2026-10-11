@@ -9,6 +9,7 @@ labels:
   - e2e
   - apl
   - visual
+  - gate:device-round
 milestone: m-18
 dependencies: []
 priority: low
