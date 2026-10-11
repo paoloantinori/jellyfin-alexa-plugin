@@ -965,18 +965,21 @@
       {
         "name": "FindSongIntent",
         "samples": [
-          "find a song",
-          "help me find a song",
-          "search for a song",
-          "I'm looking for a song",
-          "I need to find a song",
-          "find me a song",
-          "help me search for a song",
-          "I want to find a song",
-          "find a song called {titleKeywords}",
-          "search for a song called {titleKeywords}",
-          "find a song about {titleKeywords}",
-          "I'm looking for a song called {titleKeywords}"
+          "busca una cancion",
+          "ayudame a encontrar una cancion",
+          "estoy buscando una cancion",
+          "busca una cancion llamada {titleKeywords}",
+          "encuentra una cancion llamada {titleKeywords}",
+          "encuentra una cancion",
+          "quiero encontrar una cancion",
+          "busco una cancion",
+          "busca una cancion que se llame {titleKeywords}",
+          "encuentra una cancion que se llame {titleKeywords}",
+          "busco una cancion que se llame {titleKeywords}",
+          "encuentra una cancion sobre {titleKeywords}",
+          "busca una cancion sobre {titleKeywords}",
+          "ayudame a buscar una cancion",
+          "una cancion llamada {titleKeywords}"
         ],
         "slots": [
           {
@@ -988,18 +991,17 @@
       {
         "name": "FindSongByArtistIntent",
         "samples": [
-          "find a song by {musician}",
-          "help me find a song by {musician}",
-          "search for a song by {musician}",
-          "I'm looking for a song by {musician}",
-          "I want to find a song by {musician}",
-          "I need to find a song by {musician}",
-          "find me a song by {musician}",
-          "help me search for a song by {musician}",
-          "find a track by {musician}",
-          "search for a track by {musician}",
-          "I'm looking for a track by {musician}",
-          "find songs by {musician}"
+          "busca una cancion de {musician}",
+          "ayudame a encontrar una cancion de {musician}",
+          "estoy buscando una cancion de {musician}",
+          "encuentra una cancion de {musician}",
+          "quiero encontrar una cancion de {musician}",
+          "busco una cancion de {musician}",
+          "ayudame a buscar una cancion de {musician}",
+          "busca un tema de {musician}",
+          "encuentra un tema de {musician}",
+          "busco un tema de {musician}",
+          "una cancion de {musician}"
         ],
         "slots": [
           {

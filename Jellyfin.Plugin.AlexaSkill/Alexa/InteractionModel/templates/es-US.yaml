@@ -22,18 +22,16 @@
 # while the connector-residue shape "que reproduzca {series}" glued into
 # it (live-observed; the five-way divergence list below is unchanged).
 #
+# HISTORY, not a divergence (JF-399 item b, resolved 2026-10-11):
+# FindSongIntent and FindSongByArtistIntent carried the ENGLISH sample
+# sets (byte-equal to en-GB's) from the intents' birth (036f7eae
+# copy-inertia) until the maintainer's SPANISH market decision
+# (2026-10-11); both now transcribe es-ES's Spanish sets verbatim. The
+# English openers' NO_SELECTION after the swap is the accepted trade
+# (probe record in the JF-399 task notes and in the es-US fixture).
+#
 # es-US diverges from es-ES (otherwise identical: intent sequence,
-# key orders, types, dialog, Mood block) in exactly six ways:
-# - FindSongIntent (12 samples) and FindSongByArtistIntent (12 since
-#   the JF-399 2026-09-26 parity pass) carry the ENGLISH sample sets,
-#   byte-equal to en-GB's, not Spanish.
-#   That is unreviewed inertia from the intent's birth (036f7eae), not a market decision; JF-399 never scoped es-US (the FindSong
-#   conversation openers are English while the rest of the model is
-#   Spanish); do not "translate" them back without a routing
-#   decision, and do not assume the es-ES FindSong parity work
-#   (JF-399) applies here. The 2026-09-26 FindSongByArtist enrichment
-#   followed the en family's English set (byte-equality preserved)
-#   precisely so this open market decision stays untouched.
+# key orders, types, dialog, Mood block) in exactly four ways:
 # - BrowseLibrary drops the three leading samples "{browse_category}"
 #   / "solo {browse_category}" / "quiero {browse_category}", keeping
 #   the five verb-carried ones (es-ES keeps all 8, including the bare
@@ -745,44 +743,46 @@ intents:
       - siguiente página
     slots: []
   - name: FindSongIntent
+    # JF-399 item b (2026-10-11, maintainer decision: SPANISH): es-ES's
+    # Spanish set verbatim (byte-equal to es-ES/es-MX), replacing the
+    # birth-era English set; history and rationale live in the header's
+    # HISTORY bullet. Probe record in the JF-399 task notes and in the
+    # es-US fixture's accepted-trade section.
     samples:
-      - find a song
-      - help me find a song
-      - search for a song
-      - I'm looking for a song
-      - I need to find a song
-      - find me a song
-      - help me search for a song
-      - I want to find a song
-      - find a song called {titleKeywords}
-      - search for a song called {titleKeywords}
-      - find a song about {titleKeywords}
-      - I'm looking for a song called {titleKeywords}
+      - busca una cancion
+      - ayudame a encontrar una cancion
+      - estoy buscando una cancion
+      - busca una cancion llamada {titleKeywords}
+      - encuentra una cancion llamada {titleKeywords}
+      - encuentra una cancion
+      - quiero encontrar una cancion
+      - busco una cancion
+      - busca una cancion que se llame {titleKeywords}
+      - encuentra una cancion que se llame {titleKeywords}
+      - busco una cancion que se llame {titleKeywords}
+      - encuentra una cancion sobre {titleKeywords}
+      - busca una cancion sobre {titleKeywords}
+      - ayudame a buscar una cancion
+      - una cancion llamada {titleKeywords}
     slots:
       - name: titleKeywords
         type: AMAZON.SearchQuery
   - name: FindSongByArtistIntent
+    # JF-399 item b (2026-10-11): es-ES's JF-399 parity set verbatim (its
+    # own FindSong openers crossed with the de-artist tail; cancion/tema
+    # mirrors it-IT's canzone/brano), per the header HISTORY bullet.
     samples:
-      - find a song by {musician}
-      - help me find a song by {musician}
-      - search for a song by {musician}
-      - I'm looking for a song by {musician}
-      # JF-399 FindSongByArtist parity: it-IT carries 16 samples here while
-      # every other locale sat at 3-4 (the JF-391 starvation class). The
-      # additions are this locale's own FindSong openers crossed with the
-      # by-artist tail; the song/track noun pair mirrors it-IT's
-      # canzone/brano. Skipped families are noted in the template header.
-      # The set stays English and byte-equal to the en family's (the
-      # documented English-inertia status quo; the Spanish-vs-English
-      # market decision remains open in JF-399/JF-406).
-      - I want to find a song by {musician}
-      - I need to find a song by {musician}
-      - find me a song by {musician}
-      - help me search for a song by {musician}
-      - find a track by {musician}
-      - search for a track by {musician}
-      - I'm looking for a track by {musician}
-      - find songs by {musician}
+      - busca una cancion de {musician}
+      - ayudame a encontrar una cancion de {musician}
+      - estoy buscando una cancion de {musician}
+      - encuentra una cancion de {musician}
+      - quiero encontrar una cancion de {musician}
+      - busco una cancion de {musician}
+      - ayudame a buscar una cancion de {musician}
+      - busca un tema de {musician}
+      - encuentra un tema de {musician}
+      - busco un tema de {musician}
+      - una cancion de {musician}
     slots:
       - name: musician
         type: AMAZON.Musician

@@ -395,7 +395,7 @@ Invocation name: **"jellyfin player"**
 | Mark Favorite | `I like that` · `I like the video` · `I like the song` · `I like the music` · `I like this song` · `I like this` |
 | Media Info | `what's on` · `What {media_info_type} is this` · `information about this` · `what is this` · `details about this` · `tell me about this` |
 | Play Album | `play the album {album}` · `play the album {album} by {musician}` · `an album by {musician}` · `play album {album}` · `play album {album} by {musician}` · `listen to the album {album}` |
-| Play Artist Songs | `play songs by {musician}` · `play music by {musician}` · `play tracks by {musician}` · `play tunes by {musician}` · `play songs from {musician}` · `play music from {musician}` |
+| Play Artist Songs | `listen to {musician}` · `put on {musician}` · `put on some {musician}` · `I want to hear {musician}` · `I want to listen to {musician}` · `let's hear {musician}` |
 | Play Book | `play {book}` · `play the book {book}` · `play audiobook {book}` · `play the audiobook {book}` · `listen to {book}` · `listen to the book {book}` |
 | Play By Decade | `play songs from the {decade}` · `play {genre} from the {decade}` · `play tracks from the {decade}` · `play hits from the {decade}` · `play music from the {decade}` · `play {decade} hits` |
 | Play By Genre | `Play some {genre} music` · `Play {genre} songs` · `Play {genre} music` · `Play me some {genre}` · `I want to listen to {genre}` · `Play {genre}` |
@@ -410,7 +410,7 @@ Invocation name: **"jellyfin player"**
 | Play Podcast | `play the podcast {podcast_name}` · `play podcast {podcast_name}` · `listen to the podcast {podcast_name}` · `listen to podcast {podcast_name}` · `play the latest episode of {podcast_name}` · `play the newest episode of {podcast_name}` |
 | Play Radio | `play radio` · `play the radio station {station}` · `play radio mode` · `start radio` · `play more like this` · `keep playing similar music` |
 | Play Random | `Play a random {media_type}` · `Play something random` · `Play a random {media_type} from {genre}` · `Play random {genre} {media_type}` · `Play random {media_type}` · `Shuffle my {media_type}` |
-| Play Song | `play {song}` · `play {song} by {musician}` · `play the song {song}` · `play song {song}` · `play the song {song} by {musician}` · `play song {song} by {musician}` |
+| Play Song | `play {song}` · `play {song} by {musician}` · `play song {song}` · `play track {song}` · `play song {song} by {musician}` · `play track {song} by {musician}` |
 | Play Video | `Play the video {title}` · `put on the video {title}` · `start playing {title}` · `watch {title}` · `can you play {title}` · `I want to watch {title}` |
 | Query Artist Library | `which tracks do we have by {musician}` · `which {query_type} do we have by {musician}` · `which songs do we have by {musician}` · `what tracks are available from {musician}` · `what songs are available from {musician}` · `which albums do we have by {musician}` |
 | Query Recently Added | `what's new` · `what was recently added` · `what's new in my library` · `show me recently added` · `what's on deck` · `anything new lately` |
@@ -559,8 +559,8 @@ Invocation name: **"jellyfin player"**
 | Clear Queue | `Borra mi cola` · `Borra la cola` · `Vacía mi cola` · `Vacía la cola` · `Quita todo de mi cola` · `Limpia mi lista` |
 | Continue Watching | `Continuar viendo` · `Continuar escuchando` · `Seguir donde lo dejé` · `Continuar` |
 | Create Playlist | `Crea una lista llamada {playlist}` · `Crea una nueva lista llamada {playlist}` · `Nueva lista llamada {playlist}` · `Crea una lista {playlist}` · `Crea lista {playlist}` · `Nueva lista {playlist}` |
-| Find Song | `find a song` · `find a song called {titleKeywords}` · `help me find a song` · `search for a song` · `I'm looking for a song` · `I need to find a song` |
-| Find Song By Artist | `find a song by {musician}` · `help me find a song by {musician}` · `search for a song by {musician}` · `I'm looking for a song by {musician}` · `I want to find a song by {musician}` · `I need to find a song by {musician}` |
+| Find Song | `busca una cancion` · `busca una cancion llamada {titleKeywords}` · `ayudame a encontrar una cancion` · `estoy buscando una cancion` · `encuentra una cancion llamada {titleKeywords}` · `encuentra una cancion` |
+| Find Song By Artist | `busca una cancion de {musician}` · `ayudame a encontrar una cancion de {musician}` · `estoy buscando una cancion de {musician}` · `encuentra una cancion de {musician}` · `quiero encontrar una cancion de {musician}` · `busco una cancion de {musician}` |
 | Follow Me | `sígueme` · `continuar reproduciendo` · `seguir escuchando` · `retomar reproducción` |
 | Go To Chapter | `Siguiente capítulo` · `Ir al capítulo {chapter_number}` · `Capítulo anterior` · `Saltar al capítulo {chapter_number}` · `Avanzar un capítulo` · `Retroceder un capítulo` |
 | In Progress Media List | `qué estoy escuchando` · `qué estoy viendo` · `qué está en progreso` · `muestra mi progreso` · `qué he empezado` |

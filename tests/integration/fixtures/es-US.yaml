@@ -77,3 +77,83 @@ tests:
         value: "breaking bad"
       season_number: {}
       episode_number: {}
+
+  # =========================================================================
+  # JF-399 item b (2026-10-11, maintainer decision: SPANISH): FindSong /
+  # FindSongByArtist now carry es-ES's Spanish sets (byte-equal to
+  # es-ES/es-MX; templates/es-US.yaml). The rows below pin the
+  # probe-verified readings (profile-nlu, post SMAPI deploy 2026-10-11,
+  # 2/2 each). Like the JF-399 item a pins on en-US, these went
+  # red-then-green the same evening: green on the first live run after
+  # this commit, red if a later rebuild reverts the embedded model.
+  # =========================================================================
+  # Baseline recoveries (pre-swap the Spanish openers fell to
+  # AMAZON.FallbackIntent, misrouted to QueryArtistLibraryIntent with an
+  # empty query_type, or glued the whole phrase into PlaySong's song slot,
+  # e.g. song='1 cancion llamada purple rain').
+  - utterance: "busca una cancion"
+    expected_intent: FindSongIntent
+    expected_slots: {}
+
+  - utterance: "quiero encontrar una cancion"
+    expected_intent: FindSongIntent
+    expected_slots: {}
+
+  - utterance: "busca una cancion de queen"
+    expected_intent: FindSongByArtistIntent
+    expected_slots:
+      musician: {}
+
+  # Slot-value pin (JF-766 convention): profile-nlu returns the RAW spoken
+  # text, so the pin is the raw 'purple rain'.
+  - utterance: "busca una cancion llamada purple rain"
+    expected_intent: FindSongIntent
+    expected_slots:
+      titleKeywords:
+        value: "purple rain"
+
+  - utterance: "busca un tema de michael jackson"
+    expected_intent: FindSongByArtistIntent
+    expected_slots:
+      musician: {}
+
+  - utterance: "estoy buscando una cancion"
+    expected_intent: FindSongIntent
+    expected_slots: {}
+
+  # -------------------------------------------------------------------------
+  # THE ACCEPTED TRADE (recorded, not asserted): the removed English
+  # FindSong forms. Probed 2026-10-11 post-swap, 2/2 each:
+  #   "find a song"                     -> NO_SELECTION (was FindSongIntent)
+  #   "search for a song"               -> NO_SELECTION (was FindSongIntent)
+  #   "find a song called purple rain"  -> PlaySongIntent, song=<whole
+  #                                        phrase> glued (was FindSongIntent,
+  #                                        titleKeywords=purple rain)
+  #   "find a song by queen"            -> PlaySongIntent glued (was
+  #                                        FindSongByArtistIntent, musician=queen)
+  #   "I'm looking for a song"          -> PlaySongIntent glued (was FindSongIntent)
+  # The maintainer's SPANISH decision accepts this loss for the es-US
+  # marketplace; English-speakers on es-US are served by en-US. These are
+  # RECORDS, not guards: the runner skips them without probing, so a
+  # future flip on these utterances is silent here; the live Spanish rows
+  # above are the regression tripwire for the swap.
+  # -------------------------------------------------------------------------
+  - utterance: "find a song"
+    expected_intent: AMAZON.FallbackIntent
+    skip_reason: "English-loss record, JF-399 item b accepted trade: reads NO_SELECTION 2/2 post-swap (was FindSongIntent); no fixture shape expresses a no-selection expectation"
+
+  - utterance: "find a song called purple rain"
+    expected_intent: PlaySongIntent
+    skip_reason: "English-loss record, JF-399 item b accepted trade: reads PlaySongIntent with the whole phrase glued into song (was FindSongIntent titleKeywords=purple rain); not asserted to avoid pinning a glued fill"
+
+  - utterance: "find a song by queen"
+    expected_intent: PlaySongIntent
+    skip_reason: "English-loss record, JF-399 item b accepted trade: reads PlaySongIntent glued (was FindSongByArtistIntent musician=queen); not asserted to avoid pinning a glued fill"
+
+  - utterance: "search for a song"
+    expected_intent: AMAZON.FallbackIntent
+    skip_reason: "English-loss record, JF-399 item b accepted trade: reads NO_SELECTION 2/2 post-swap (was FindSongIntent); no fixture shape expresses a no-selection expectation"
+
+  - utterance: "I'm looking for a song"
+    expected_intent: PlaySongIntent
+    skip_reason: "English-loss record, JF-399 item b accepted trade: reads PlaySongIntent with 'looking for a song' glued into song (was FindSongIntent); not asserted to avoid pinning a glued fill"

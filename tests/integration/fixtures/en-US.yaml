@@ -129,6 +129,106 @@ tests:
       musician: {}
 
   # -------------------------------------------------------------------------
+  # 6b. JF-399 item a: the carrier-noun expansion (PlaySong 38 -> 73,
+  # PlayArtistSongs 34 -> 172; templates en-US.yaml, the song/track and
+  # artist-carrier vocabulary products). Rows pin the probe-verified
+  # readings (profile-nlu, post SMAPI deploy 2026-10-11, 2/2 each) and
+  # went RED-THEN-GREEN the same evening: they were added with the model
+  # change and the model was deployed for the validation probes the same
+  # session, so on the FIRST live suite run after this commit they read
+  # green; if a later rebuild reverts the embedded model they read red,
+  # which is the regression signal. The baseline-vs-after matrix lives in
+  # the JF-399 task notes.
+  # -------------------------------------------------------------------------
+  # Baseline steal recoveries (pre-expansion these routed PlayVideo with
+  # the song noun glued into the free-text title slot).
+  - utterance: "stream the song hotel california"
+    expected_intent: PlaySongIntent
+    expected_slots:
+      song: {}
+
+  - utterance: "can you play the track smells like teen spirit"
+    expected_intent: PlaySongIntent
+    expected_slots:
+      song: {}
+
+  - utterance: "start playing the track wonderwall"
+    expected_intent: PlaySongIntent
+    expected_slots:
+      song: {}
+
+  # New-carrier generalization rows (baseline already routed these; the
+  # samples anchor the fill boundary).
+  - utterance: "put on the track bohemian rhapsody"
+    expected_intent: PlaySongIntent
+    expected_slots:
+      song: {}
+
+  - utterance: "give me the song purple rain"
+    expected_intent: PlaySongIntent
+    expected_slots:
+      song: {}
+
+  - utterance: "play a track called shine on you crazy diamond"
+    expected_intent: PlaySongIntent
+    expected_slots:
+      song: {}
+
+  # Baseline misroute recoveries on the artist side (pre-expansion:
+  # phantom MusicRecording fills "Music"/"On the Tracks" on PlaySong, or
+  # PlayVideo glued titles; "play the band queen" glued the carrier noun
+  # into the musician slot).
+  - utterance: "put on tracks by pink floyd"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+
+  - utterance: "give me music by coldplay"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+
+  - utterance: "stream tracks by metallica"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+
+  - utterance: "can you play music by the police"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+
+  - utterance: "play the band queen"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+
+  - utterance: "listen to tunes by the beatles"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+
+  - utterance: "play some tunes by the rolling stones"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+
+  # JF-864 en-US legs re-verified as expansion regression guards (the
+  # expansion must not degrade the steal landscape; probed 3/3 and 2/2
+  # post-deploy, matching the JF-864 map's baseline readings). "play
+  # radio" is asserted by the pre-existing "Play radio" row in the
+  # PlayRadioIntent section below (same expectation), so it is not
+  # duplicated here.
+  - utterance: "play nemo"
+    expected_intent: PlaySongIntent
+    expected_slots: {}
+
+  - utterance: "play the movie nemo"
+    expected_intent: PlayVideoIntent
+    expected_slots:
+      title: {}
+
+  # -------------------------------------------------------------------------
   # 7. PlayLastAddedIntent (media_type, time_period)
   # -------------------------------------------------------------------------
   # "Play last added songs" matches the literal sample — no slot captured
