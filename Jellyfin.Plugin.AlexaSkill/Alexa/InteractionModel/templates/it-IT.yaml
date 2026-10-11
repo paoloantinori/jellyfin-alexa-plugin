@@ -735,12 +735,18 @@ explicit_intents:
         type: JellyfinArtist
   PlayRadioIntent:
     samples:
-      - riproduci radio
-      - suona radio
-      - metti radio
+      # JF-864: the bare [verb][radio] statics (riproduci/suona/metti radio)
+      # taught the trainer the naked [imperative][X] pattern, which stole the
+      # core play asks on device 3/3 ("riproduci nemo"/"riproduci inception"/
+      # "metti nemo" all routed here with an empty station, 2026-10-11 live
+      # evidence + profile-nlu). The article qualifies the pattern; the
+      # working default (empty-station elicitation) is unchanged.
+      - riproduci la radio
+      - suona la radio
+      - metti la radio
       - attiva la radio
       - modalità radio
-      - riproduci simili
+      - riproduci musica simile
       - suona brani simili
       - continua con musica simile
       - metti musica simile

@@ -9293,12 +9293,12 @@ Complete phrase list (1595 phrases across 72 commands):
 
 **Start radio mode**
 
-- `riproduci radio`
-- `suona radio`
-- `metti radio`
+- `riproduci la radio`
+- `suona la radio`
+- `metti la radio`
 - `attiva la radio`
 - `modalità radio`
-- `riproduci simili`
+- `riproduci musica simile`
 - `suona brani simili`
 - `continua con musica simile`
 - `metti musica simile`

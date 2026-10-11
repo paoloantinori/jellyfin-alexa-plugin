@@ -827,7 +827,7 @@ Invocation name: **"mia collezione"**
 | Play Next Episode | `Riproduci {episode_position} episodio di {series_name}` · `Continua a guardare {series_name}` · `Metti {episode_position} episodio di {series_name}` · `Guarda {episode_position} episodio di {series_name}` · `Guarda l'episodio {episode_position} di {series_name}` · `Continua a guardare la serie {series_name}` |
 | Play Playlist | `Riproduci playlist {playlist}` · `Suona playlist {playlist}` · `Metti playlist {playlist}` · `Pleia playlist {playlist}` · `Ascolta playlist {playlist}` · `Riproduci la playlist {playlist}` |
 | Play Podcast | `Riproduci il podcast {podcast_name}` · `Suona il podcast {podcast_name}` · `Ascolta il podcast {podcast_name}` · `Metti il podcast {podcast_name}` · `Ascolta l'ultimo episodio di {podcast_name}` · `Di riprodurre il podcast {podcast_name}` |
-| Play Radio | `riproduci radio` · `riproduci la stazione radio {station}` · `suona radio` · `metti radio` · `attiva la radio` · `modalità radio` |
+| Play Radio | `riproduci la radio` · `riproduci la stazione radio {station}` · `suona la radio` · `metti la radio` · `attiva la radio` · `modalità radio` |
 | Play Random | `Riproduci {media_type} casuali` · `Riproduci {media_type} a caso` · `Suona {media_type} casuali` · `Suona {media_type} a caso` · `Metti {media_type} casuali` · `Metti {media_type} a caso` |
 | Play Song | `Riproduci il brano {song}` · `Riproduci {song} di {musician}` · `Riproduci la canzone {song}` · `Riproduci il pezzo {song}` · `Riproduci la traccia {song}` · `Suona il brano {song}` |
 | Play Video | `Riproduci {title}` · `Riproduci un film` · `Suona {title}` · `Metti {title}` · `Pleia {title}` · `Riproduci un video` |
