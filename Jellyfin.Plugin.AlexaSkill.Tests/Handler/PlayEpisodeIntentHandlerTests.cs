@@ -50,7 +50,9 @@ public class PlayEpisodeIntentHandlerTests : PluginTestBase
         _loggerFactory = LoggerFactory.Create(b => { });
     }
 
-    private sealed class RecordingPlayEpisodeHandler(
+    // JF-624 item 4 reuse: internal so AplPaginatedListTests shares the ONE
+    // JF-501 recording seam for this handler (ProgressiveSpeechCapture below).
+    internal sealed class RecordingPlayEpisodeHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
         ILibraryManager libraryManager,

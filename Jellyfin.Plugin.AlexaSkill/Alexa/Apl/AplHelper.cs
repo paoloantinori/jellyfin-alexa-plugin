@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Linq;
 using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
+using Alexa.NET.Response;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using MediaBrowser.Controller.Entities;
@@ -961,6 +962,64 @@ internal static class AplHelper
 
     private static readonly JObject DisambiguationListDocument = JObject.Parse(DisambiguationListTemplate);
 
+    // JF-624 item 4: the tappable paginated picker (AlexaPaginatedList) for
+    // chapter/episode lists. Property shape verified against the CURRENT Amazon
+    // AlexaPaginatedList page (scraped 2026-10-11; page last updated 2023-11-28):
+    // the template is full-screen with NATIVE pagination ("a list of items in a
+    // series of pages" + the built-in page counter), every parameter except type
+    // is optional, listItems rows use the documented AlexaImageListItem subset
+    // (primaryText/secondaryText/tertiaryText/imageSource + the per-item
+    // primaryAction override), and the documented primaryAction shape is exactly
+    // SendEvent [action, "${ordinal}"] ("passes the number representing the
+    // selected item"). Deliberately NOT set: every background/scrim knob (the
+    // 2026-05-10 silent-black-screen class was a background-parameter mismatch,
+    // and a picker needs no background), headerBackButton (a transient picker,
+    // same decision as the item-3 text list), and listId (voice-based scrolling
+    // needs Echo Show built-in intents this skill does not register).
+    private static readonly string PaginatedListTemplate = @"{
+  ""type"": ""APL"",
+  ""version"": ""1.7"",
+  ""theme"": ""dark"",
+  ""import"": [
+    {
+      ""name"": ""alexa-layouts"",
+      ""version"": ""1.7.0""
+    }
+  ],
+  ""mainTemplate"": {
+    ""parameters"": [""payload""],
+    ""items"": [
+      {
+        ""type"": ""AlexaPaginatedList"",
+        ""theme"": ""dark"",
+        ""headerTitle"": ""${payload.paginatedData.properties.title}"",
+        ""listItems"": ""${payload.paginatedData.properties.listItems}"",
+        ""primaryAction"": [
+          {
+            ""type"": ""SendEvent"",
+            ""arguments"": [ ""${payload.paginatedData.properties.action}"", ""${ordinal}"" ]
+          }
+        ]
+      }
+    ]
+  }
+}";
+
+    private static readonly JObject PaginatedListDocument = JObject.Parse(PaginatedListTemplate);
+
+    /// <summary>
+    /// SendEvent action for a tap on a chapter-picker row: the GoToChapter entry
+    /// (the tap's ordinal is the 1-based chapter number). JF-624 item 4.
+    /// </summary>
+    internal const string ChapterPickTapAction = "chapterPick";
+
+    /// <summary>
+    /// SendEvent action for a tap on an episode-picker row: the PlayEpisode entry
+    /// (the row's per-item arguments carry season, episode, and series name).
+    /// JF-624 item 4.
+    /// </summary>
+    internal const string EpisodePickTapAction = "episodePick";
+
     /// <summary>
     /// SendEvent action for a tap on a disambiguation text-list row: the yes/no
     /// disambiguation state machine (disambig_* session attributes). JF-624 item 3.
@@ -1241,6 +1300,129 @@ internal static class AplHelper
                 }
             }
         };
+    }
+
+    /// <summary>
+    /// The row cap for the paginated picker (JF-624 item 4): a defensive bound on
+    /// the directive payload (datasource bytes ride the skill response), high
+    /// above every real season/chapter list observed (the largest are low
+    /// hundreds). The cap keeps a PREFIX of the rows, so the positional tap
+    /// identity of both flavors stays exact for every rendered row: chapter rows
+    /// keep ordinal == chapter number, and episode rows carry their own explicit
+    /// season/episode arguments. Rows past the cap stay reachable by voice.
+    /// </summary>
+    internal const int PaginatedListRowCap = 100;
+
+    /// <summary>
+    /// Build the tappable paginated picker directive (JF-624 item 4): an
+    /// AlexaPaginatedList whose template-level primaryAction SendEvent carries
+    /// [<paramref name="action"/>, "${ordinal}"] (the documented shape). Rows with
+    /// <see cref="PaginatedListRow.TapArguments"/> set override that with their own
+    /// exact per-item SendEvent (the documented list-item mechanism) so a tap
+    /// never depends on positional identity when the row's pick value is not its
+    /// position. The timeout is MAX (the display-document shape the persistence
+    /// dossier prescribes): the picker mounts on session-ending responses, and
+    /// SHORT's ~30s idle dismissal would kill the list while the user is still
+    /// paging; a tap or voice one-shot re-enters the skill regardless.
+    /// </summary>
+    /// <param name="title">Localized header (the item or series name; no new locale keys).</param>
+    /// <param name="rows">Picker rows in pick order.</param>
+    /// <param name="action">SendEvent action name for rows without explicit tap arguments.</param>
+    /// <returns>An APL RenderDocument directive, or null if the row list is empty.</returns>
+    internal static AplRenderDocumentDirective? BuildPaginatedListDirective(
+        string title,
+        List<PaginatedListRow> rows,
+        string action)
+    {
+        if (rows.Count == 0)
+        {
+            return null;
+        }
+
+        var itemArray = new JArray();
+        foreach (var row in rows.Take(PaginatedListRowCap))
+        {
+            var rowObj = new JObject
+            {
+                ["primaryText"] = row.PrimaryText
+            };
+
+            if (!string.IsNullOrEmpty(row.SecondaryText))
+            {
+                rowObj["secondaryText"] = row.SecondaryText;
+            }
+
+            if (row.TapArguments is { Length: > 0 } args)
+            {
+                rowObj["primaryAction"] = new JArray
+                {
+                    new JObject
+                    {
+                        ["type"] = "SendEvent",
+                        ["arguments"] = new JArray(args)
+                    }
+                };
+            }
+
+            itemArray.Add(rowObj);
+        }
+
+        return new AplRenderDocumentDirective
+        {
+            Token = "paginatedPicker",
+            TimeoutType = "MAX",
+            Document = PaginatedListDocument,
+            DataSources = new JObject
+            {
+                ["paginatedData"] = new JObject
+                {
+                    ["type"] = "object",
+                    ["properties"] = new JObject
+                    {
+                        ["title"] = title,
+                        ["action"] = action,
+                        ["listItems"] = itemArray
+                    }
+                }
+            }
+        };
+    }
+
+    /// <summary>
+    /// Attach the tappable paginated picker (JF-624 item 4) when the enhanced
+    /// gate is on; a no-op otherwise (null context, flag off, no APL, or visuals
+    /// off), so every caller's flag-off response is byte-identical and pays
+    /// nothing: the row projection runs only when the gate opens. Unlike the
+    /// item-3 attach helper, no caller branches on the outcome (item 3's
+    /// AskFirstMatch falls back to the carousel; both picker surfaces have no
+    /// fallback document), hence void.
+    /// The gate predicate is <see cref="DisambiguationListEnabled"/>, the ONE
+    /// AplEnhancedScreens family gate (flag + visuals + APL device,
+    /// screen-agnostic): it serves every enhanced screen, item 3's
+    /// disambiguation lists AND item 4's pickers alike.
+    /// </summary>
+    /// <param name="response">The response to attach the picker document to.</param>
+    /// <param name="rows">Lazy row projection (invoked only when the gate opens).</param>
+    /// <param name="title">Localized header (the item or series name).</param>
+    /// <param name="action">SendEvent action for rows without explicit tap arguments.</param>
+    /// <param name="context">The Alexa request context, or null.</param>
+    internal static void AttachPaginatedListIfEnabled(
+        SkillResponse response,
+        Func<List<PaginatedListRow>> rows,
+        string title,
+        string action,
+        Context? context)
+    {
+        if (!DisambiguationListEnabled(context))
+        {
+            return;
+        }
+
+        var directive = BuildPaginatedListDirective(title, rows(), action);
+        if (directive != null)
+        {
+            response.Response.Directives.Add(directive);
+        }
     }
 
     /// <summary>

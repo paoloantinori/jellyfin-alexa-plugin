@@ -130,6 +130,10 @@ public class Registrator : IPluginServiceRegistrator
         // Handler namespace despite living in the Intent folder.
         serviceCollection.AddSingleton<Alexa.Handler.YesIntentHandler>();
         serviceCollection.AddSingleton<Alexa.Handler.FindSongIntentHandler>();
+        // JF-624 item 4: the two paginated-picker tap targets (chapter and episode
+        // picking), same typed-singleton rule as above.
+        serviceCollection.AddSingleton<Alexa.Handler.GoToChapterIntentHandler>();
+        serviceCollection.AddSingleton<Alexa.Handler.PlayEpisodeIntentHandler>();
 
         // Request pipeline interceptors (order matters: circuit breaker first for fail-fast,
         // then audio device capability check before any Jellyfin API calls)

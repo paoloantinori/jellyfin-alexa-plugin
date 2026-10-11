@@ -9,6 +9,7 @@ using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Jellyfin.Data.Enums;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Apl;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Dto;
@@ -224,7 +225,53 @@ public class PlayEpisodeIntentHandler : BaseHandler
         if (episode == null)
         {
             Logger.LogDebug("PlayEpisode: episode S{Season}E{Episode} not found for series='{SeriesName}'", seasonNumber, episodeNumber, seriesName);
-            return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundEpisode", locale, seasonNumber.ToString(CultureInfo.InvariantCulture), episodeNumber.ToString(CultureInfo.InvariantCulture), seriesName));
+
+            // JF-624 item 4: flag on, when the asked season EXISTS with episodes
+            // (the wrong-number shape: the miss is the episode number, not the
+            // season), the NotFoundEpisode Tell ALSO carries the tappable
+            // paginated episode picker so the user can see and tap the season's
+            // real episodes. The spoken response is unchanged for both flag
+            // states. Each row carries its own exact tap arguments (season,
+            // episode, series name) via the documented per-item primaryAction
+            // override: the row ordinal is NOT the episode number when seasons
+            // have gaps or specials, and the tap must re-enter the REAL
+            // PlayEpisode entry with exact numbers (its own feature gate, series
+            // resolution, codec routing, and announce all re-run). A stateless
+            // delegation: nothing rides session attributes, so the picker keeps
+            // working after this Tell ends the session. A season query that
+            // returned zero episodes (the wrong-SEASON shape) attaches nothing:
+            // there is no list of this season's episodes to pick from. Rows are
+            // only episodes WITH an IndexNumber: the tap re-enters by season +
+            // episode number, so a numberless row would be a dead row.
+            var notFound = ResponseBuilder.Tell(ResponseStrings.Get("NotFoundEpisode", locale, seasonNumber.ToString(CultureInfo.InvariantCulture), episodeNumber.ToString(CultureInfo.InvariantCulture), seriesName));
+            if (episodes.Count > 0)
+            {
+                AplHelper.AttachPaginatedListIfEnabled(
+                    notFound,
+                    () => episodes
+                        .Where(e => e.IndexNumber.HasValue)
+                        .OrderBy(e => e.IndexNumber!.Value)
+                        // The cap is applied before the per-row build so nothing
+                        // past it is ever constructed (the builder re-checks it as
+                        // the defensive layer).
+                        .Take(AplHelper.PaginatedListRowCap)
+                        .Select(e => new Apl.PaginatedListRow(
+                            e.Name ?? string.Empty,
+                            $"S{e.ParentIndexNumber ?? seasonNumber} · E{e.IndexNumber}",
+                            new[]
+                            {
+                                AplHelper.EpisodePickTapAction,
+                                (e.ParentIndexNumber ?? seasonNumber).ToString(CultureInfo.InvariantCulture),
+                                e.IndexNumber!.Value.ToString(CultureInfo.InvariantCulture),
+                                seriesName
+                            }))
+                        .ToList(),
+                    series.Name ?? seriesName,
+                    AplHelper.EpisodePickTapAction,
+                    context);
+            }
+
+            return notFound;
         }
 
         Logger.LogDebug("PlayEpisode: matched episode='{EpisodeName}' (id={EpisodeId})", episode.Name, episode.Id);
