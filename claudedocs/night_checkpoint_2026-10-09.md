@@ -290,3 +290,20 @@ feature task, never examined, now DISPATCHED. The verify-family (JF-271/
 Lesson recorded: an exhaustion claim requires the full-list pass, not the
 remembered-list pass - the exact failure mode the morning challenge named,
 resurfacing at the enumeration layer.
+
+## The full day-and-night arc, final ledger (2026-10-11 12:45)
+
+DEPLOYED: 7c63ce79 (the morning batch: JF-860B's ItemPosition collapse,
+JF-858's flat-gate bounds + stamp refresh, JF-624 items 3-4's tappable
+disambiguation + paginated pickers; md5/config/smoke verified as always).
+Suite finale 5756/5756 both TFMs. TOTAL SINCE THE FIRST CHALLENGE: 22 tasks
+closed (JF-772/775/772/771/803/812/857/789/853/854/856/859/787/648/860A+B/
+862/863/858/624/329-routed + the reconciliations), 6 verified deploys, and
+two maintainer challenges that each uncovered a real failure mode in my
+enumeration (the weight-judgment stop; the remembered-list pass). THE
+DEVICE ROUND OWED TO PAOLO now spans: the 1.0 release round, JF-843's
+announce attribution, JF-847's pausa, JF-789's idle shapes, JF-846's
+prefix, JF-329's Show probes (2 unproven APL constructs), JF-624's 13
+probe legs (2 revert triggers), JF-857/771 already matrix-green. The
+decisions owed: JF-855 (the 12-locale wave), JF-861, JF-798/799's fixture
+permission, JF-529's root.
