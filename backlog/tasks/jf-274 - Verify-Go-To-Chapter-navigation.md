@@ -4,7 +4,7 @@ title: Verify Go To Chapter navigation
 status: To Do
 assignee: []
 created_date: '2026-06-08 09:31'
-updated_date: '2026-10-07 08:42'
+updated_date: '2026-10-11 11:07'
 labels:
   - e2e
   - audiobooks
@@ -38,3 +38,9 @@ AUDIT UPDATE (2026-10-02): the unit layer landed (Handler/GoToChapterIntentHandl
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining, or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+SIMULATOR BATTERY (2026-10-11 13:15, orchestrator, live server): the idle shapes answer honestly - GoToChapter with chapter_number=3 and nothing playing = 'Nessun contenuto in riproduzione' (the NoMediaPlaying tell, no wrong directive); empty slot = the same honest idle (the handler's empty-slot prompt sits behind the nothing-playing gate; unit pins already cover the slot-elicitation shape with a playing book). REMAINING for the device round: the navigation DURING playback (seek to the chapter offset on a chaptered book, the single-file books in this library carry children:0 so the chaptered shape needs a fixture or the one chaptered item Paolo owns).
+<!-- SECTION:NOTES:END -->

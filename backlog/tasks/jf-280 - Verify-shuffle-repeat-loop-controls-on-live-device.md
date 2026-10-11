@@ -4,7 +4,7 @@ title: Verify shuffle/repeat/loop controls on live device
 status: To Do
 assignee: []
 created_date: '2026-06-08 09:32'
-updated_date: '2026-10-07 08:43'
+updated_date: '2026-10-11 11:07'
 labels:
   - e2e
   - playback
@@ -42,4 +42,6 @@ ShuffleOn/Off, LoopOn/Off, LoopSongOn, and RepeatIntent modify PlaybackInfo stat
 
 <!-- SECTION:NOTES:BEGIN -->
 2026-09-23 progress (battery evidence, task stays OPEN): the handler-firing + spoken-confirmation legs are verified live — LoopAllOn arrived and answered «Riproduzione in loop attivata» (2026-09-22 19:04:27 corr c5e3fe11), and the shuffle steal is fixed with ShuffleAllOn twins (profile-nlu verified on the deployed model in it/de/fr; device re-test pending Paolo). The BEHAVIORAL effects (items 1-5: next track actually random / same track actually repeats / order restored / mode interplay / persistence) remain unverified — this task now tracks exactly that device session: loop on then let a track END; shuffle on then let 2-3 tracks pass; observe.
+
+SIMULATOR BATTERY (2026-10-11 13:15, orchestrator, live server, idle device): RepeatIntent and LoopOnIntent answer the honest 'Nessun contenuto in riproduzione'; ShuffleOn/ShuffleOff answer AFFIRMATIVELY at idle ('Coda mescolata.' / 'Mescolamento disattivato.') - the shuffle is a mode flag on the (empty) queue, not an action on a current item, so the shape is defensible (an empty queue shuffled is trivially true) but it is an affirmative answer with nothing playing: UX NOTE FOR PAOLO whether the idle shuffle should instead speak the no-media line. REMAINING for the device round: the during-playback halves (shuffle actually reordering a live queue, repeat looping, loop-on for one-item repeat) - those need queue state the stateless simulator cannot carry; the JF-301-era unit pins already cover the reordering logic.
 <!-- SECTION:NOTES:END -->

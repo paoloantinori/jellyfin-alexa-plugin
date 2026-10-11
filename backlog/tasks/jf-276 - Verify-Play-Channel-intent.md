@@ -4,7 +4,7 @@ title: Verify Play Channel intent
 status: To Do
 assignee: []
 created_date: '2026-06-08 09:31'
-updated_date: '2026-10-07 08:42'
+updated_date: '2026-10-11 11:07'
 labels:
   - e2e
   - live-tv
@@ -38,3 +38,9 @@ AUDIT UPDATE (2026-10-02): the unit layer landed (PlayChannelIntentHandlerTests.
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining, or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+SIMULATOR BATTERY (2026-10-11 13:15, orchestrator; after making the simulator's fake device Show-faithful - VideoApp added to its supportedInterfaces, the fix that this battery itself surfaced): PlayChannelIntent '100% News' on it-IT against the LIVE server returns VideoApp.Launch whose source IS the real resolver's direct-remote HLS URL (http://85.238.112.40:8810/hls_sec/239.33.16.32-.m3u8, the documented primary IPTV/M3U path - protocol Http + SupportsDirectStream). THE RESOLVER PATH IS VERIFIED END-TO-END on real LiveTv data. REMAINING for the device round: the on-Show rendering of that URL (video+audio actually playing) - the handler/resolver halves are closed. Also verified en route: the audio-only honest refusal ('questo contenuto richiede un dispositivo con schermo') fires correctly when the context lacks VideoApp.
+<!-- SECTION:NOTES:END -->
