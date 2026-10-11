@@ -849,11 +849,12 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
             var context = CreateContextNoAudioPlayer();
 
             var user = TestHelpers.CreateTestUser();
-            _fx.Config.AddUser(new Jellyfin.Plugin.AlexaSkill.Entities.User
+            var pluginUser = new Jellyfin.Plugin.AlexaSkill.Entities.User
             {
                 Id = user.Id,
                 AnnouncePositionOnResume = false
-            });
+            };
+            _fx.Config.AddUser(pluginUser);
 
             Guid bookFolderId = Guid.NewGuid();
             var chapter = new AudioBook
@@ -873,6 +874,10 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
 
             tracker.RecordSegment(bookFolderId.ToString(), 61); // conservative position: 60 * 10s = 10 min
 
+            // JF-861 twin rows: the SAME tracker-warm resume under the flag OFF
+            // (no position announce) and ON (the announce fires) - the ON row
+            // keeps this pin two-sided, so a silent break of the announce
+            // machinery cannot masquerade as flag honoring.
             var response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
             Assert.NotNull(response);
@@ -888,7 +893,21 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
             // JF-501: the announce rides the progressive vehicle; the final launch
             // response carries the directive ONLY.
             Assert.Null(response.Response.OutputSpeech);
-            Assert.True(handler.Progressive.Contains("Chapter 3"), "progressive announce must speak the chapter title");
+            Assert.False(handler.Progressive.Contains("Chapter 3"), $"expected no position announce with the flag off, got: {handler.Progressive.AllText}");
+
+            // Flag ON row: same resume, the position announce now rides the
+            // progressive vehicle (AddUser stores the instance, so the flag
+            // flip on the stored record is what the handler's config lookup reads).
+            pluginUser.AnnouncePositionOnResume = true;
+            var onHandler = CreateHandler();
+            var onSession = CreateEmptySession();
+            onSession.FullNowPlayingItem = chapter;
+            var onResponse = await onHandler.HandleAsync(
+                CreateResumeRequest(), CreateContextNoAudioPlayer(), user, onSession, CancellationToken.None);
+
+            Assert.NotNull(onResponse);
+            Assert.Null(onResponse.Response.OutputSpeech);
+            Assert.True(onHandler.Progressive.Contains("Chapter 3"), $"expected the position announce with the flag on, got: {onHandler.Progressive.AllText}");
         }
         finally
         {
@@ -1275,7 +1294,10 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
     /// rows minted the raw max: the announce said a position the serve's gate
     /// then dropped, "Position: 4h" over a 0:00 restart). The LIVE control
     /// row: a mark on the current timeline still announces and slices at its
-    /// own position, byte-identical to the pre-JF-860 shape.
+    /// own position, byte-identical to the pre-JF-860 shape. JF-861: the announce
+    /// now also honors AnnouncePositionOnResume, so this pin runs the flag ON
+    /// (see the user seed below) and the rows' announce split stays purely the
+    /// identity gate's verdict.
     /// </summary>
     [Fact]
     public async Task SessionHeldBook_NativeControlsOn_OrphanedForeignTimelineMark_NotSlicedNotAnnounced()
@@ -1290,7 +1312,12 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
             _fx.Config.AddUser(new Jellyfin.Plugin.AlexaSkill.Entities.User
             {
                 Id = user.Id,
-                AnnouncePositionOnResume = false
+                // JF-861: the book arm's announce honors AnnouncePositionOnResume, so
+                // this pin runs the flag ON - the live row's announce then proves the
+                // identity gate honored the current-timeline mark, and the orphaned
+                // row's silence proves the gate dropped the foreign mark (a flag-off
+                // run would silence BOTH rows and blind the pin).
+                AnnouncePositionOnResume = true
             });
 
             // Two verified book folders whose CURRENT membership enumerates 12
