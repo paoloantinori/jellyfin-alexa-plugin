@@ -17,6 +17,19 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline;
 /// API calls are made, avoiding wasted backend round-trips.
 /// </summary>
 /// <remarks>
+/// KNOWN BOUNDARY (JF-863, census 2026-10-11): the gate refuses ALL IntentRequests,
+/// so an intent whose primary surface is NOT audio (ShowPhotoAlbumIntent's
+/// PhotosRequireScreen fork) would be preempted here on a hypothetical
+/// APL-capable device lacking AudioPlayer. The census (Amazon's current APL doc:
+/// Echo Show family, Fire Tablet, Fire TV, and character displays - all
+/// audio-capable; plus this plugin's own logs: every device ever observed declared
+/// AudioPlayer) found NO documented or observed device with that shape, so the
+/// boundary is documented rather than fixed; LaunchRequest and APL UserEvents pass
+/// the gate untouched. Revisit only if a user reports the localized
+/// AudioPlayerNotSupported line on a screen device (the interceptor's Warning log
+/// is the detection surface).
+/// </remarks>
+/// <remarks>
 /// Registered early in the request pipeline (after <see cref="CircuitBreakerInterceptor"/>)
 /// so that unsupported-device requests fail fast.
 /// </remarks>

@@ -7,7 +7,7 @@ title: >-
 status: In Progress
 assignee: []
 created_date: '2026-10-10 18:41'
-updated_date: '2026-10-10 18:41'
+updated_date: '2026-10-11 06:07'
 labels:
   - tech-debt
   - playback
@@ -42,3 +42,9 @@ PART B - the JF-648 altitude round's named follow-up (the CopySurvivingStores do
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+PART B UNBLOCKED (2026-10-11 07:55, orchestrator): the 'later session' deferral was self-inflicted phantom-blocking - Part B (the ItemPositionState+ItemPositionKinds parallel-map collapse into Dictionary<string, ItemPositionRecord> with ticks + nullable kind, null as the DESIGNED kindless state per JF-812) is dispatchable now; a dedicated lane is running it (Part A is landed and deployed).
+<!-- SECTION:NOTES:END -->

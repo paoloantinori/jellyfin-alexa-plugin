@@ -4,9 +4,10 @@ title: >-
   AudioDeviceCapabilityInterceptor's blanket no-AudioPlayer refusal preempts
   non-audio intents (the photo slideshow's screen-required fork is unreachable
   on APL-without-AudioPlayer devices)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-10 22:39'
+updated_date: '2026-10-11 06:21'
 labels:
   - pipeline
   - capability
@@ -38,3 +39,9 @@ DECISION SHAPE (verify the device census first - if no real device carries APL-w
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+CENSUS RESULT + DISPOSITION (2026-10-11 08:20, orchestrator; the census the task demanded): Amazon's CURRENT APL doc (developer.amazon.com, add-visuals-and-audio-to-your-skill, scraped live) lists the APL device set as Echo Show family, Fire Tablet, Fire TV, and the character displays (Echo Dot with clock) - ALL audio-capable; no documented device carries Alexa.Presentation.APL without AudioPlayer, and this plugin's own logs concur (every device ever observed declared AudioPlayer; the JF-505 complement shape is screenless-lacks-VideoApp). DISPOSITION per the task's own recommendation: the DOCUMENTED BOUNDARY landed in the interceptor's doc remark (the gate refuses all IntentRequests, so ShowPhotoAlbum's screen-required fork is preempted on the hypothetical shape; LaunchRequest and APL UserEvents pass, pinned; revisit trigger = a user reporting the localized AudioPlayerNotSupported line on a screen device, the Warning log is the detection surface). The per-intent opt-out stays unimplemented: zero observed instances, and the JF-505/JF-564 precedent (gates only for live-verified absent shapes) cuts the same way. Simplify gate: 4 angles CLEAN (the two optional trims of the simplification round skipped per the repo's dense-evidence remark convention, both agents' own verdicts calling them defensible either way). CLOSED.
+<!-- SECTION:NOTES:END -->

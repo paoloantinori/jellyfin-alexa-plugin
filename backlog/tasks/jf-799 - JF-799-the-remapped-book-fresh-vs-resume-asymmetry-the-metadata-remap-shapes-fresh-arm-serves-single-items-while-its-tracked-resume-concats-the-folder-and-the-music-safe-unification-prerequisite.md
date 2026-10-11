@@ -1,13 +1,13 @@
 ---
 id: JF-799
 title: >-
-  JF-799 - the remapped-book fresh-vs-resume asymmetry: the metadata-remap shape's
-  fresh arm serves single items while its tracked resume concats the folder (and the
-  music-safe unification prerequisite)
+  JF-799 - the remapped-book fresh-vs-resume asymmetry: the metadata-remap
+  shape's fresh arm serves single items while its tracked resume concats the
+  folder (and the music-safe unification prerequisite)
 status: To Do
 assignee: []
 created_date: '2026-10-06'
-updated_date: '2026-10-06'
+updated_date: '2026-10-11 06:08'
 labels:
   - bug
   - audiobooks
@@ -20,6 +20,7 @@ priority: low
 ---
 
 ## Description
+
 <!-- SECTION:DESCRIPTION:BEGIN -->
 Filed from the JF-794 /code-review high round (2026-10-06, finding 3), same-turn per
 the review-recommendation rule. The review's explicit question - whether the
@@ -88,3 +89,9 @@ ACCEPTANCE CRITERIA (when picked up):
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+DISPOSITION VERIFIED (2026-10-11 07:55, orchestrator, full read after the maintainer's challenge): correctly parked, and for a sharper reason than the title suggested - the task's own corrected hazard section says a PURE Audio-typed remap fixture records nothing and proves nothing, so the device probe needs a MIXED row set (AudioBook-typed + Audio-typed rows under one verified folder) built IN THE LIBRARY: the same permission class as JF-798's fixture gate (household library content change, Paolo's call). The unification analysis half is inseparable from the probe outcome per the task's own acceptance criteria. Parked on the fixture permission alongside JF-798.
+<!-- SECTION:NOTES:END -->
