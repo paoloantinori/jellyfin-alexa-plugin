@@ -674,4 +674,115 @@ public class RepeatIntentHandlerTests : PluginTestBase, IDisposable
 
         Assert.Contains("non posso ripetere", TestHelpers.GetSpeechText(response), StringComparison.OrdinalIgnoreCase);
     }
+
+    // === JF-858: the flat transport gate's corroboration bound (Repeat family) ===
+    //
+    // Repeat's gate cannot take the evidence-only discriminator: its fall-through
+    // rides the resolver whose fresh tail would hand back a VideoApp-routed plain
+    // Audio item and RESTART it (the parallel-audio hazard on a possibly-live
+    // sessionless stream), so the WINDOW arm is load-bearing here. The bound opens
+    // only the AGED evidence-free quadrant, where the resolver's own JF-789-bounded
+    // tail refuses and the no-media tell answers.
+
+    /// <summary>
+    /// JF-858 red proof, the Repeat family's flip: an aged resolvable VideoApp
+    /// movie with no live evidence (no token, no session item) answers the no-media
+    /// tell instead of the VideoApp cannot-repeat refusal, exactly like the aged
+    /// AUDIO-routed tail shape JF-789 bounded
+    /// (<see cref="HandleAsync_DaysOldLedgerTail_NoMediaInsteadOfRestart_JF789"/>).
+    /// RED on the pre-JF-858 tree: CannotRepeatContent answered over the idle
+    /// device.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_DaysOldResolvableVideoAppMovie_NoEvidence_NoMediaInsteadOfRefusal_JF858()
+    {
+        var queueManager = TestHelpers.CreateDeviceQueueManager("repeat-aged-jf858");
+        var movie = new MediaBrowser.Controller.Entities.Movies.Movie
+        {
+            Name = "Days Old Movie",
+            Id = Guid.NewGuid(),
+            Path = "/movies/days-old.mkv"
+        };
+        _fx.LibraryManager.Setup(l => l.GetItemById(movie.Id)).Returns(movie);
+        string deviceId = "repeat-aged-jf858-device";
+        queueManager.RecordLastPlayed(deviceId, movie.Id.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
+        TestHelpers.BackdateLastPlayedStamp(queueManager, deviceId, TimeSpan.FromDays(3));
+        var handler = CreateHandler(queueManager);
+
+        SkillResponse response = await handler.HandleAsync(
+            CreateRepeatRequest(), TestHelpers.CreateTestContext(deviceId),
+            TestHelpers.CreateTestUser(), session: null!, CancellationToken.None);
+
+        AssertNoAudioPlayDirective(response);
+        Assert.Contains(
+            Jellyfin.Plugin.AlexaSkill.Alexa.Locale.ResponseStrings.Get("NoMediaPlaying", "en-US"),
+            TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            Jellyfin.Plugin.AlexaSkill.Alexa.Locale.ResponseStrings.Get("CannotRepeatContent", "en-US"),
+            TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// JF-858 boundary pin, the WINDOW arm (the reason Repeat cannot take the
+    /// evidence-only discriminator): a FRESH VideoApp-routed SEEK-MODE song with no
+    /// live evidence keeps the cannot-repeat refusal, because the fall-through's
+    /// resolver tail is still within-window and would return the item into Repeat's
+    /// restart branch (an AudioPlayer.Play over a possibly-live VideoApp stream).
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_FreshSeekSongLedger_NoEvidence_StillCannotRepeat_JF858()
+    {
+        var queueManager = TestHelpers.CreateDeviceQueueManager("repeat-fresh-seek-jf858");
+        var seekSong = new Audio
+        {
+            Name = "Seek Mode Song",
+            Id = Guid.NewGuid(),
+            Path = "/music/seek.mp3"
+        };
+        _fx.LibraryManager.Setup(l => l.GetItemById(seekSong.Id)).Returns(seekSong);
+        string deviceId = "repeat-fresh-seek-jf858-device";
+        queueManager.RecordLastPlayed(deviceId, seekSong.Id.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
+        var handler = CreateHandler(queueManager);
+
+        SkillResponse response = await handler.HandleAsync(
+            CreateRepeatRequest(), TestHelpers.CreateTestContext(deviceId),
+            TestHelpers.CreateTestUser(), session: null!, CancellationToken.None);
+
+        AssertNoAudioPlayDirective(response);
+        Assert.Contains(
+            Jellyfin.Plugin.AlexaSkill.Alexa.Locale.ResponseStrings.Get("CannotRepeatContent", "en-US"),
+            TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// JF-858 boundary pin, the EVIDENCE arm at the Repeat gate: an AGED
+    /// VideoApp-routed seek song whose session still holds the item keeps the
+    /// refusal (the held item is live evidence), which is the quadrant a window-only
+    /// bound would have wrongly opened into a restart of the item the session names.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_DaysOldSeekSongLedger_SessionHoldsItem_StillCannotRepeat_JF858()
+    {
+        var queueManager = TestHelpers.CreateDeviceQueueManager("repeat-aged-seek-jf858");
+        var seekSong = new Audio
+        {
+            Name = "Seek Mode Song",
+            Id = Guid.NewGuid(),
+            Path = "/music/seek.mp3"
+        };
+        _fx.LibraryManager.Setup(l => l.GetItemById(seekSong.Id)).Returns(seekSong);
+        string deviceId = "repeat-aged-seek-jf858-device";
+        queueManager.RecordLastPlayed(deviceId, seekSong.Id.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
+        TestHelpers.BackdateLastPlayedStamp(queueManager, deviceId, TimeSpan.FromDays(3));
+        var handler = CreateHandler(queueManager);
+
+        SkillResponse response = await handler.HandleAsync(
+            CreateRepeatRequest(), TestHelpers.CreateTestContext(deviceId),
+            TestHelpers.CreateTestUser(), CreateSessionWithNowPlaying(seekSong), CancellationToken.None);
+
+        AssertNoAudioPlayDirective(response);
+        Assert.Contains(
+            Jellyfin.Plugin.AlexaSkill.Alexa.Locale.ResponseStrings.Get("CannotRepeatContent", "en-US"),
+            TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+    }
 }

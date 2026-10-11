@@ -785,4 +785,129 @@ public class PlaybackLaunchBuilderMediumTests : PluginTestBase
         Assert.False(PlaybackLaunchBuilder.IsActivelyPlaying(TestHelpers.CreateTestContext()));
         Assert.False(PlaybackLaunchBuilder.IsActivelyPlaying(null));
     }
+
+    // ---- JF-858: the segment-observed stamp refresh (the belt-residual shrink) ----
+
+    /// <summary>
+    /// JF-858 half 2, the purpose pin: the belt's JF-789 ACCEPTED RESIDUAL (a
+    /// belt-only session past the recency window losing protection mid-playback)
+    /// shrinks to nothing when the live stream keeps fetching segments - the
+    /// refresh EXTENDS a within-window session, so a continuously-playing stream
+    /// never reaches the window boundary no matter the session length. The
+    /// aged-out twin (the code-review F2 window gate): an entry ALREADY past the
+    /// window is never RESURRECTED by an observation (segment requests are
+    /// anonymous; a sibling device playing the same key must not revive an idle
+    /// device's entry), which keeps the honest idle boundary exactly where JF-789
+    /// drew it.
+    /// </summary>
+    [Fact]
+    public void ScreenOwner_LiveSeekSession_NeverAgesOutOfTheBelt_SegmentRefreshExtends_JF858()
+    {
+        var seekSong = new Audio { Name = "Same Item Seek Song", Id = Guid.NewGuid() };
+        var (library, queue) = LedgerWith(seekSong, "belt-refresh-jf858");
+        Context tokenNamingLedgerItem = TestHelpers.CreateContextWithToken(seekSong.Id.ToString(), "belt-refresh-jf858");
+        queue.RecordVideoAudioStreamLink("belt-refresh-jf858", seekSong.Id.ToString(), seekSong.Id.ToString());
+
+        // Minute 50 of the live session: the stamp is past the refresh interval
+        // but within the window, so the observation extends it...
+        TestHelpers.BackdateLastPlayedStamp(
+            queue, "belt-refresh-jf858",
+            DeviceQueueManager.LastPlayedRecencyWindow - TimeSpan.FromMinutes(10));
+        queue.RefreshLastPlayedStampForStream(seekSong.Id.ToString());
+        Assert.Equal("VideoAppAudio", _builder.ResolveScreenOwningMedium(tokenNamingLedgerItem, library.Object, queue).ToString());
+
+        // ...and the extension repeats: another near-the-window span passes, the
+        // stream is still live, the second observation resets the clock again, so
+        // the session is now far past the ORIGINAL hour yet the belt still answers
+        // (the pre-JF-858 tree lost protection exactly here).
+        TestHelpers.BackdateLastPlayedStamp(
+            queue, "belt-refresh-jf858",
+            DeviceQueueManager.LastPlayedRecencyWindow - TimeSpan.FromMinutes(10));
+        queue.RefreshLastPlayedStampForStream(seekSong.Id.ToString());
+        Assert.Equal("VideoAppAudio", _builder.ResolveScreenOwningMedium(tokenNamingLedgerItem, library.Object, queue).ToString());
+
+        // The window gate's twin: an entry aged past the whole window is NOT
+        // resurrected by the same observation (the honest idle boundary stands).
+        TestHelpers.BackdateLastPlayedStamp(queue, "belt-refresh-jf858", TimeSpan.FromDays(3));
+        queue.RefreshLastPlayedStampForStream(seekSong.Id.ToString());
+        Assert.Equal("Audio", _builder.ResolveScreenOwningMedium(tokenNamingLedgerItem, library.Object, queue).ToString());
+    }
+
+    /// <summary>
+    /// JF-858 launch-site wiring: BuildVideoAppAudioResponse records the stream
+    /// link beside its ledger record, so a segment observation for the minted
+    /// stream key refreshes the SAME device's entry. The single-item branch mints
+    /// the URL under the item id, so the ledger item id and the stream key are one
+    /// value here; the proof is end-to-end (launch -> backdate -> segment
+    /// observation -> the snapshot is fresh again).
+    /// </summary>
+    [Fact]
+    public void VideoAudioLaunch_RecordsStreamLink_SegmentRefreshKeepsStampFresh_JF858()
+    {
+        var config = new PluginConfiguration();
+        TestHelpers.SetServerAddress(config, "https://test.example.com");
+        config.StreamTokenSecret = "jf858-refresh-secret-please-not-in-prod-32+c";
+        PlaybackLaunchBuilder launch = TestHelpers.CreateLaunchBuilder(config);
+
+        var song = new Audio { Name = "Seek Song", Id = Guid.NewGuid() };
+        string deviceId = "jf858-launch-link";
+        using DeviceQueueManager queue = TestHelpers.CreateDeviceQueueManager("jf858-launch-link");
+        using IDisposable scope = TestHelpers.SwapPluginLedgerScope(
+            config,
+            Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance,
+            queue,
+            "jf858-launch-link-scope");
+
+        SkillResponse response = launch.BuildVideoAppAudioResponse(
+            song.Id.ToString(), song, TestHelpers.CreateTestUser(),
+            context: TestHelpers.CreateContextWithVideoApp(deviceId));
+
+        Assert.NotNull(response.Response.Directives);
+        TestHelpers.BackdateLastPlayedStamp(
+            queue, deviceId, DeviceQueueManager.LastPlayedStampRefreshInterval + TimeSpan.FromMinutes(5));
+        queue.RefreshLastPlayedStampForStream(song.Id.ToString());
+
+        (string? itemId, _, DateTime? writtenAt) = queue.GetLastPlayedSnapshot(deviceId);
+        Assert.Equal(song.Id.ToString(), itemId);
+        Assert.True(DeviceQueueManager.IsWithinLastPlayedRecencyWindow(writtenAt), "the refreshed stamp is back inside the window");
+    }
+
+    /// <summary>
+    /// JF-858 launch-site wiring, the RESUME sibling (the shape the link exists
+    /// for): the resumed book's ledger entry names the CHAPTER leaf while the
+    /// concat stream is served under the BOOK FOLDER key, so the launch-time link
+    /// is the only routing between a segment observation and the entry. The proof
+    /// is end-to-end (resume launch -> backdate -> a folder-keyed segment
+    /// observation -> the chapter entry's stamp is fresh again).
+    /// </summary>
+    [Fact]
+    public void AudiobookResumeLaunch_RecordsFolderKeyedLink_SegmentRefreshReachesChapterLedgerEntry_JF858()
+    {
+        var config = new PluginConfiguration();
+        TestHelpers.SetServerAddress(config, "https://test.example.com");
+        config.StreamTokenSecret = "jf858-refresh-secret-please-not-in-prod-32+c";
+        PlaybackLaunchBuilder launch = TestHelpers.CreateLaunchBuilder(config);
+
+        var (chapter, bookFolder, library) = TestHelpers.CreateVerifiedBookChapter();
+        string deviceId = "jf858-resume-link";
+        using DeviceQueueManager queue = TestHelpers.CreateDeviceQueueManager("jf858-resume-link");
+        using IDisposable scope = TestHelpers.SwapPluginLedgerScope(
+            config,
+            Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance,
+            queue,
+            "jf858-resume-link-scope");
+
+        SkillResponse response = launch.BuildAudiobookResumeResponse(
+            chapter, TimeSpan.FromMinutes(5).Ticks, TestHelpers.CreateTestUser(),
+            TestHelpers.CreateContextWithVideoApp(deviceId), library.Object);
+
+        Assert.NotNull(response.Response.Directives);
+        TestHelpers.BackdateLastPlayedStamp(
+            queue, deviceId, DeviceQueueManager.LastPlayedStampRefreshInterval + TimeSpan.FromMinutes(5));
+        queue.RefreshLastPlayedStampForStream(bookFolder.Id.ToString());
+
+        (string? itemId, _, DateTime? writtenAt) = queue.GetLastPlayedSnapshot(deviceId);
+        Assert.Equal(chapter.Id.ToString(), itemId);
+        Assert.True(DeviceQueueManager.IsWithinLastPlayedRecencyWindow(writtenAt), "the chapter entry's stamp is back inside the window");
+    }
 }

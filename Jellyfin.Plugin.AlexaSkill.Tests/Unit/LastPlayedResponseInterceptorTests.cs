@@ -216,4 +216,51 @@ public class LastPlayedResponseInterceptorTests : IDisposable
 
         Assert.Equal(first, _queueManager.GetLastPlayedItemId("test-device"));
     }
+
+    /// <summary>
+    /// JF-858 remux wiring: the EPISODE-REMUX source is served by the plugin's own
+    /// segment endpoint under the same item GUID, so the interceptor links the
+    /// stream beside its ledger record and a segment observation refreshes the
+    /// entry (the EAC3 movie past its first hour keeps a fresh stamp). The NATIVE
+    /// /Videos arm records NO link (Jellyfin's endpoint is not observable
+    /// plugin-side), pinned by the twin below.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_EpisodeRemuxUrl_LinksStreamForSegmentRefresh_JF858()
+    {
+        string guid = Guid.NewGuid().ToString();
+        var ctx = CreateContext(ResponseWithDirective(
+            VideoApp($"https://jellyfin.example/alexaskill/api/video-audio/episode/{guid}/stream.m3u8?token=t")));
+        await _interceptor.ProcessAsync(ctx, CancellationToken.None);
+
+        TestHelpers.BackdateLastPlayedStamp(
+            _queueManager, "test-device",
+            DeviceQueueManager.LastPlayedStampRefreshInterval + TimeSpan.FromMinutes(5));
+        _queueManager.RefreshLastPlayedStampForStream(guid);
+
+        Assert.True(
+            DeviceQueueManager.IsWithinLastPlayedRecencyWindow(_queueManager.GetLastPlayedSnapshot("test-device").WrittenAt),
+            "the remux entry's stamp is back inside the window (the link routed the observation)");
+    }
+
+    /// <summary>
+    /// JF-858 wiring boundary: the NATIVE /Videos source records the ledger entry
+    /// but NO stream link - a segment observation for that GUID refreshes nothing.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_NativeVideosUrl_RecordsNoStreamLink_JF858()
+    {
+        string guid = Guid.NewGuid().ToString();
+        var ctx = CreateContext(ResponseWithDirective(
+            VideoApp($"https://jellyfin.example/Videos/{guid}/stream?static=true&api_key=x")));
+        await _interceptor.ProcessAsync(ctx, CancellationToken.None);
+
+        TestHelpers.BackdateLastPlayedStamp(
+            _queueManager, "test-device",
+            DeviceQueueManager.LastPlayedStampRefreshInterval + TimeSpan.FromMinutes(5));
+        DateTime backdated = _queueManager.GetQueue("test-device")!.LastPlayedWrittenAt!.Value;
+        _queueManager.RefreshLastPlayedStampForStream(guid);
+
+        Assert.Equal(backdated, _queueManager.GetQueue("test-device")!.LastPlayedWrittenAt);
+    }
 }

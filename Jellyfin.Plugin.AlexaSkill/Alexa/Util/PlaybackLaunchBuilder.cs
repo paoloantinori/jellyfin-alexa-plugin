@@ -841,6 +841,79 @@ public sealed class PlaybackLaunchBuilder
     }
 
     /// <summary>
+    /// JF-858: the ONE corroborated classifier answer for the flat transport gates
+    /// (Pause/Stop/Cancel in PauseIntentHandler, Next/Previous and the APL taps
+    /// through ProgressReporter.ServeAdjacentQueueItem, and Repeat in
+    /// RepeatIntentHandler): <see cref="ResolvePlayingMedium"/> first, then a
+    /// corroboration bound on the VideoApp-family answers. An entry classified as a
+    /// VideoApp medium SURVIVES only when corroborated by live evidence
+    /// (<see cref="HasCurrentPlaybackEvidence"/>, the ONE predicate) OR a
+    /// within-window stamp
+    /// (<see cref="DeviceQueueManager.IsWithinLastPlayedRecencyWindow"/>); an AGED
+    /// stamp with NO live evidence degrades the answer to
+    /// <see cref="PlayingMedium.Unknown"/>, so each family falls to its ordinary
+    /// no-ledger path (Pause the JF-482 pause shape, Next/Previous the queue
+    /// logic's silent Empty, Repeat the resolver's no-media tell whose tail is
+    /// itself window-bounded since JF-789). The one quadrant this opens is the
+    /// idle-device shape JF-789's window doc named as the flat gates' leftover.
+    /// THE DISCRIMINATOR, decided per gate (both single forms were evaluated):
+    /// the COMPOSITE, because each single form fails a different family on a
+    /// LIVE-playback shape. The EVIDENCE arm is what keeps the long-session
+    /// shapes refusing: a VideoApp stream on the NATIVE <c>/Videos</c> URL
+    /// (codec-compatible movies/episodes, live TV) has NO server-side
+    /// stamp-refresh mechanism (VideoApp playback fires no AudioPlayer events, so
+    /// the JF-655 flag never sets, and Jellyfin's own endpoint is not observable
+    /// plugin-side), so at minute 61 of such a movie the stamp is aged and only
+    /// the session-held item or a stale token corroborates; the codec-routed
+    /// remux movie/episode IS a plugin stream whose segments keep the stamp fresh
+    /// (JF-858's interceptor link), but the evidence arm must still carry the
+    /// native arm and the restart-straddle - a window-only bound would let
+    /// Next/Repeat emit a parallel AudioPlayer.Play mid-video (the JF-564
+    /// double-audio class). The
+    /// WINDOW arm is what keeps the near-launch sessionless shapes refusing, and
+    /// for Repeat it is LOAD-BEARING: the fall-through rides
+    /// <see cref="ResolveCurrentPlayingItem"/>, whose within-window tail would
+    /// return a fresh VideoApp-routed plain-Audio item into Repeat's restart
+    /// branch (a parallel-audio hazard on a possibly-live stream whose session was
+    /// dropped), so Repeat cannot take the evidence-only form. Pause and
+    /// Next/Previous land on the same composite for the mirror reasons (Pause's
+    /// branch never emits AudioPlayer.Play, so its risk is only the spoken line,
+    /// but the evidence arm is what keeps the honest line for the held-session
+    /// long movie; Next/Previous's queue logic structurally answers Empty without
+    /// evidence, its current-item resolution reading exactly the predicate's
+    /// legs). The belt (<see cref="ResolveScreenOwningMedium"/>) keeps its own
+    /// JF-789 bound on the two hole arms and its unbounded classifier-first arm;
+    /// this helper does not change it, and the classifier itself stays unbounded
+    /// (the loop suite's days-old-resolvable pin still holds).
+    /// COST (inherited shape, the belt's same note): the classifier resolves and
+    /// reads the snapshot internally without exposing them, so the corroborated
+    /// path reads the snapshot once more beside it (in-memory dictionary reads).
+    /// </summary>
+    /// <param name="context">The Alexa context (device id for the ledger read, AudioPlayer token for both the classifier and the evidence leg).</param>
+    /// <param name="session">The Jellyfin session (the held-item and DTO evidence legs; may be null - a null session carries no evidence).</param>
+    /// <param name="libraryManager">The library manager, to resolve the ledger item id. Null yields Unknown.</param>
+    /// <param name="queueManager">The caller's device queue manager; null falls back to <c>Plugin.Instance</c>'s.</param>
+    /// <returns>The classified medium, except a VideoApp-family medium with an AGED stamp and no live evidence degrades to Unknown.</returns>
+    internal PlayingMedium ResolvePlayingMediumForFlatTransportGate(
+        Context? context,
+        SessionInfo? session,
+        ILibraryManager? libraryManager,
+        DeviceQueueManager? queueManager = null)
+    {
+        PlayingMedium medium = ResolvePlayingMedium(context, libraryManager, queueManager);
+        if (!IsVideoAppMedium(medium))
+        {
+            return medium;
+        }
+
+        (_, _, DateTime? writtenAt) = ReadLastPlayedSnapshot(context, queueManager);
+        return PlaybackLaunchBuilder.HasCurrentPlaybackEvidence(context, session)
+            || DeviceQueueManager.IsWithinLastPlayedRecencyWindow(writtenAt)
+            ? medium
+            : PlayingMedium.Unknown;
+    }
+
+    /// <summary>
     /// The ONE belt-inclusive "does a VideoApp stream own the screen" answer
     /// (JF-632/JF-635): <see cref="ResolvePlayingMedium"/> first, then the raw
     /// ledger-route belt. The belt closes the classifier's two proven holes
@@ -863,8 +936,8 @@ public sealed class PlaybackLaunchBuilder
     /// (ProgressReporter.ApplyRepeatModeAsync), the sleep-timer re-issue gate
     /// (SleepTimerIntentHandler), and the playback-speed re-launch gate
     /// (SetPlaybackSpeedIntentHandler, migrated JF-637); Pause/Repeat/
-    /// next-previous still carry the classifier-only flat gate and migrate
-    /// deliberately.
+    /// next-previous moved OFF this belt question in JF-858 onto the corroborated
+    /// flat-gate classifier (<see cref="ResolvePlayingMediumForFlatTransportGate"/>).
     /// Cost note (inherited, not by construction): the classifier resolves the
     /// ledger item internally without exposing the outcome, so on the
     /// deleted-item path the belt re-resolves the same known-absent GUID once
@@ -915,10 +988,16 @@ public sealed class PlaybackLaunchBuilder
         // requires the opt-in seek-mode flag plus an hour of continuous playback
         // plus the frozen-token shape, and no request-carried signal separates
         // "minute 61 of that session" from "idle days later" (JF-847: the frozen
-        // token reads STOPPED either way). A server-side stamp refresh during
-        // genuinely live playback (the JF-655 PlaybackStarted flag, or the
-        // video-audio segment tracker) is the follow-up that would shrink this
-        // residual; it is a write-side change outside JF-789's read-side scope.
+        // token reads STOPPED either way). THE FOLLOW-UP SHIPPED (JF-858, the
+        // video-audio segment tracker arm): the segment-observed stamp refresh
+        // (DeviceQueueManager.RefreshLastPlayedStampForStream, fed by the
+        // launch-time stream links) keeps a genuinely live video-audio stream's
+        // stamp within the window at any session length, so this residual now
+        // bites only the RESTART-STRADDLE shape - a plugin restart mid-playback
+        // orphans the live stream (the links are in-memory by design) until the
+        // next launch re-arms one. The JF-655 PlaybackStarted-flag arm was
+        // evaluated and rejected: VideoApp streams fire no AudioPlayer events, so
+        // the flag never sets for exactly these residual shapes.
         (string? lastPlayedId, DeviceQueueManager.LaunchRoute? recordedRoute, DateTime? writtenAt) =
             ReadLastPlayedSnapshot(context, queueManager);
         if (recordedRoute != DeviceQueueManager.LaunchRoute.VideoApp
@@ -1196,6 +1275,11 @@ public sealed class PlaybackLaunchBuilder
     /// three pre-JF-627 inline guards (FavoriteToggle, MediaInfo,
     /// ProgressReporter.ApplyRepeatModeAsync) migrated onto this predicate in
     /// JF-785, each with its own red proof on the full-item-without-DTO shape.
+    /// JF-858 added a second consumer class: the LIVE-EVIDENCE arm of the flat
+    /// transport gates' corroboration bound
+    /// (<see cref="ResolvePlayingMediumForFlatTransportGate"/>) reads this same
+    /// predicate, so the gates' refusal and the guarded families' guard key on
+    /// ONE definition of "evidence exists now".
     /// All four guarded families additionally pass
     /// <c>allowLedgerTailAnswers: false</c> at their resolver call (the JF-785
     /// Leg A door; the resolver's doc owns that contract), which makes this
@@ -1834,7 +1918,11 @@ public sealed class PlaybackLaunchBuilder
         // item's ParentId, so the JF-694 read key (GetAudiobookBookKey) and this URL
         // segment name the same folder.
         Guid parentId = resumeBookFolder.Id;
-        string videoAudioUrl = GetAudiobookResumeUrl(parentId.ToString(), startTicks, user);
+        // JF-858: the URL key (the concat folder) and the ledger item (the CHAPTER
+        // leaf) are the two halves the stream link pairs; each string is minted once.
+        string streamKey = parentId.ToString();
+        string ledgerItemId = item.Id.ToString();
+        string videoAudioUrl = GetAudiobookResumeUrl(streamKey, startTicks, user);
 
         _logger.LogDebug(
             "BuildAudiobookResumeResponse: itemId={ItemId}, parentId={ParentId}, startTicks={Ticks}, url={Url}",
@@ -1854,7 +1942,13 @@ public sealed class PlaybackLaunchBuilder
         string? ledgerDeviceId = context?.System?.Device?.DeviceID;
         if (!string.IsNullOrEmpty(ledgerDeviceId))
         {
-            (Plugin.Instance?.DeviceQueueManager)?.RecordLastPlayed(ledgerDeviceId, item.Id.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
+            DeviceQueueManager? ledger = Plugin.Instance?.DeviceQueueManager;
+            ledger?.RecordLastPlayed(ledgerDeviceId, ledgerItemId, DeviceQueueManager.LaunchRoute.VideoApp);
+            // JF-858: the concat stream is served under the parent folder id while the
+            // ledger records the CHAPTER leaf, so the segment-observed stamp refresh
+            // needs the launch-time link (see BuildVideoAppAudioResponse's identical
+            // call).
+            ledger?.RecordVideoAudioStreamLink(ledgerDeviceId, streamKey, ledgerItemId);
         }
 
         // JF-732: the throw-or-launch pin; this member verifies its own outward return.
@@ -2667,12 +2761,14 @@ public sealed class PlaybackLaunchBuilder
         }
 
         string videoAudioUrl;
+        string streamKey;
         if (bookFolder is not null)
         {
             // Multi-chapter audiobook: use concat HLS endpoint keyed by parent book ID.
             // The endpoint concatenates all chapters into one continuous HLS stream,
             // giving the full book duration in the Echo Show seek bar.
-            videoAudioUrl = GetAudiobookVideoAudioUrl(bookFolder.Id.ToString(), user);
+            streamKey = bookFolder.Id.ToString();
+            videoAudioUrl = GetAudiobookVideoAudioUrl(streamKey, user);
             // JF-580: the URL carries the signed JF-309 stream token; log it masked.
             _logger.LogDebug("BuildVideoAppAudioResponse: itemId={ItemId}, parentId={ParentId}, title={Title}, url={Url} (audiobook concat)", itemId, bookFolder.Id, item!.Name, RequestLogRedactor.RedactUrl(videoAudioUrl));
         }
@@ -2690,11 +2786,13 @@ public sealed class PlaybackLaunchBuilder
             // album key and the book tracker machinery must not mix; an AudioBook
             // with an EMPTY ParentId riding an album collection keeps the album
             // concat exactly as before (gate-marker finding 6).
-            videoAudioUrl = GetAudiobookResumeUrl(concatParent.ToString(), collectionStartTicks, user);
+            streamKey = concatParent.ToString();
+            videoAudioUrl = GetAudiobookResumeUrl(streamKey, collectionStartTicks, user);
             _logger.LogDebug("BuildVideoAppAudioResponse: itemId={ItemId}, collectionParent={ParentId}, startTicks={StartTicks}, title={Title}, url={Url} (album concat)", itemId, concatParent, collectionStartTicks, item?.Name, RequestLogRedactor.RedactUrl(videoAudioUrl));
         }
         else
         {
+            streamKey = itemId;
             videoAudioUrl = GetVideoAudioUrl(itemId);
             // JF-580: the URL carries the signed JF-309 stream token; log it masked.
             _logger.LogDebug("BuildVideoAppAudioResponse: itemId={ItemId}, title={Title}, url={Url}", itemId, item?.Name, RequestLogRedactor.RedactUrl(videoAudioUrl));
@@ -2722,7 +2820,14 @@ public sealed class PlaybackLaunchBuilder
         string? ledgerDeviceId = context?.System?.Device?.DeviceID;
         if (!string.IsNullOrEmpty(ledgerDeviceId))
         {
-            (Plugin.Instance?.DeviceQueueManager)?.RecordLastPlayed(ledgerDeviceId, itemId, DeviceQueueManager.LaunchRoute.VideoApp);
+            DeviceQueueManager? ledger = Plugin.Instance?.DeviceQueueManager;
+            ledger?.RecordLastPlayed(ledgerDeviceId, itemId, DeviceQueueManager.LaunchRoute.VideoApp);
+            // JF-858: link the stream key this launch minted to the ledger entry it
+            // just recorded, so the segment-observed stamp refresh
+            // (DeviceQueueManager.RefreshLastPlayedStampForStream) can keep the
+            // entry fresh while the stream is genuinely live (the belt residual
+            // shrink). The link map's contract lives on its field.
+            ledger?.RecordVideoAudioStreamLink(ledgerDeviceId, streamKey, itemId);
         }
 
         var response = new SkillResponse
