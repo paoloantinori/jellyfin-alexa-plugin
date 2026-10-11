@@ -5,8 +5,10 @@
 # samples); `python3 scripts/generate_interaction_model.py en-US`
 # reproduces it byte-identically. Vocabulary products are declared only
 # where the committed samples form a real Cartesian product
-# (PlayPlaylist, SearchMedia, PlayNextEpisode, PlayBook, and the
-# definite-article tail of PlayArtistSongs); every other intent is a
+# (PlayPlaylist, SearchMedia, PlayNextEpisode, PlayBook, the
+# definite-article tail of PlayArtistSongs, and since JF-399 item a the
+# PlaySongIntent carrier product and the PlayArtistSongsIntent
+# by/from-media-noun + artist-carrier products); every other intent is a
 # verbatim sample list, in the committed order.
 #
 # Run: python3 scripts/generate_interaction_model.py en-US
@@ -42,6 +44,17 @@
 # 'next' (NextUp, the empty-slot default) from 'latest' (recency,
 # PremiereDate desc); see the intent and type blocks for this locale's
 # values.
+#
+# JF-399 item a (2026-10-11, maintainer-approved with undo bar): the
+# carrier-noun expansion of PlaySongIntent (38 -> 73) and
+# PlayArtistSongsIntent (34 -> 172) toward it-IT's carrier density
+# (84/418), via the song_media_verb/song_noun_en and
+# artist_media_* / artist_carrier_en vocabulary products. Every new
+# sample names the media (song/track/songs/music/tracks/tunes/band/
+# artist/singer); no new bare carriers (anti-pattern #11 discipline).
+# Baseline-vs-after probe matrices live in the JF-399 task notes;
+# the undo bar is "new carrier forms route AND the old ones do not
+# degrade".
 invocationName: jellyfin player
 
 # Word sets expanded via Cartesian product inside an intent's `templates`
@@ -64,6 +77,20 @@ vocabulary:
   book_noun: ['{book}', 'the book {book}', 'audiobook {book}', 'the audiobook {book}']
   # PlayArtistSongsIntent tail: "{verb} the {musician}" + "to {verb} the {musician}"
   definite_artist_verb: [play, put on, stream, hear]
+  # JF-399 item a (2026-10-11): PlaySongIntent carrier-noun expansion toward
+  # it-IT's song_noun density. song/track is the natural English noun pair
+  # (it-IT: il brano / la canzone / il pezzo / la traccia).
+  song_media_verb: [play, put on, stream, give me, can you play, start playing, let's hear, I want to hear, listen to]
+  song_noun_en: [the song, the track]
+  # JF-399 item a (2026-10-11): PlayArtistSongsIntent carrier-noun expansion,
+  # the en-US twin of it-IT's {imperative} {media_noun} {artist_article}
+  # {musician} product. by/from carry the role artist_article plays in
+  # it-IT (English has no genitive articles); the carrier nouns mirror
+  # it-IT's artist_carrier family (la band / il gruppo / il cantante...).
+  artist_media_verb: [play, listen to, put on, stream, give me, shuffle, start playing, can you play, I want to hear, I want to listen to, let's hear, let's listen to]
+  artist_media_noun: [songs, music, tracks, tunes]
+  artist_media_prep: [by, from]
+  artist_carrier_en: [the band, the artist, the singer]
 intents:
   - name: QueryRecentlyAddedIntent
     samples:
@@ -121,43 +148,50 @@ intents:
   - name: PlaySongIntent
     samples:
       - play {song}
-      - play the song {song}
       - play song {song}
+      - play track {song}
       - play {song} by {musician}
-      - play the song {song} by {musician}
       - play song {song} by {musician}
+      - play track {song} by {musician}
       - listen to {song}
-      - listen to the song {song}
       - listen to {song} by {musician}
-      - listen to the song {song} by {musician}
       - put on {song}
-      - put on the song {song}
       - I want to hear {song}
       - I want to hear {song} by {musician}
-      - I want to hear the song {song} by {musician}
       - can you play {song}
       - can you play {song} by {musician}
-      - can you play the song {song} by {musician}
       - start playing {song}
-      - play the track {song}
-      - play the track {song} by {musician}
       - let's hear {song}
       - give me {song}
       - stream {song}
       - play that song {song}
+      - play that track {song}
       - play that song {song} by {musician}
+      - play that track {song} by {musician}
       - put on {song} by {musician}
-      - put on the song {song} by {musician}
+      - put on that song {song}
+      - put on that song {song} by {musician}
       - start playing {song} by {musician}
       - stream {song} by {musician}
       - let's hear {song} by {musician}
       - give me {song} by {musician}
       - play a song called {song}
       - play the song called {song}
+      - play a track called {song}
+      - play the track called {song}
       - play a song called {song} by {musician}
       - play the song called {song} by {musician}
       - play the song {song} from {musician}
+      - play the track {song} from {musician}
       - play {song} from {musician}
+    templates:
+      # JF-399 item a (2026-10-11): carrier-noun expansion toward it-IT's
+      # song_noun density. Baseline probes showed the noun-qualified asks
+      # stolen by PlayVideo's bare "stream / start playing / can you play
+      # {title}" carriers (title glued); these rows anchor the fill
+      # boundary the way it-IT's "{imperative} {song_noun} {song}" does.
+      - '{song_media_verb} {song_noun_en} {song}'
+      - '{song_media_verb} {song_noun_en} {song} by {musician}'
     slots:
       - name: song
         type: AMAZON.MusicRecording
@@ -209,16 +243,7 @@ intents:
         type: AMAZON.SearchQuery
   - name: PlayArtistSongsIntent
     samples:
-      - play songs by {musician}
-      - play music by {musician}
-      - play tracks by {musician}
-      - play tunes by {musician}
-      - play songs from {musician}
-      - play music from {musician}
       - listen to {musician}
-      - listen to songs by {musician}
-      - listen to music by {musician}
-      - listen to songs from {musician}
       - put on {musician}
       - put on some {musician}
       - I want to hear {musician}
@@ -228,7 +253,6 @@ intents:
       - can you play {musician}
       - start playing {musician}
       - shuffle {musician}
-      - shuffle songs by {musician}
       - play {musician}
       - play some {musician}
       - play {musician} songs
@@ -238,6 +262,17 @@ intents:
     templates:
       - '{definite_artist_verb} the {musician}'
       - to {definite_artist_verb} the {musician}
+      # JF-399 item a (2026-10-11): the by/from media-noun product and the
+      # artist-carrier family, the en-US twin of it-IT's PlayArtistSongs
+      # carrier space. Baseline probes showed the un-carriered asks stolen
+      # by PlaySong's phantom MusicRecording fills ("Music" by Nightwish on
+      # "give me music by coldplay") and PlayVideo's glued titles; these
+      # rows anchor the media noun so the asks route on the noun, not on a
+      # phantom song match.
+      - '{artist_media_verb} {artist_media_noun} {artist_media_prep} {musician}'
+      - play some {artist_media_noun} {artist_media_prep} {musician}
+      - put on some {artist_media_noun} {artist_media_prep} {musician}
+      - '{artist_media_verb} {artist_carrier_en} {musician}'
     slots:
       - name: musician
         type: JellyfinArtist

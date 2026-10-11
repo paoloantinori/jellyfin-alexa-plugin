@@ -4365,63 +4365,89 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (606 phrases across 69 commands):
+Complete phrase list (779 phrases across 69 commands):
 
 #### Play music
 
 **Play a song**
 
 - `play <song title>`
-- `play the song <song title>`
 - `play song <song title>`
+- `play track <song title>`
 - `play <song title> by <artist name>`
-- `play the song <song title> by <artist name>`
 - `play song <song title> by <artist name>`
+- `play track <song title> by <artist name>`
 - `listen to <song title>`
-- `listen to the song <song title>`
 - `listen to <song title> by <artist name>`
-- `listen to the song <song title> by <artist name>`
 - `put on <song title>`
-- `put on the song <song title>`
 - `I want to hear <song title>`
 - `I want to hear <song title> by <artist name>`
-- `I want to hear the song <song title> by <artist name>`
 - `can you play <song title>`
 - `can you play <song title> by <artist name>`
-- `can you play the song <song title> by <artist name>`
 - `start playing <song title>`
-- `play the track <song title>`
-- `play the track <song title> by <artist name>`
 - `let's hear <song title>`
 - `give me <song title>`
 - `stream <song title>`
 - `play that song <song title>`
+- `play that track <song title>`
 - `play that song <song title> by <artist name>`
+- `play that track <song title> by <artist name>`
 - `put on <song title> by <artist name>`
-- `put on the song <song title> by <artist name>`
+- `put on that song <song title>`
+- `put on that song <song title> by <artist name>`
 - `start playing <song title> by <artist name>`
 - `stream <song title> by <artist name>`
 - `let's hear <song title> by <artist name>`
 - `give me <song title> by <artist name>`
 - `play a song called <song title>`
 - `play the song called <song title>`
+- `play a track called <song title>`
+- `play the track called <song title>`
 - `play a song called <song title> by <artist name>`
 - `play the song called <song title> by <artist name>`
 - `play the song <song title> from <artist name>`
+- `play the track <song title> from <artist name>`
 - `play <song title> from <artist name>`
+- `play the song <song title>`
+- `play the track <song title>`
+- `put on the song <song title>`
+- `put on the track <song title>`
+- `stream the song <song title>`
+- `stream the track <song title>`
+- `give me the song <song title>`
+- `give me the track <song title>`
+- `can you play the song <song title>`
+- `can you play the track <song title>`
+- `start playing the song <song title>`
+- `start playing the track <song title>`
+- `let's hear the song <song title>`
+- `let's hear the track <song title>`
+- `I want to hear the song <song title>`
+- `I want to hear the track <song title>`
+- `listen to the song <song title>`
+- `listen to the track <song title>`
+- `play the song <song title> by <artist name>`
+- `play the track <song title> by <artist name>`
+- `put on the song <song title> by <artist name>`
+- `put on the track <song title> by <artist name>`
+- `stream the song <song title> by <artist name>`
+- `stream the track <song title> by <artist name>`
+- `give me the song <song title> by <artist name>`
+- `give me the track <song title> by <artist name>`
+- `can you play the song <song title> by <artist name>`
+- `can you play the track <song title> by <artist name>`
+- `start playing the song <song title> by <artist name>`
+- `start playing the track <song title> by <artist name>`
+- `let's hear the song <song title> by <artist name>`
+- `let's hear the track <song title> by <artist name>`
+- `I want to hear the song <song title> by <artist name>`
+- `I want to hear the track <song title> by <artist name>`
+- `listen to the song <song title> by <artist name>`
+- `listen to the track <song title> by <artist name>`
 
 **Play an artist**
 
-- `play songs by <artist name>`
-- `play music by <artist name>`
-- `play tracks by <artist name>`
-- `play tunes by <artist name>`
-- `play songs from <artist name>`
-- `play music from <artist name>`
 - `listen to <artist name>`
-- `listen to songs by <artist name>`
-- `listen to music by <artist name>`
-- `listen to songs from <artist name>`
 - `put on <artist name>`
 - `put on some <artist name>`
 - `I want to hear <artist name>`
@@ -4431,7 +4457,6 @@ Complete phrase list (606 phrases across 69 commands):
 - `can you play <artist name>`
 - `start playing <artist name>`
 - `shuffle <artist name>`
-- `shuffle songs by <artist name>`
 - `play <artist name>`
 - `play some <artist name>`
 - `play <artist name> songs`
@@ -4446,6 +4471,154 @@ Complete phrase list (606 phrases across 69 commands):
 - `to put on the <artist name>`
 - `to stream the <artist name>`
 - `to hear the <artist name>`
+- `play songs by <artist name>`
+- `play songs from <artist name>`
+- `play music by <artist name>`
+- `play music from <artist name>`
+- `play tracks by <artist name>`
+- `play tracks from <artist name>`
+- `play tunes by <artist name>`
+- `play tunes from <artist name>`
+- `listen to songs by <artist name>`
+- `listen to songs from <artist name>`
+- `listen to music by <artist name>`
+- `listen to music from <artist name>`
+- `listen to tracks by <artist name>`
+- `listen to tracks from <artist name>`
+- `listen to tunes by <artist name>`
+- `listen to tunes from <artist name>`
+- `put on songs by <artist name>`
+- `put on songs from <artist name>`
+- `put on music by <artist name>`
+- `put on music from <artist name>`
+- `put on tracks by <artist name>`
+- `put on tracks from <artist name>`
+- `put on tunes by <artist name>`
+- `put on tunes from <artist name>`
+- `stream songs by <artist name>`
+- `stream songs from <artist name>`
+- `stream music by <artist name>`
+- `stream music from <artist name>`
+- `stream tracks by <artist name>`
+- `stream tracks from <artist name>`
+- `stream tunes by <artist name>`
+- `stream tunes from <artist name>`
+- `give me songs by <artist name>`
+- `give me songs from <artist name>`
+- `give me music by <artist name>`
+- `give me music from <artist name>`
+- `give me tracks by <artist name>`
+- `give me tracks from <artist name>`
+- `give me tunes by <artist name>`
+- `give me tunes from <artist name>`
+- `shuffle songs by <artist name>`
+- `shuffle songs from <artist name>`
+- `shuffle music by <artist name>`
+- `shuffle music from <artist name>`
+- `shuffle tracks by <artist name>`
+- `shuffle tracks from <artist name>`
+- `shuffle tunes by <artist name>`
+- `shuffle tunes from <artist name>`
+- `start playing songs by <artist name>`
+- `start playing songs from <artist name>`
+- `start playing music by <artist name>`
+- `start playing music from <artist name>`
+- `start playing tracks by <artist name>`
+- `start playing tracks from <artist name>`
+- `start playing tunes by <artist name>`
+- `start playing tunes from <artist name>`
+- `can you play songs by <artist name>`
+- `can you play songs from <artist name>`
+- `can you play music by <artist name>`
+- `can you play music from <artist name>`
+- `can you play tracks by <artist name>`
+- `can you play tracks from <artist name>`
+- `can you play tunes by <artist name>`
+- `can you play tunes from <artist name>`
+- `I want to hear songs by <artist name>`
+- `I want to hear songs from <artist name>`
+- `I want to hear music by <artist name>`
+- `I want to hear music from <artist name>`
+- `I want to hear tracks by <artist name>`
+- `I want to hear tracks from <artist name>`
+- `I want to hear tunes by <artist name>`
+- `I want to hear tunes from <artist name>`
+- `I want to listen to songs by <artist name>`
+- `I want to listen to songs from <artist name>`
+- `I want to listen to music by <artist name>`
+- `I want to listen to music from <artist name>`
+- `I want to listen to tracks by <artist name>`
+- `I want to listen to tracks from <artist name>`
+- `I want to listen to tunes by <artist name>`
+- `I want to listen to tunes from <artist name>`
+- `let's hear songs by <artist name>`
+- `let's hear songs from <artist name>`
+- `let's hear music by <artist name>`
+- `let's hear music from <artist name>`
+- `let's hear tracks by <artist name>`
+- `let's hear tracks from <artist name>`
+- `let's hear tunes by <artist name>`
+- `let's hear tunes from <artist name>`
+- `let's listen to songs by <artist name>`
+- `let's listen to songs from <artist name>`
+- `let's listen to music by <artist name>`
+- `let's listen to music from <artist name>`
+- `let's listen to tracks by <artist name>`
+- `let's listen to tracks from <artist name>`
+- `let's listen to tunes by <artist name>`
+- `let's listen to tunes from <artist name>`
+- `play some songs by <artist name>`
+- `play some songs from <artist name>`
+- `play some music by <artist name>`
+- `play some music from <artist name>`
+- `play some tracks by <artist name>`
+- `play some tracks from <artist name>`
+- `play some tunes by <artist name>`
+- `play some tunes from <artist name>`
+- `put on some songs by <artist name>`
+- `put on some songs from <artist name>`
+- `put on some music by <artist name>`
+- `put on some music from <artist name>`
+- `put on some tracks by <artist name>`
+- `put on some tracks from <artist name>`
+- `put on some tunes by <artist name>`
+- `put on some tunes from <artist name>`
+- `play the band <artist name>`
+- `play the artist <artist name>`
+- `play the singer <artist name>`
+- `listen to the band <artist name>`
+- `listen to the artist <artist name>`
+- `listen to the singer <artist name>`
+- `put on the band <artist name>`
+- `put on the artist <artist name>`
+- `put on the singer <artist name>`
+- `stream the band <artist name>`
+- `stream the artist <artist name>`
+- `stream the singer <artist name>`
+- `give me the band <artist name>`
+- `give me the artist <artist name>`
+- `give me the singer <artist name>`
+- `shuffle the band <artist name>`
+- `shuffle the artist <artist name>`
+- `shuffle the singer <artist name>`
+- `start playing the band <artist name>`
+- `start playing the artist <artist name>`
+- `start playing the singer <artist name>`
+- `can you play the band <artist name>`
+- `can you play the artist <artist name>`
+- `can you play the singer <artist name>`
+- `I want to hear the band <artist name>`
+- `I want to hear the artist <artist name>`
+- `I want to hear the singer <artist name>`
+- `I want to listen to the band <artist name>`
+- `I want to listen to the artist <artist name>`
+- `I want to listen to the singer <artist name>`
+- `let's hear the band <artist name>`
+- `let's hear the artist <artist name>`
+- `let's hear the singer <artist name>`
+- `let's listen to the band <artist name>`
+- `let's listen to the artist <artist name>`
+- `let's listen to the singer <artist name>`
 
 **Play by genre**
 
@@ -12521,7 +12694,7 @@ Placeholder legend:
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (453 phrases across 67 commands):
+Complete phrase list (455 phrases across 67 commands):
 
 #### Play music
 
@@ -12833,33 +13006,35 @@ Complete phrase list (453 phrases across 67 commands):
 
 **Find a song (multi-turn conversation)**
 
-- `find a song`
-- `help me find a song`
-- `search for a song`
-- `I'm looking for a song`
-- `I need to find a song`
-- `find me a song`
-- `help me search for a song`
-- `I want to find a song`
-- `find a song called <palabras del título de la canción>`
-- `search for a song called <palabras del título de la canción>`
-- `find a song about <palabras del título de la canción>`
-- `I'm looking for a song called <palabras del título de la canción>`
+- `busca una cancion`
+- `ayudame a encontrar una cancion`
+- `estoy buscando una cancion`
+- `busca una cancion llamada <palabras del título de la canción>`
+- `encuentra una cancion llamada <palabras del título de la canción>`
+- `encuentra una cancion`
+- `quiero encontrar una cancion`
+- `busco una cancion`
+- `busca una cancion que se llame <palabras del título de la canción>`
+- `encuentra una cancion que se llame <palabras del título de la canción>`
+- `busco una cancion que se llame <palabras del título de la canción>`
+- `encuentra una cancion sobre <palabras del título de la canción>`
+- `busca una cancion sobre <palabras del título de la canción>`
+- `ayudame a buscar una cancion`
+- `una cancion llamada <palabras del título de la canción>`
 
 **Find a song by an artist**
 
-- `find a song by <nombre del artista>`
-- `help me find a song by <nombre del artista>`
-- `search for a song by <nombre del artista>`
-- `I'm looking for a song by <nombre del artista>`
-- `I want to find a song by <nombre del artista>`
-- `I need to find a song by <nombre del artista>`
-- `find me a song by <nombre del artista>`
-- `help me search for a song by <nombre del artista>`
-- `find a track by <nombre del artista>`
-- `search for a track by <nombre del artista>`
-- `I'm looking for a track by <nombre del artista>`
-- `find songs by <nombre del artista>`
+- `busca una cancion de <nombre del artista>`
+- `ayudame a encontrar una cancion de <nombre del artista>`
+- `estoy buscando una cancion de <nombre del artista>`
+- `encuentra una cancion de <nombre del artista>`
+- `quiero encontrar una cancion de <nombre del artista>`
+- `busco una cancion de <nombre del artista>`
+- `ayudame a buscar una cancion de <nombre del artista>`
+- `busca un tema de <nombre del artista>`
+- `encuentra un tema de <nombre del artista>`
+- `busco un tema de <nombre del artista>`
+- `una cancion de <nombre del artista>`
 
 #### Queue and repeat
 
