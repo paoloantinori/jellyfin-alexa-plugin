@@ -201,6 +201,11 @@ public class SimulatorController : ControllerBase
             slotsJson = "{" + string.Join(",", slotParts) + "}";
         }
 
+        // The fake device context emulates the household's Echo Show: AudioPlayer,
+        // VideoApp, and APL together (VideoApp added for Show faithfulness,
+        // JF-276's simulator battery - without it every video launch honestly
+        // refused on the screen gate and the resolver/LiveTv path was
+        // simulator-unreachable; a real Show carries all three interfaces).
         string json = $$"""
         {
             "version": "1.0",
@@ -229,6 +234,7 @@ public class SimulatorController : ControllerBase
                         "deviceId": "{{EscapeJson(deviceId)}}",
                         "supportedInterfaces": {
                             "AudioPlayer": {},
+                            "VideoApp": {},
                             "Alexa.Presentation.APL": {
                                 "runtime": { "maxVersion": "2024.3" }
                             }
