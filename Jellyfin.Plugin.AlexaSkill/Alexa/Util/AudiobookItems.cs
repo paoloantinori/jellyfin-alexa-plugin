@@ -16,7 +16,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 /// were never needed; the type-pattern form also tracks subclasses of AudioBook, which
 /// the exact string comparison silently dropped.
 /// </summary>
-internal static class AudiobookItems
+internal static partial class AudiobookItems
 {
     internal static bool IsAudioBook(BaseItem? item) => item is AudioBook;
 
@@ -70,11 +70,13 @@ internal static class AudiobookItems
         => item is AudioBook ? TryResolveVerifiedParentFolder(item, libraryManager, parentFolderCache) : null;
 
     /// <summary>
-    /// The ONE verified ParentId climb (JF-794), shared by the search-path twins
+    /// The ONE verified book-ancestor climb (JF-794 one-level verdict + the JF-798
+    /// outermost-book-ancestor walk), shared by the search-path twins
     /// (the <see cref="TryResolveBookFolder(BaseItem?, ILibraryManager?)"/> overloads,
     /// which add the AudioBook gate its search
     /// results carry) and the VideoApp builders' concat decision: resolve the leaf's
-    /// ParentId to a Folder, then apply the JF-793 shared-container discriminator.
+    /// ParentId to a Folder, apply the JF-793 shared-container discriminator, then
+    /// continue over part-marker subfolders to the OUTERMOST book ancestor.
     /// Type-agnostic BY DESIGN on this seam: the builders' item argument can be an
     /// Audio-typed chapter of a metadata-remapped book (the JF-784 leg-3 row set),
     /// which the AudioBook gate of the search twin would drop. FAILS CLOSED on every
@@ -82,14 +84,19 @@ internal static class AudiobookItems
     /// resolves to no Folder, a leaf that does not sit directly inside the resolved
     /// folder): null, so every consumer degrades to the leaf playing as its own
     /// track, never a merged-container or dead-ParentId concat. When it ACCEPTS, the
-    /// returned folder's Id is exactly the leaf's ParentId, so the discriminated
-    /// concat URL is byte-identical to the pre-JF-794 raw climb.
+    /// returned folder is the OUTERMOST verified book ancestor: for the flat shapes
+    /// (a chapter directly inside its book folder) that is still exactly the leaf's
+    /// ParentId, so the pre-JF-798 accepted concat URL is byte-identical; for the
+    /// multi-part shape (a leaf inside a Part subfolder inside the book) it is the
+    /// BOOK folder, so head, confirm, continuation, the concat URL, and the tracker
+    /// keys all span the whole book instead of stopping at the part boundary.
     /// The scratchpad overload (JF-797 item 4) threads the batched twin's per-ask
-    /// cache into the SAME body, so the fail-closed contract stays ONE definition.
+    /// cache into the SAME body, so the fail-closed contract stays ONE definition
+    /// (the walk's own hops resolve through the same scratchpad).
     /// </summary>
     /// <param name="item">The audio leaf whose ParentId names the candidate book folder.</param>
     /// <param name="libraryManager">The library manager resolving the ParentId; null fails closed.</param>
-    /// <returns>The verified book folder, or null when the climb cannot be verified or is rejected.</returns>
+    /// <returns>The verified outermost book ancestor, or null when the climb cannot be verified or is rejected.</returns>
     internal static Folder? TryResolveVerifiedParentFolder(BaseItem? item, ILibraryManager? libraryManager)
         => TryResolveVerifiedParentFolder(item, libraryManager, parentFolderCache: null);
 
@@ -117,7 +124,36 @@ internal static class AudiobookItems
             return null;
         }
 
-        return SitsDirectlyInside(item, folder) ? folder : null;
+        if (!SitsDirectlyInside(item, folder))
+        {
+            // The JF-793 shared-container rejection. The JF-798 walk NEVER runs on a
+            // rejected verdict: it only EXTENDS an accepted one-level climb, so the
+            // census collapsed books keep playing as their own tracks unchanged.
+            return null;
+        }
+
+        // JF-798: the outermost-book-ancestor walk (the contract lives on the
+        // method doc; IsPartLikeFolderName owns the discriminator choice). Each hop
+        // re-verifies with the SAME SitsDirectlyInside path compare the base
+        // verdict uses and re-uses the ONE scratchpad-aware ResolveParentFolder.
+        Folder book = folder;
+        for (int hop = 0; hop < MaxBookAncestorHops; hop++)
+        {
+            if (book.ParentId == Guid.Empty || !IsPartLikeFolderName(book.Name))
+            {
+                break;
+            }
+
+            if (ResolveParentFolder(book.ParentId, libraryManager, parentFolderCache) is not { } parent
+                || !SitsDirectlyInside(book, parent))
+            {
+                break;
+            }
+
+            book = parent;
+        }
+
+        return book;
     }
 
     /// <summary>
@@ -155,7 +191,8 @@ internal static class AudiobookItems
     /// for a chapter leaf, kept as its own branch so the type-agnostic remap rows
     /// resolve the same folder the resume builder concats); (2) the leaf is an
     /// AudioBook whose ParentId RESOLVES to a Folder it does not sit directly
-    /// inside (the census shared container, or a part subfolder), so the raw
+    /// inside (the census shared container; a part subfolder stopped being this
+    /// shape at JF-798, the walk carries it up to the book), so the raw
     /// ParentId names a container of sibling books, not this book: the key is the
     /// leaf's OWN id, making each collapsed book's position independent; (3) every
     /// other shape (an empty ParentId, a dangling id, no manager): the raw
@@ -339,6 +376,61 @@ internal static class AudiobookItems
                 folder.Path.TrimEnd('/', '\\'),
                 StringComparison.OrdinalIgnoreCase);
     }
+
+    /// <summary>
+    /// The JF-798 walk's hop bound (the defensive depth cap, matching
+    /// <see cref="IsAudioBookOrChapter"/>'s ancestor bound): the plausible layouts
+    /// are Book/Part1 and Book/Part1/CD1, and a ParentId chain is acyclic in
+    /// Jellyfin, so the cap exists to bound the walk, never to correct it.
+    /// </summary>
+    private const int MaxBookAncestorHops = 4;
+
+    /// <summary>
+    /// The JF-798 part-marker pattern: a folder NAME that is nothing but a
+    /// part/disc/volume/chapter marker plus a numeral (Arabic 1-3 digits, a roman
+    /// numeral, or a single a-d side letter). Anchored case-insensitive; the
+    /// numeral is REQUIRED, which is what keeps real book titles out ("Multipart
+    /// Book", "The Parting", "Thinking Better" all fail the anchor or the numeral).
+    /// </summary>
+    [System.Text.RegularExpressions.GeneratedRegex(
+        @"^(part|parte|partie|teil|chap|chapter|capitolo|kapitel|cd|disc|disk|disco|disque|vol|volume|side|track|traccia)[\s._-]*(\d{1,3}|[ivxl]{1,3}|[a-d])$",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant)]
+    private static partial System.Text.RegularExpressions.Regex PartFolderNamePattern();
+
+    /// <summary>
+    /// The JF-798 walk's stop-condition discriminator: whether a folder is a
+    /// PART-LIKE subfolder of something (a bare part/disc/volume/chapter marker
+    /// name), which is the ONLY signal the climb reads when deciding to extend
+    /// upward. CHOSEN over the task's other two candidates because it is the only
+    /// zero-extra-query option on the per-segment write-gate path AND the only one
+    /// with discriminative power on the live library: Jellyfin types nothing (the
+    /// library root, the ZZZ folder, the book, and the part are ALL plain Folders,
+    /// so the library-root/CollectionType probe cannot even identify WHICH level
+    /// below the root is the book), and the census container's single-file book
+    /// subfolders are structurally IDENTICAL to a Book/Part1 pair, so folder-content
+    /// heuristics cannot separate "part of a book" from "one of many books" without
+    /// a children query per hop. RESIDUAL (accepted, and pinned as the accepted
+    /// behavior in AudiobookMultipartBookAltitudeTests): a genuine BOOK folder named
+    /// a bare marker plus numeral ("Volume 1" holding its chapters directly, under
+    /// a shared container) is structurally indistinguishable from a part subfolder
+    /// and WOULD climb, and the harm is the FULL JF-793 hazard class, not a benign
+    /// merged timeline: the returned container drives a Recursive concat playlist
+    /// of every sibling book AND ResolveTrackedBookKey blends the siblings' marks
+    /// under one key. No query-free discriminator separates the two shapes; none
+    /// such name exists in the live library (2026-10-11 capture); if one appears,
+    /// the pin flips the design deliberately. The numeral classes are also
+    /// deliberately narrow: spelled-out numerals ("Part One", "Chapitre 2") do NOT
+    /// match, so such libraries keep the part-boundary behavior; extend the
+    /// pattern per observed locale evidence, never speculatively (this line is the
+    /// pattern's source of truth, there is no separate locale table).
+    /// Composite part names ("Part 1 - The Beginning") likewise do NOT match (the
+    /// anchor excludes free text); such a library keeps the part-boundary
+    /// behavior, never a wrong merge.
+    /// </summary>
+    /// <param name="name">The candidate folder's name, or null.</param>
+    /// <returns>True when the name is a bare part/disc/volume/chapter marker.</returns>
+    private static bool IsPartLikeFolderName(string? name)
+        => !string.IsNullOrWhiteSpace(name) && PartFolderNamePattern().IsMatch(name);
 
     /// <summary>
     /// Whether a confirmed "album"-labelled disambiguation payload is a BOOK

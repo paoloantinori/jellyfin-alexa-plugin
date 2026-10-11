@@ -1914,9 +1914,11 @@ public sealed class PlaybackLaunchBuilder
         // Guid format. It is NOT the tracker bookKey (ResumeMath.GetAudiobookBookKey's
         // "N" string); AudiobookPositionTracker.NormalizeKey canonicalizes both shapes,
         // so the segment-record path (URL dashed) and the resume-read path ("N") agree
-        // in the tracker dictionary. The verified climb guarantees the id IS the
-        // item's ParentId, so the JF-694 read key (GetAudiobookBookKey) and this URL
-        // segment name the same folder.
+        // in the tracker dictionary. Since JF-798 the verified climb returns the
+        // OUTERMOST book ancestor (for a flat book the item's ParentId; for a
+        // multi-part book the book folder above the part), and the JF-694 read key
+        // resolves through the SAME seam (ResolveTrackedBookKey), so this URL
+        // segment and the read key still name the same folder.
         Guid parentId = resumeBookFolder.Id;
         // JF-858: the URL key (the concat folder) and the ledger item (the CHAPTER
         // leaf) are the two halves the stream link pairs; each string is minted once.
@@ -2746,10 +2748,12 @@ public sealed class PlaybackLaunchBuilder
         // JF-794: the audiobook concat's ParentId climbs through the ONE shared
         // gated climb (AudiobookItems.TryResolveBookFolder: the AudioBook gate plus
         // the verified parent resolution whose contract lives on
-        // TryResolveVerifiedParentFolder). When the climb ACCEPTS, bookFolder.Id IS
-        // the raw ParentId, so the URL is byte-identical to the pre-JF-794 raw
-        // climb; when it is REJECTED or unverifiable (the shared-container census
-        // shape, a dangling ParentId, or no manager threaded) the leaf falls through
+        // TryResolveVerifiedParentFolder). When the climb ACCEPTS, bookFolder.Id is
+        // the verified book ancestor: the raw ParentId for the flat shapes (the
+        // pre-JF-794 URL byte-identical), the BOOK folder above the part since the
+        // JF-798 walk for the multi-part shapes; when it is REJECTED or unverifiable
+        // (the shared-container census shape, a dangling ParentId, or no manager
+        // threaded) the leaf falls through
         // to the single-item stream below, never a potentially-merged container
         // concat.
         Folder? bookFolder = AudiobookItems.TryResolveBookFolder(item, libraryManager);

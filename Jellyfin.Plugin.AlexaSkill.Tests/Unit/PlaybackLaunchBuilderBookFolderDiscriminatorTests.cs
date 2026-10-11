@@ -64,23 +64,10 @@ public class PlaybackLaunchBuilderBookFolderDiscriminatorTests
         => TestHelpers.CreateVerifiedBookChapter(name);
 
     /// <summary>The census shape: a collapsed single-file book whose ParentId is the
-    /// SHARED container while its file sits inside its own subfolder below it.</summary>
+    /// SHARED container while its file sits inside its own subfolder below it (the
+    /// ONE shared fixture, <see cref="TestHelpers.CreateCollapsedBookUnderContainer"/>).</summary>
     private static (AudioBook Book, Folder Container, Mock<ILibraryManager> Library) CollapsedBookShape()
-    {
-        Guid containerId = Guid.NewGuid();
-        var book = new AudioBook
-        {
-            Name = "Managing Humans",
-            Id = Guid.NewGuid(),
-            ParentId = containerId,
-            RunTimeTicks = TimeSpan.FromMinutes(20).Ticks,
-            Path = "/audiobooks/Managing Humans/Managing Humans.m4b"
-        };
-        var container = new Folder { Name = "Audiobooks", Id = containerId, Path = "/audiobooks" };
-        var library = new Mock<ILibraryManager>();
-        library.Setup(l => l.GetItemById(containerId)).Returns(container);
-        return (book, container, library);
-    }
+        => TestHelpers.CreateCollapsedBookUnderContainer();
 
     [Fact]
     public void FreshLaunch_VerifiedChapterFolder_ConcatsUnderFolderId()
