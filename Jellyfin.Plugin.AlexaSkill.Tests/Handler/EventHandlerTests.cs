@@ -751,7 +751,7 @@ public class EventHandlerTests : PluginTestBase, IDisposable
         // stores (the pinned defect).
         Assert.Equal(itemA1.ToString(), queue.CurrentItemId);
         Assert.Equal(TimeSpan.FromMilliseconds(200).Ticks, queue.CurrentPositionTicks);
-        Assert.Equal(TimeSpan.FromMilliseconds(200).Ticks, queue.ItemPositionState[itemA1.ToString("N")]);
+        Assert.Equal(TimeSpan.FromMilliseconds(200).Ticks, queue.ItemPositions[itemA1.ToString("N")].Ticks);
 
         // Only after the new start processes does the classifier catch up: from here
         // on, a later stop for A1 would classify as displacement.
@@ -801,7 +801,7 @@ public class EventHandlerTests : PluginTestBase, IDisposable
         queue.ItemIds = residentIds.Select(g => g.ToString()).ToList();
         foreach (Guid id in residentIds)
         {
-            queue.ItemPositionState[id.ToString("N")] = 1234;
+            queue.ItemPositions[id.ToString("N")] = new ItemPositionRecord { Ticks = 1234 };
         }
 
         var user = TestHelpers.CreateTestUser();
@@ -816,8 +816,8 @@ public class EventHandlerTests : PluginTestBase, IDisposable
 
         // Membership + the fresh-entry guard: nothing queued was evicted and the
         // fresh entry survived its own trim.
-        Assert.All(residentIds, id => Assert.Equal(1234, queue.ItemPositionState[id.ToString("N")]));
-        Assert.Contains(firstSingleItemId.ToString("N"), queue.ItemPositionState.Keys);
+        Assert.All(residentIds, id => Assert.Equal(1234, queue.ItemPositions[id.ToString("N")].Ticks));
+        Assert.Contains(firstSingleItemId.ToString("N"), queue.ItemPositions.Keys);
 
         // The clock crosses the freshness window: the first stop's stamp expires
         // (rule ON), so the second stop's trim may evict that entry again.
@@ -831,9 +831,9 @@ public class EventHandlerTests : PluginTestBase, IDisposable
         await CreateStopHandler().HandleAsync(
             CreateAudioPlayerRequest("AudioPlayer.PlaybackStopped", secondSingleItemId.ToString(), offset: 6000), context, user, CreateSession(), CancellationToken.None);
 
-        Assert.DoesNotContain(firstSingleItemId.ToString("N"), queue.ItemPositionState.Keys);
-        Assert.Contains(secondSingleItemId.ToString("N"), queue.ItemPositionState.Keys);
-        Assert.All(residentIds, id => Assert.Equal(1234, queue.ItemPositionState[id.ToString("N")]));
+        Assert.DoesNotContain(firstSingleItemId.ToString("N"), queue.ItemPositions.Keys);
+        Assert.Contains(secondSingleItemId.ToString("N"), queue.ItemPositions.Keys);
+        Assert.All(residentIds, id => Assert.Equal(1234, queue.ItemPositions[id.ToString("N")].Ticks));
     }
 
     [Fact]
@@ -863,7 +863,7 @@ public class EventHandlerTests : PluginTestBase, IDisposable
         queue.CurrentItemId = itemX1.ToString(); // directive-time pointer: the NEW item
         queue.CurrentPositionTicks = TimeSpan.FromMinutes(3).Ticks;
         long a1SavedProgress = TimeSpan.FromMinutes(2).Ticks;
-        queue.ItemPositionState[itemA1.ToString("N")] = a1SavedProgress;
+        queue.ItemPositions[itemA1.ToString("N")] = new ItemPositionRecord { Ticks = a1SavedProgress };
         var user = TestHelpers.CreateTestUser();
 
         await CreateStartHandler().HandleAsync(
@@ -886,7 +886,7 @@ public class EventHandlerTests : PluginTestBase, IDisposable
         // lands for the suspect near-zero offset.
         Assert.Equal(itemX1.ToString(), queue.CurrentItemId);
         Assert.Equal(TimeSpan.FromMinutes(3).Ticks, queue.CurrentPositionTicks);
-        Assert.Equal(a1SavedProgress, queue.ItemPositionState[itemA1.ToString("N")]);
+        Assert.Equal(a1SavedProgress, queue.ItemPositions[itemA1.ToString("N")].Ticks);
     }
 
     /// <summary>

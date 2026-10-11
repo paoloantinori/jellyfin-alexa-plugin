@@ -314,13 +314,16 @@ public class AplUserEventHandler : BaseHandler
 
     private int GetResumeOffset(BaseItem item, SessionInfo session, Request request)
     {
-        string itemIdStr = item.Id.ToString("N");
-
-        // 1. Check plugin's per-item state first (bypasses Jellyfin's min-resume thresholds)
-        var queue = _queueManager.GetOrCreateQueue(session.DeviceId);
-        if (queue.ItemPositionState.TryGetValue(itemIdStr, out long cachedTicks) && cachedTicks > 0)
+        // 1. Check plugin's per-item state first (bypasses Jellyfin's min-resume
+        // thresholds). JF-860: through the manager's LOCKED read seam
+        // (GetStoredPositionTicks) instead of a raw map read, so an unlocked
+        // TryGetValue cannot race the locked write/trim mid-resize (the
+        // JF-425/JF-447/JF-738 class the seam's doc names); it also skips the
+        // queue-creating side effect the old GetOrCreateQueue tap had.
+        long? cachedTicks = _queueManager.GetStoredPositionTicks(session.DeviceId, item.Id.ToString());
+        if (cachedTicks is > 0)
         {
-            int offsetMs = (int)TimeSpan.FromTicks(cachedTicks).TotalMilliseconds;
+            int offsetMs = (int)TimeSpan.FromTicks(cachedTicks.Value).TotalMilliseconds;
             Logger.LogInformation(
                 "APL tap: resuming {ItemName} from {OffsetMs}ms (ItemPositionState)",
                 item.Name, offsetMs);

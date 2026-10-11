@@ -72,7 +72,7 @@ public static class AudiobookPlayResolver
     /// <param name="request">The skill request (the progressive-announce vehicle on the VideoApp arm).</param>
     /// <param name="locale">The request locale for response strings.</param>
     /// <param name="userDataManager">User data manager for the resume-track lookup.</param>
-    /// <param name="queueManager">Optional per-device queue manager (crash recovery; null skips the ItemPositionState tier and the device-queue write).</param>
+    /// <param name="queueManager">Optional per-device queue manager (crash recovery; null skips the stored-position tier and the device-queue write).</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The launch response, or the localized no-content Tell.</returns>
     public static async Task<SkillResponse> PlayBookAsync(
@@ -394,7 +394,7 @@ public static class AudiobookPlayResolver
         // first-ever ask of a multi-page book on a clean device pays the probes,
         // not the full-book fetch). ONE MORE TRIGGER beside the probes (code-review
         // F3, tightened JF-812): FindResumeTrackIndex also reads the device
-        // queue's ItemPositionState, and the JF-581 shape (a server-side UserData
+        // queue's ItemPositions, and the JF-581 shape (a server-side UserData
         // write loss with the position surviving only in the device queue) would
         // be invisible to the probes, so a device queue holding a positioned entry
         // that may be book progress releases the fetch. JF-812: the stop-path

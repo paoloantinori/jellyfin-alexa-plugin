@@ -379,7 +379,7 @@ public class ResumeConfirmationTranscodeBaseTests : PluginTestBase, IDisposable
         // device's own stop wrote the SAME 5:00 into both stores (the equality the
         // retired gate classified on; it now holds for item-absolute writes too).
         // Kept as a canary: nothing on the offer/confirm path reads it anymore.
-        _queueManager.GetOrCreateQueue(DeviceId).ItemPositionState[id.ToString("N")] = TimeSpan.FromMinutes(5).Ticks;
+        _queueManager.GetOrCreateQueue(DeviceId).ItemPositions[id.ToString("N")] = new ItemPositionRecord { Ticks = TimeSpan.FromMinutes(5).Ticks };
 
         // Screen-capable device, no AudioPlayer token: the no-token NativeControlsForAudio
         // route offers the device's last-played item from UserData.
@@ -493,7 +493,7 @@ public class ResumeConfirmationTranscodeBaseTests : PluginTestBase, IDisposable
         // The device's OWN audio-shaped transcode launch left the stale launch scope...
         SeedActiveBase(id, 20);
         // ...and its own stop persisted a 5:00 raw offset the phone's 40:00 no longer matches.
-        _queueManager.GetOrCreateQueue(DeviceId).ItemPositionState[id.ToString("N")] = TimeSpan.FromMinutes(5).Ticks;
+        _queueManager.GetOrCreateQueue(DeviceId).ItemPositions[id.ToString("N")] = new ItemPositionRecord { Ticks = TimeSpan.FromMinutes(5).Ticks };
 
         SkillResponse offer = await CreateLaunchHandler().HandleAsync(
             new LaunchRequest { Locale = "en-US" },

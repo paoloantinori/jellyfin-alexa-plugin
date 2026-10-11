@@ -472,7 +472,7 @@ public class AplUserEventHandlerTests : PluginTestBase, IDisposable
         var session = CreateSession();
         session.DeviceId = "tap-resume-device";
         var queue = _queueManager.GetOrCreateQueue(session.DeviceId);
-        queue.ItemPositionState[episodeId.ToString("N", System.Globalization.CultureInfo.InvariantCulture)] = TimeSpan.FromSeconds(90).Ticks;
+        queue.ItemPositions[episodeId.ToString("N", System.Globalization.CultureInfo.InvariantCulture)] = new ItemPositionRecord { Ticks = TimeSpan.FromSeconds(90).Ticks };
 
         var series = new MediaBrowser.Controller.Entities.TV.Series { Name = "Generazione", Id = seriesId };
         var episode = new MediaBrowser.Controller.Entities.TV.Episode { Name = "Ep 12", Id = episodeId };

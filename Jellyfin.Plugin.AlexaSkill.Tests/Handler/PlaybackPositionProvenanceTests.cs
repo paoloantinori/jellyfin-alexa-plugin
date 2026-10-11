@@ -148,7 +148,7 @@ public class PlaybackPositionProvenanceTests : PluginTestBase, IDisposable
         Assert.Equal(itemAbsoluteTicks, queue.CurrentPositionTicks);
 
         // Store 3: the per-item position state ("N"-format key).
-        Assert.Equal(itemAbsoluteTicks, queue.ItemPositionState[id.ToString("N")]);
+        Assert.Equal(itemAbsoluteTicks, queue.ItemPositions[id.ToString("N")].Ticks);
 
         // Store 4: the UserData cross-client fill writes the same item-absolute ticks.
         Assert.NotNull(saved);
@@ -158,7 +158,7 @@ public class PlaybackPositionProvenanceTests : PluginTestBase, IDisposable
         // UserData fill tick-equals the device's own per-item recorded position - both
         // written by this stop event, both item-absolute since JF-522.
         Assert.Equal(
-            _queueManager.GetOrCreateQueue(DeviceId).ItemPositionState[id.ToString("N")],
+            _queueManager.GetOrCreateQueue(DeviceId).ItemPositions[id.ToString("N")].Ticks,
             saved.PlaybackPositionTicks);
     }
 
@@ -181,7 +181,7 @@ public class PlaybackPositionProvenanceTests : PluginTestBase, IDisposable
 
         DeviceQueue queue = _queueManager.GetOrCreateQueue(DeviceId);
         Assert.Equal(TimeSpan.FromMilliseconds(30000).Ticks, queue.CurrentPositionTicks);
-        Assert.Equal(TimeSpan.FromMilliseconds(30000).Ticks, queue.ItemPositionState[id.ToString("N")]);
+        Assert.Equal(TimeSpan.FromMilliseconds(30000).Ticks, queue.ItemPositions[id.ToString("N")].Ticks);
     }
 
     /// <summary>
@@ -209,7 +209,7 @@ public class PlaybackPositionProvenanceTests : PluginTestBase, IDisposable
 
         DeviceQueue queue = _queueManager.GetOrCreateQueue(DeviceId);
         Assert.Equal(MinutesToTicks(10), queue.CurrentPositionTicks);
-        Assert.Equal(MinutesToTicks(10), queue.ItemPositionState[id.ToString("N")]);
+        Assert.Equal(MinutesToTicks(10), queue.ItemPositions[id.ToString("N")].Ticks);
         _fx.SessionManager.Verify(
             s => s.OnPlaybackStopped(It.Is<PlaybackStopInfo>(i => i.ItemId == id && i.PositionTicks == MinutesToTicks(10))),
             Times.Once);
@@ -236,7 +236,7 @@ public class PlaybackPositionProvenanceTests : PluginTestBase, IDisposable
             CancellationToken.None);
 
         DeviceQueue queue = _queueManager.GetOrCreateQueue(DeviceId);
-        Assert.Equal(MinutesToTicks(25), queue.ItemPositionState[id.ToString("N")]);
+        Assert.Equal(MinutesToTicks(25), queue.ItemPositions[id.ToString("N")].Ticks);
     }
 
     // ========== Store 1: the start/finish reports ==========
@@ -548,7 +548,7 @@ public class PlaybackPositionProvenanceTests : PluginTestBase, IDisposable
             Times.Once);
         DeviceQueue queue = _queueManager.GetOrCreateQueue(DeviceId);
         Assert.Equal(expected, queue.CurrentPositionTicks);
-        Assert.Equal(expected, queue.ItemPositionState[id.ToString("N")]);
+        Assert.Equal(expected, queue.ItemPositions[id.ToString("N")].Ticks);
     }
 
     /// <summary>

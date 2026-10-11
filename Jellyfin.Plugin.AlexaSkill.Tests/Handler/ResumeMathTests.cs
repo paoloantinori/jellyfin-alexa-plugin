@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 using MediaBrowser.Controller.Entities;
@@ -348,14 +349,14 @@ public class ResumeMathTests : IDisposable
     {
         var t0 = new Audio { Name = "A", Id = Guid.NewGuid() };
         // Server-side UserData says played with no position; the device queue's
-        // ItemPositionState (recorded by HLS segment requests) must win for this track.
+        // ItemPositions (recorded by HLS segment requests) must win for this track.
         StubUserData(t0, new UserItemData { Key = "k", Played = true });
         long cached = TimeSpan.FromMinutes(6).Ticks;
 
         var (index, ticks) = WithDeviceQueue("resume-math-idx", qm =>
         {
             var queue = qm.GetOrCreateQueue("test-device");
-            queue.ItemPositionState[t0.Id.ToString("N")] = cached;
+            queue.ItemPositions[t0.Id.ToString("N")] = new ItemPositionRecord { Ticks = cached };
             return ResumeMath.FindResumeTrackIndex(
                 new List<BaseItem> { t0 }, TestHelpers.CreateJellyfinUser(), _fx.UserDataManager.Object, qm, "test-device", resumePosition: true);
         });
@@ -374,7 +375,7 @@ public class ResumeMathTests : IDisposable
         var (index, ticks) = WithDeviceQueue("resume-math-idx2", qm =>
         {
             var queue = qm.GetOrCreateQueue("test-device");
-            queue.ItemPositionState[t0.Id.ToString("N")] = cached;
+            queue.ItemPositions[t0.Id.ToString("N")] = new ItemPositionRecord { Ticks = cached };
             return ResumeMath.FindResumeTrackIndex(
                 new List<BaseItem> { t0 }, TestHelpers.CreateJellyfinUser(), _fx.UserDataManager.Object, qm, "test-device", resumePosition: false);
         });
@@ -396,7 +397,7 @@ public class ResumeMathTests : IDisposable
         var (index, ticks) = WithDeviceQueue("resume-math-idx3", qm =>
         {
             var queue = qm.GetOrCreateQueue("test-device");
-            queue.ItemPositionState[t1.Id.ToString("N")] = TimeSpan.FromMinutes(9).Ticks;
+            queue.ItemPositions[t1.Id.ToString("N")] = new ItemPositionRecord { Ticks = TimeSpan.FromMinutes(9).Ticks };
             return ResumeMath.FindResumeTrackIndex(
                 new List<BaseItem> { t0, t1 }, TestHelpers.CreateJellyfinUser(), _fx.UserDataManager.Object, qm, "test-device", resumePosition: true);
         });
