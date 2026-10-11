@@ -335,6 +335,21 @@ public class PlaySongIntentHandler : BaseHandler
                 return albumFallback;
             }
 
+            // JF-865: the cross-medium video leg, LAST in the cascade (song, then
+            // artist, then album, then video: a movie is the most distant guess, so
+            // it only fires when every same-medium recovery missed). Rescues the
+            // JF-864 steal locales where a bare "play <movie>" routes here; the
+            // carrier form stays the guaranteed first-shot path (see the leg's doc
+            // for the NO_SELECTION boundary).
+            SkillResponse? videoFallback = await CrossMedia.TryVideoFallbackAsync(
+                songQuery, jellyfinUser!, user, session, context, locale,
+                _libraryManager,
+                "PlaySong", request, cancellationToken).ConfigureAwait(false);
+            if (videoFallback != null)
+            {
+                return videoFallback;
+            }
+
             return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundSongByName", locale, songQuery));
         }
 
