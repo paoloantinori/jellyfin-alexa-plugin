@@ -183,7 +183,23 @@ tests:
   # across an identical-content rebuild (station slot empty -> the handler
   # prompts). Same JF-436 triage class as before: a movie-shaped bare ask,
   # pin records reality, not endorsement.
-  - utterance: "suona matrix"
+  # Re-pinned 2026-10-11 (JF-864): the PlayRadioIntent bare statics
+  # ('riproduci/suona/metti radio') were article-qualified after the device
+  # round caught them stealing the core play asks 3/3 ('riproduci inception'
+  # answered the radio elicit). Post-fix this row reads NO_SELECTION
+  # deterministically (3/3 probed): the radio steal is dead and the bare
+  # movie ask now falls into the JF-844-family no-winner landscape (the
+  # same class 'pleia matrix' already documents below). profile-nlu cannot
+  # express no-selection, so this row becomes a comment-recorded skip; the
+  # two GUARD rows below pin the new qualified forms so a future edit that
+  # un-qualifies them (or re-steals) flags here.
+  # - utterance: "suona matrix"  [skip: NO_SELECTION 3/3, JF-864]
+
+  - utterance: "riproduci la radio"
+    expected_intent: PlayRadioIntent
+    expected_slots: {}
+
+  - utterance: "metti la radio"
     expected_intent: PlayRadioIntent
     expected_slots: {}
 

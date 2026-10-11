@@ -65,3 +65,12 @@ tests:
     # DIVERGENCE (documented, JF-406 class): the speel-form PlayBook carrier
     # ('speel het luisterboek X') is stolen by PlayArtistSongsIntent with a
     # garbage musician capture; only the luister-naar carrier routes.
+
+# --- JF-864 (2026-10-11): the nl-NL radio guard pins ---
+# The bare 'speel radio' statics were article-qualified after the 16-locale
+# crossing probes found nl-NL the ONE sibling with it-IT's device-confirmed
+# steal ('speel nemo' -> PlayRadioIntent, live). Post-fix (live 3/3): the
+# steal is dead (speel nemo -> NO_SELECTION) and the qualified forms hold.
+  - utterance: "speel de radio"
+    expected_intent: PlayRadioIntent
+    expected_slots: {}
