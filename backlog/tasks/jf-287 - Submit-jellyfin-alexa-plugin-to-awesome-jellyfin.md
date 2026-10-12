@@ -44,3 +44,9 @@ Key info for the entry:
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining, or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+SUBMITTED 2026-10-12 (maintainer's blanket approval, the JF-855 discussion round): upstream issue awesome-jellyfin/awesome-jellyfin#694 filed, PR awesome-jellyfin/awesome-jellyfin#695 opened from the fork (branch add-jellyfin-alexa-plugin, one line in the playback section between intro-skipper and cinema mode, conventional-commits per CONTRIBUTING.md). Awaiting upstream review. DoD #8's '12 locales' is stale (the model carries 17 since JF-316).
+<!-- SECTION:NOTES:END -->
