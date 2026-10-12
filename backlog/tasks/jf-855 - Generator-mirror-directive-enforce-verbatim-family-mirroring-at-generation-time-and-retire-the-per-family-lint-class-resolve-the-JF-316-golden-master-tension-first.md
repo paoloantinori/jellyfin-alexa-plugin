@@ -39,3 +39,9 @@ The deeper fix: a template-side mirror/include directive in generate_interaction
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+MAINTAINER DECISION (2026-10-12 06:55, chat): DEFERRED. JF-844 resolved handler-side (not model-side), so the mirror's value is limited to retiring the es-trio lint class. The verbatim golden-master architecture (JF-316) is the maintainer's deliberate choice; the lint works and costs little. Revisit only if a second cross-locale mirror case emerges.
+<!-- SECTION:NOTES:END -->
