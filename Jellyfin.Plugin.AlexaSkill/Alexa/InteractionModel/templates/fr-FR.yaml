@@ -301,6 +301,36 @@ intents:
     slots:
       - name: chapter_number
         type: AMAZON.NUMBER
+  # JF-875 (2026-10-12): the SkipForwardBack family (en-US + it-IT carried it
+  # until now; this locale was the JF-684 no-selection class for every
+  # skip-forward/back-style ask). The family ships in the JF-869 it-IT shape:
+  # the direction word rides ONLY the slotted {seek_direction} position (a
+  # direction-literal row delivers an empty slot and the handler's forward
+  # default seeks the wrong way, the en-US wrong-way bug this rollout must not
+  # re-import), no bare direction-only rows (the it-IT transport-steal
+  # lesson: bare direction words steal the built-in Next/Previous routing),
+  # and verbs that ARE the direction (the locale's rewind-class verbs) ride
+  # the slot as SeekDirection synonyms (the rewind-as-synonym mechanism) on
+  # the verb-initial bare row.
+  # The de-connector carries the amount (the locale's GoToChapter uses the
+  # same d'un-chapter shape); the bare row's avance/recule verb-direction
+  # synonyms are the natural spoken forms ("avance de trente secondes").
+  # skip family; the it-IT "salta di {seek_amount} {seek_unit}" direction-less
+  # default-forward twin is deliberately OMITTED: the direction phrase is
+  # grammatical in French only with it ("saute 30 secondes" sans en avant
+  # tronque), so a direction-less row would only harvest misalignments.
+  - name: SkipForwardBackIntent
+    samples:
+      - saute {seek_direction}
+      - saute {seek_direction} de {seek_amount} {seek_unit}
+      - '{seek_direction} de {seek_amount} {seek_unit}'
+    slots:
+      - name: seek_direction
+        type: SeekDirection
+      - name: seek_amount
+        type: AMAZON.NUMBER
+      - name: seek_unit
+        type: SeekUnit
   - name: PlayPlaylistIntent
     samples:
       - Lis la playlist {playlist}
@@ -955,6 +985,27 @@ types:
       - value: le dernier
         id: latest
         synonyms: [dernier, le plus récent, plus récent]
+  # JF-875: seek vocabulary for SkipForwardBackIntent (the EpisodePosition
+  # shape: localized values over the shared English id key space the
+  # handler's entity resolution reads; SeekVocabulary.cs is the consuming
+  # half, its raw word sets carry these locale words as the no-ER
+  # fallback).
+  SeekDirection:
+    values:
+      - value: en avant
+        id: "forward"
+        synonyms: [avance]
+      - value: en arrière
+        id: "back"
+        synonyms: [recule]
+  SeekUnit:
+    values:
+      - value: secondes
+        id: "seconds"
+        synonyms: [seconde]
+      - value: minutes
+        id: "minutes"
+        synonyms: [minute]
   MediaInfoType:
     values:
       - id: title

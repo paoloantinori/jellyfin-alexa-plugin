@@ -157,3 +157,31 @@ tests:
   - utterance: "I'm looking for a song"
     expected_intent: PlaySongIntent
     skip_reason: "English-loss record, JF-399 item b accepted trade: reads PlaySongIntent with 'looking for a song' glued into song (was FindSongIntent); not asserted to avoid pinning a glued fill"
+  # -------------------------------------------------------------------------
+  # SkipForwardBackIntent (JF-875 rollout; "salta adelante" was the JF-684
+  # no-selection class before). The avanza/retrocede verb-direction synonyms
+  # ride the bare row (the rewind-as-synonym mechanism). Verified on the
+  # scratch build across two identical-content rebuilds.
+  # -------------------------------------------------------------------------
+  - utterance: "salta adelante 30 segundos"
+    expected_intent: SkipForwardBackIntent
+    expected_slots:
+      seek_direction: {}
+      seek_amount: {}
+      seek_unit: {}
+
+  - utterance: "retrocede 30 segundos"
+    expected_intent: SkipForwardBackIntent
+    expected_slots:
+      seek_direction: {}
+      seek_amount: {}
+      seek_unit: {}
+
+  # NOTE (JF-875, stable across two identical-content scratch rebuilds): the
+  # "salta atrás {n}" combination leaves seek_direction UNFILLED on this
+  # locale's trainer (es-ES/es-MX bind it green), so it is deliberately NOT
+  # pinned; "retrocede {n} segundos" above is the reliable back carrier here.
+  # Transport steal guard (pre-existing vendor routing).
+  - utterance: "siguiente canción"
+    expected_intent: ShowMoreIntent
+    expected_slots: {}

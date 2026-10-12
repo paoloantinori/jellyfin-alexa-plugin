@@ -315,6 +315,27 @@
         ]
       },
       {
+        "name": "SkipForwardBackIntent",
+        "samples": [
+          "{seek_direction} {seek_amount} {seek_unit}",
+          "تخطى {seek_amount} {seek_unit}"
+        ],
+        "slots": [
+          {
+            "name": "seek_direction",
+            "type": "SeekDirection"
+          },
+          {
+            "name": "seek_amount",
+            "type": "AMAZON.NUMBER"
+          },
+          {
+            "name": "seek_unit",
+            "type": "SeekUnit"
+          }
+        ]
+      },
+      {
         "name": "PlayPlaylistIntent",
         "samples": [
           "شغل قائمة التشغيل {playlist}",
@@ -1249,6 +1270,53 @@
               ]
             },
             "id": "latest"
+          }
+        ]
+      },
+      {
+        "name": "SeekDirection",
+        "values": [
+          {
+            "name": {
+              "value": "للأمام",
+              "synonyms": [
+                "تقدم"
+              ]
+            },
+            "id": "forward"
+          },
+          {
+            "name": {
+              "value": "للخلف",
+              "synonyms": [
+                "ارجع",
+                "تراجع"
+              ]
+            },
+            "id": "back"
+          }
+        ]
+      },
+      {
+        "name": "SeekUnit",
+        "values": [
+          {
+            "name": {
+              "value": "ثانية",
+              "synonyms": [
+                "ثواني"
+              ]
+            },
+            "id": "seconds"
+          },
+          {
+            "name": {
+              "value": "دقيقة",
+              "synonyms": [
+                "دقائق"
+              ]
+            },
+            "id": "minutes"
           }
         ]
       },

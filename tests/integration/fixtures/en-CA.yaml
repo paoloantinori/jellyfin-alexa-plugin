@@ -383,3 +383,34 @@ tests:
     expected_intent: PlayAlbumIntent
     expected_slots:
       musician: {}
+  # -------------------------------------------------------------------------
+  # SkipForwardBackIntent (JF-875 rollout; this locale was the JF-684
+  # no-selection class before). Ships the reworked en-US shape: direction
+  # rides the slotted {seek_direction} position only, "rewind" is a back
+  # synonym on the bare row, no direction-literal rows (they deliver an empty
+  # slot and the handler's forward default seeks the wrong way). Verified on
+  # the scratch build across two identical-content rebuilds.
+  # -------------------------------------------------------------------------
+  - utterance: "rewind 30 seconds"
+    expected_intent: SkipForwardBackIntent
+    expected_slots:
+      seek_direction: {}
+      seek_amount: {}
+      seek_unit: {}
+
+  - utterance: "skip back 30 seconds"
+    expected_intent: SkipForwardBackIntent
+    expected_slots:
+      seek_direction: {}
+      seek_amount: {}
+      seek_unit: {}
+
+  - utterance: "skip forward"
+    expected_intent: SkipForwardBackIntent
+    expected_slots:
+      seek_direction: {}
+
+  # Transport steal guard (pre-existing vendor routing, pinned as the no-steal guard).
+  - utterance: "next"
+    expected_intent: ShowMoreIntent
+    expected_slots: {}

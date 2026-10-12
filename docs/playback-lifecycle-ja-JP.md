@@ -36,7 +36,7 @@ graph TD
     NowPlaying --> Playing
 
     Playing -->|"30秒スキップ"| SkipFwd["SkipForward"]
-    Playing -->|"30秒戻す"| SkipBack["SkipBack"]
+    Playing -->|"30秒 戻して"| SkipBack["SkipBack"]
     Playing -->|"5分にジャンプ"| JumpPos["JumpToPosition"]
     Playing -->|"次のチャプター"| Chapter["GoToChapter"]
 

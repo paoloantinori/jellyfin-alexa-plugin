@@ -999,3 +999,35 @@ tests:
   - utterance: "show me my photos"
     expected_intent: ShowPhotoAlbumIntent
     expected_slots: {}
+  # -------------------------------------------------------------------------
+  # SkipForwardBackIntent (JF-875 rework). The old direction-LITERAL rows
+  # (skip back / go back / jump back / back / rewind + amount) delivered an
+  # EMPTY seek_direction and the handler's forward default seeked the WRONG
+  # WAY (vendor-model baseline probe: "rewind 30 seconds" and "skip back 30
+  # seconds" both resolved with seek_direction ABSENT). The direction word now
+  # rides the slotted {seek_direction} position; "rewind" survives as a back
+  # synonym on the bare row. The combined-form pins carry the direction
+  # presence guard: an empty seek_direction there is the wrong-way regression
+  # this family must never grow back.
+  # -------------------------------------------------------------------------
+  - utterance: "rewind 30 seconds"
+    expected_intent: SkipForwardBackIntent
+    expected_slots:
+      seek_direction: {}
+      seek_amount: {}
+      seek_unit: {}
+
+  - utterance: "skip back 30 seconds"
+    expected_intent: SkipForwardBackIntent
+    expected_slots:
+      seek_direction: {}
+      seek_amount: {}
+      seek_unit: {}
+
+  - utterance: "skip forward 30 seconds"
+    expected_intent: SkipForwardBackIntent
+    expected_slots:
+      seek_direction: {}
+      seek_amount: {}
+      seek_unit: {}
+

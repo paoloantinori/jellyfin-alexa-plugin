@@ -41,3 +41,26 @@ tests:
     expected_intent: SetReminderIntent
     expected_slots:
       reminder_time: {}
+  # -------------------------------------------------------------------------
+  # SkipForwardBackIntent (JF-875 rollout). The avança/volta verb-direction
+  # synonyms ride the bare row (the rewind-as-synonym mechanism). Verified on
+  # the scratch build across two identical-content rebuilds.
+  # -------------------------------------------------------------------------
+  - utterance: "avança 30 segundos"
+    expected_intent: SkipForwardBackIntent
+    expected_slots:
+      seek_direction: {}
+      seek_amount: {}
+      seek_unit: {}
+
+  - utterance: "volta 30 segundos"
+    expected_intent: SkipForwardBackIntent
+    expected_slots:
+      seek_direction: {}
+      seek_amount: {}
+      seek_unit: {}
+
+  # Transport steal guard (pre-existing vendor routing).
+  - utterance: "próxima música"
+    expected_intent: RecommendIntent
+    expected_slots: {}

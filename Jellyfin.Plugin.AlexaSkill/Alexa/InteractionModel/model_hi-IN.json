@@ -335,6 +335,29 @@
         ]
       },
       {
+        "name": "SkipForwardBackIntent",
+        "samples": [
+          "{seek_amount} {seek_unit} {seek_direction} जाओ",
+          "{seek_amount} {seek_unit} {seek_direction} स्किप करो",
+          "{seek_direction} स्किप करो",
+          "{seek_amount} {seek_unit} स्किप करो"
+        ],
+        "slots": [
+          {
+            "name": "seek_direction",
+            "type": "SeekDirection"
+          },
+          {
+            "name": "seek_amount",
+            "type": "AMAZON.NUMBER"
+          },
+          {
+            "name": "seek_unit",
+            "type": "SeekUnit"
+          }
+        ]
+      },
+      {
         "name": "PlayPlaylistIntent",
         "samples": [
           "प्लेलिस्ट {playlist} चलाओ",
@@ -1287,6 +1310,47 @@
               ]
             },
             "id": "latest"
+          }
+        ]
+      },
+      {
+        "name": "SeekDirection",
+        "values": [
+          {
+            "name": {
+              "value": "आगे"
+            },
+            "id": "forward"
+          },
+          {
+            "name": {
+              "value": "पीछे"
+            },
+            "id": "back"
+          }
+        ]
+      },
+      {
+        "name": "SeekUnit",
+        "values": [
+          {
+            "name": {
+              "value": "सेकंड",
+              "synonyms": [
+                "सेकंड्स"
+              ]
+            },
+            "id": "seconds"
+          },
+          {
+            "name": {
+              "value": "मिनट",
+              "synonyms": [
+                "मिनटों",
+                "मिनट्स"
+              ]
+            },
+            "id": "minutes"
           }
         ]
       },

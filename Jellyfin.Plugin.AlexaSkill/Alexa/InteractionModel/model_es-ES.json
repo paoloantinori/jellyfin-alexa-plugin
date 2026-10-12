@@ -308,6 +308,29 @@
         ]
       },
       {
+        "name": "SkipForwardBackIntent",
+        "samples": [
+          "salta {seek_direction}",
+          "salta {seek_direction} {seek_amount} {seek_unit}",
+          "salta {seek_amount} {seek_unit}",
+          "{seek_direction} {seek_amount} {seek_unit}"
+        ],
+        "slots": [
+          {
+            "name": "seek_direction",
+            "type": "SeekDirection"
+          },
+          {
+            "name": "seek_amount",
+            "type": "AMAZON.NUMBER"
+          },
+          {
+            "name": "seek_unit",
+            "type": "SeekUnit"
+          }
+        ]
+      },
+      {
         "name": "PlayPlaylistIntent",
         "samples": [
           "Reproduce la lista de reproducción {playlist}",
@@ -1411,6 +1434,52 @@
               ]
             },
             "id": "latest"
+          }
+        ]
+      },
+      {
+        "name": "SeekDirection",
+        "values": [
+          {
+            "name": {
+              "value": "adelante",
+              "synonyms": [
+                "avanza"
+              ]
+            },
+            "id": "forward"
+          },
+          {
+            "name": {
+              "value": "atrás",
+              "synonyms": [
+                "retrocede"
+              ]
+            },
+            "id": "back"
+          }
+        ]
+      },
+      {
+        "name": "SeekUnit",
+        "values": [
+          {
+            "name": {
+              "value": "segundos",
+              "synonyms": [
+                "segundo"
+              ]
+            },
+            "id": "seconds"
+          },
+          {
+            "name": {
+              "value": "minutos",
+              "synonyms": [
+                "minuto"
+              ]
+            },
+            "id": "minutes"
           }
         ]
       },

@@ -408,24 +408,26 @@ intents:
     slots:
       - name: chapter_number
         type: AMAZON.NUMBER
+  # JF-875 (2026-10-12): reworked to the it-IT JF-869 discipline (the en-US
+  # family shipped direction-LITERAL rows, and a literal row delivers an EMPTY
+  # seek_direction, so every back-literal row here was the wrong-way latent
+  # bug: "skip back 30 seconds" / "go back ..." / "jump back ..." / "back
+  # ..." / "rewind ..." all fell to the handler's forward default). The
+  # direction word now rides ONLY the slotted {seek_direction} position, so
+  # the literal twins are gone; "rewind" survives as a back synonym on the
+  # bare row (the verb fills the slot, the rewind-as-synonym mechanism) and
+  # as a SeekVocabulary raw word. "fast forward {amount} {unit}" is the one
+  # kept direction-implying literal: its empty slot resolves forward, which
+  # is its own semantics (the rewind mirror was the bug, not the shape).
   - name: SkipForwardBackIntent
     samples:
-      - skip forward {seek_amount} {seek_unit}
-      - skip back {seek_amount} {seek_unit}
       - skip {seek_direction} {seek_amount} {seek_unit}
-      - go forward {seek_amount} {seek_unit}
-      - go back {seek_amount} {seek_unit}
       - skip {seek_direction}
-      - forward {seek_amount} {seek_unit}
-      - back {seek_amount} {seek_unit}
-      - skip forward
-      - skip back
-      - skip {seek_amount} seconds
-      - skip {seek_amount} minutes
+      - skip {seek_amount} {seek_unit}
+      - go {seek_direction} {seek_amount} {seek_unit}
+      - jump {seek_direction} {seek_amount} {seek_unit}
       - fast forward {seek_amount} {seek_unit}
-      - rewind {seek_amount} {seek_unit}
-      - jump forward {seek_amount} {seek_unit}
-      - jump back {seek_amount} {seek_unit}
+      - '{seek_direction} {seek_amount} {seek_unit}'
     slots:
       - name: seek_direction
         type: SeekDirection
@@ -1002,6 +1004,10 @@ types:
       - value: evening
       - value: dinner
       - value: sleep
+  # JF-875: "rewind" joins the back entry as a synonym (the rewind-as-synonym
+  # mechanism: the verb lands in the {seek_direction} slot on the bare row and
+  # entity resolution maps it to the shared back id; SeekVocabulary carries the
+  # raw-word twin for no-ER deliveries).
   SeekDirection:
     values:
       - id: forward
@@ -1009,7 +1015,7 @@ types:
         synonyms: [ahead, 'on']
       - id: back
         value: back
-        synonyms: [backward, backwards]
+        synonyms: [backward, backwards, rewind]
   SeekUnit:
     values:
       - id: seconds

@@ -419,3 +419,34 @@ tests:
     expected_intent: PlayAlbumIntent
     expected_slots:
       musician: {}
+  # -------------------------------------------------------------------------
+  # SkipForwardBackIntent (JF-875 rollout; "salta adelante" was the JF-684
+  # no-selection class before). The avanza/retrocede verb-direction synonyms
+  # ride the bare row (the rewind-as-synonym mechanism). Verified on the
+  # scratch build across two identical-content rebuilds.
+  # -------------------------------------------------------------------------
+  - utterance: "salta adelante 30 segundos"
+    expected_intent: SkipForwardBackIntent
+    expected_slots:
+      seek_direction: {}
+      seek_amount: {}
+      seek_unit: {}
+
+  - utterance: "retrocede 30 segundos"
+    expected_intent: SkipForwardBackIntent
+    expected_slots:
+      seek_direction: {}
+      seek_amount: {}
+      seek_unit: {}
+
+  - utterance: "salta atrás 30 segundos"
+    expected_intent: SkipForwardBackIntent
+    expected_slots:
+      seek_direction: {}
+      seek_amount: {}
+      seek_unit: {}
+
+  # Transport steal guard.
+  - utterance: "siguiente canción"
+    expected_intent: AMAZON.NextIntent
+    expected_slots: {}

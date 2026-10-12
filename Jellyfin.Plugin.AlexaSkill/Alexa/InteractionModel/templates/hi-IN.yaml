@@ -356,6 +356,33 @@ intents:
     slots:
       - name: chapter_number
         type: AMAZON.NUMBER
+  # JF-875 (2026-10-12): the SkipForwardBack family (en-US + it-IT carried it
+  # until now; this locale was the JF-684 no-selection class for every
+  # skip-forward/back-style ask). The family ships in the JF-869 it-IT shape:
+  # the direction word rides ONLY the slotted {seek_direction} position (a
+  # direction-literal row delivers an empty slot and the handler's forward
+  # default seeks the wrong way, the en-US wrong-way bug this rollout must not
+  # re-import), no bare direction-only rows (the it-IT transport-steal
+  # lesson: bare direction words steal the built-in Next/Previous routing),
+  # and verbs that ARE the direction (the locale's rewind-class verbs) ride
+  # the slot as SeekDirection synonyms (the rewind-as-synonym mechanism) on
+  # the verb-initial bare row.
+  # Hindi word order follows the locale's GoToChapter shape (एक चैप्टर आगे
+  # जाओ): amount, unit, direction, verb. स्किप करो is the established skip
+  # verb (चैप्टर स्किप करो).
+  - name: SkipForwardBackIntent
+    samples:
+      - '{seek_amount} {seek_unit} {seek_direction} जाओ'
+      - '{seek_amount} {seek_unit} {seek_direction} स्किप करो'
+      - '{seek_direction} स्किप करो'
+      - '{seek_amount} {seek_unit} स्किप करो'
+    slots:
+      - name: seek_direction
+        type: SeekDirection
+      - name: seek_amount
+        type: AMAZON.NUMBER
+      - name: seek_unit
+        type: SeekUnit
   - name: PlayPlaylistIntent
     samples:
       - प्लेलिस्ट {playlist} चलाओ
@@ -899,6 +926,25 @@ types:
       - value: नवीनतम
         id: latest
         synonyms: [सबसे नया, नया, आख़िरी]
+  # JF-875: seek vocabulary for SkipForwardBackIntent (the EpisodePosition
+  # shape: localized values over the shared English id key space the
+  # handler's entity resolution reads; SeekVocabulary.cs is the consuming
+  # half, its raw word sets carry these locale words as the no-ER
+  # fallback).
+  SeekDirection:
+    values:
+      - value: आगे
+        id: "forward"
+      - value: पीछे
+        id: "back"
+  SeekUnit:
+    values:
+      - value: सेकंड
+        id: "seconds"
+        synonyms: [सेकंड्स]
+      - value: मिनट
+        id: "minutes"
+        synonyms: [मिनटों, मिनट्स]
   TimePeriod:
     values:
       - id: today

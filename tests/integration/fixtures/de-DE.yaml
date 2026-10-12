@@ -480,3 +480,28 @@ tests:
     expected_slots:
       query:
         value: "inception"
+  # -------------------------------------------------------------------------
+  # SkipForwardBackIntent (JF-875 rollout; "springe vor" was the JF-684
+  # no-selection class before). German word order puts the separable
+  # direction particle after the amount, so the slotted direction rides the
+  # row tail; the direction word never appears as a literal. Verified on the
+  # scratch build across two identical-content rebuilds.
+  # -------------------------------------------------------------------------
+  - utterance: "springe 30 Sekunden vor"
+    expected_intent: SkipForwardBackIntent
+    expected_slots:
+      seek_direction: {}
+      seek_amount: {}
+      seek_unit: {}
+
+  - utterance: "spule 30 Sekunden zurück"
+    expected_intent: SkipForwardBackIntent
+    expected_slots:
+      seek_direction: {}
+      seek_amount: {}
+      seek_unit: {}
+
+  # Transport steal guard.
+  - utterance: "nächstes Lied"
+    expected_intent: AMAZON.NextIntent
+    expected_slots: {}

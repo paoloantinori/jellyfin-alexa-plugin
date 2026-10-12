@@ -8,15 +8,23 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 /// JF-869 seek-slot semantics for SkipForwardBackIntent. The SeekDirection and
 /// SeekUnit slot types are restricted custom types (the EpisodePosition
 /// architecture) whose values carry the shared English ids in every locale
-/// that declares the types (en-US and it-IT today; the templates' type entries
-/// are the authoritative source of the ids; this is the consuming half), so
-/// the entity-resolution branch is locale-independent; the raw-value branch
-/// covers requests whose entity resolution did not match (an older deployed
-/// model, ASR drift) via the word sets below. The sets are the flat union of
-/// the words the locales carrying the intent speak today (the en-US values
-/// plus synonyms, the it-IT values): when a new locale family gains the
-/// SkipForwardBack samples, its words join THESE sets (the one edit point),
-/// the CancelWords JF-444 lesson.
+/// that declares the types (all 17 since the JF-875 rollout; the templates'
+/// type entries are the authoritative source of the ids; this is the consuming
+/// half), so the entity-resolution branch is locale-independent; the raw-value
+/// branch covers requests whose entity resolution did not match (an older
+/// deployed model, ASR drift) via the word sets below. The sets are the flat
+/// union of the direction/unit words every locale's types speak (values plus
+/// synonyms, including the verb-direction synonyms like the en "rewind" and
+/// the es "retrocede", the rewind-as-synonym mechanism): when a locale's
+/// seek vocabulary changes, its words change HERE (the one edit point; the
+/// SeekVocabularyTests mirror guard fails the suite on drift either way).
+/// Unlike CancelWords (JF-444) the union is deliberately NOT locale-keyed:
+/// CancelWords serves free-text slots where a foreign-locale word
+/// false-positives against arbitrary user content, while these slots are
+/// restricted types whose cross-locale collision surface is empty (the
+/// negative sides of the mirror guard pin that standing) and the spoken
+/// language can differ from the request locale (an it-IT user saying
+/// "rewind", the JF-384 cross-locale class).
 /// </summary>
 internal static class SeekVocabulary
 {
@@ -28,12 +36,44 @@ internal static class SeekVocabulary
 
     private static readonly HashSet<string> BackwardWords = new(StringComparer.OrdinalIgnoreCase)
     {
-        "back", "backward", "backwards", "indietro",
+        // en family (rewind joined in JF-875, the rewind-as-synonym mechanism)
+        "back", "backward", "backwards", "rewind",
+        // it-IT
+        "indietro",
+        // de-DE
+        "zurück", "rückwärts",
+        // es family + pt-BR (atrás shared)
+        "atrás", "retrocede",
+        // fr family
+        "en arrière", "recule",
+        // hi-IN
+        "पीछे",
+        // ja-JP
+        "戻して", "戻って",
+        // nl-NL
+        "terug", "achteruit",
+        // pt-BR
+        "para trás", "volta",
+        // ar-SA
+        "للخلف", "ارجع", "تراجع",
     };
 
     private static readonly HashSet<string> MinuteWords = new(StringComparer.OrdinalIgnoreCase)
     {
+        // en family + it-IT + fr family
         "minutes", "minute", "minuti", "minuto",
+        // de-DE ("Minute" case-folds onto the en "minute" entry)
+        "Minuten",
+        // es family + pt-BR
+        "minutos",
+        // hi-IN
+        "मिनट", "मिनटों", "मिनट्स",
+        // ja-JP
+        "分",
+        // nl-NL ("minuten" case-folds onto the de-DE "Minuten" entry)
+        "minuut",
+        // ar-SA
+        "دقيقة", "دقائق",
     };
 
     /// <summary>

@@ -58,6 +58,9 @@ Placeholder legend:
 | `<المدة (5 دقائق، 30 ثانية، نص ساعة)>` | `{reminder_duration}` |
 | `<الوقت (الساعة السابعة)>` | `{reminder_time}` |
 | `<رقم الموسم>` | `{season_number}` |
+| `<عدد>` | `{seek_amount}` |
+| `<للأمام أو للخلف>` | `{seek_direction}` |
+| `<ثوانٍ أو دقائق>` | `{seek_unit}` |
 | `<اسم المسلسل>` | `{series_name}` |
 | `<المدة (5 دقائق، 30 ثانية، نصف ساعة)>` | `{sleep_duration}` |
 | `<اسم الأغنية>` | `{song}` |
@@ -70,7 +73,7 @@ Placeholder legend:
 | `<كلمات من عنوان الأغنية>` | `{titleKeywords}` |
 | `<اسم المستخدم>` | `{username}` |
 
-Complete phrase list (347 phrases across 67 commands):
+Complete phrase list (349 phrases across 68 commands):
 
 #### Play music
 
@@ -559,6 +562,11 @@ Complete phrase list (347 phrases across 67 commands):
 - `انتقل إلى الفصل <رقم الفصل>`
 - `تخطى فصلاً`
 
+**Skip forward or back**
+
+- `<للأمام أو للخلف> <عدد> <ثوانٍ أو دقائق>`
+- `تخطى <عدد> <ثوانٍ أو دقائق>`
+
 **Change the playback speed**
 
 - `بسرعة <السرعة (عادية، واحدة ونصف، مضاعفة، أسرع)>`
@@ -645,6 +653,9 @@ Placeholder legend:
 | `<duur (5 minuten, 30 seconden, een half uur)>` | `{reminder_duration}` |
 | `<tijdstip (om 7 uur)>` | `{reminder_time}` |
 | `<seizoensnummer>` | `{season_number}` |
+| `<aantal>` | `{seek_amount}` |
+| `<vooruit of terug>` | `{seek_direction}` |
+| `<seconden of minuten>` | `{seek_unit}` |
 | `<naam van de serie>` | `{series_name}` |
 | `<duur (5 minuten, 30 seconden, een half uur)>` | `{sleep_duration}` |
 | `<titel van het nummer>` | `{song}` |
@@ -657,7 +668,7 @@ Placeholder legend:
 | `<woorden uit de songtitel>` | `{titleKeywords}` |
 | `<gebruikersnaam>` | `{username}` |
 
-Complete phrase list (403 phrases across 67 commands):
+Complete phrase list (406 phrases across 68 commands):
 
 #### Play music
 
@@ -1197,6 +1208,12 @@ Complete phrase list (403 phrases across 67 commands):
 - `een hoofdstuk terug`
 - `hoofdstuk overslaan`
 
+**Skip forward or back**
+
+- `spring <vooruit of terug>`
+- `spring <aantal> <seconden of minuten> <vooruit of terug>`
+- `ga <aantal> <seconden of minuten> <vooruit of terug>`
+
 **Change the playback speed**
 
 - `op snelheid <snelheid (normaal, anderhalf, dubbel, sneller)>`
@@ -1288,6 +1305,9 @@ Placeholder legend:
 | `<duration (5 minutes, 30 seconds, half an hour)>` | `{reminder_duration}` |
 | `<time (7 pm)>` | `{reminder_time}` |
 | `<season number>` | `{season_number}` |
+| `<number>` | `{seek_amount}` |
+| `<forward or back>` | `{seek_direction}` |
+| `<seconds or minutes>` | `{seek_unit}` |
 | `<series name>` | `{series_name}` |
 | `<duration (5 minutes, 30 seconds, half an hour)>` | `{sleep_duration}` |
 | `<song title>` | `{song}` |
@@ -1299,7 +1319,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (502 phrases across 67 commands):
+Complete phrase list (509 phrases across 68 commands):
 
 #### Play music
 
@@ -1933,6 +1953,16 @@ Complete phrase list (502 phrases across 67 commands):
 - `Go back a chapter`
 - `Skip chapter`
 
+**Skip forward or back**
+
+- `skip <forward or back> <number> <seconds or minutes>`
+- `skip <forward or back>`
+- `skip <number> <seconds or minutes>`
+- `go <forward or back> <number> <seconds or minutes>`
+- `jump <forward or back> <number> <seconds or minutes>`
+- `fast forward <number> <seconds or minutes>`
+- `<forward or back> <number> <seconds or minutes>`
+
 **Change the playback speed**
 
 - `at speed <speed (normal, one and a half, double, faster)>`
@@ -2029,6 +2059,9 @@ Placeholder legend:
 | `<duration (5 minutes, 30 seconds, half an hour)>` | `{reminder_duration}` |
 | `<time (7 pm)>` | `{reminder_time}` |
 | `<season number>` | `{season_number}` |
+| `<number>` | `{seek_amount}` |
+| `<forward or back>` | `{seek_direction}` |
+| `<seconds or minutes>` | `{seek_unit}` |
 | `<series name>` | `{series_name}` |
 | `<duration (5 minutes, 30 seconds, half an hour)>` | `{sleep_duration}` |
 | `<song title>` | `{song}` |
@@ -2040,7 +2073,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (504 phrases across 67 commands):
+Complete phrase list (511 phrases across 68 commands):
 
 #### Play music
 
@@ -2677,6 +2710,16 @@ Complete phrase list (504 phrases across 67 commands):
 - `Go back a chapter`
 - `Skip chapter`
 
+**Skip forward or back**
+
+- `skip <forward or back> <number> <seconds or minutes>`
+- `skip <forward or back>`
+- `skip <number> <seconds or minutes>`
+- `go <forward or back> <number> <seconds or minutes>`
+- `jump <forward or back> <number> <seconds or minutes>`
+- `fast forward <number> <seconds or minutes>`
+- `<forward or back> <number> <seconds or minutes>`
+
 **Change the playback speed**
 
 - `at speed <speed (normal, one and a half, double, faster)>`
@@ -2772,6 +2815,9 @@ Placeholder legend:
 | `<duration (5 minutes, 30 seconds, half an hour)>` | `{reminder_duration}` |
 | `<time (7 pm)>` | `{reminder_time}` |
 | `<season number>` | `{season_number}` |
+| `<number>` | `{seek_amount}` |
+| `<forward or back>` | `{seek_direction}` |
+| `<seconds or minutes>` | `{seek_unit}` |
 | `<series name>` | `{series_name}` |
 | `<duration (5 minutes, 30 seconds, half an hour)>` | `{sleep_duration}` |
 | `<song title>` | `{song}` |
@@ -2783,7 +2829,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (591 phrases across 67 commands):
+Complete phrase list (598 phrases across 68 commands):
 
 #### Play music
 
@@ -3502,6 +3548,16 @@ Complete phrase list (591 phrases across 67 commands):
 - `Go back a chapter`
 - `Skip chapter`
 
+**Skip forward or back**
+
+- `skip <forward or back> <number> <seconds or minutes>`
+- `skip <forward or back>`
+- `skip <number> <seconds or minutes>`
+- `go <forward or back> <number> <seconds or minutes>`
+- `jump <forward or back> <number> <seconds or minutes>`
+- `fast forward <number> <seconds or minutes>`
+- `<forward or back> <number> <seconds or minutes>`
+
 **Change the playback speed**
 
 - `at speed <speed (normal, one and a half, double, faster)>`
@@ -3602,6 +3658,9 @@ Placeholder legend:
 | `<duration (5 minutes, 30 seconds, half an hour)>` | `{reminder_duration}` |
 | `<time (7 pm)>` | `{reminder_time}` |
 | `<season number>` | `{season_number}` |
+| `<number>` | `{seek_amount}` |
+| `<forward or back>` | `{seek_direction}` |
+| `<seconds or minutes>` | `{seek_unit}` |
 | `<series name>` | `{series_name}` |
 | `<duration (5 minutes, 30 seconds, half an hour)>` | `{sleep_duration}` |
 | `<song title>` | `{song}` |
@@ -3613,7 +3672,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (506 phrases across 67 commands):
+Complete phrase list (513 phrases across 68 commands):
 
 #### Play music
 
@@ -4253,6 +4312,16 @@ Complete phrase list (506 phrases across 67 commands):
 - `Go back a chapter`
 - `Skip chapter`
 
+**Skip forward or back**
+
+- `skip <forward or back> <number> <seconds or minutes>`
+- `skip <forward or back>`
+- `skip <number> <seconds or minutes>`
+- `go <forward or back> <number> <seconds or minutes>`
+- `jump <forward or back> <number> <seconds or minutes>`
+- `fast forward <number> <seconds or minutes>`
+- `<forward or back> <number> <seconds or minutes>`
+
 **Change the playback speed**
 
 - `at speed <speed (normal, one and a half, double, faster)>`
@@ -4365,7 +4434,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (779 phrases across 69 commands):
+Complete phrase list (770 phrases across 69 commands):
 
 #### Play music
 
@@ -5245,22 +5314,13 @@ Complete phrase list (779 phrases across 69 commands):
 
 **Skip forward or back**
 
-- `skip forward <number> <seconds or minutes>`
-- `skip back <number> <seconds or minutes>`
 - `skip <forward or back> <number> <seconds or minutes>`
-- `go forward <number> <seconds or minutes>`
-- `go back <number> <seconds or minutes>`
 - `skip <forward or back>`
-- `forward <number> <seconds or minutes>`
-- `back <number> <seconds or minutes>`
-- `skip forward`
-- `skip back`
-- `skip <number> seconds`
-- `skip <number> minutes`
+- `skip <number> <seconds or minutes>`
+- `go <forward or back> <number> <seconds or minutes>`
+- `jump <forward or back> <number> <seconds or minutes>`
 - `fast forward <number> <seconds or minutes>`
-- `rewind <number> <seconds or minutes>`
-- `jump forward <number> <seconds or minutes>`
-- `jump back <number> <seconds or minutes>`
+- `<forward or back> <number> <seconds or minutes>`
 
 **Jump to a position**
 
@@ -5378,6 +5438,9 @@ Placeholder legend:
 | `<durée (5 minutes, 30 secondes, une demi-heure)>` | `{reminder_duration}` |
 | `<heure (à 19 heures)>` | `{reminder_time}` |
 | `<numéro de saison>` | `{season_number}` |
+| `<quantité>` | `{seek_amount}` |
+| `<en avant ou en arrière>` | `{seek_direction}` |
+| `<secondes ou minutes>` | `{seek_unit}` |
 | `<nom de la série>` | `{series_name}` |
 | `<durée (5 minutes, 30 secondes, une demi-heure)>` | `{sleep_duration}` |
 | `<titre de la chanson>` | `{song}` |
@@ -5389,7 +5452,7 @@ Placeholder legend:
 | `<mots du titre de la chanson>` | `{titleKeywords}` |
 | `<nom d'utilisateur>` | `{username}` |
 
-Complete phrase list (465 phrases across 72 commands):
+Complete phrase list (468 phrases across 73 commands):
 
 #### Play music
 
@@ -6006,6 +6069,12 @@ Complete phrase list (465 phrases across 72 commands):
 - `Avancer d'un chapitre`
 - `Reculer d'un chapitre`
 
+**Skip forward or back**
+
+- `saute <en avant ou en arrière>`
+- `saute <en avant ou en arrière> de <quantité> <secondes ou minutes>`
+- `<en avant ou en arrière> de <quantité> <secondes ou minutes>`
+
 **Change the playback speed**
 
 - `à vitesse <vitesse (normale, un et demi, double, plus vite)>`
@@ -6097,6 +6166,9 @@ Placeholder legend:
 | `<durée (5 minutes, 30 secondes, une demi-heure)>` | `{reminder_duration}` |
 | `<heure (à 19 heures)>` | `{reminder_time}` |
 | `<numéro de saison>` | `{season_number}` |
+| `<quantité>` | `{seek_amount}` |
+| `<en avant ou en arrière>` | `{seek_direction}` |
+| `<secondes ou minutes>` | `{seek_unit}` |
 | `<nom de la série>` | `{series_name}` |
 | `<durée (5 minutes, 30 secondes, une demi-heure)>` | `{sleep_duration}` |
 | `<titre de la chanson>` | `{song}` |
@@ -6108,7 +6180,7 @@ Placeholder legend:
 | `<mots du titre de la chanson>` | `{titleKeywords}` |
 | `<nom d'utilisateur>` | `{username}` |
 
-Complete phrase list (477 phrases across 72 commands):
+Complete phrase list (480 phrases across 73 commands):
 
 #### Play music
 
@@ -6736,6 +6808,12 @@ Complete phrase list (477 phrases across 72 commands):
 - `Avancer d'un chapitre`
 - `Reculer d'un chapitre`
 
+**Skip forward or back**
+
+- `saute <en avant ou en arrière>`
+- `saute <en avant ou en arrière> de <quantité> <secondes ou minutes>`
+- `<en avant ou en arrière> de <quantité> <secondes ou minutes>`
+
 **Change the playback speed**
 
 - `à vitesse <vitesse (normale, un et demi, double, plus vite)>`
@@ -6828,6 +6906,9 @@ Placeholder legend:
 | `<Dauer (5 Minuten, 30 Sekunden, eine halbe Stunde)>` | `{reminder_duration}` |
 | `<Uhrzeit (um 19 Uhr)>` | `{reminder_time}` |
 | `<Staffelnummer>` | `{season_number}` |
+| `<Anzahl>` | `{seek_amount}` |
+| `<vor oder zurück>` | `{seek_direction}` |
+| `<Sekunden oder Minuten>` | `{seek_unit}` |
 | `<Name der Serie>` | `{series_name}` |
 | `<Dauer (5 Minuten, 30 Sekunden, eine halbe Stunde)>` | `{sleep_duration}` |
 | `<Titel des Liedes>` | `{song}` |
@@ -6839,7 +6920,7 @@ Placeholder legend:
 | `<Wörter aus dem Songtitel>` | `{titleKeywords}` |
 | `<Benutzername>` | `{username}` |
 
-Complete phrase list (482 phrases across 72 commands):
+Complete phrase list (485 phrases across 73 commands):
 
 #### Play music
 
@@ -7471,6 +7552,12 @@ Complete phrase list (482 phrases across 72 commands):
 - `Ein Kapitel vor`
 - `Ein Kapitel zurück`
 
+**Skip forward or back**
+
+- `springe <vor oder zurück>`
+- `springe <Anzahl> <Sekunden oder Minuten> <vor oder zurück>`
+- `spule <Anzahl> <Sekunden oder Minuten> <vor oder zurück>`
+
 **Change the playback speed**
 
 - `mit geschwindigkeit <Geschwindigkeit (normal, eineinhalb, doppelt, schneller)>`
@@ -7564,6 +7651,9 @@ Placeholder legend:
 | `<अवधि (5 मिनट, 30 सेकंड, आधा घंटा)>` | `{reminder_duration}` |
 | `<समय (शाम 7 बजे)>` | `{reminder_time}` |
 | `<सीज़न नंबर>` | `{season_number}` |
+| `<संख्या>` | `{seek_amount}` |
+| `<आगे या पीछे>` | `{seek_direction}` |
+| `<सेकंड या मिनट>` | `{seek_unit}` |
 | `<सीरीज़ का नाम>` | `{series_name}` |
 | `<अवधि (5 मिनट, 30 सेकंड, आधा घंटा)>` | `{sleep_duration}` |
 | `<गाने का नाम>` | `{song}` |
@@ -7576,7 +7666,7 @@ Placeholder legend:
 | `<गाने के नाम के शब्द>` | `{titleKeywords}` |
 | `<उपयोगकर्ता का नाम>` | `{username}` |
 
-Complete phrase list (377 phrases across 67 commands):
+Complete phrase list (381 phrases across 68 commands):
 
 #### Play music
 
@@ -8092,6 +8182,13 @@ Complete phrase list (377 phrases across 67 commands):
 - `एक चैप्टर आगे जाओ`
 - `एक चैप्टर पीछे जाओ`
 - `चैप्टर स्किप करो`
+
+**Skip forward or back**
+
+- `<संख्या> <सेकंड या मिनट> <आगे या पीछे> जाओ`
+- `<संख्या> <सेकंड या मिनट> <आगे या पीछे> स्किप करो`
+- `<आगे या पीछे> स्किप करो`
+- `<संख्या> <सेकंड या मिनट> स्किप करो`
 
 **Change the playback speed**
 
@@ -10084,6 +10181,9 @@ Placeholder legend:
 | `<時間（5分、30秒、30分）>` | `{reminder_duration}` |
 | `<時刻 (7時)>` | `{reminder_time}` |
 | `<シーズン番号>` | `{season_number}` |
+| `<数>` | `{seek_amount}` |
+| `<前または後ろ>` | `{seek_direction}` |
+| `<秒または分>` | `{seek_unit}` |
 | `<シリーズ名>` | `{series_name}` |
 | `<時間（5分、30秒、30分）>` | `{sleep_duration}` |
 | `<曲名>` | `{song}` |
@@ -10096,7 +10196,7 @@ Placeholder legend:
 | `<曲名のキーワード>` | `{titleKeywords}` |
 | `<ユーザー名>` | `{username}` |
 
-Complete phrase list (341 phrases across 67 commands):
+Complete phrase list (343 phrases across 68 commands):
 
 #### Play music
 
@@ -10576,6 +10676,11 @@ Complete phrase list (341 phrases across 67 commands):
 - `チャプター <チャプター番号> へスキップして`
 - `チャプターをスキップして`
 
+**Skip forward or back**
+
+- `<数> <秒または分> <前または後ろ>`
+- `<数> <秒または分> スキップして`
+
 **Change the playback speed**
 
 - `速度 <速度（通常、1.5倍、2倍、速く）>`
@@ -10665,6 +10770,9 @@ Placeholder legend:
 | `<duração (5 minutos, 30 segundos, meia hora)>` | `{reminder_duration}` |
 | `<hora (às sete)>` | `{reminder_time}` |
 | `<número da temporada>` | `{season_number}` |
+| `<quantidade>` | `{seek_amount}` |
+| `<avançar ou voltar>` | `{seek_direction}` |
+| `<segundos ou minutos>` | `{seek_unit}` |
 | `<nome da série>` | `{series_name}` |
 | `<duração (5 minutos, 30 segundos, meia hora)>` | `{sleep_duration}` |
 | `<título da música>` | `{song}` |
@@ -10677,7 +10785,7 @@ Placeholder legend:
 | `<palavras do título da música>` | `{titleKeywords}` |
 | `<nome do usuário>` | `{username}` |
 
-Complete phrase list (417 phrases across 67 commands):
+Complete phrase list (419 phrases across 68 commands):
 
 #### Play music
 
@@ -11229,6 +11337,11 @@ Complete phrase list (417 phrases across 67 commands):
 - `voltar um capítulo`
 - `pular capítulo`
 
+**Skip forward or back**
+
+- `pula <quantidade> <segundos ou minutos>`
+- `<avançar ou voltar> <quantidade> <segundos ou minutos>`
+
 **Change the playback speed**
 
 - `a velocidade <velocidade (normal, um e meio, dupla, mais rápido)>`
@@ -11322,6 +11435,9 @@ Placeholder legend:
 | `<duración (5 minutos, 30 segundos, media hora)>` | `{reminder_duration}` |
 | `<hora (a las siete)>` | `{reminder_time}` |
 | `<número de temporada>` | `{season_number}` |
+| `<cantidad>` | `{seek_amount}` |
+| `<adelante o atrás>` | `{seek_direction}` |
+| `<segundos o minutos>` | `{seek_unit}` |
 | `<nombre de la serie>` | `{series_name}` |
 | `<duración (5 minutos, 30 segundos, media hora)>` | `{sleep_duration}` |
 | `<título de la canción>` | `{song}` |
@@ -11333,7 +11449,7 @@ Placeholder legend:
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (468 phrases across 67 commands):
+Complete phrase list (472 phrases across 68 commands):
 
 #### Play music
 
@@ -11937,6 +12053,13 @@ Complete phrase list (468 phrases across 67 commands):
 - `Avanzar un capítulo`
 - `Retroceder un capítulo`
 
+**Skip forward or back**
+
+- `salta <adelante o atrás>`
+- `salta <adelante o atrás> <cantidad> <segundos o minutos>`
+- `salta <cantidad> <segundos o minutos>`
+- `<adelante o atrás> <cantidad> <segundos o minutos>`
+
 **Change the playback speed**
 
 - `a velocidad <velocidad (normal, uno y medio, doble, más rápido)>`
@@ -12029,6 +12152,9 @@ Placeholder legend:
 | `<duración (5 minutos, 30 segundos, media hora)>` | `{reminder_duration}` |
 | `<hora (a las siete)>` | `{reminder_time}` |
 | `<número de temporada>` | `{season_number}` |
+| `<cantidad>` | `{seek_amount}` |
+| `<adelante o atrás>` | `{seek_direction}` |
+| `<segundos o minutos>` | `{seek_unit}` |
 | `<nombre de la serie>` | `{series_name}` |
 | `<duración (5 minutos, 30 segundos, media hora)>` | `{sleep_duration}` |
 | `<título de la canción>` | `{song}` |
@@ -12040,7 +12166,7 @@ Placeholder legend:
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (465 phrases across 67 commands):
+Complete phrase list (469 phrases across 68 commands):
 
 #### Play music
 
@@ -12642,6 +12768,13 @@ Complete phrase list (465 phrases across 67 commands):
 - `Avanzar un capítulo`
 - `Retroceder un capítulo`
 
+**Skip forward or back**
+
+- `salta <adelante o atrás>`
+- `salta <adelante o atrás> <cantidad> <segundos o minutos>`
+- `salta <cantidad> <segundos o minutos>`
+- `<adelante o atrás> <cantidad> <segundos o minutos>`
+
 **Change the playback speed**
 
 - `a velocidad <velocidad (normal, uno y medio, doble, más rápido)>`
@@ -12733,6 +12866,9 @@ Placeholder legend:
 | `<duración (5 minutos, 30 segundos, media hora)>` | `{reminder_duration}` |
 | `<hora (a las siete)>` | `{reminder_time}` |
 | `<número de temporada>` | `{season_number}` |
+| `<cantidad>` | `{seek_amount}` |
+| `<adelante o atrás>` | `{seek_direction}` |
+| `<segundos o minutos>` | `{seek_unit}` |
 | `<nombre de la serie>` | `{series_name}` |
 | `<duración (5 minutos, 30 segundos, media hora)>` | `{sleep_duration}` |
 | `<título de la canción>` | `{song}` |
@@ -12744,7 +12880,7 @@ Placeholder legend:
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (455 phrases across 67 commands):
+Complete phrase list (459 phrases across 68 commands):
 
 #### Play music
 
@@ -13335,6 +13471,13 @@ Complete phrase list (455 phrases across 67 commands):
 - `Saltar al capítulo <número de capítulo>`
 - `Avanzar un capítulo`
 - `Retroceder un capítulo`
+
+**Skip forward or back**
+
+- `salta <adelante o atrás>`
+- `salta <adelante o atrás> <cantidad> <segundos o minutos>`
+- `salta <cantidad> <segundos o minutos>`
+- `<adelante o atrás> <cantidad> <segundos o minutos>`
 
 **Change the playback speed**
 

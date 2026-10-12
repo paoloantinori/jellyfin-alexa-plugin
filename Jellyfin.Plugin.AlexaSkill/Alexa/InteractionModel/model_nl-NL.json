@@ -338,6 +338,28 @@
         ]
       },
       {
+        "name": "SkipForwardBackIntent",
+        "samples": [
+          "spring {seek_direction}",
+          "spring {seek_amount} {seek_unit} {seek_direction}",
+          "ga {seek_amount} {seek_unit} {seek_direction}"
+        ],
+        "slots": [
+          {
+            "name": "seek_direction",
+            "type": "SeekDirection"
+          },
+          {
+            "name": "seek_amount",
+            "type": "AMAZON.NUMBER"
+          },
+          {
+            "name": "seek_unit",
+            "type": "SeekUnit"
+          }
+        ]
+      },
+      {
         "name": "PlayPlaylistIntent",
         "samples": [
           "speel de afspeellijst {playlist}",
@@ -1346,6 +1368,52 @@
               ]
             },
             "id": "latest"
+          }
+        ]
+      },
+      {
+        "name": "SeekDirection",
+        "values": [
+          {
+            "name": {
+              "value": "vooruit",
+              "synonyms": [
+                "voor"
+              ]
+            },
+            "id": "forward"
+          },
+          {
+            "name": {
+              "value": "terug",
+              "synonyms": [
+                "achteruit"
+              ]
+            },
+            "id": "back"
+          }
+        ]
+      },
+      {
+        "name": "SeekUnit",
+        "values": [
+          {
+            "name": {
+              "value": "seconden",
+              "synonyms": [
+                "seconde"
+              ]
+            },
+            "id": "seconds"
+          },
+          {
+            "name": {
+              "value": "minuten",
+              "synonyms": [
+                "minuut"
+              ]
+            },
+            "id": "minutes"
           }
         ]
       },

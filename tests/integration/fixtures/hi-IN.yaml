@@ -142,3 +142,53 @@ tests:
       song:
         value: "bohemian rhapsody"
 
+  # -------------------------------------------------------------------------
+  # SkipForwardBackIntent (JF-875 rollout). Hindi word order follows the
+  # locale's GoToChapter shape: amount, unit, direction, verb. The word-form
+  # number pin (तीस) guards the AMAZON.NUMBER word-form delivery. Verified on
+  # the scratch build across two identical-content rebuilds.
+  # -------------------------------------------------------------------------
+  - utterance: "30 सेकंड आगे जाओ"
+    expected_intent: SkipForwardBackIntent
+    expected_slots:
+      seek_direction: {}
+      seek_amount: {}
+      seek_unit: {}
+
+  - utterance: "30 सेकंड पीछे जाओ"
+    expected_intent: SkipForwardBackIntent
+    expected_slots:
+      seek_direction: {}
+      seek_amount: {}
+      seek_unit: {}
+
+  - utterance: "तीस सेकंड पीछे जाओ"
+    expected_intent: SkipForwardBackIntent
+    expected_slots:
+      seek_direction: {}
+      seek_amount: {}
+      seek_unit: {}
+
+  # Magnitude-discriminating word-form pin (code-review catch): साठ is 60, so
+  # an exact value pin proves the word-form number survived AMAZON.NUMBER
+  # normalization AND the handler parse; a तीस-only pin (=30) could never
+  # distinguish a parsed word from the 30s default coincidence.
+  - utterance: "साठ सेकंड पीछे जाओ"
+    expected_intent: SkipForwardBackIntent
+    expected_slots:
+      seek_direction: {}
+      seek_amount:
+        value: "60"
+      seek_unit: {}
+
+  # The direction-less default-forward row (the it-IT "salta di" shape).
+  - utterance: "30 सेकंड स्किप करो"
+    expected_intent: SkipForwardBackIntent
+    expected_slots:
+      seek_amount: {}
+      seek_unit: {}
+
+  # Transport steal guard.
+  - utterance: "अगला गाना"
+    expected_intent: AMAZON.NextIntent
+    expected_slots: {}

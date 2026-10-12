@@ -312,6 +312,36 @@ intents:
     slots:
       - name: chapter_number
         type: AMAZON.NUMBER
+  # JF-875 (2026-10-12): the SkipForwardBack family (en-US + it-IT carried it
+  # until now; this locale was the JF-684 no-selection class for every
+  # skip-forward/back-style ask). The family ships in the JF-869 it-IT shape:
+  # the direction word rides ONLY the slotted {seek_direction} position (a
+  # direction-literal row delivers an empty slot and the handler's forward
+  # default seeks the wrong way, the en-US wrong-way bug this rollout must not
+  # re-import), no bare direction-only rows (the it-IT transport-steal
+  # lesson: bare direction words steal the built-in Next/Previous routing),
+  # and verbs that ARE the direction (the locale's rewind-class verbs) ride
+  # the slot as SeekDirection synonyms (the rewind-as-synonym mechanism) on
+  # the verb-initial bare row.
+  # German word order: the separable direction particle sits AFTER the amount
+  # ("springe 30 Sekunden vor", "spule 30 Sekunden zurueck"), so the slotted
+  # direction rides the row tail; spulen is the natural media-rewind verb.
+  # skip family; the it-IT "salta di {seek_amount} {seek_unit}" direction-less
+  # default-forward twin is deliberately OMITTED: German needs the separable
+  # direction particle to sound complete ("springe 30 Sekunden" ohne vor ist
+  # unvollstaendig), so a direction-less row would only harvest misalignments.
+  - name: SkipForwardBackIntent
+    samples:
+      - springe {seek_direction}
+      - springe {seek_amount} {seek_unit} {seek_direction}
+      - spule {seek_amount} {seek_unit} {seek_direction}
+    slots:
+      - name: seek_direction
+        type: SeekDirection
+      - name: seek_amount
+        type: AMAZON.NUMBER
+      - name: seek_unit
+        type: SeekUnit
   - name: PlayPlaylistIntent
     samples:
       - Spiele die Playlist {playlist}
@@ -973,6 +1003,27 @@ types:
       - value: die neueste
         id: latest
         synonyms: [neueste, die letzte, letzte, aktuellste, die aktuellste]
+  # JF-875: seek vocabulary for SkipForwardBackIntent (the EpisodePosition
+  # shape: localized values over the shared English id key space the
+  # handler's entity resolution reads; SeekVocabulary.cs is the consuming
+  # half, its raw word sets carry these locale words as the no-ER
+  # fallback).
+  SeekDirection:
+    values:
+      - value: vor
+        id: "forward"
+        synonyms: [vorwärts, voraus]
+      - value: zurück
+        id: "back"
+        synonyms: [rückwärts]
+  SeekUnit:
+    values:
+      - value: Sekunden
+        id: "seconds"
+        synonyms: [Sekunde]
+      - value: Minuten
+        id: "minutes"
+        synonyms: [Minute]
   MediaInfoType:
     values:
       - id: title

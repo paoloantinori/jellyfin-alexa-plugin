@@ -605,22 +605,13 @@
       {
         "name": "SkipForwardBackIntent",
         "samples": [
-          "skip forward {seek_amount} {seek_unit}",
-          "skip back {seek_amount} {seek_unit}",
           "skip {seek_direction} {seek_amount} {seek_unit}",
-          "go forward {seek_amount} {seek_unit}",
-          "go back {seek_amount} {seek_unit}",
           "skip {seek_direction}",
-          "forward {seek_amount} {seek_unit}",
-          "back {seek_amount} {seek_unit}",
-          "skip forward",
-          "skip back",
-          "skip {seek_amount} seconds",
-          "skip {seek_amount} minutes",
+          "skip {seek_amount} {seek_unit}",
+          "go {seek_direction} {seek_amount} {seek_unit}",
+          "jump {seek_direction} {seek_amount} {seek_unit}",
           "fast forward {seek_amount} {seek_unit}",
-          "rewind {seek_amount} {seek_unit}",
-          "jump forward {seek_amount} {seek_unit}",
-          "jump back {seek_amount} {seek_unit}"
+          "{seek_direction} {seek_amount} {seek_unit}"
         ],
         "slots": [
           {
@@ -1593,7 +1584,8 @@
               "value": "back",
               "synonyms": [
                 "backward",
-                "backwards"
+                "backwards",
+                "rewind"
               ]
             }
           }

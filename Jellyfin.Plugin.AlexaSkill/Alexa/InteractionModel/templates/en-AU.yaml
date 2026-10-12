@@ -19,8 +19,8 @@
 #
 # Invariants carried by this file:
 # - en-AU diverges from en-US structurally, not just in vocabulary:
-#   no SkipForwardBackIntent / JumpToPositionIntent (hence no
-#   SeekDirection / SeekUnit types), PlayLastAdded has no time_period
+#   no JumpToPositionIntent (SkipForwardBackIntent joined in JF-875 with
+#   its SeekDirection / SeekUnit types), PlayLastAdded has no time_period
 #   slot (hence no TimePeriod type) and only 4 samples, PlayPodcast +
 #   SearchMedia sit after PlayMoodMusic, PlayByDecade (15 samples)
 #   sits between QueryArtistLibrary and PlayBook, there is no
@@ -271,6 +271,33 @@ intents:
     slots:
       - name: chapter_number
         type: AMAZON.NUMBER
+  # JF-875 (2026-10-12): the SkipForwardBack family (en-US carried it alone in
+  # the en family until now; these locales were the JF-684 no-selection class
+  # for every "skip forward"-style ask). Ships in the JF-869 it-IT shape the
+  # reworked en-US set: the direction word rides ONLY the slotted
+  # {seek_direction} position (a direction-literal row delivers an empty slot
+  # and the handler's forward default seeks the wrong way, the en-US wrong-way
+  # bug this family was born fixed), no bare direction-only rows (the it-IT
+  # transport-steal lesson), "rewind" survives as a back synonym on the bare
+  # row plus a SeekVocabulary raw word, and "fast forward" is the one kept
+  # direction-implying literal (its empty slot resolves forward, which is its
+  # own semantics).
+  - name: SkipForwardBackIntent
+    samples:
+      - skip {seek_direction} {seek_amount} {seek_unit}
+      - skip {seek_direction}
+      - skip {seek_amount} {seek_unit}
+      - go {seek_direction} {seek_amount} {seek_unit}
+      - jump {seek_direction} {seek_amount} {seek_unit}
+      - fast forward {seek_amount} {seek_unit}
+      - '{seek_direction} {seek_amount} {seek_unit}'
+    slots:
+      - name: seek_direction
+        type: SeekDirection
+      - name: seek_amount
+        type: AMAZON.NUMBER
+      - name: seek_unit
+        type: SeekUnit
   - name: PlayPlaylistIntent
     samples:
       - Play the playlist {playlist}
@@ -937,6 +964,26 @@ types:
       - value: latest
         id: latest
         synonyms: [the latest, newest, the newest, last, the last, most recent, the most recent]
+  # JF-875: seek vocabulary for SkipForwardBackIntent (the EpisodePosition
+  # shape: localized values over the shared English id key space the handler's
+  # entity resolution reads; SeekVocabulary.cs is the consuming half). The
+  # id-first key order mirrors en-US's committed SeekDirection/SeekUnit.
+  SeekDirection:
+    values:
+      - id: forward
+        value: forward
+        synonyms: [ahead, 'on']
+      - id: back
+        value: back
+        synonyms: [backward, backwards, rewind]
+  SeekUnit:
+    values:
+      - id: seconds
+        value: seconds
+        synonyms: [second]
+      - id: minutes
+        value: minutes
+        synonyms: [minute]
   MediaInfoType:
     values:
       - id: title
