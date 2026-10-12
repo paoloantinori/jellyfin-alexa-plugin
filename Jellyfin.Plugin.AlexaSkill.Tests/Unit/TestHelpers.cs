@@ -633,8 +633,33 @@ internal static class TestHelpers
     /// AudioPlayer.Stop directive is kept, and no AudioPlayer.Play may leave.
     /// </summary>
     internal static void AssertVideoStoppedTell(SkillResponse response)
+        => AssertStoppedByVoiceTell(response, "VideoStoppedByVoice");
+
+    /// <summary>
+    /// The audiobook branch of the VideoApp pause/cancel Tell (JF-870): the
+    /// book-stopped line is spoken, the video line is NOT, and the rest of the
+    /// <see cref="AssertVideoStoppedTell"/> invariants hold unchanged.
+    /// </summary>
+    internal static void AssertBookStoppedTell(SkillResponse response)
+        => AssertStoppedByVoiceTell(response, "BookStoppedByVoice", "VideoStoppedByVoice");
+
+    /// <summary>
+    /// The shared core of the per-medium stopped-Tell entry points above (the
+    /// JF-870 parameterization, so the response-shape invariants live once and
+    /// a future shape change does not re-edit them per medium): the medium's
+    /// stopped line is spoken (and the forbidden line, when given, is not), the
+    /// session ends as a Tell, the AudioPlayer.Stop directive is kept, and no
+    /// AudioPlayer.Play may leave.
+    /// </summary>
+    private static void AssertStoppedByVoiceTell(SkillResponse response, string lineKey, string? forbiddenLineKey = null)
     {
-        Assert.Contains(ResponseStrings.Get("VideoStoppedByVoice", "en-US"), GetSpeechText(response), StringComparison.OrdinalIgnoreCase);
+        string speech = GetSpeechText(response);
+        Assert.Contains(ResponseStrings.Get(lineKey, "en-US"), speech, StringComparison.OrdinalIgnoreCase);
+        if (forbiddenLineKey is not null)
+        {
+            Assert.DoesNotContain(ResponseStrings.Get(forbiddenLineKey, "en-US"), speech, StringComparison.OrdinalIgnoreCase);
+        }
+
         Assert.True(response.Response.ShouldEndSession == true, "the VideoApp pause/cancel response ends the session");
         AssertHasAudioPlayerStopDirective(response);
         AssertNoAudioPlayDirective(response);

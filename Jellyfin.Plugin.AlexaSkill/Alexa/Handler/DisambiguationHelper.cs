@@ -352,7 +352,12 @@ internal static class DisambiguationHelper
     /// phrasings are count-invariant by design: the most common overflow is
     /// exactly 1 unspoken, so no locale's hint inflects for the numeral
     /// (Arabic uses the count-predicate form, Hindi a verbless form; the
-    /// JF-487 singular/plural key split is not needed).
+    /// JF-487 singular/plural key split is not needed). The 2026-10-12 wording
+    /// audit (JF-870) reworded the four verb-less standalone calques of
+    /// "And {0} more." (it, fr, de, nl) into full sentences, still
+    /// count-invariant; the rest were kept as already natural (en is the
+    /// native appositive, es/pt carry a verb, ja is a full sentence, and
+    /// hi/ar keep their documented invariant forms).
     /// </summary>
     /// <param name="matches">The candidates in spoken order (winner first).</param>
     /// <param name="locale">The request locale.</param>

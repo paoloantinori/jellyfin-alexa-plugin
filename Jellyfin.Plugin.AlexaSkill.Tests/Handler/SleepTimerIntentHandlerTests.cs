@@ -483,8 +483,9 @@ public class SleepTimerIntentHandlerTests : PluginTestBase, IDisposable
         // JF-632, the book arm of the refusal family: a NativeControlsForBooks book
         // rides the VideoApp HLS path, which never touches the AudioPlayer token and
         // emits no events the deadline could ride, so the arm refuses with the same
-        // video-family line (the PauseIntentHandler JF-564 precedent gives books no
-        // line of their own) and the ledger keeps the truthful book record.
+        // video-family line (this refusal family keeps one line for the whole
+        // VideoApp family, unlike PauseIntentHandler's stop line, which has been
+        // medium-aware since JF-870) and the ledger keeps the truthful book record.
         Guid staleSongId = Guid.NewGuid();
         var book = new AudioBook
         {
