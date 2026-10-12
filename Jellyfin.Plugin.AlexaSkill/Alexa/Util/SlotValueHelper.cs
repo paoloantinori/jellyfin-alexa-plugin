@@ -84,6 +84,35 @@ public static class SlotValueHelper
             : null;
 
     /// <summary>
+    /// The full resolved entry (id AND canonical name) of the first
+    /// ER_SUCCESS_MATCH authority on the slot (JF-869), or null when no
+    /// authority matched. The id is the shared cross-locale key space the
+    /// restricted custom types carry (the EpisodePosition/SeekVocabulary
+    /// consuming pattern); the name is the localized canonical
+    /// <see cref="GetCanonicalValue(Slot)"/> returns. The ONE owner of the
+    /// authority walk for id-reading consumers.
+    /// </summary>
+    /// <param name="slot">The slot to read entity resolution from; null (an absent slot) reads as no match.</param>
+    /// <returns>The resolved value entry, or null when no authority matched.</returns>
+    public static ResolutionValue? GetResolvedValue(Slot? slot)
+    {
+        if (slot?.Resolution?.Authorities is { Length: > 0 } authorities)
+        {
+            foreach (var authority in authorities)
+            {
+                if (authority.Status?.Code == "ER_SUCCESS_MATCH"
+                    && authority.Values is { Length: > 0 }
+                    && authority.Values[0].Value is { } resolved)
+                {
+                    return resolved;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// ALL distinct canonical names of the first ER_SUCCESS_MATCH authority on
     /// the slot (JF-690), de-duplicated by trimmed case-insensitive name (the
     /// ER values array lists distinct catalog values ordered by Amazon's

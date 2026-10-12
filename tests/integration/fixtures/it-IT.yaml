@@ -155,6 +155,29 @@ tests:
     expected_slots:
       title: {}
 
+  # JF-869 (2026-10-12): BARE-INFINITIVE film twins (mettere/guardare/vedere;
+  # riprodurre already carried its own). Before them every bare infinitive
+  # fell to FallbackIntent; verified green across two identical-content
+  # scratch builds. The one-shot WRAPPER forms ("chiedi a mia collezione di
+  # mettere il film X") stay Fallback: the AMAZON.SearchQuery title span is
+  # wrapper-hostile in the NLU recall (JF-869 evidence table; the catalog-backed
+  # MovieTitle type is the tracked architectural fix), so they are deliberately
+  # NOT pinned here.
+  - utterance: "mettere il film sunny dancer"
+    expected_intent: PlayVideoIntent
+    expected_slots:
+      title: {}
+
+  - utterance: "guardare il film sunny dancer"
+    expected_intent: PlayVideoIntent
+    expected_slots:
+      title: {}
+
+  - utterance: "vedere il film sunny dancer"
+    expected_intent: PlayVideoIntent
+    expected_slots:
+      title: {}
+
   # JF-436: video-regression direction of the JF-418 bare-form collision.
   # PlayArtistSongsIntent's bare '{imperative} {musician}' samples (JF-418)
   # collide in surface shape with PlayVideoIntent's '{imperative} {title}' on
@@ -327,6 +350,32 @@ tests:
     expected_intent: PlayBookIntent
     expected_slots:
       book: {}
+  # JF-869 (2026-10-12): the Di-mettere symmetric rows + the leggere family
+  # fixed the one-shot wrappers for the LIBRO carrier (all were FallbackIntent
+  # before). Verified green across two identical-content scratch builds. The
+  # noun-less leggere wrapper ("di leggere option b") still does not align in
+  # the profiler and the plain-audiolibro wrapper ("di mettere l'audiolibro X")
+  # is a per-build trainer race (green on the live build, flipped across
+  # identical scratch rebuilds), so neither is pinned.
+  - utterance: "chiedi a mia collezione di leggere il libro option b"
+    expected_intent: PlayBookIntent
+    expected_slots:
+      book: {}
+
+  - utterance: "chiedi a mia collezione di mettere il libro option b"
+    expected_intent: PlayBookIntent
+    expected_slots:
+      book: {}
+
+  - utterance: "chiedi a mia collezione di riprodurre il libro option b"
+    expected_intent: PlayBookIntent
+    expected_slots:
+      book: {}
+
+  - utterance: "leggi il libro option b"
+    expected_intent: PlayBookIntent
+    expected_slots:
+      book: {}
   - utterance: "di riprodurre il podcast generazione"
     expected_intent: PlayPodcastIntent
     expected_slots:
@@ -399,6 +448,49 @@ tests:
     expected_intent: GoToChapterIntent
     expected_slots:
       chapter_number: {}
+
+  # -------------------------------------------------------------------------
+  # 8b. SkipForwardBackIntent (seek_direction, seek_amount, seek_unit), JF-869
+  # The it-IT family is NEW (en-US only until now; "salta avanti" matched
+  # nothing, the JF-684 selection class). Design constraints from the live
+  # probe round: NO bare "avanti"/"indietro" rows (they steal the built-in
+  # transport routing pinned in section 32), the direction word rides ONLY the
+  # slotted {seek_direction} position (a direction-literal row delivers an
+  # EMPTY seek_direction and the handler's forward default seeks the wrong
+  # way), and no "riavvolgi" carrier (rewind carries no direction word; the
+  # en-US 'rewind {seek_amount} {seek_unit}' row has the identical latent
+  # wrong-way trap, its own fix). The combined-form pins carry the direction
+  # and unit presence guards: an empty seek_direction there is the wrong-way
+  # regression this family must never grow back.
+  # -------------------------------------------------------------------------
+  - utterance: "salta indietro"
+    expected_intent: SkipForwardBackIntent
+    expected_slots:
+      seek_direction: {}
+
+  - utterance: "salta avanti di trenta secondi"
+    expected_intent: SkipForwardBackIntent
+    expected_slots:
+      seek_direction: {}
+      seek_amount: {}
+      seek_unit: {}
+
+  - utterance: "vai indietro di trenta secondi"
+    expected_intent: SkipForwardBackIntent
+    expected_slots:
+      seek_direction: {}
+      seek_amount: {}
+      seek_unit: {}
+
+  - utterance: "chiedi a mia collezione di saltare avanti"
+    expected_intent: SkipForwardBackIntent
+    expected_slots:
+      seek_direction: {}
+
+  # Transport steal guard: the built-in keeps its vocabulary.
+  - utterance: "successivo"
+    expected_intent: AMAZON.NextIntent
+    expected_slots: {}
 
   # -------------------------------------------------------------------------
   # 9. MarkFavoriteIntent (no slots)
@@ -1432,6 +1524,17 @@ tests:
   # JF-816 residual guard: the seed extension must not steal this shape;
   # deliberate twin of the JF-493 pin below with a different series token.
   - utterance: "di mettere la serie sailor moon"
+    expected_intent: PlayNextEpisodeIntent
+    expected_slots:
+      series_name: {}
+
+  # JF-869: the "la serie" family gained imperative/bare-infinitive twins (the
+  # Di-only family was the JF-844 orphaned shape whose generalization swallowed
+  # unrelated wrapper tails whole). The selection is UNCHANGED by design: an
+  # empty episode_position defaults to NextUp, which IS the series-play
+  # semantic; the twins just make it an exact match instead of a
+  # generalization, stable across trainer re-rolls.
+  - utterance: "metti la serie sailor moon"
     expected_intent: PlayNextEpisodeIntent
     expected_slots:
       series_name: {}

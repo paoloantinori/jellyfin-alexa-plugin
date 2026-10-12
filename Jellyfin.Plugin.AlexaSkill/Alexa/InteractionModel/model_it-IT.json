@@ -173,7 +173,10 @@
           "voglio guardare il film {title}",
           "cerca il film {title}",
           "Di guardare il film {title}",
-          "Di vedere il film {title}"
+          "Di vedere il film {title}",
+          "mettere il film {title}",
+          "guardare il film {title}",
+          "vedere il film {title}"
         ],
         "slots": [
           {
@@ -772,6 +775,12 @@
           "Di riprodurre l'audiolibro di {book}",
           "Di ascoltare il libro di {book}",
           "Di ascoltare l'audiolibro di {book}",
+          "leggi il libro di {book}",
+          "leggi l'audiolibro di {book}",
+          "leggere il libro di {book}",
+          "leggere l'audiolibro di {book}",
+          "Di leggere il libro di {book}",
+          "Di leggere l'audiolibro di {book}",
           "riproduci il libro {book}",
           "riproduci l'audiolibro {book}",
           "ascolta il libro {book}",
@@ -787,7 +796,17 @@
           "mettere il libro {book}",
           "mettere l'audiolibro {book}",
           "Di riprodurre il libro {book}",
-          "Di ascoltare il libro {book}"
+          "Di ascoltare il libro {book}",
+          "Di mettere il libro {book}",
+          "Di mettere l'audiolibro {book}",
+          "leggi il libro {book}",
+          "leggi l'audiolibro {book}",
+          "leggere il libro {book}",
+          "leggere l'audiolibro {book}",
+          "Di leggere il libro {book}",
+          "Di leggere l'audiolibro {book}",
+          "leggere {book}",
+          "Di leggere {book}"
         ],
         "slots": [
           {
@@ -913,6 +932,32 @@
           {
             "name": "photoAlbum",
             "type": "AMAZON.SearchQuery"
+          }
+        ]
+      },
+      {
+        "name": "SkipForwardBackIntent",
+        "samples": [
+          "salta {seek_direction}",
+          "salta {seek_direction} di {seek_amount} {seek_unit}",
+          "salta di {seek_amount} {seek_unit}",
+          "vai {seek_direction} di {seek_amount} {seek_unit}",
+          "saltare {seek_direction}",
+          "saltare {seek_direction} di {seek_amount} {seek_unit}",
+          "di saltare {seek_direction}"
+        ],
+        "slots": [
+          {
+            "name": "seek_direction",
+            "type": "SeekDirection"
+          },
+          {
+            "name": "seek_amount",
+            "type": "AMAZON.NUMBER"
+          },
+          {
+            "name": "seek_unit",
+            "type": "SeekUnit"
           }
         ]
       },
@@ -2188,7 +2233,13 @@
           "Di suonare la serie {series_name}",
           "Di mettere la serie {series_name}",
           "Di pleiare la serie {series_name}",
-          "Di ascoltare la serie {series_name}"
+          "Di ascoltare la serie {series_name}",
+          "Riproduci la serie {series_name}",
+          "Metti la serie {series_name}",
+          "Guarda la serie {series_name}",
+          "riprodurre la serie {series_name}",
+          "mettere la serie {series_name}",
+          "guardare la serie {series_name}"
         ],
         "slots": [
           {
@@ -2571,6 +2622,46 @@
               ]
             },
             "id": "latest"
+          }
+        ]
+      },
+      {
+        "name": "SeekDirection",
+        "values": [
+          {
+            "name": {
+              "value": "avanti"
+            },
+            "id": "forward"
+          },
+          {
+            "name": {
+              "value": "indietro"
+            },
+            "id": "back"
+          }
+        ]
+      },
+      {
+        "name": "SeekUnit",
+        "values": [
+          {
+            "name": {
+              "value": "secondi",
+              "synonyms": [
+                "secondo"
+              ]
+            },
+            "id": "seconds"
+          },
+          {
+            "name": {
+              "value": "minuti",
+              "synonyms": [
+                "minuto"
+              ]
+            },
+            "id": "minutes"
           }
         ]
       },

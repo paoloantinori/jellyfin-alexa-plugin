@@ -8182,6 +8182,9 @@ Placeholder legend:
 | `<durata (5 minuti, 30 secondi, mezz'ora)>` | `{reminder_duration}` |
 | `<ora (alle sette)>` | `{reminder_time}` |
 | `<numero della stagione>` | `{season_number}` |
+| `<quantità>` | `{seek_amount}` |
+| `<avanti o indietro>` | `{seek_direction}` |
+| `<secondi o minuti>` | `{seek_unit}` |
 | `<nome della serie>` | `{series_name}` |
 | `<durata (5 minuti, 30 secondi, mezz'ora)>` | `{sleep_duration}` |
 | `<titolo del brano>` | `{song}` |
@@ -8193,7 +8196,7 @@ Placeholder legend:
 | `<titolo del video o del film>` | `{title}` |
 | `<parole del titolo del brano>` | `{titleKeywords}` |
 
-Complete phrase list (1595 phrases across 72 commands):
+Complete phrase list (1637 phrases across 73 commands):
 
 #### Play music
 
@@ -9317,6 +9320,9 @@ Complete phrase list (1595 phrases across 72 commands):
 - `cerca il film <titolo del video o del film>`
 - `Di guardare il film <titolo del video o del film>`
 - `Di vedere il film <titolo del video o del film>`
+- `mettere il film <titolo del video o del film>`
+- `guardare il film <titolo del video o del film>`
+- `vedere il film <titolo del video o del film>`
 
 #### Episodes and series
 
@@ -9388,6 +9394,12 @@ Complete phrase list (1595 phrases across 72 commands):
 - `Di mettere la serie <nome della serie>`
 - `Di pleiare la serie <nome della serie>`
 - `Di ascoltare la serie <nome della serie>`
+- `Riproduci la serie <nome della serie>`
+- `Metti la serie <nome della serie>`
+- `Guarda la serie <nome della serie>`
+- `riprodurre la serie <nome della serie>`
+- `mettere la serie <nome della serie>`
+- `guardare la serie <nome della serie>`
 
 #### Podcasts
 
@@ -9430,6 +9442,12 @@ Complete phrase list (1595 phrases across 72 commands):
 - `Di riprodurre l'audiolibro di <titolo dell'audiolibro>`
 - `Di ascoltare il libro di <titolo dell'audiolibro>`
 - `Di ascoltare l'audiolibro di <titolo dell'audiolibro>`
+- `leggi il libro di <titolo dell'audiolibro>`
+- `leggi l'audiolibro di <titolo dell'audiolibro>`
+- `leggere il libro di <titolo dell'audiolibro>`
+- `leggere l'audiolibro di <titolo dell'audiolibro>`
+- `Di leggere il libro di <titolo dell'audiolibro>`
+- `Di leggere l'audiolibro di <titolo dell'audiolibro>`
 - `riproduci il libro <titolo dell'audiolibro>`
 - `riproduci l'audiolibro <titolo dell'audiolibro>`
 - `ascolta il libro <titolo dell'audiolibro>`
@@ -9446,6 +9464,16 @@ Complete phrase list (1595 phrases across 72 commands):
 - `mettere l'audiolibro <titolo dell'audiolibro>`
 - `Di riprodurre il libro <titolo dell'audiolibro>`
 - `Di ascoltare il libro <titolo dell'audiolibro>`
+- `Di mettere il libro <titolo dell'audiolibro>`
+- `Di mettere l'audiolibro <titolo dell'audiolibro>`
+- `leggi il libro <titolo dell'audiolibro>`
+- `leggi l'audiolibro <titolo dell'audiolibro>`
+- `leggere il libro <titolo dell'audiolibro>`
+- `leggere l'audiolibro <titolo dell'audiolibro>`
+- `Di leggere il libro <titolo dell'audiolibro>`
+- `Di leggere l'audiolibro <titolo dell'audiolibro>`
+- `leggere <titolo dell'audiolibro>`
+- `Di leggere <titolo dell'audiolibro>`
 
 #### Photos
 
@@ -9925,6 +9953,26 @@ Complete phrase list (1595 phrases across 72 commands):
 - `Salta al capitolo <ordinale (primo, secondo)>`
 - `Capitolo <numero del capitolo>`
 - `Capitolo <ordinale (primo, secondo)>`
+
+**Skip forward or back**
+
+- `salta avanti`
+- `salta indietro`
+- `salta <avanti o indietro>`
+- `salta avanti di <quantità> <secondi o minuti>`
+- `salta indietro di <quantità> <secondi o minuti>`
+- `salta di <quantità> <secondi o minuti>`
+- `salta avanti di <quantità> secondi`
+- `salta avanti di <quantità> minuti`
+- `riavvolgi di <quantità> <secondi o minuti>`
+- `vai avanti di <quantità> <secondi o minuti>`
+- `vai indietro di <quantità> <secondi o minuti>`
+- `saltare avanti`
+- `saltare indietro`
+- `saltare avanti di <quantità> <secondi o minuti>`
+- `saltare indietro di <quantità> <secondi o minuti>`
+- `di saltare avanti`
+- `di saltare indietro`
 
 **Change the playback speed**
 

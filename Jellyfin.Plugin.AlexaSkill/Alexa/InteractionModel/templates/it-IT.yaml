@@ -212,6 +212,18 @@ explicit_intents:
       # so its infinitive twins anchor that family for the one-shot shape.
       - Di guardare il film {title}
       - Di vedere il film {title}
+      # JF-869 (2026-10-12): BARE-INFINITIVE noun-carrying twins for every film
+      # verb. Live battery: each one-shot wrapper tail ("chiedi a mia collezione
+      # di mettere/guardare/vedere il film sunny dancer") fell to FallbackIntent
+      # while the bare imperative routed fine; the lone 'riprodurre il film
+      # {title}' twin above anchored only its own verb (the guardare variant was
+      # additionally swallowed whole by PlayNextEpisode's under-anchored
+      # 'Di mettere la serie {series_name}' family). The JF-844 PlaySong/PlayBook
+      # lesson: the trainer does not generalize across verbs for the wrapper
+      # remainder, each spoken verb needs its own literal row.
+      - mettere il film {title}
+      - guardare il film {title}
+      - vedere il film {title}
     slots:
       - name: title
         type: AMAZON.SearchQuery
@@ -696,6 +708,18 @@ explicit_intents:
       - Di riprodurre l'audiolibro di {book}
       - Di ascoltare il libro di {book}
       - Di ascoltare l'audiolibro di {book}
+      # JF-869 (2026-10-12): the LEGGERE family. Live: "chiedi a mia collezione
+      # di leggere option b" fell to FallbackIntent while the mettere/ascoltare
+      # wrappers routed; leggere is the natural book verb and had no row at all
+      # (the bare imperative 'leggi il libro X' only reached this intent by
+      # trainer generalization). Full three-form set like the siblings above,
+      # on both the plain and the DI-CONNECTOR (JF-816) carriers.
+      - leggi il libro di {book}
+      - leggi l'audiolibro di {book}
+      - leggere il libro di {book}
+      - leggere l'audiolibro di {book}
+      - Di leggere il libro di {book}
+      - Di leggere l'audiolibro di {book}
       - riproduci il libro {book}
       - riproduci l'audiolibro {book}
       - ascolta il libro {book}
@@ -712,6 +736,27 @@ explicit_intents:
       - mettere l'audiolibro {book}
       - Di riprodurre il libro {book}
       - Di ascoltare il libro {book}
+      # JF-869: the symmetric Di-forms of mettere. Live A/B (scratch-skill probe,
+      # 2026-10-12): with these rows the one-shot wrappers "di mettere/riprodurre
+      # il libro X" route PlayBookIntent while the mettere/ascoltare imperative
+      # twins alone left them on FallbackIntent; the audiolibro twin keeps the
+      # already-working "di mettere l'audiolibro X" race anchored on the exact
+      # row instead of trainer generalization.
+      - Di mettere il libro {book}
+      - Di mettere l'audiolibro {book}
+      # JF-869: plain-carrier leg of the leggere family documented above.
+      - leggi il libro {book}
+      - leggi l'audiolibro {book}
+      - leggere il libro {book}
+      - leggere l'audiolibro {book}
+      - Di leggere il libro {book}
+      - Di leggere l'audiolibro {book}
+      # JF-869: the noun-less leggere twins (live A/B: their presence flipped
+      # the noun-carrying wrapper "di leggere il libro X" green; the noun-less
+      # wrapper "di leggere option b" itself still does not align in the
+      # profiler, but the catalog-gated book slot keeps the row un-stealable).
+      - leggere {book}
+      - Di leggere {book}
     slots:
       - name: book
         type: AudiobookTitle
@@ -816,6 +861,48 @@ explicit_intents:
     slots:
       - name: photoAlbum
         type: AMAZON.SearchQuery
+
+  # JF-869 (2026-10-12): the it-IT leg of SkipForwardBackIntent (en-US only
+  # until now; "salta avanti" matched nothing, so the one-shot/in-session ask
+  # never reached the skill, the JF-684 selection class). Optional-slot intent
+  # (the JF-403 boundary): a missing amount delivers the working default (30s,
+  # the handler's DefaultSkipSeconds). THREE hard rules from the live probe
+  # round: (1) NO bare "avanti"/"indietro" rows, they steal the built-in
+  # transport routing (the fixture guard pins bare "avanti" ->
+  # AMAZON.NextIntent); (2) the direction word rides ONLY the slotted
+  # {seek_direction} position, never a direction-literal row: a literal
+  # ("vai indietro di 30 secondi" on a 'vai indietro di {seek_amount}
+  # {seek_unit}' row) delivers an EMPTY seek_direction and the handler's
+  # forward default seeks the WRONG WAY (slot dump verified live); (3) no
+  # "riavvolgi" row: rewind carries no direction word to fill the slot, the
+  # same wrong-way trap (the en-US 'rewind {seek_amount} {seek_unit}' row has
+  # the identical latent bug, its own fix). The bare-infinitive twins follow
+  # the JF-844 wrapper-remainder discipline; AMAZON.NUMBER is word-form
+  # friendly ("trenta" fills 30) and the digit delivery caveat is the JF-844
+  # season_number class, tolerable for a skip amount (the default covers a
+  # missed digit). The other 11 non-en locales still lack the family (audit
+  # note in the JF-869 report).
+  SkipForwardBackIntent:
+    samples:
+      - salta {seek_direction}
+      - salta {seek_direction} di {seek_amount} {seek_unit}
+      - salta di {seek_amount} {seek_unit}
+      - vai {seek_direction} di {seek_amount} {seek_unit}
+      - saltare {seek_direction}
+      - saltare {seek_direction} di {seek_amount} {seek_unit}
+      # The wrapper-tail twin, the lowercase 'di riprodurre un film' precedent
+      # on PlayVideo: the one-shot wrapper tail "di saltare avanti" aligns on
+      # an explicit row (live A/B: without it the wrapper fell back to trainer
+      # generalization and flipped red when the bare avanti/indietro rows were
+      # dropped for the transport steal).
+      - di saltare {seek_direction}
+    slots:
+      - name: seek_direction
+        type: SeekDirection
+      - name: seek_amount
+        type: AMAZON.NUMBER
+      - name: seek_unit
+        type: SeekUnit
 
 # Custom slot type definitions. These are emitted into the model's types section.
 # Each type has a name and a list of values (with optional id and synonyms).
@@ -926,6 +1013,25 @@ types:
       - value: "l'ultimo"
         id: latest
         synonyms: [ultimo, l'ultima, ultima, "il più recente", "più recente"]
+  # JF-869: seek vocabulary for SkipForwardBackIntent (the EpisodePosition
+  # shape: localized values over the shared English id key space the handler's
+  # entity resolution reads; SkipForwardBackIntentHandler is the consuming
+  # half). Bare singular forms ride the synonyms so "un minuto" style speech
+  # still resolves.
+  SeekDirection:
+    values:
+      - value: avanti
+        id: "forward"
+      - value: indietro
+        id: "back"
+  SeekUnit:
+    values:
+      - value: secondi
+        id: "seconds"
+        synonyms: [secondo]
+      - value: minuti
+        id: "minutes"
+        synonyms: [minuto]
   AlbumName:
     values:
       - Discovery
@@ -1418,6 +1524,23 @@ templates:
       # vocabulary expansion of "{infinitive} {episode_position} episodio di
       # {series_name}" already generates those exact phrases as slotted samples).
       - "{infinitive} la serie {series_name}"
+      # JF-869 (2026-10-12): the family above was Di-only, the JF-844
+      # orphaned-family shape: with no imperative/bare twins the trainer
+      # generalized it so hard it swallowed unrelated one-shot wrapper tails
+      # whole (live: "chiedi a mia collezione di guardare il film sunny
+      # dancer" selected THIS intent with series_name='guardare il film sunny
+      # dancer', ER_NO_MATCH). The symmetric rows anchor the family; "metti la
+      # serie X" keeps selecting this intent (an empty episode_position is the
+      # NextUp default, JF-583: that IS the series-play semantic) through an
+      # exact match instead of a generalization. Guardare joins the verb set
+      # because it is the natural series-watching verb (vocabulary products
+      # stay music-verb-only).
+      - Riproduci la serie {series_name}
+      - Metti la serie {series_name}
+      - Guarda la serie {series_name}
+      - riprodurre la serie {series_name}
+      - mettere la serie {series_name}
+      - guardare la serie {series_name}
     slots:
       - name: series_name
         type: SeriesName

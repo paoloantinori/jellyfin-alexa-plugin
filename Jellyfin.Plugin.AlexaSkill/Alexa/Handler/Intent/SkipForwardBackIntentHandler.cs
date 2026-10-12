@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Alexa.NET;
@@ -96,11 +97,15 @@ public class SkipForwardBackIntentHandler : BaseHandler
             if (intentRequest.Intent.Slots.TryGetValue("seek_direction", out Slot? dirSlot)
                 && !string.IsNullOrEmpty(dirSlot.Value))
             {
-                forward = !string.Equals(dirSlot.Value, "back", StringComparison.OrdinalIgnoreCase);
+                // JF-869: the raw slot value is the SPOKEN word ("indietro" on
+                // it-IT, "backward" as an en-US synonym), so the restricted
+                // vocabulary resolves through SeekVocabulary (entity resolution
+                // first, raw words as the no-ER fallback).
+                forward = !Util.SeekVocabulary.IsBackward(dirSlot);
             }
 
             if (intentRequest.Intent.Slots.TryGetValue("seek_amount", out Slot? amountSlot)
-                && int.TryParse(amountSlot.Value, out int parsedAmount)
+                && Util.ItalianNumberWords.TryParse(amountSlot.Value, out int parsedAmount)
                 && parsedAmount > 0)
             {
                 amount = parsedAmount;
@@ -109,7 +114,7 @@ public class SkipForwardBackIntentHandler : BaseHandler
             if (intentRequest.Intent.Slots.TryGetValue("seek_unit", out Slot? unitSlot)
                 && !string.IsNullOrEmpty(unitSlot.Value))
             {
-                if (string.Equals(unitSlot.Value, "minutes", StringComparison.OrdinalIgnoreCase))
+                if (Util.SeekVocabulary.IsMinutes(unitSlot))
                 {
                     amount *= 60;
                 }
