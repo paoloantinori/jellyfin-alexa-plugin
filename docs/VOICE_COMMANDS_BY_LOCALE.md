@@ -8196,7 +8196,7 @@ Placeholder legend:
 | `<titolo del video o del film>` | `{title}` |
 | `<parole del titolo del brano>` | `{titleKeywords}` |
 
-Complete phrase list (1637 phrases across 73 commands):
+Complete phrase list (1627 phrases across 73 commands):
 
 #### Play music
 
@@ -9956,23 +9956,13 @@ Complete phrase list (1637 phrases across 73 commands):
 
 **Skip forward or back**
 
-- `salta avanti`
-- `salta indietro`
 - `salta <avanti o indietro>`
-- `salta avanti di <quantità> <secondi o minuti>`
-- `salta indietro di <quantità> <secondi o minuti>`
+- `salta <avanti o indietro> di <quantità> <secondi o minuti>`
 - `salta di <quantità> <secondi o minuti>`
-- `salta avanti di <quantità> secondi`
-- `salta avanti di <quantità> minuti`
-- `riavvolgi di <quantità> <secondi o minuti>`
-- `vai avanti di <quantità> <secondi o minuti>`
-- `vai indietro di <quantità> <secondi o minuti>`
-- `saltare avanti`
-- `saltare indietro`
-- `saltare avanti di <quantità> <secondi o minuti>`
-- `saltare indietro di <quantità> <secondi o minuti>`
-- `di saltare avanti`
-- `di saltare indietro`
+- `vai <avanti o indietro> di <quantità> <secondi o minuti>`
+- `saltare <avanti o indietro>`
+- `saltare <avanti o indietro> di <quantità> <secondi o minuti>`
+- `di saltare <avanti o indietro>`
 
 **Change the playback speed**
 

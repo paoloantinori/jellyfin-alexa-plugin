@@ -845,7 +845,7 @@ Invocation name: **"mia collezione"**
 | Shuffle All Off | `Disattiva mescolamento` · `Disattiva il casuale` · `Ripristina l'ordine della coda` · `disattivare il mescolamento` · `Di disattivare il mescolamento` |
 | Shuffle All On | `Attiva mescolamento` · `Attiva il casuale` · `Mescola la coda` · `Mescola la riproduzione` · `attivare il mescolamento` · `mescolare la coda` |
 | Shuffle Play | `Mescola la playlist {playlist}` · `Mescola playlist {playlist}` · `Riproduci la playlist {playlist} in modalità casuale` · `Riproduci la playlist {playlist} a caso` · `Suona la playlist {playlist} in modalità casuale` |
-| Skip Forward Back | `salta avanti` · `salta {seek_direction}` · `salta avanti di {seek_amount} {seek_unit}` · `salta avanti di {seek_amount} secondi` · `salta indietro` · `salta indietro di {seek_amount} {seek_unit}` |
+| Skip Forward Back | `salta {seek_direction}` · `salta {seek_direction} di {seek_amount} {seek_unit}` · `salta di {seek_amount} {seek_unit}` · `vai {seek_direction} di {seek_amount} {seek_unit}` · `saltare {seek_direction}` · `saltare {seek_direction} di {seek_amount} {seek_unit}` |
 | Sleep Timer | `Imposta timer {sleep_duration}` · `Timer per dormire {sleep_duration}` · `Spegimento automatico {sleep_duration}` · `Ferma dopo {sleep_duration}` · `Fermare la riproduzione tra {sleep_duration}` · `Ferma la riproduzione tra {sleep_duration}` |
 | Turn Radio Off | `disattiva la radio` · `spegni la radio` · `disattiva modalità radio` · `modalità radio spenta` · `ferma riproduzione radio` · `radio spenta` |
 | Turn Radio On | `attiva la radio` · `accendi la radio` · `attiva modalità radio` · `modalità radio accesa` · `radio accesa` · `abilita radio` |
