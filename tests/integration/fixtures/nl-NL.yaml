@@ -74,3 +74,29 @@ tests:
   - utterance: "speel de radio"
     expected_intent: PlayRadioIntent
     expected_slots: {}
+  # -------------------------------------------------------------------------
+  # SkipForwardBackIntent (JF-875 rollout). Dutch mirrors German: the
+  # direction particle rides the row tail. Word-form numbers are pinned
+  # because this locale's profile-nlu fails DIGIT delivery into
+  # AMAZON.NUMBER slots (a pre-existing quirk: the vendor model's own
+  # "ga naar hoofdstuk 3" shows chapter_number ABSENT). Verified on the
+  # scratch build across two identical-content rebuilds.
+  # -------------------------------------------------------------------------
+  - utterance: "spring dertig seconden vooruit"
+    expected_intent: SkipForwardBackIntent
+    expected_slots:
+      seek_direction: {}
+      seek_amount: {}
+      seek_unit: {}
+
+  - utterance: "ga dertig seconden terug"
+    expected_intent: SkipForwardBackIntent
+    expected_slots:
+      seek_direction: {}
+      seek_amount: {}
+      seek_unit: {}
+
+  # Transport steal guard (pre-existing vendor routing).
+  - utterance: "volgende nummer"
+    expected_intent: ShowMoreIntent
+    expected_slots: {}

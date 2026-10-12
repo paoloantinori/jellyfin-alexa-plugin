@@ -323,6 +323,32 @@
         ]
       },
       {
+        "name": "SkipForwardBackIntent",
+        "samples": [
+          "skip {seek_direction} {seek_amount} {seek_unit}",
+          "skip {seek_direction}",
+          "skip {seek_amount} {seek_unit}",
+          "go {seek_direction} {seek_amount} {seek_unit}",
+          "jump {seek_direction} {seek_amount} {seek_unit}",
+          "fast forward {seek_amount} {seek_unit}",
+          "{seek_direction} {seek_amount} {seek_unit}"
+        ],
+        "slots": [
+          {
+            "name": "seek_direction",
+            "type": "SeekDirection"
+          },
+          {
+            "name": "seek_amount",
+            "type": "AMAZON.NUMBER"
+          },
+          {
+            "name": "seek_unit",
+            "type": "SeekUnit"
+          }
+        ]
+      },
+      {
         "name": "PlayPlaylistIntent",
         "samples": [
           "Play the playlist {playlist}",
@@ -1425,6 +1451,55 @@
               ]
             },
             "id": "latest"
+          }
+        ]
+      },
+      {
+        "name": "SeekDirection",
+        "values": [
+          {
+            "id": "forward",
+            "name": {
+              "value": "forward",
+              "synonyms": [
+                "ahead",
+                "on"
+              ]
+            }
+          },
+          {
+            "id": "back",
+            "name": {
+              "value": "back",
+              "synonyms": [
+                "backward",
+                "backwards",
+                "rewind"
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "SeekUnit",
+        "values": [
+          {
+            "id": "seconds",
+            "name": {
+              "value": "seconds",
+              "synonyms": [
+                "second"
+              ]
+            }
+          },
+          {
+            "id": "minutes",
+            "name": {
+              "value": "minutes",
+              "synonyms": [
+                "minute"
+              ]
+            }
           }
         ]
       },

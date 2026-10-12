@@ -13118,13 +13118,13 @@
           {
             "source": "Playing",
             "target": "SkipFwd",
-            "label": "تخطي للأمام 30 ثانية",
+            "label": "تقدم 30 ثانية",
             "style": "solid"
           },
           {
             "source": "Playing",
             "target": "SkipBack",
-            "label": "تخطي للخلف 30 ثانية",
+            "label": "تراجع 30 ثانية",
             "style": "solid"
           },
           {
@@ -13511,13 +13511,13 @@
           {
             "source": "Playing",
             "target": "SkipFwd",
-            "label": "30 Sekunden vorwärts",
+            "label": "springe 30 Sekunden vor",
             "style": "solid"
           },
           {
             "source": "Playing",
             "target": "SkipBack",
-            "label": "30 Sekunden zurück",
+            "label": "spule 30 Sekunden zurück",
             "style": "solid"
           },
           {
@@ -15911,7 +15911,7 @@
           {
             "source": "Playing",
             "target": "SkipBack",
-            "label": "salta atras 30 segundos",
+            "label": "salta atrás 30 segundos",
             "style": "solid"
           },
           {
@@ -16308,7 +16308,7 @@
           {
             "source": "Playing",
             "target": "SkipBack",
-            "label": "salta atras 30 segundos",
+            "label": "salta atrás 30 segundos",
             "style": "solid"
           },
           {
@@ -16705,7 +16705,7 @@
           {
             "source": "Playing",
             "target": "SkipBack",
-            "label": "salta atras 30 segundos",
+            "label": "retrocede 30 segundos",
             "style": "solid"
           },
           {
@@ -18283,13 +18283,13 @@
           {
             "source": "Playing",
             "target": "SkipFwd",
-            "label": "vai avanti {seek_amount} {seek_unit}",
+            "label": "vai avanti di 30 secondi",
             "style": "solid"
           },
           {
             "source": "Playing",
             "target": "SkipBack",
-            "label": "vai indietro {seek_amount} {seek_unit}",
+            "label": "vai indietro di 30 secondi",
             "style": "solid"
           },
           {
@@ -18680,7 +18680,7 @@
           {
             "source": "Playing",
             "target": "SkipBack",
-            "label": "30秒戻す",
+            "label": "30秒 戻して",
             "style": "solid"
           },
           {
@@ -19071,7 +19071,7 @@
           {
             "source": "Playing",
             "target": "SkipFwd",
-            "label": "sla 30 seconden over",
+            "label": "spring 30 seconden vooruit",
             "style": "solid"
           },
           {
@@ -19468,13 +19468,13 @@
           {
             "source": "Playing",
             "target": "SkipFwd",
-            "label": "avançar 30 segundos",
+            "label": "avança 30 segundos",
             "style": "solid"
           },
           {
             "source": "Playing",
             "target": "SkipBack",
-            "label": "voltar 30 segundos",
+            "label": "volta 30 segundos",
             "style": "solid"
           },
           {

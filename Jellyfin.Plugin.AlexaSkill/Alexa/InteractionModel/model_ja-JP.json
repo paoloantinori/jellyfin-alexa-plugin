@@ -309,6 +309,27 @@
         ]
       },
       {
+        "name": "SkipForwardBackIntent",
+        "samples": [
+          "{seek_amount} {seek_unit} {seek_direction}",
+          "{seek_amount} {seek_unit} スキップして"
+        ],
+        "slots": [
+          {
+            "name": "seek_direction",
+            "type": "SeekDirection"
+          },
+          {
+            "name": "seek_amount",
+            "type": "AMAZON.NUMBER"
+          },
+          {
+            "name": "seek_unit",
+            "type": "SeekUnit"
+          }
+        ]
+      },
+      {
         "name": "PlayPlaylistIntent",
         "samples": [
           "プレイリスト {playlist} を再生して",
@@ -1242,6 +1263,46 @@
               ]
             },
             "id": "latest"
+          }
+        ]
+      },
+      {
+        "name": "SeekDirection",
+        "values": [
+          {
+            "name": {
+              "value": "進めて",
+              "synonyms": [
+                "前に進めて"
+              ]
+            },
+            "id": "forward"
+          },
+          {
+            "name": {
+              "value": "戻して",
+              "synonyms": [
+                "戻って"
+              ]
+            },
+            "id": "back"
+          }
+        ]
+      },
+      {
+        "name": "SeekUnit",
+        "values": [
+          {
+            "name": {
+              "value": "秒"
+            },
+            "id": "seconds"
+          },
+          {
+            "name": {
+              "value": "分"
+            },
+            "id": "minutes"
           }
         ]
       },

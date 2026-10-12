@@ -35,7 +35,7 @@ graph TD
 
     NowPlaying --> Playing
 
-    Playing -->|"sla 30 seconden over"| SkipFwd["SkipForward"]
+    Playing -->|"spring 30 seconden vooruit"| SkipFwd["SkipForward"]
     Playing -->|"ga 30 seconden terug"| SkipBack["SkipBack"]
     Playing -->|"spring naar 5 minuten"| JumpPos["JumpToPosition"]
     Playing -->|"volgend hoofdstuk"| Chapter["GoToChapter"]

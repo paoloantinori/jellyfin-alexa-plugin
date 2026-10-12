@@ -345,6 +345,28 @@
         ]
       },
       {
+        "name": "SkipForwardBackIntent",
+        "samples": [
+          "springe {seek_direction}",
+          "springe {seek_amount} {seek_unit} {seek_direction}",
+          "spule {seek_amount} {seek_unit} {seek_direction}"
+        ],
+        "slots": [
+          {
+            "name": "seek_direction",
+            "type": "SeekDirection"
+          },
+          {
+            "name": "seek_amount",
+            "type": "AMAZON.NUMBER"
+          },
+          {
+            "name": "seek_unit",
+            "type": "SeekUnit"
+          }
+        ]
+      },
+      {
         "name": "PlayPlaylistIntent",
         "samples": [
           "Spiele die Playlist {playlist}",
@@ -1491,6 +1513,53 @@
               ]
             },
             "id": "latest"
+          }
+        ]
+      },
+      {
+        "name": "SeekDirection",
+        "values": [
+          {
+            "name": {
+              "value": "vor",
+              "synonyms": [
+                "vorwärts",
+                "voraus"
+              ]
+            },
+            "id": "forward"
+          },
+          {
+            "name": {
+              "value": "zurück",
+              "synonyms": [
+                "rückwärts"
+              ]
+            },
+            "id": "back"
+          }
+        ]
+      },
+      {
+        "name": "SeekUnit",
+        "values": [
+          {
+            "name": {
+              "value": "Sekunden",
+              "synonyms": [
+                "Sekunde"
+              ]
+            },
+            "id": "seconds"
+          },
+          {
+            "name": {
+              "value": "Minuten",
+              "synonyms": [
+                "Minute"
+              ]
+            },
+            "id": "minutes"
           }
         ]
       },

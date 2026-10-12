@@ -59,3 +59,29 @@ tests:
     expected_intent: PlayArtistSongsIntent
     expected_slots:
       musician: {}
+  # -------------------------------------------------------------------------
+  # SkipForwardBackIntent (JF-875 rollout). The تقدم/تراجع verb-direction
+  # synonyms ride the bare row (the rewind-as-synonym mechanism). NOTE
+  # (stable across two identical-content scratch rebuilds): the word ارجع
+  # leaves seek_direction UNFILLED on this trainer (تراجع and للخلف bind
+  # green; a value/synonym swap was tried and moved nothing), so ارجع forms
+  # are deliberately NOT pinned.
+  # -------------------------------------------------------------------------
+  - utterance: "تقدم 30 ثانية"
+    expected_intent: SkipForwardBackIntent
+    expected_slots:
+      seek_direction: {}
+      seek_amount: {}
+      seek_unit: {}
+
+  - utterance: "تراجع 30 ثانية"
+    expected_intent: SkipForwardBackIntent
+    expected_slots:
+      seek_direction: {}
+      seek_amount: {}
+      seek_unit: {}
+
+  # Transport steal guard (GoToChapter keeps its chapter routing).
+  - utterance: "الفصل التالي"
+    expected_intent: GoToChapterIntent
+    expected_slots: {}

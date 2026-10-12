@@ -69,6 +69,7 @@ Invocation name: **"jellyfin player"**
 | Show More | `أظهر المزيد` · `المزيد` · `الصفحة التالية` · `استمر` · `ماذا أيضا` · `المزيد من النتائج` |
 | Show Photo Album | `أرني صوري` · `أرني صور {photoAlbum}` · `اعرض صوري` · `اعرض صور {photoAlbum}` · `افتح صور {photoAlbum}` · `ابدأ عرض شرائح لصوري` |
 | Shuffle Play | `شغل قائمة التشغيل {playlist} بشكل عشوائي` · `اخلط قائمة التشغيل {playlist}` · `شغل قائمة التشغيل {playlist} في وضع الخلط` |
+| Skip Forward Back | `{seek_direction} {seek_amount} {seek_unit}` · `تخطى {seek_amount} {seek_unit}` |
 | Sleep Timer | `أوقف التشغيل بعد {sleep_duration}` · `اضبط مؤقت النوم لـ {sleep_duration}` · `مؤقت نوم {sleep_duration}` · `أوقف بعد {sleep_duration}` |
 | Turn Radio Off | `أوقف وضع الراديو` · `عطّل وضع الراديو` · `وضع الراديو متوقف` · `أوقف الراديو` |
 | Turn Radio On | `شغل وضع الراديو` · `فعّل وضع الراديو` · `وضع الراديو قيد التشغيل` · `شغل الراديو` |
@@ -132,6 +133,7 @@ Invocation name: **"jellyfin player"**
 | Shuffle All Off | `zufallswiedergabe ausschalten` · `zufällige wiedergabe aus` |
 | Shuffle All On | `zufallswiedergabe aktivieren` · `zufallswiedergabe einschalten` · `musik zufällig abspielen` · `zufällige wiedergabe an` |
 | Shuffle Play | `spiele die Playlist {playlist} in zufälliger Reihenfolge` · `mische die Playlist {playlist}` · `spiele die Playlist {playlist} im Zufallsmodus` |
+| Skip Forward Back | `springe {seek_direction}` · `springe {seek_amount} {seek_unit} {seek_direction}` · `spule {seek_amount} {seek_unit} {seek_direction}` |
 | Sleep Timer | `stoppe in {sleep_duration}` · `schlaf-timer {sleep_duration}` · `stoppe nach {sleep_duration}` · `ausschalten in {sleep_duration}` |
 | Turn Radio Off | `Schalte den Radiomodus aus` · `Deaktiviere den Radiomodus` · `Radiomodus aus` · `Schalte Radio aus` · `Deaktiviere Radio` · `Stoppe den Radiomodus` |
 | Turn Radio On | `Schalte den Radiomodus ein` · `Aktiviere den Radiomodus` · `Radiomodus an` · `Schalte Radio ein` · `Aktiviere Radio` |
@@ -190,6 +192,7 @@ Invocation name: **"jellyfin player"**
 | Show More | `show more` · `next page` · `more results` · `see more` · `more` · `what else` |
 | Show Photo Album | `show my photos` · `show my {photoAlbum} photos` · `show me my photos` · `show photos of {photoAlbum}` · `show photos from {photoAlbum}` · `show me photos of {photoAlbum}` |
 | Shuffle Play | `shuffle the playlist {playlist}` · `play the playlist {playlist} in shuffle mode` · `play the playlist {playlist} on shuffle` · `play {playlist} shuffled` |
+| Skip Forward Back | `skip {seek_direction} {seek_amount} {seek_unit}` · `skip {seek_direction}` · `skip {seek_amount} {seek_unit}` · `go {seek_direction} {seek_amount} {seek_unit}` · `jump {seek_direction} {seek_amount} {seek_unit}` · `fast forward {seek_amount} {seek_unit}` |
 | Sleep Timer | `stop playing in {sleep_duration}` · `set a sleep timer for {sleep_duration}` · `sleep timer {sleep_duration}` · `stop after {sleep_duration}` · `turn off in {sleep_duration}` · `set sleep timer {sleep_duration}` |
 | Turn Radio Off | `turn off radio mode` · `disable radio mode` · `radio mode off` · `turn off radio` · `disable radio` · `stop radio mode` |
 | Turn Radio On | `turn on radio mode` · `enable radio mode` · `radio mode on` · `turn on radio` · `enable radio` |
@@ -248,6 +251,7 @@ Invocation name: **"jellyfin player"**
 | Show More | `show more` · `next page` · `more results` · `see more` · `more` · `what else` |
 | Show Photo Album | `show my photos` · `show my {photoAlbum} photos` · `show me my photos` · `show photos of {photoAlbum}` · `show photos from {photoAlbum}` · `show me photos of {photoAlbum}` |
 | Shuffle Play | `shuffle the playlist {playlist}` · `play the playlist {playlist} in shuffle mode` · `play the playlist {playlist} on shuffle` · `play {playlist} shuffled` |
+| Skip Forward Back | `skip {seek_direction} {seek_amount} {seek_unit}` · `skip {seek_direction}` · `skip {seek_amount} {seek_unit}` · `go {seek_direction} {seek_amount} {seek_unit}` · `jump {seek_direction} {seek_amount} {seek_unit}` · `fast forward {seek_amount} {seek_unit}` |
 | Sleep Timer | `stop playing in {sleep_duration}` · `set a sleep timer for {sleep_duration}` · `sleep timer {sleep_duration}` · `stop after {sleep_duration}` · `turn off in {sleep_duration}` · `set sleep timer {sleep_duration}` |
 | Turn Radio Off | `turn off radio mode` · `disable radio mode` · `radio mode off` · `turn off radio` · `disable radio` · `stop radio mode` |
 | Turn Radio On | `turn on radio mode` · `enable radio mode` · `radio mode on` · `turn on radio` · `enable radio` |
@@ -306,6 +310,7 @@ Invocation name: **"jellyfin player"**
 | Show More | `show more` · `next page` · `more results` · `see more` · `more` · `what else` |
 | Show Photo Album | `show my photos` · `show my {photoAlbum} photos` · `show me my photos` · `show photos of {photoAlbum}` · `show photos from {photoAlbum}` · `show me photos of {photoAlbum}` |
 | Shuffle Play | `shuffle the playlist {playlist}` · `play the playlist {playlist} in shuffle mode` · `play the playlist {playlist} on shuffle` · `play {playlist} shuffled` |
+| Skip Forward Back | `skip {seek_direction} {seek_amount} {seek_unit}` · `skip {seek_direction}` · `skip {seek_amount} {seek_unit}` · `go {seek_direction} {seek_amount} {seek_unit}` · `jump {seek_direction} {seek_amount} {seek_unit}` · `fast forward {seek_amount} {seek_unit}` |
 | Sleep Timer | `stop playing in {sleep_duration}` · `set a sleep timer for {sleep_duration}` · `sleep timer {sleep_duration}` · `stop after {sleep_duration}` · `turn off in {sleep_duration}` · `set sleep timer {sleep_duration}` |
 | Turn Radio Off | `turn off radio mode` · `disable radio mode` · `radio mode off` · `turn off radio` · `disable radio` · `stop radio mode` |
 | Turn Radio On | `turn on radio mode` · `enable radio mode` · `radio mode on` · `turn on radio` · `enable radio` |
@@ -364,6 +369,7 @@ Invocation name: **"jellyfin player"**
 | Show More | `show more` · `next page` · `more results` · `see more` · `more` · `what else` |
 | Show Photo Album | `show my photos` · `show my {photoAlbum} photos` · `show me my photos` · `show photos of {photoAlbum}` · `show photos from {photoAlbum}` · `show me photos of {photoAlbum}` |
 | Shuffle Play | `shuffle the playlist {playlist}` · `play the playlist {playlist} in shuffle mode` · `play the playlist {playlist} on shuffle` · `play {playlist} shuffled` |
+| Skip Forward Back | `skip {seek_direction} {seek_amount} {seek_unit}` · `skip {seek_direction}` · `skip {seek_amount} {seek_unit}` · `go {seek_direction} {seek_amount} {seek_unit}` · `jump {seek_direction} {seek_amount} {seek_unit}` · `fast forward {seek_amount} {seek_unit}` |
 | Sleep Timer | `stop playing in {sleep_duration}` · `set a sleep timer for {sleep_duration}` · `sleep timer {sleep_duration}` · `stop after {sleep_duration}` · `turn off in {sleep_duration}` · `set sleep timer {sleep_duration}` |
 | Turn Radio Off | `turn off radio mode` · `disable radio mode` · `radio mode off` · `turn off radio` · `disable radio` · `stop radio mode` |
 | Turn Radio On | `turn on radio mode` · `enable radio mode` · `radio mode on` · `turn on radio` · `enable radio` |
@@ -423,7 +429,7 @@ Invocation name: **"jellyfin player"**
 | Show More | `show more` · `next page` · `more results` · `see more` · `more` · `what else` |
 | Show Photo Album | `show my photos` · `show my {photoAlbum} photos` · `show me my photos` · `show photos of {photoAlbum}` · `show photos from {photoAlbum}` · `show me photos of {photoAlbum}` |
 | Shuffle Play | `shuffle the playlist {playlist}` · `play the playlist {playlist} in shuffle mode` · `play the playlist {playlist} on shuffle` · `play {playlist} shuffled` |
-| Skip Forward Back | `skip forward {seek_amount} {seek_unit}` · `skip {seek_direction} {seek_amount} {seek_unit}` · `skip {seek_direction}` · `skip forward` · `skip {seek_amount} seconds` · `skip back {seek_amount} {seek_unit}` |
+| Skip Forward Back | `skip {seek_direction} {seek_amount} {seek_unit}` · `skip {seek_direction}` · `skip {seek_amount} {seek_unit}` · `go {seek_direction} {seek_amount} {seek_unit}` · `jump {seek_direction} {seek_amount} {seek_unit}` · `fast forward {seek_amount} {seek_unit}` |
 | Sleep Timer | `stop playing in {sleep_duration}` · `set a sleep timer for {sleep_duration}` · `sleep timer {sleep_duration}` · `stop after {sleep_duration}` · `turn off in {sleep_duration}` · `set sleep timer {sleep_duration}` |
 | Turn Radio Off | `turn off radio mode` · `disable radio mode` · `radio mode off` · `turn off radio` · `disable radio` · `stop radio mode` |
 | Turn Radio On | `turn on radio mode` · `enable radio mode` · `radio mode on` · `turn on radio` · `enable radio` |
@@ -482,6 +488,7 @@ Invocation name: **"jellyfin player"**
 | Show More | `mostrar más` · `más resultados` · `siguiente` · `continúa` · `qué más` · `ver más` |
 | Show Photo Album | `muestra mis fotos` · `muestra fotos de {photoAlbum}` · `muéstrame mis fotos` · `muestra las fotos de {photoAlbum}` · `muéstrame las fotos de {photoAlbum}` · `abre las fotos de {photoAlbum}` |
 | Shuffle Play | `reproduce la lista {playlist} en modo aleatorio` · `mezcla la lista {playlist}` · `reproduce la lista de reproducción {playlist} en modo aleatorio` |
+| Skip Forward Back | `salta {seek_direction}` · `salta {seek_direction} {seek_amount} {seek_unit}` · `salta {seek_amount} {seek_unit}` · `{seek_direction} {seek_amount} {seek_unit}` |
 | Sleep Timer | `detener en {sleep_duration}` · `temporizador {sleep_duration}` · `parar después de {sleep_duration}` · `apagar en {sleep_duration}` |
 | Turn Radio Off | `Desactiva el modo radio` · `Apaga el modo radio` · `Modo radio apagado` · `Desactiva la radio` · `Apaga la radio` · `Detén el modo radio` |
 | Turn Radio On | `Activa el modo radio` · `Enciende el modo radio` · `Modo radio encendido` · `Activa la radio` · `Enciende la radio` |
@@ -540,6 +547,7 @@ Invocation name: **"jellyfin player"**
 | Show More | `mostrar más` · `más resultados` · `siguiente` · `continúa` · `qué más` · `ver más` |
 | Show Photo Album | `muestra mis fotos` · `muestra fotos de {photoAlbum}` · `muéstrame mis fotos` · `muestra las fotos de {photoAlbum}` · `muéstrame las fotos de {photoAlbum}` · `abre las fotos de {photoAlbum}` |
 | Shuffle Play | `reproduce la lista {playlist} en modo aleatorio` · `mezcla la lista {playlist}` · `reproduce la lista de reproducción {playlist} en modo aleatorio` |
+| Skip Forward Back | `salta {seek_direction}` · `salta {seek_direction} {seek_amount} {seek_unit}` · `salta {seek_amount} {seek_unit}` · `{seek_direction} {seek_amount} {seek_unit}` |
 | Sleep Timer | `detener en {sleep_duration}` · `temporizador {sleep_duration}` · `parar después de {sleep_duration}` · `apagar en {sleep_duration}` |
 | Turn Radio Off | `Desactiva el modo radio` · `Apaga el modo radio` · `Modo radio apagado` · `Desactiva la radio` · `Apaga la radio` · `Detén el modo radio` |
 | Turn Radio On | `Activa el modo radio` · `Enciende el modo radio` · `Modo radio encendido` · `Activa la radio` · `Enciende la radio` |
@@ -598,6 +606,7 @@ Invocation name: **"jellyfin player"**
 | Show More | `mostrar más` · `más resultados` · `siguiente` · `continúa` · `qué más` · `ver más` |
 | Show Photo Album | `muestra mis fotos` · `muestra fotos de {photoAlbum}` · `muéstrame mis fotos` · `muestra las fotos de {photoAlbum}` · `muéstrame las fotos de {photoAlbum}` · `abre las fotos de {photoAlbum}` |
 | Shuffle Play | `reproduce la lista {playlist} en modo aleatorio` · `mezcla la lista {playlist}` · `reproduce la lista de reproducción {playlist} en modo aleatorio` |
+| Skip Forward Back | `salta {seek_direction}` · `salta {seek_direction} {seek_amount} {seek_unit}` · `salta {seek_amount} {seek_unit}` · `{seek_direction} {seek_amount} {seek_unit}` |
 | Sleep Timer | `detener en {sleep_duration}` · `temporizador {sleep_duration}` · `parar después de {sleep_duration}` · `apagar en {sleep_duration}` |
 | Turn Radio Off | `Desactiva el modo radio` · `Apaga el modo radio` · `Modo radio apagado` · `Desactiva la radio` · `Apaga la radio` · `Detén el modo radio` |
 | Turn Radio On | `Activa el modo radio` · `Enciende el modo radio` · `Modo radio encendido` · `Activa la radio` · `Enciende la radio` |
@@ -661,6 +670,7 @@ Invocation name: **"jellyfin player"**
 | Shuffle All Off | `désactive la lecture aléatoire` · `arrête la lecture aléatoire` |
 | Shuffle All On | `active la lecture aléatoire` · `mélange la file d'attente` · `lecture aléatoire` |
 | Shuffle Play | `lis la playlist {playlist} en mode aléatoire` · `mélange la playlist {playlist}` · `mets la playlist {playlist} en mode aléatoire` |
+| Skip Forward Back | `saute {seek_direction}` · `saute {seek_direction} de {seek_amount} {seek_unit}` · `{seek_direction} de {seek_amount} {seek_unit}` |
 | Sleep Timer | `arrêter dans {sleep_duration}` · `minuterie {sleep_duration}` · `arrêter après {sleep_duration}` · `éteindre dans {sleep_duration}` |
 | Turn Radio Off | `Désactive le mode radio` · `Éteins le mode radio` · `Mode radio désactivé` · `Désactive la radio` · `Éteins la radio` · `Arrête le mode radio` |
 | Turn Radio On | `Active le mode radio` · `Allume le mode radio` · `Mode radio activé` · `Active la radio` · `Allume la radio` |
@@ -724,6 +734,7 @@ Invocation name: **"jellyfin player"**
 | Shuffle All Off | `désactive la lecture aléatoire` · `arrête la lecture aléatoire` |
 | Shuffle All On | `active la lecture aléatoire` · `mélange la file d'attente` · `mets en lecture aléatoire` · `lecture aléatoire` |
 | Shuffle Play | `lis la playlist {playlist} en mode aléatoire` · `mélange la playlist {playlist}` · `mets la playlist {playlist} en mode aléatoire` |
+| Skip Forward Back | `saute {seek_direction}` · `saute {seek_direction} de {seek_amount} {seek_unit}` · `{seek_direction} de {seek_amount} {seek_unit}` |
 | Sleep Timer | `arrêter dans {sleep_duration}` · `minuterie {sleep_duration}` · `arrêter après {sleep_duration}` · `éteindre dans {sleep_duration}` |
 | Turn Radio Off | `Désactive le mode radio` · `Éteins le mode radio` · `Mode radio désactivé` · `Désactive la radio` · `Éteins la radio` · `Arrête le mode radio` |
 | Turn Radio On | `Active le mode radio` · `Allume le mode radio` · `Mode radio activé` · `Active la radio` · `Allume la radio` |
@@ -782,6 +793,7 @@ Invocation name: **"jellyfin player"**
 | Show More | `और दिखाओ` · `अगला पेज` · `और` · `जारी रखो` · `आगे` · `क्या और है` |
 | Show Photo Album | `मेरी फ़ोटो दिखाओ` · `{photoAlbum} की फ़ोटो दिखाओ` · `मुझे मेरी फ़ोटो दिखाओ` · `{photoAlbum} की तस्वीरें दिखाओ` · `{photoAlbum} का फ़ोटो एल्बम दिखाओ` · `मेरी फ़ोटो की स्लाइडशो शुरू करो` |
 | Shuffle Play | `प्लेलिस्ट {playlist} शफल में चलाओ` · `प्लेलिस्ट {playlist} शफल करो` |
+| Skip Forward Back | `{seek_amount} {seek_unit} {seek_direction} जाओ` · `{seek_direction} स्किप करो` · `{seek_amount} {seek_unit} स्किप करो` · `{seek_amount} {seek_unit} {seek_direction} स्किप करो` |
 | Sleep Timer | `{sleep_duration} में बंद करो` · `स्लीप टाइमर {sleep_duration} सेट करो` · `स्लीप टाइमर {sleep_duration}` · `{sleep_duration} बाद बंद करो` |
 | Turn Radio Off | `रेडियो मोड बंद करो` · `रेडियो मोड डिसेबल करो` · `रेडियो मोड ऑफ` · `रेडियो बंद करो` · `रेडियो डिसेबल करो` |
 | Turn Radio On | `रेडियो मोड चालू करो` · `रेडियो मोड एनेबल करो` · `रेडियो मोड ऑन` · `रेडियो चालू करो` · `रेडियो एनेबल करो` |
@@ -904,6 +916,7 @@ Invocation name: **"jellyfin player"**
 | Show More | `もっと見せて` · `次のページ` · `もっと` · `続き` · `他に何がある` · `もっと結果` |
 | Show Photo Album | `写真を見せて` · `{photoAlbum} の写真を見せて` · `私の写真を見せて` · `{photoAlbum} のフォトアルバムを見せて` · `{photoAlbum} の写真を表示して` · `スライドショーを始めて` |
 | Shuffle Play | `プレイリスト {playlist} をシャッフルで再生して` · `シャッフルでプレイリスト {playlist} を再生して` |
+| Skip Forward Back | `{seek_amount} {seek_unit} {seek_direction}` · `{seek_amount} {seek_unit} スキップして` |
 | Sleep Timer | `{sleep_duration} 後に止めて` · `スリープタイマー {sleep_duration}` · `{sleep_duration} 後におやすみタイマー` · `{sleep_duration} でスリープタイマーをセットして` |
 | Turn Radio Off | `ラジオモードをオフにして` · `ラジオモードを無効にして` · `ラジオをオフにして` · `ラジオを無効にして` · `ラジオモードを止めて` |
 | Turn Radio On | `ラジオモードをオンにして` · `ラジオモードを有効にして` · `ラジオをオンにして` · `ラジオを有効にして` |
@@ -962,6 +975,7 @@ Invocation name: **"jellyfin player"**
 | Show More | `toon meer` · `meer resultaten` · `volgende` · `doorgaan` · `wat nog meer` · `meer` |
 | Show Photo Album | `toon mijn foto's` · `toon foto's van {photoAlbum}` · `laat mijn foto's zien` · `toon de foto's van {photoAlbum}` · `laat de foto's van {photoAlbum} zien` · `open de foto's van {photoAlbum}` |
 | Shuffle Play | `speel de playlist {playlist} in willekeurige volgorde` · `shuffle de playlist {playlist}` |
+| Skip Forward Back | `spring {seek_direction}` · `spring {seek_amount} {seek_unit} {seek_direction}` · `ga {seek_amount} {seek_unit} {seek_direction}` |
 | Sleep Timer | `stop met afspelen over {sleep_duration}` · `stel een slaaptimer in voor {sleep_duration}` · `slaaptimer {sleep_duration}` · `stop na {sleep_duration}` · `zet uit over {sleep_duration}` |
 | Turn Radio Off | `zet radiomodus uit` · `schakel radiomodus uit` · `radiomodus uit` · `zet radio uit` · `schakel radio uit` · `stop radiomodus` |
 | Turn Radio On | `zet radiomodus aan` · `schakel radiomodus in` · `radiomodus aan` · `zet radio aan` · `schakel radio in` |
@@ -1020,6 +1034,7 @@ Invocation name: **"jellyfin player"**
 | Show More | `mostrar mais` · `mais resultados` · `próximo` · `continuar` · `o que mais` · `ver mais` |
 | Show Photo Album | `mostra minhas fotos` · `mostra fotos de {photoAlbum}` · `me mostra minhas fotos` · `mostra as fotos de {photoAlbum}` · `me mostra as fotos de {photoAlbum}` · `abre as fotos de {photoAlbum}` |
 | Shuffle Play | `toque a playlist {playlist} em modo aleatório` · `embaralhe a playlist {playlist}` |
+| Skip Forward Back | `pula {seek_amount} {seek_unit}` · `{seek_direction} {seek_amount} {seek_unit}` |
 | Sleep Timer | `parar de tocar em {sleep_duration}` · `definir timer de sono para {sleep_duration}` · `timer de sono {sleep_duration}` · `parar após {sleep_duration}` · `desligar em {sleep_duration}` · `definir timer de sono {sleep_duration}` |
 | Turn Radio Off | `desativar modo rádio` · `desabilitar modo rádio` · `modo rádio desligado` · `desligar rádio` · `desabilitar rádio` · `parar modo rádio` |
 | Turn Radio On | `ativar modo rádio` · `habilitar modo rádio` · `modo rádio ligado` · `ligar rádio` · `habilitar rádio` |

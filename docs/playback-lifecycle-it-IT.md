@@ -35,8 +35,8 @@ graph TD
 
     NowPlaying --> Playing
 
-    Playing -->|"vai avanti {seek_amount} {seek_unit}"| SkipFwd["SkipForward"]
-    Playing -->|"vai indietro {seek_amount} {seek_unit}"| SkipBack["SkipBack"]
+    Playing -->|"vai avanti di 30 secondi"| SkipFwd["SkipForward"]
+    Playing -->|"vai indietro di 30 secondi"| SkipBack["SkipBack"]
     Playing -->|"vai a {position_minutes} minuti"| JumpPos["JumpToPosition"]
     Playing -->|"Vai al capitolo {chapter_number}"| Chapter["GoToChapter"]
 

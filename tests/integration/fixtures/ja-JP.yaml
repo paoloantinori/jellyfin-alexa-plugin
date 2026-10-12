@@ -152,3 +152,24 @@ tests:
         value: "game of thrones"
       season_number: {}
       episode_number: {}
+  # -------------------------------------------------------------------------
+  # SkipForwardBackIntent (JF-875 rollout). The te-form direction verbs are
+  # the natural media-skip words; the amount and unit slots are
+  # space-separated in the samples because adjacent slot references make
+  # SMAPI silently drop the whole ja-JP build (scratch-verified). Verified on
+  # the scratch build across two identical-content rebuilds.
+  # -------------------------------------------------------------------------
+  - utterance: "30秒 進めて"
+    expected_intent: SkipForwardBackIntent
+    expected_slots:
+      seek_direction: {}
+      seek_amount: {}
+      seek_unit: {}
+
+  - utterance: "30秒 戻して"
+    expected_intent: SkipForwardBackIntent
+    expected_slots:
+      seek_direction: {}
+      seek_amount: {}
+      seek_unit: {}
+

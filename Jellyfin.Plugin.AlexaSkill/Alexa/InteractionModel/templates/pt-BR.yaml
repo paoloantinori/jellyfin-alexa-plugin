@@ -306,6 +306,33 @@ intents:
     slots:
       - name: chapter_number
         type: AMAZON.NUMBER
+  # JF-875 (2026-10-12): the SkipForwardBack family (en-US + it-IT carried it
+  # until now; this locale was the JF-684 no-selection class for every
+  # skip-forward/back-style ask). The family ships in the JF-869 it-IT shape:
+  # the direction word rides ONLY the slotted {seek_direction} position (a
+  # direction-literal row delivers an empty slot and the handler's forward
+  # default seeks the wrong way, the en-US wrong-way bug this rollout must not
+  # re-import), no bare direction-only rows (the it-IT transport-steal
+  # lesson: bare direction words steal the built-in Next/Previous routing),
+  # and verbs that ARE the direction (the locale's rewind-class verbs) ride
+  # the slot as SeekDirection synonyms (the rewind-as-synonym mechanism) on
+  # the verb-initial bare row.
+  # The bare row carries the avança/volta verb-direction synonyms (the
+  # rewind-as-synonym mechanism: "avança trinta segundos" / "volta trinta
+  # segundos" are the natural spoken forms); "pula {seek_amount} {seek_unit}"
+  # is the direction-less default-forward row (pular is the locale's skip
+  # verb, pular para o capítulo).
+  - name: SkipForwardBackIntent
+    samples:
+      - pula {seek_amount} {seek_unit}
+      - '{seek_direction} {seek_amount} {seek_unit}'
+    slots:
+      - name: seek_direction
+        type: SeekDirection
+      - name: seek_amount
+        type: AMAZON.NUMBER
+      - name: seek_unit
+        type: SeekUnit
   - name: PlayPlaylistIntent
     samples:
       - tocar a playlist {playlist}
@@ -883,6 +910,27 @@ types:
       - value: o último
         id: latest
         synonyms: [último, o mais recente, mais recente, o mais novo, mais novo]
+  # JF-875: seek vocabulary for SkipForwardBackIntent (the EpisodePosition
+  # shape: localized values over the shared English id key space the
+  # handler's entity resolution reads; SeekVocabulary.cs is the consuming
+  # half, its raw word sets carry these locale words as the no-ER
+  # fallback).
+  SeekDirection:
+    values:
+      - value: para frente
+        id: "forward"
+        synonyms: [adiante, avança]
+      - value: para trás
+        id: "back"
+        synonyms: [atrás, volta]
+  SeekUnit:
+    values:
+      - value: segundos
+        id: "seconds"
+        synonyms: [segundo]
+      - value: minutos
+        id: "minutes"
+        synonyms: [minuto]
   TimePeriod:
     values:
       - id: today
