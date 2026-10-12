@@ -4,14 +4,14 @@ title: >-
   Cap-priority tradeoff at MaxCatalogValues saturation: a library that fills the
   whole cap drops every static seed and the JF-823 generic word (reserved-slots
   alternative from the JF-825 code review)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-09 16:59'
-updated_date: '2026-10-09 19:55'
+updated_date: '2026-10-12 22:25'
 labels:
   - catalog-sync
   - review-followup
-  - gate:future-trigger
+  - 'gate:future-trigger'
 dependencies: []
 references:
   - >-
@@ -53,3 +53,9 @@ Trigger to revisit: any evidence of a real library near the 50000-value cap on a
 <!-- SECTION:NOTES:BEGIN -->
 Trigger evidence check (orchestrator, 2026-10-09 20:05, live read-only): /Items/Counts on the minix household library returns ArtistCount 1135, AlbumCount 886, SeriesCount 140, BookCount 6 (SongCount 12766, but songs are not a synced catalog type). The largest synced type sits at ~2.3% of the 50000-value cap, so the saturation regime this task trades against is not merely rare here, it is two orders of magnitude away. Task stays parked per its own revisit trigger (evidence of a real library near the cap, or maintainer preference for generic-word availability); this data point is the counter-evidence side of that ledger.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+EXECUTED on branch jf848 (4fa8d500), merged to main 086a995e, pushed. CatalogPayload.TruncateTo now returns (Dropped, DroppedReservedCount) and reserves the static tail (seed titles + the JF-823 generic word) FIRST at saturation, so a saturated library can no longer evict the recall floor; below saturation the JF-825 behavior is byte-identical (the dispatch's requirement, and the source of the JF-879 band finding for the maintainer). 7 cap-class pins incl. the JF-874 Movie saturation and an es-ES generic-word survival pin. Gates: /simplify (4 applied) + /code-review high (5 applied, F1 -> JF-879). Tests 5825/5825 BOTH TFMs; Release -warnaserror 0/0. Note: the policy rides the DLL; it activates on the next deploy of this build to minix (no model/template change).
+<!-- SECTION:FINAL_SUMMARY:END -->
