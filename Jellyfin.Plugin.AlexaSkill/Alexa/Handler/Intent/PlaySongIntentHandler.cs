@@ -160,6 +160,10 @@ public class PlaySongIntentHandler : BaseHandler
         // PRIMARY SearchTerm path stays ungated: a server-side index match on a
         // romaji string is literal, not the fuzzy wrong-accept class the bar kills.
         bool kanaOrigin = Util.ArtistSearch.IsKanaOriginQuery(null, songQuery);
+        // JF-871: the PRE-romanization query is what the fuzzy suggestion's decline
+        // context stores (the kana flag's own capture point): the decline re-derives
+        // kana-origin from it and romanizes it, reproducing this local exactly.
+        string preRomanizedSongQuery = songQuery;
         songQuery = Util.KatakanaRomanizer.Romanize(songQuery);
 
         RunFireAndForget(SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingMedia", locale)));
@@ -297,61 +301,22 @@ public class PlaySongIntentHandler : BaseHandler
             // Cross-media-type fallback: no songs found and no musician slot.
             // The NLU may have routed an artist name to PlaySongIntent by mistake
             // (e.g. "mettere gli strokes" → song="strokes" instead of artist="strokes").
-            // JF-446: the shared gate (TryEntityFallbackAsync) owns the word-count guard
-            // (on TOKENIZED words, so locale articles no longer count against the limit)
-            // and the acceptance thresholds (phonetic matcher + the JF-363
-            // Confirm/AutoServe band for sub-strict matches).
-            SkillResponse? artistFallback = await CrossMedia.TryEntityFallbackAsync(
-                songQuery, jellyfinUser!, user, session, context, locale,
+            // JF-871: the cascade tail (artist, then album JF-345, then video JF-865,
+            // then the honest not-found) lives on the shared
+            // BaseHandler.RunSongMissCascadeAsync so the DECLINE of a fuzzy song
+            // suggestion runs the same tiers (a rejected "intendevi X?" counts as a
+            // song-tier miss). The tiers' own docs carry the precedence rationale.
+            return await RunSongMissCascadeAsync(
+                songQuery, kanaOrigin, request, context, locale,
+                jellyfinUser!, user, session,
                 _libraryManager, _userDataManager, _queueManager, _artistIndex,
-                "PlaySong", cancellationToken,
-                notFoundMediaType: DisambiguationHelper.MediaTypeSong,
-                // JF-660: songQuery is the ROMANIZED local; the flag captured on the
-                // raw slot above (JF-654) keeps the JF-652 artist bar live here.
-                kanaOrigin: kanaOrigin).ConfigureAwait(false);
-            if (artistFallback != null)
-            {
-                return artistFallback;
-            }
-
-            // JF-345: song-to-album cascade, AFTER the artist cascade (see
-            // TryAlbumFallbackAsync for the precedence rationale: a bare "play abbey
-            // road" finds no artist, so the album tier recovers it here, while a bare
-            // "play metallica" still plays the artist above and never reaches this
-            // tier). Bare album titles route to PlaySong in the free-text locales
-            // (guaranteed in the five English locales PR #15 trimmed the carriers
-            // from; a coin flip in the other 11, which still ship them) and used
-            // to dead-end in the song not-found below.
-            SkillResponse? albumFallback = await AlbumPlay.TryAlbumFallbackAsync(
-                songQuery, jellyfinUser!, user, session, context, locale,
-                _libraryManager, _userDataManager, _queueManager,
-                "PlaySong", request, cancellationToken,
-                // JF-661: songQuery is the ROMANIZED local (JF-643); the flag
-                // captured on the raw slot above (JF-654) keeps the album bar live
-                // here, the same pinning the artist cascade one gate up applies.
-                kanaOrigin: kanaOrigin).ConfigureAwait(false);
-            if (albumFallback != null)
-            {
-                return albumFallback;
-            }
-
-            // JF-865: the cross-medium video leg, LAST in the cascade (song, then
-            // artist, then album, then video: a movie is the most distant guess, so
-            // it only fires when every same-medium recovery missed). Rescues the
-            // JF-864 steal locales where a bare "play <movie>" routes here; the
-            // carrier form stays the guaranteed first-shot path (see the leg's doc
-            // for the NO_SELECTION boundary).
-            SkillResponse? videoFallback = await CrossMedia.TryVideoFallbackAsync(
-                songQuery, jellyfinUser!, user, session, context, locale,
-                _libraryManager,
-                "PlaySong", request, cancellationToken).ConfigureAwait(false);
-            if (videoFallback != null)
-            {
-                return videoFallback;
-            }
-
-            return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundSongByName", locale, songQuery));
+                "PlaySong", cancellationToken).ConfigureAwait(false);
         }
+
+        // JF-871: the cross-media seams below (the exact-video preemption and the
+        // suggestion decline context) run only for the title-only shape, the same
+        // scope the miss cascade's legs run in.
+        bool noMusicianShape = string.IsNullOrWhiteSpace(musicianQuery);
 
         if (songs.Count > 1)
         {
@@ -386,7 +351,31 @@ public class PlaySongIntentHandler : BaseHandler
                     return await SwapOntoAnnounceVehicleAsync(fuzzyPlay, request, context, user).ConfigureAwait(false);
                 },
                 user: user,
-                speechSelector: s => s.Name).ConfigureAwait(false);
+                speechSelector: s => s.Name,
+                // JF-871 ranking: an EXACT-title video outranks the sub-threshold
+                // fuzzy song near-hit, so it is offered BEFORE the "intendevi X?"
+                // prompt instead of after a confirmed miss (the video tier sat last
+                // in the cascade and a near-hit intercepted it: "brano sunny dancer"
+                // with the film in the library answered "intendevi Sunny?"). Only
+                // the no-musician shape (the cascade legs run there too); a fuzzy
+                // video hit does NOT preempt (exactOnly), so a real near-miss song
+                // ask keeps its suggestion.
+                confirmAlternativeAsync: noMusicianShape
+                    ? () => CrossMedia.TryVideoFallbackAsync(
+                        songQuery, jellyfinUser!, user, session, context, locale,
+                        _libraryManager,
+                        "PlaySong:exact-video-preempt", request, cancellationToken,
+                        exactOnly: true)
+                    : null,
+                // JF-871 decline: the rejected suggestion counts as a song-tier miss,
+                // so the ask carries the query NoIntentHandler resumes the cascade
+                // with (see RunSongMissCascadeAsync).
+                sessionExtras: noMusicianShape
+                    ? new (string Key, object Value)[]
+                    {
+                        (DisambiguationHelper.AttrSongSuggestionQuery, preRomanizedSongQuery)
+                    }
+                    : null).ConfigureAwait(false);
 
             if (missOutcome != FuzzyMissOutcome.NotFound)
             {

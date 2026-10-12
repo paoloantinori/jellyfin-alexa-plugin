@@ -1222,6 +1222,16 @@ public abstract class BaseHandler
     /// <param name="speechSelector">Optional display-name selector for SPOKEN
     /// surfaces (the auto-play qualifier and the "did you mean" ask); defaults to
     /// <paramref name="selector"/> (the pre-JF-755 dual-use behavior).</param>
+    /// <param name="confirmAlternativeAsync">JF-871: consulted ONLY in the Confirm
+    /// branch, before the "did you mean" ask is built; a non-null response replaces
+    /// the prompt (outcome stays SuggestionHandled, the caller returns it). The
+    /// caller-owned ranking seam for "an EXACT cross-medium hit outranks a
+    /// sub-threshold near-hit prompt" (PlaySong passes the exact-title video leg).
+    /// Null (the default for every other caller) keeps the prompt byte-identical.</param>
+    /// <param name="sessionExtras">JF-871: extra session entries layered onto the
+    /// Confirm ask (the PlaySong decline-context query); their keys join the ask's
+    /// ACTIVE key set, so the ask keeps them while every other flow's keys are
+    /// superseded. Null (the default) keeps the attribute shape byte-identical.</param>
     /// <returns>A tuple indicating the outcome and optional response.</returns>
     protected async Task<(FuzzyMissOutcome Outcome, SkillResponse? Response)> HandleFuzzyMiss<T>(
         string query,
@@ -1234,7 +1244,9 @@ public abstract class BaseHandler
         Entities.User? user = null,
         Context? context = null,
         Request? request = null,
-        Func<T, string>? speechSelector = null)
+        Func<T, string>? speechSelector = null,
+        Func<Task<SkillResponse?>>? confirmAlternativeAsync = null,
+        (string Key, object Value)[]? sessionExtras = null)
         where T : class
     {
         if (candidates == null || candidates.Count == 0)
@@ -1359,12 +1371,26 @@ public abstract class BaseHandler
         // Confirm mode: "Did you mean X?"
         Logger.LogDebug("HandleFuzzyMiss: query={Query}, best={BestMatch}, score={Score}, candidates={CandidateCount} — disambiguating",
             query, selector(best), score, candidates.Count);
+        // JF-871: before the near-hit ask is built, the caller's alternative may
+        // outrank it (an EXACT cross-medium hit beats a sub-threshold fuzzy
+        // suggestion). A null alternative falls through to today's prompt.
+        if (confirmAlternativeAsync != null)
+        {
+            SkillResponse? alternative = await confirmAlternativeAsync().ConfigureAwait(false);
+            if (alternative != null)
+            {
+                Logger.LogDebug("HandleFuzzyMiss: confirm alternative preempted the suggestion for query={Query}", query);
+                return (FuzzyMissOutcome.SuggestionHandled, alternative);
+            }
+        }
+
         var matches = matchExtractor(best) ?? new List<(Guid, string)>();
         SkillResponse response = SpeechBuilder.AskLocalized(
             "FuzzySuggestionPromptSsml", "FuzzySuggestionPrompt", "FuzzySuggestionReprompt", locale, query, speak(best));
 
         var matchInfos = matches.Select(m => new DisambiguationHelper.MatchInfo { Id = m.Id.ToString(), Name = m.Name }).ToList();
-        response.SessionAttributes = DisambiguationHelper.BuildAttributes(matchInfos, 0, mediaType);
+        var extras = sessionExtras ?? Array.Empty<(string Key, object Value)>();
+        response.SessionAttributes = DisambiguationHelper.BuildAttributes(matchInfos, 0, mediaType, extras);
 
         // JF-398: activating the disambiguation flow supersedes any other flow's state.
         // JF-690 review tail: the FIFTH plain ask site (the four DisambiguationHelper
@@ -1372,12 +1398,101 @@ public abstract class BaseHandler
         // so a stale cross-media OFFER's crossmedia_notfound_* decline keys are
         // superseded with the rest instead of surviving to answer a later "no" with
         // the OLD song/album not-found.
+        // JF-871: the sessionExtras' keys are keys THIS ask writes (the PlaySong
+        // decline context), so they join the active set instead of being superseded.
         ConversationalFlows.MarkOthersInactive(
             response,
-            DisambiguationHelper.AttrMatches,
-            DisambiguationHelper.AttrIndex,
-            DisambiguationHelper.AttrType);
+            new[]
+            {
+                DisambiguationHelper.AttrMatches,
+                DisambiguationHelper.AttrIndex,
+                DisambiguationHelper.AttrType
+            }
+            .Concat(extras.Select(e => e.Key))
+            .ToArray());
         return (FuzzyMissOutcome.SuggestionHandled, response);
+    }
+
+    /// <summary>
+    /// JF-871: the ONE song-miss cross-media cascade (artist, then album, then
+    /// video, then the honest song not-found), extracted from PlaySong's inline
+    /// miss tail so the DECLINE of a PlaySong fuzzy suggestion (the "intendevi
+    /// X?" ask, whose rejection must count as a song-tier miss per JF-871) runs
+    /// the same tiers in the same order as the first-turn miss. Precedence is
+    /// unchanged from the inline tail it was extracted from (the JF-345/JF-865
+    /// rationales live on the tiers themselves); only the call site count grew
+    /// from one to two.
+    /// </summary>
+    /// <param name="songQuery">The carrier-stripped, ROMANIZED song query (the
+    /// value the tiers search and the not-found speaks).</param>
+    /// <param name="kanaOrigin">The kana-origin flag captured on the caller's raw
+    /// slot (JF-654/JF-652/JF-661 bars); the decline call site re-derives it from
+    /// the stored pre-romanization query.</param>
+    /// <param name="request">The current skill request (the JF-501 progressive
+    /// announce vehicle on the video tier's AutoServe launch).</param>
+    /// <param name="context">The request context.</param>
+    /// <param name="locale">The request locale.</param>
+    /// <param name="jellyfinUser">The resolved Jellyfin user for queries.</param>
+    /// <param name="user">The plugin user.</param>
+    /// <param name="session">The Jellyfin session receiving now-playing writes.</param>
+    /// <param name="libraryManager">Library manager for the tiers' queries.</param>
+    /// <param name="userDataManager">User data manager (artist tier resume reads).</param>
+    /// <param name="queueManager">Optional per-device queue manager.</param>
+    /// <param name="artistIndex">Optional in-memory artist index.</param>
+    /// <param name="logLabel">Tier log label (the calling site's name).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Always non-null: the first tier that answers, else the song not-found Tell.</returns>
+    protected async Task<SkillResponse> RunSongMissCascadeAsync(
+        string songQuery,
+        bool kanaOrigin,
+        Request? request,
+        Context context,
+        string locale,
+        JellyfinUser jellyfinUser,
+        Entities.User user,
+        SessionInfo session,
+        ILibraryManager libraryManager,
+        IUserDataManager userDataManager,
+        DeviceQueueManager? queueManager,
+        IArtistIndex? artistIndex,
+        string logLabel,
+        CancellationToken cancellationToken)
+    {
+        // Artist tier: the NLU may have routed an artist name to the song slot.
+        SkillResponse? artistFallback = await CrossMedia.TryEntityFallbackAsync(
+            songQuery, jellyfinUser, user, session, context, locale,
+            libraryManager, userDataManager, queueManager, artistIndex,
+            logLabel, cancellationToken,
+            notFoundMediaType: DisambiguationHelper.MediaTypeSong,
+            kanaOrigin: kanaOrigin).ConfigureAwait(false);
+        if (artistFallback != null)
+        {
+            return artistFallback;
+        }
+
+        // Album tier (JF-345): after the artist cascade, so a bare artist name
+        // never reaches it while a bare album title does.
+        SkillResponse? albumFallback = await AlbumPlay.TryAlbumFallbackAsync(
+            songQuery, jellyfinUser, user, session, context, locale,
+            libraryManager, userDataManager, queueManager,
+            logLabel, request, cancellationToken,
+            kanaOrigin: kanaOrigin).ConfigureAwait(false);
+        if (albumFallback != null)
+        {
+            return albumFallback;
+        }
+
+        // Video tier (JF-865): last, a movie is the most distant guess.
+        SkillResponse? videoFallback = await CrossMedia.TryVideoFallbackAsync(
+            songQuery, jellyfinUser, user, session, context, locale,
+            libraryManager,
+            logLabel, request, cancellationToken).ConfigureAwait(false);
+        if (videoFallback != null)
+        {
+            return videoFallback;
+        }
+
+        return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundSongByName", locale, songQuery));
     }
 
     /// <summary>

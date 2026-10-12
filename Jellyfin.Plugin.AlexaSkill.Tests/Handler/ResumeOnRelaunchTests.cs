@@ -122,6 +122,9 @@ public class ResumeOnRelaunchTests : PluginTestBase, IDisposable
         return new NoIntentHandler(
             _sessionManagerMock.Object,
             _config,
+            _libraryManagerMock.Object,
+            _userManagerMock.Object,
+            new Moq.Mock<IUserDataManager>().Object,
             _loggerFactory);
     }
 

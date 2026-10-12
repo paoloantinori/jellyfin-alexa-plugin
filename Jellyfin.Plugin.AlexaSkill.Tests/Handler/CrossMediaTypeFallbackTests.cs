@@ -687,7 +687,7 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
     /// </summary>
     private Task<SkillResponse> DeclineOfferAsync(SkillResponse offer)
     {
-        var noHandler = new NoIntentHandler(_fx.SessionManager.Object, _fx.Config, _fx.LoggerFactory);
+        var noHandler = new NoIntentHandler(_fx.SessionManager.Object, _fx.Config, _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.UserDataManager.Object, _fx.LoggerFactory);
         var noRequest = new IntentRequest { Intent = new Intent { Name = IntentNames.AmazonNo }, Locale = "en-US", RequestId = "no-req" };
         return noHandler.HandleAsync(
             noRequest, _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), offer.SessionAttributes, CancellationToken.None);
