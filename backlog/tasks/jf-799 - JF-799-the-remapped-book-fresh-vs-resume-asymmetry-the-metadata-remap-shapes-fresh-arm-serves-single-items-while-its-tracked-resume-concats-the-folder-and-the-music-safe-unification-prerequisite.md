@@ -4,14 +4,14 @@ title: >-
   JF-799 - the remapped-book fresh-vs-resume asymmetry: the metadata-remap
   shape's fresh arm serves single items while its tracked resume concats the
   folder (and the music-safe unification prerequisite)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-06'
-updated_date: '2026-10-11 06:08'
+updated_date: '2026-10-12 00:01'
 labels:
   - bug
   - audiobooks
-  - gate:fixture-permission
+  - 'gate:fixture-permission'
 dependencies:
   - JF-794
 references:
