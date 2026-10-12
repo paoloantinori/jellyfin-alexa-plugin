@@ -28,6 +28,17 @@ internal static class IntentNames
     public const string ShufflePlay = "ShufflePlayIntent";
     public const string PlaySong = "PlaySongIntent";
     public const string PlayVideo = "PlayVideoIntent";
+
+    /// <summary>
+    /// JF-874: the it-IT catalog-backed wrapper-hosting twin of
+    /// <see cref="PlayVideo"/>. Its <c>movie</c> slot is the MovieTitle catalog
+    /// type, which is what makes the one-shot wrapper tails
+    /// ("chiedi a mia collezione di mettere il film X") selectable (the
+    /// SearchQuery title span is wrapper-hostile; scratch A/B 2026-10-12).
+    /// Served by <see cref="Handler.PlayVideoIntentHandler"/>, whose logic is
+    /// shared verbatim.
+    /// </summary>
+    public const string PlayMovie = "PlayMovieIntent";
     public const string PlayRandom = "PlayRandomIntent";
     public const string PlayByGenre = "PlayByGenreIntent";
     public const string PlayByDecade = "PlayByDecadeIntent";
@@ -164,5 +175,13 @@ internal static class IntentNames
         /// by ItalianNumberWords on both shapes.
         /// </summary>
         public const string StarRating = "star_rating";
+
+        /// <summary>
+        /// JF-874: the MovieTitle catalog-typed slot on PlayMovieIntent. Its own
+        /// NAME (not "title") because PlayVideoIntent's title is
+        /// AMAZON.SearchQuery and a slot name keeps one type per locale
+        /// (the JF-614 song/song_query precedent).
+        /// </summary>
+        public const string Movie = "movie";
     }
 }

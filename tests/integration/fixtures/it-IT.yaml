@@ -178,6 +178,34 @@ tests:
     expected_slots:
       title: {}
 
+  # JF-874 (2026-10-12): the one-shot WRAPPERS now route PlayMovieIntent, the
+  # catalog-backed MovieTitle twin (scratch A/B 65da1ba5, stable across two
+  # identical rebuilds: all four verbs green, every bare imperative and
+  # non-catalog control green). These rows go green on the LIVE suite only
+  # after the model deploy AND the next catalog sync mints+pins the MovieTitle
+  # version (JF-684 live-effect path); 'sunny dancer' is a real library movie.
+  # Slots pinned presence-only: the movie slot may carry the ER canonical
+  # ('Sunny Dancer') or the raw fill depending on the pinned catalog version.
+  - utterance: "chiedi a mia collezione di mettere il film sunny dancer"
+    expected_intent: PlayMovieIntent
+    expected_slots:
+      movie: {}
+
+  - utterance: "chiedi a mia collezione di riprodurre il film sunny dancer"
+    expected_intent: PlayMovieIntent
+    expected_slots:
+      movie: {}
+
+  - utterance: "chiedi a mia collezione di vedere il film sunny dancer"
+    expected_intent: PlayMovieIntent
+    expected_slots:
+      movie: {}
+
+  - utterance: "chiedi a mia collezione di guardare il film sunny dancer"
+    expected_intent: PlayMovieIntent
+    expected_slots:
+      movie: {}
+
   # JF-436: video-regression direction of the JF-418 bare-form collision.
   # PlayArtistSongsIntent's bare '{imperative} {musician}' samples (JF-418)
   # collide in surface shape with PlayVideoIntent's '{imperative} {title}' on

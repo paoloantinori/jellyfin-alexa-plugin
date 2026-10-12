@@ -823,6 +823,7 @@ Invocation name: **"mia collezione"**
 | Play Favorites | `Riproduci i miei preferiti` · `Riproduci {media_type} preferiti` · `Suona i miei preferiti` · `Suona {media_type} preferiti` · `Metti i miei preferiti` · `Metti {media_type} preferiti` |
 | Play Last Added | `Riproduci novità {media_type}` · `Riproduci nuovi media` · `Riproduci {media_type} aggiunti {time_period}` · `Riproduci ultimi {media_type} aggiunti` · `Suona novità {media_type}` · `Suona ultimi {media_type} aggiunti` |
 | Play Mood Music | `Musica {mood}` · `Musica per {mood}` · `Riproduci musica {mood}` · `Riproduci musica per {mood}` · `Suona musica {mood}` · `Suona musica per {mood}` |
+| Play Movie | `Di riprodurre il film {movie}` · `Di mettere il film {movie}` · `Di vedere il film {movie}` · `Di guardare il film {movie}` |
 | Play Next | `riproduci {song} dopo` · `riproduci {song} di {musician} dopo` · `suona {song} dopo` · `metti {song} dopo` · `suona {song} di {musician} dopo` · `voglio ascoltare {song} dopo` |
 | Play Next Episode | `Riproduci {episode_position} episodio di {series_name}` · `Continua a guardare {series_name}` · `Metti {episode_position} episodio di {series_name}` · `Guarda {episode_position} episodio di {series_name}` · `Guarda l'episodio {episode_position} di {series_name}` · `Continua a guardare la serie {series_name}` |
 | Play Playlist | `Riproduci playlist {playlist}` · `Suona playlist {playlist}` · `Metti playlist {playlist}` · `Pleia playlist {playlist}` · `Ascolta playlist {playlist}` · `Riproduci la playlist {playlist}` |

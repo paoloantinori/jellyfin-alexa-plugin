@@ -8172,6 +8172,7 @@ Placeholder legend:
 | `<informazione (titolo, artista, album)>` | `{media_info_type}` |
 | `<tipo di contenuto (musica, video)>` | `{media_type}` |
 | `<umore (rilassato, energico)>` | `{mood}` |
+| `<titolo del film>` | `{movie}` |
 | `<nome dell'artista>` | `{musician}` |
 | `<nome dell'album di foto>` | `{photoAlbum}` |
 | `<nome della playlist>` | `{playlist}` |
@@ -8196,7 +8197,7 @@ Placeholder legend:
 | `<titolo del video o del film>` | `{title}` |
 | `<parole del titolo del brano>` | `{titleKeywords}` |
 
-Complete phrase list (1631 phrases across 73 commands):
+Complete phrase list (1635 phrases across 74 commands):
 
 #### Play music
 
@@ -9323,6 +9324,13 @@ Complete phrase list (1631 phrases across 73 commands):
 - `mettere il film <titolo del video o del film>`
 - `guardare il film <titolo del video o del film>`
 - `vedere il film <titolo del video o del film>`
+
+**Play a movie (one-shot wrapper form)**
+
+- `Di riprodurre il film <titolo del film>`
+- `Di mettere il film <titolo del film>`
+- `Di vedere il film <titolo del film>`
+- `Di guardare il film <titolo del film>`
 
 #### Episodes and series
 
@@ -13403,6 +13411,7 @@ The body above is user-facing and never names intents or handlers. This table ma
 | Play music | Play recently added media | `PlayLastAddedIntent` |
 | Play albums | Play an album | `PlayAlbumIntent` |
 | Play videos | Play a video or movie | `PlayVideoIntent` |
+| Play videos | Play a movie (one-shot wrapper form) | `PlayMovieIntent` |
 | Episodes and series | Play an episode | `PlayEpisodeIntent` |
 | Episodes and series | Play the next episode | `PlayNextEpisodeIntent` |
 | Podcasts | Play a podcast | `PlayPodcastIntent` |

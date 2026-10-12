@@ -42,7 +42,11 @@ public static class CatalogSlotTypes
         [CatalogType.Artist] = "AMAZON.Musician", // locale fallback; see ResolveMusicianSlotType (JF-415)
         [CatalogType.Album] = "AMAZON.Album", // JF-332: mismatched (model uses AlbumName)
         [CatalogType.Series] = "SeriesName",
-        [CatalogType.Audiobook] = "AudiobookTitle"
+        [CatalogType.Audiobook] = "AudiobookTitle",
+        // JF-874: declared for table totality; NO dynamic-entity arm pushes movies
+        // (the type exists for first-turn wrapper selection, which the turn-2+
+        // UpdateDynamicEntities push cannot serve), so no builder reads this row.
+        [CatalogType.Movie] = "MovieTitle"
     };
 
     /// <summary>
@@ -111,7 +115,16 @@ public static class CatalogSlotTypes
         // push lands turn 2+ (after first-turn selection), so the saved model's
         // vocabulary was the static seed for every user. The JF-543 locale gate
         // (CatalogWiringUnsupportedLocales) applies model-wide and is inherited.
-        [CatalogType.Audiobook] = "AudiobookTitle"
+        [CatalogType.Audiobook] = "AudiobookTitle",
+        // JF-874: declared by it-IT ONLY (the evidence locale; PlayMovieIntent is
+        // it-IT-only this task). The injection ADDS the catalog-backed type block
+        // to the other synced locales where nothing references it; that is the
+        // proven inert-block shape de-DE already carries for AlbumName
+        // (live-verified 2026-10-12: injected AlbumName block, zero referencing
+        // slots, builds SUCCEEDED). Unlike the album family there is no
+        // slot-type divergence to track: no locale declares a MovieTitle slot
+        // type other than this one.
+        [CatalogType.Movie] = "MovieTitle"
     };
 
     /// <summary>

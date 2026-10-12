@@ -55,7 +55,16 @@ BATTERY: dict[str, list[tuple[str, str, str]]] = {
         ("simulate", "chiedi a mia collezione di riprodurre rapsodia dopo", "PlayNextIntent"),
         ("simulate", "chiedi a mia collezione di attivare loop", "LoopAllOnIntent"),
         ("simulate", "chiedi a mia collezione di attivare il mescolamento", "ShuffleAllOnIntent"),
-        ("simulate", "chiedi a mia collezione di riprodurre il film ada", "PlayVideoIntent"),
+        # JF-874: the film wrapper routes the catalog-backed MovieTitle twin
+        # (PlayMovieIntent, served by the PlayVideo handler); the expectation
+        # flips from PlayVideoIntent with the deployed model + movie catalog
+        # sync. 'ada' is a real library movie (the battery's slot convention).
+        # PRE-DEPLOY WINDOW: both rows read red until the orchestrator deploys
+        # the rebuilt it-IT model AND the next catalog sync pins the MovieTitle
+        # version (the JF-684 live-effect path); the neighboring wrapper rows
+        # staying green is the marker that only the pending flip is red.
+        ("simulate", "chiedi a mia collezione di riprodurre il film ada", "PlayMovieIntent"),
+        ("simulate", "chiedi a mia collezione di mettere il film ada", "PlayMovieIntent"),
         ("simulate", "chiedi a mia collezione di riprodurre brani simili", "PlayRadioIntent"),
         ("simulate", "chiedi a mia collezione di fermare dopo un minuto", "SleepTimerIntent"),
         ("simulate", "chiedi a mia collezione di aggiungere alla playlist prova echo", "AddSongToPlaylistIntent"),

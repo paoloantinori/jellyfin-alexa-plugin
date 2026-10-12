@@ -182,7 +182,7 @@ public class CatalogWiringGraftTests
     [Fact]
     public void Apply_WithWiring_ReplacesStaticSeedOnFreshModel()
     {
-        var wiring = new CatalogWiring(null, null, null, null, "series-3", "9", null, null);
+        var wiring = new CatalogWiring(null, null, null, null, "series-3", "9", null, null, null, null);
 
         string result = CatalogWiringGraft.Apply(FreshModelJson(), "it-IT", wiring, null);
 
@@ -231,6 +231,38 @@ public class CatalogWiringGraftTests
         Assert.False(audiobookType.TryGetProperty("values", out _), "static seed values must be replaced, not kept alongside");
     }
 
+    /// <summary>
+    /// JF-874: a movie-only live wiring (a live it-IT model whose MovieTitle
+    /// block carries the valueSupplier, nothing else wired) extracts into the
+    /// record's Movie fields and a rebuild PUT grafts it back as the catalog
+    /// supplier on a fresh model that does not even DECLARE the type: the
+    /// injection adds it, which is exactly the shape the 16 non-declaring
+    /// synced locales receive (the proven inert AlbumName block).
+    /// </summary>
+    [Fact]
+    public void ExtractAndApply_MovieOnlyWiring_AddsTypeOnFreshModel()
+    {
+        const string MovieTypeName = "MovieTitle";
+        string live = LiveModelJson(WiredType(MovieTypeName, "movie-9", "2"));
+
+        var wiring = CatalogWiringGraft.ExtractWiring(live);
+
+        Assert.NotNull(wiring);
+        Assert.Equal("movie-9", wiring!.MovieId);
+        Assert.Equal("2", wiring.MovieVersion);
+        Assert.Null(wiring.ArtistId);
+        Assert.Null(wiring.AlbumId);
+
+        string result = CatalogWiringGraft.Apply(FreshModelJson(), "it-IT", wiring, null);
+
+        using var doc = JsonDocument.Parse(result);
+        var types = doc.RootElement.GetProperty("interactionModel").GetProperty("languageModel").GetProperty("types");
+        var movieType = Assert.Single(types.EnumerateArray(), t => t.GetProperty("name").GetString() == MovieTypeName);
+        var catalog = movieType.GetProperty("valueSupplier").GetProperty("valueCatalog");
+        Assert.Equal("movie-9", catalog.GetProperty("catalogId").GetString());
+        Assert.Equal("2", catalog.GetProperty("version").GetString());
+    }
+
     [Fact]
     public void Apply_NoWiring_ReturnsModelUnchanged()
     {
@@ -246,7 +278,7 @@ public class CatalogWiringGraftTests
     {
         // JF-543 defense in depth: ar-SA live models never carry wiring, but if one
         // did (drift), the graft must refuse to re-apply it.
-        var wiring = new CatalogWiring("artist-1", "1", null, null, null, null, null, null);
+        var wiring = new CatalogWiring("artist-1", "1", null, null, null, null, null, null, null, null);
 
         string result = CatalogWiringGraft.Apply(FreshModelJson(), "ar-SA", wiring, null);
 

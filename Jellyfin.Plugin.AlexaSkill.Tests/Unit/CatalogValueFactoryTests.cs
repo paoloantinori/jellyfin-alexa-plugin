@@ -116,14 +116,14 @@ public class CatalogValueFactoryTests
             Synonyms = new List<string> { "i Pink Floyd" }
         };
         Assert.ThrowsAny<InvalidOperationException>(
-            () => CatalogValueFactory.AssertArtistEnrichment(missing));
+            () => CatalogValueFactory.AssertPartialWordEnrichment(missing));
 
         var noList = new CatalogValueName { Value = "The Beatles" };
         Assert.ThrowsAny<InvalidOperationException>(
-            () => CatalogValueFactory.AssertArtistEnrichment(noList));
+            () => CatalogValueFactory.AssertPartialWordEnrichment(noList));
 
         var present = new CatalogValueName { Value = "Pink Floyd", Synonyms = new List<string> { "PINK" } };
-        CatalogValueFactory.AssertArtistEnrichment(present);
+        CatalogValueFactory.AssertPartialWordEnrichment(present);
     }
 
     [Fact]
@@ -141,7 +141,7 @@ public class CatalogValueFactoryTests
         };
 
         Assert.Throws<CatalogPayloadInvariantException>(
-            () => CatalogValueFactory.AssertArtistEnrichment(missing));
+            () => CatalogValueFactory.AssertPartialWordEnrichment(missing));
     }
 
     [Fact]

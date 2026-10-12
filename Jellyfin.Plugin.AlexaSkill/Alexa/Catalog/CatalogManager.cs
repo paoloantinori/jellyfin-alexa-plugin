@@ -482,10 +482,12 @@ public class CatalogManager
     /// <param name="albumCatalogId">The album catalog ID (may be null).</param>
     /// <param name="seriesCatalogId">The series catalog ID (may be null).</param>
     /// <param name="audiobookCatalogId">The audiobook catalog ID (may be null, JF-823).</param>
+    /// <param name="movieCatalogId">The movie catalog ID (may be null, JF-874).</param>
     /// <param name="artistCatalogVersion">The artist catalog version (may be null).</param>
     /// <param name="albumCatalogVersion">The album catalog version (may be null).</param>
     /// <param name="seriesCatalogVersion">The series catalog version (may be null).</param>
     /// <param name="audiobookCatalogVersion">The audiobook catalog version (may be null, JF-823).</param>
+    /// <param name="movieCatalogVersion">The movie catalog version (may be null, JF-874).</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The build outcome and canary counts for the status ledger.</returns>
     public async Task<CatalogModelUpdateResult> UpdateInteractionModelAsync(
@@ -497,13 +499,15 @@ public class CatalogManager
         string? albumCatalogId,
         string? seriesCatalogId,
         string? audiobookCatalogId,
+        string? movieCatalogId,
         string? artistCatalogVersion,
         string? albumCatalogVersion,
         string? seriesCatalogVersion,
         string? audiobookCatalogVersion,
+        string? movieCatalogVersion,
         CancellationToken cancellationToken)
     {
-        if (string.IsNullOrEmpty(artistCatalogId) && string.IsNullOrEmpty(albumCatalogId) && string.IsNullOrEmpty(seriesCatalogId) && string.IsNullOrEmpty(audiobookCatalogId))
+        if (string.IsNullOrEmpty(artistCatalogId) && string.IsNullOrEmpty(albumCatalogId) && string.IsNullOrEmpty(seriesCatalogId) && string.IsNullOrEmpty(audiobookCatalogId) && string.IsNullOrEmpty(movieCatalogId))
         {
             _logger.LogInformation("No catalogs to inject into interaction model, skipping update");
             return new CatalogModelUpdateResult("Skipped", null, 0, 0);
@@ -542,7 +546,7 @@ public class CatalogManager
 
         string modelJson = await getResponse.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
 
-        string modifiedJson = InjectCatalogReferences(modelJson, artistCatalogId, albumCatalogId, seriesCatalogId, audiobookCatalogId, artistCatalogVersion, albumCatalogVersion, seriesCatalogVersion, audiobookCatalogVersion, _logger);
+        string modifiedJson = InjectCatalogReferences(modelJson, artistCatalogId, albumCatalogId, seriesCatalogId, audiobookCatalogId, movieCatalogId, artistCatalogVersion, albumCatalogVersion, seriesCatalogVersion, audiobookCatalogVersion, movieCatalogVersion, _logger);
 
         // JF-495: greppable audit line before the PUT.
         var (putIntents, putSamples) = InteractionModelPutAudit.CountFromJson(modifiedJson);
@@ -920,12 +924,14 @@ public class CatalogManager
     /// <param name="albumCatalogId">The album catalog ID to inject.</param>
     /// <param name="seriesCatalogId">The series catalog ID to inject.</param>
     /// <param name="audiobookCatalogId">The audiobook catalog ID to inject (JF-823).</param>
+    /// <param name="movieCatalogId">The movie catalog ID to inject (JF-874).</param>
     /// <param name="artistCatalogVersion">The artist catalog version.</param>
     /// <param name="albumCatalogVersion">The album catalog version.</param>
     /// <param name="seriesCatalogVersion">The series catalog version.</param>
     /// <param name="audiobookCatalogVersion">The audiobook catalog version (JF-823).</param>
+    /// <param name="movieCatalogVersion">The movie catalog version (JF-874).</param>
     /// <returns>The modified interaction model JSON string.</returns>
-    internal static string InjectCatalogReferences(string modelJson, string? artistCatalogId, string? albumCatalogId, string? seriesCatalogId, string? audiobookCatalogId, string? artistCatalogVersion, string? albumCatalogVersion, string? seriesCatalogVersion, string? audiobookCatalogVersion, ILogger? logger = null)
+    internal static string InjectCatalogReferences(string modelJson, string? artistCatalogId, string? albumCatalogId, string? seriesCatalogId, string? audiobookCatalogId, string? movieCatalogId, string? artistCatalogVersion, string? albumCatalogVersion, string? seriesCatalogVersion, string? audiobookCatalogVersion, string? movieCatalogVersion, ILogger? logger = null)
     {
         logger ??= NullLogger.Instance;
         JsonNode? root = JsonNode.Parse(modelJson);
@@ -982,7 +988,19 @@ public class CatalogManager
                 null));
         }
 
-        WarnOnCrossTypeCatalogIds(artistCatalogId, albumCatalogId, seriesCatalogId, audiobookCatalogId, logger);
+        if (!string.IsNullOrEmpty(movieCatalogId))
+        {
+            // No ReplacesType (JF-874): the SeriesName/AudiobookTitle shape. In
+            // it-IT (the declaring locale) every PlayMovieIntent slot already
+            // references MovieTitle so the injection replaces the static seed
+            // block in place; in the other synced locales the added type block
+            // is the proven inert AlbumName shape (nothing references it).
+            catalogMappings.Add((movieCatalogId!, ResolveCatalogVersion(movieCatalogVersion, CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Movie], movieCatalogId, logger),
+                CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Movie],
+                null));
+        }
+
+        WarnOnCrossTypeCatalogIds(artistCatalogId, albumCatalogId, seriesCatalogId, audiobookCatalogId, movieCatalogId, logger);
 
         logger.LogInformation(
             "Injecting {Count} catalog references into interaction model ({SlotTypes})",
@@ -1066,14 +1084,15 @@ public class CatalogManager
     /// (JF-495): one slot type would then be backed by another type's catalog
     /// (e.g. the artist catalog feeding AlbumName), corrupting slot resolution.
     /// </summary>
-    private static void WarnOnCrossTypeCatalogIds(string? artistCatalogId, string? albumCatalogId, string? seriesCatalogId, string? audiobookCatalogId, ILogger logger)
+    private static void WarnOnCrossTypeCatalogIds(string? artistCatalogId, string? albumCatalogId, string? seriesCatalogId, string? audiobookCatalogId, string? movieCatalogId, ILogger logger)
     {
         var supplied = new[]
         {
             (Type: "Artist", Id: artistCatalogId),
             (Type: "Album", Id: albumCatalogId),
             (Type: "Series", Id: seriesCatalogId),
-            (Type: "Audiobook", Id: audiobookCatalogId)
+            (Type: "Audiobook", Id: audiobookCatalogId),
+            (Type: "Movie", Id: movieCatalogId)
         };
 
         for (int i = 0; i < supplied.Length; i++)
