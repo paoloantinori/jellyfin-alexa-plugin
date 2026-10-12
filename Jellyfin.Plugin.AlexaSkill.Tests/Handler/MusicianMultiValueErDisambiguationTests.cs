@@ -168,7 +168,7 @@ public class MusicianMultiValueErDisambiguationTests : PluginTestBase, IDisposab
         // The terminal leg: the fourth "no" exhausts the FULL stored list and
         // ends the flow with NoMoreMatches. Pinned here because every
         // pre-existing exhaustion pin covers only the below-cap two-name shape.
-        SkillResponse exhausted = await new NoIntentHandler(_fx.SessionManager.Object, _fx.Config, _fx.LoggerFactory)
+        SkillResponse exhausted = await new NoIntentHandler(_fx.SessionManager.Object, _fx.Config, _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.UserDataManager.Object, _fx.LoggerFactory)
             .HandleAsync(
                 CreateNoIntentRequest(), _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), attrs, CancellationToken.None);
         Assert.True(exhausted.Response.ShouldEndSession, "exhaustion ends the session");
@@ -248,7 +248,7 @@ public class MusicianMultiValueErDisambiguationTests : PluginTestBase, IDisposab
     /// </summary>
     private async Task<Dictionary<string, object>?> AdvanceDisambiguationAsync(SkillResponse ask, params string[] spokenOnAdvance)
     {
-        var noHandler = new NoIntentHandler(_fx.SessionManager.Object, _fx.Config, _fx.LoggerFactory);
+        var noHandler = new NoIntentHandler(_fx.SessionManager.Object, _fx.Config, _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.UserDataManager.Object, _fx.LoggerFactory);
         Dictionary<string, object>? attrs = ask.SessionAttributes;
         foreach (string expectedName in spokenOnAdvance)
         {

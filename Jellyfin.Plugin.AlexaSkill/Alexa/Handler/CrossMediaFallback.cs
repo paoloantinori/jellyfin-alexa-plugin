@@ -1167,6 +1167,14 @@ public sealed class CrossMediaFallback
     /// <param name="logLabel">Label for log messages.</param>
     /// <param name="request">The skill request (the JF-501 progressive announce vehicle on the AutoServe launch).</param>
     /// <param name="cancellationToken">Cancellation token.</param>
+    /// <param name="exactOnly">JF-871: accept only an EXACT-title video (the shared
+    /// JF-420.1 equality predicate) and never run the bounded fuzzy tier. This is
+    /// the PlaySong PREEMPTION shape (offered before a sub-threshold fuzzy song
+    /// near-hit prompt through HandleFuzzyMiss's confirmAlternative seam), where a
+    /// fuzzy video hit must NOT outrank the song suggestion: only a video whose
+    /// name IS the query does. The flag, mode, and word-guard gates are shared
+    /// with the cascade shape; the default (false) is byte-identical to the
+    /// pre-JF-871 leg.</param>
     /// <returns>The offer ask or the launch response, or null when no video clears the bar / the flag or mode is off (caller falls through to its own not-found).</returns>
     public async Task<SkillResponse?> TryVideoFallbackAsync(
         string slotText,
@@ -1178,7 +1186,8 @@ public sealed class CrossMediaFallback
         ILibraryManager libraryManager,
         string logLabel,
         global::Alexa.NET.Request.Type.Request? request,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool exactOnly = false)
     {
         // The video flag gates here (the IsMusicEnabled live-read idiom): offering a
         // movie the admin disabled would dead-end the "yes" at a launch the direct
@@ -1226,8 +1235,11 @@ public sealed class CrossMediaFallback
             cancellationToken).ConfigureAwait(false);
 
         // Tier 2 (bounded fuzzy): only on an exact miss, one cheap-DTO scan of the
-        // video catalog capped at the SearchItemsFuzzyAsync bound.
-        if (candidates.Count == 0 && query.Length >= MinFuzzyVideoQueryLength)
+        // video catalog capped at the SearchItemsFuzzyAsync bound. The JF-871
+        // exactOnly shape never runs it: its acceptance is name equality, which the
+        // indexed tier already returns, so a fuzzy pool could only add candidates
+        // it would refuse.
+        if (!exactOnly && candidates.Count == 0 && query.Length >= MinFuzzyVideoQueryLength)
         {
             InternalItemsQuery fuzzyQuery = BuildVideoQuery(jellyfinUser, user, libraryManager, searchTerm: null, cheapDto: true, limit: 500);
             candidates = await RetryAsync(
@@ -1241,28 +1253,53 @@ public sealed class CrossMediaFallback
             return null;
         }
 
-        // Single best through the shared JF-412 walk (embedded-containment guard);
-        // both tiers are judged at this one acceptance point, the album cascade's
-        // rule. A below-bar library lands the caller's honest miss.
-        int threshold = FuzzyMatcher.GetEffectiveThreshold(user, CrossMediaVideoThreshold);
-        var eligible = FindBestNonEmbeddedMatch(
-            query, candidates, v => KeywordMatcher.ScoringName(v.Name), threshold);
-        if (eligible is not { } match)
+        BaseItem winner;
+        if (exactOnly)
         {
-            _logger.LogDebug(
-                "{Label}: no video above threshold={Threshold} (or all embedded) for query='{Query}', not offering",
-                logLabel, threshold, query);
-            return null;
-        }
+            // JF-871: the preemption bar is EXACT name equality (the shared JF-420.1
+            // predicate), picked directly rather than through the threshold walk: a
+            // suffixed sibling listed before the exact title wins the walk's
+            // underlying early-exit at ContainmentScore and shadows it (the JF-776
+            // B1 class), while equality is not embedded-containment, so the walk's
+            // guards add nothing here. First exact hit wins; same-name ties pick
+            // arbitrarily (JF-341).
+            BaseItem? exact = candidates.FirstOrDefault(v => Util.ArtistSearch.IsExactNameMatch(query, v.Name));
+            if (exact == null)
+            {
+                _logger.LogDebug(
+                    "{Label}: no exact-title video for query='{Query}', not preempting the song suggestion",
+                    logLabel, query);
+                return null;
+            }
 
-        _logger.LogInformation(
-            "{Label}: video fallback found '{VideoName}' score={Score} for query='{Query}' (threshold={Threshold})",
-            logLabel, match.Item.Name, match.Score, query, threshold);
+            winner = exact;
+        }
+        else
+        {
+            // Single best through the shared JF-412 walk (embedded-containment guard);
+            // both tiers are judged at this one acceptance point, the album cascade's
+            // rule. A below-bar library lands the caller's honest miss.
+            int threshold = FuzzyMatcher.GetEffectiveThreshold(user, CrossMediaVideoThreshold);
+            var eligible = FindBestNonEmbeddedMatch(
+                query, candidates, v => KeywordMatcher.ScoringName(v.Name), threshold);
+            if (eligible is not { } match)
+            {
+                _logger.LogDebug(
+                    "{Label}: no video above threshold={Threshold} (or all embedded) for query='{Query}', not offering",
+                    logLabel, threshold, query);
+                return null;
+            }
+
+            _logger.LogInformation(
+                "{Label}: video fallback found '{VideoName}' score={Score} for query='{Query}' (threshold={Threshold})",
+                logLabel, match.Item.Name, match.Score, query, threshold);
+            winner = match.Item;
+        }
 
         // Confirm (the code default): the yes/no offer through the JF-363 plumbing.
         if (suggestionMode == CrossMediaArtistSuggestion.Confirm)
         {
-            return BuildCrossMediaVideoOfferAsk(query, match.Item, locale);
+            return BuildCrossMediaVideoOfferAsk(query, winner, locale);
         }
 
         // AutoServe: launch the movie/episode through the shared episode-launch
@@ -1273,17 +1310,17 @@ public sealed class CrossMediaFallback
             context,
             request,
             locale,
-            match.Item,
+            winner,
             user,
-            _launch.GetVideoAppLaunchUrl(match.Item, user),
+            _launch.GetVideoAppLaunchUrl(winner, user),
             resumeTicks: 0,
             _config.AnnounceCrossMediaSubstitution
-                ? SpeechBuilder.BuildOutputSpeech("FoundVideoInsteadSsml", "FoundVideoInstead", locale, match.Item.Name)
+                ? SpeechBuilder.BuildOutputSpeech("FoundVideoInsteadSsml", "FoundVideoInstead", locale, winner.Name)
                 : null).ConfigureAwait(false);
 
         // JF-714/JF-718: the now-playing write rides a DELIVERED launch (the
         // screenless capability Tell is not one).
-        PlaybackLaunchBuilder.AttachNowPlayingIfLaunched(response, session, match.Item);
+        PlaybackLaunchBuilder.AttachNowPlayingIfLaunched(response, session, winner);
         return response;
     }
 

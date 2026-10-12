@@ -32,6 +32,21 @@ internal static class DisambiguationHelper
     internal const string AttrCrossmediaQuery = "crossmedia_notfound_query";
     internal const string AttrCrossmediaType = "crossmedia_notfound_type";
 
+    /// <summary>
+    /// JF-871: the original song query behind a PlaySong fuzzy suggestion
+    /// ("intendevi X?"), stored so a declined suggestion counts as a song-tier
+    /// MISS and NoIntentHandler can run the remaining cross-media cascade
+    /// (artist, album, video) with it. The value is the carrier-stripped,
+    /// PRE-romanization query: the decline re-derives the kana-origin flag from
+    /// it (the flag's own capture point) and romanizes it for the search tiers.
+    /// Writer: PlaySongIntentHandler through HandleFuzzyMiss's sessionExtras;
+    /// reader: NoIntentHandler; supersession: the
+    /// <see cref="Pipeline.ConversationalFlows.SongSuggestionKeys"/> family, so
+    /// any later flow's ask strips it (a stale key must never answer a "no" that
+    /// belongs to a newer disambiguation).
+    /// </summary>
+    internal const string AttrSongSuggestionQuery = "song_suggestion_query";
+
     public const string MediaTypeSong = "song";
     public const string MediaTypeAlbum = "album";
     public const string MediaTypeArtist = "artist";

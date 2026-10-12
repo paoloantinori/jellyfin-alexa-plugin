@@ -8,7 +8,9 @@ using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
+using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using Microsoft.Extensions.Logging;
 
@@ -18,20 +20,47 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// Handles AMAZON.NoIntent during search disambiguation or resume confirmation.
 /// For resume: clears resume state and returns a fresh welcome prompt.
 /// For disambiguation: advances to the next match or reports no more matches.
+/// JF-871: declining a PlaySong fuzzy suggestion ("intendevi X?") continues the
+/// song-miss cross-media cascade instead of dead-ending at "no more matches"
+/// (see <see cref="BaseHandler.RunSongMissCascadeAsync"/>).
 /// </summary>
 public class NoIntentHandler : BaseHandler
 {
+    private readonly ILibraryManager _libraryManager;
+    private readonly IUserManager _userManager;
+    private readonly IUserDataManager _userDataManager;
+    private readonly IArtistIndex? _artistIndex;
+    private readonly Playback.DeviceQueueManager? _queueManager;
+
     /// <summary>
     /// Initializes a new instance of the <see cref="NoIntentHandler"/> class.
+    /// The three required data collaborators mirror the
+    /// <see cref="YesIntentHandler"/> twin's shape (handlers are DI-constructed:
+    /// Registrator registers every handler type, so they always resolve).
     /// </summary>
     /// <param name="sessionManager">Instance of the <see cref="ISessionManager"/> interface.</param>
     /// <param name="config">The plugin configuration.</param>
+    /// <param name="libraryManager">Library manager for the decline cascade's tiers.</param>
+    /// <param name="userManager">User manager for the Jellyfin user resolution.</param>
+    /// <param name="userDataManager">User data manager (artist tier resume reads).</param>
     /// <param name="loggerFactory">Instance of the <see cref="ILoggerFactory"/> interface.</param>
+    /// <param name="queueManager">Optional per-device queue manager.</param>
+    /// <param name="artistIndex">Optional in-memory artist index.</param>
     public NoIntentHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
-        ILoggerFactory loggerFactory) : base(sessionManager, config, loggerFactory)
+        ILibraryManager libraryManager,
+        IUserManager userManager,
+        IUserDataManager userDataManager,
+        ILoggerFactory loggerFactory,
+        Playback.DeviceQueueManager? queueManager = null,
+        IArtistIndex? artistIndex = null) : base(sessionManager, config, loggerFactory)
     {
+        _libraryManager = libraryManager;
+        _userManager = userManager;
+        _userDataManager = userDataManager;
+        _artistIndex = artistIndex;
+        _queueManager = queueManager;
     }
 
     /// <inheritdoc/>
@@ -67,7 +96,7 @@ public class NoIntentHandler : BaseHandler
     /// <param name="sessionAttributes">Session attributes from the Alexa request.</param>
     /// <param name="cancellationToken">Cancellation token for request timeout.</param>
     /// <returns>A task representing the async operation.</returns>
-    public override Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, Dictionary<string, object>? sessionAttributes, CancellationToken cancellationToken)
+    public override async Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, Dictionary<string, object>? sessionAttributes, CancellationToken cancellationToken)
     {
         string locale = GetLocale(request);
 
@@ -75,14 +104,14 @@ public class NoIntentHandler : BaseHandler
         if (ResumeHelper.HasResumeState(sessionAttributes))
         {
             Logger.LogDebug("NoIntent: handling resume rejection, returning FreshStart");
-            return HandleResumeRejection(locale);
+            return await HandleResumeRejection(locale).ConfigureAwait(false);
         }
 
         var state = DisambiguationHelper.ReadState(sessionAttributes);
         if (state == null)
         {
             Logger.LogDebug("NoIntent: no disambiguation state found, returning UnexpectedYes");
-            return Task.FromResult(ResponseBuilder.Tell(ResponseStrings.Get("UnexpectedYes", locale)));
+            return ResponseBuilder.Tell(ResponseStrings.Get("UnexpectedYes", locale));
         }
 
         // JF-363: if this disambiguation was a cross-media artist suggestion (the user asked
@@ -96,21 +125,64 @@ public class NoIntentHandler : BaseHandler
         {
             Logger.LogDebug("NoIntent: declining cross-media artist suggestion (type={Type}, query='{Query}')", notFoundType, notFoundQuery);
             string notFoundKey = notFoundType == DisambiguationHelper.MediaTypeAlbum ? "NotFoundAlbumByName" : "NotFoundSongByName";
-            return Task.FromResult(ResponseBuilder.Tell(ResponseStrings.Get(notFoundKey, locale, notFoundQuery)));
+            return ResponseBuilder.Tell(ResponseStrings.Get(notFoundKey, locale, notFoundQuery));
         }
 
         var (matches, index, mediaType) = state.Value;
+
+        // JF-871: a declined PlaySong fuzzy suggestion ("intendevi X?") counts as
+        // a song-tier MISS, so the remaining cross-media cascade (artist, album,
+        // video) runs with the stored query instead of dead-ending at "no more
+        // matches". The state key is written only by PlaySong's suggestion ask
+        // (HandleFuzzyMiss's sessionExtras), and any newer flow's ask supersedes
+        // it (ConversationalFlows.SongSuggestionKeys), so a "no" belonging to a
+        // later disambiguation never lands here.
+        if (mediaType == DisambiguationHelper.MediaTypeSong
+            && sessionAttributes != null
+            && sessionAttributes.TryGetValue(DisambiguationHelper.AttrSongSuggestionQuery, out var suggestionQueryObj)
+            && suggestionQueryObj is string suggestionQuery
+            && !string.IsNullOrWhiteSpace(suggestionQuery))
+        {
+            Logger.LogDebug(
+                "NoIntent: declining song suggestion, continuing the miss cascade with query='{Query}'",
+                suggestionQuery);
+
+            // The cascade runs the same tiered queries PlaySong's miss path runs,
+            // so it gets the same "searching" progressive ping (PlaySong sends its
+            // own before the identical work): without it, a slow or cold database
+            // spends the whole "no" turn in budgeted retries with no audio
+            // feedback, the on-device INVALID_RESPONSE latency class the suite's
+            // coverage caveat documents.
+            RunFireAndForget(SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingMedia", locale)));
+
+            var (jellyfinUser, userError) = ResolveJellyfinUser(_userManager, session.UserId, locale);
+            if (userError != null)
+            {
+                return userError;
+            }
+
+            // The stored query is the PRE-romanization form (the kana flag's own
+            // capture point): re-derive the flag here, romanize for the tiers,
+            // reproducing PlaySong's locals exactly.
+            bool kanaOrigin = Util.ArtistSearch.IsKanaOriginQuery(null, suggestionQuery);
+            string romanizedQuery = Util.KatakanaRomanizer.Romanize(suggestionQuery);
+            return await RunSongMissCascadeAsync(
+                romanizedQuery, kanaOrigin, request, context, locale,
+                jellyfinUser!, user, session,
+                _libraryManager, _userDataManager, _queueManager, _artistIndex,
+                "PlaySongSuggestionDecline", cancellationToken).ConfigureAwait(false);
+        }
+
         int nextIndex = index + 1;
 
         if (nextIndex >= matches.Count)
         {
             Logger.LogDebug("NoIntent: no more matches (index={Index}, total={Total}), returning NoMoreMatches", nextIndex, matches.Count);
-            return Task.FromResult(DisambiguationHelper.NoMoreMatches(locale));
+            return DisambiguationHelper.NoMoreMatches(locale);
         }
 
         Logger.LogDebug("NoIntent: advancing to next disambiguation match, mediaType={MediaType}, nextIndex={NextIndex}", mediaType, nextIndex);
-        SkillResponse response = DisambiguationHelper.AskNextMatch(matches, nextIndex, mediaType, locale);
-        return Task.FromResult(response);
+        return DisambiguationHelper.AskNextMatch(matches, nextIndex, mediaType, locale);
     }
 
     /// <summary>

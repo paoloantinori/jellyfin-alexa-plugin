@@ -429,7 +429,7 @@ public class CrossMediaVideoFallbackTests : PluginTestBase
         var offer = await new RecordingPlaySongHandler(_fx).HandleAsync(
             CreateSongIntent("nemo"), _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
 
-        var noHandler = new NoIntentHandler(_fx.SessionManager.Object, _fx.Config, _fx.LoggerFactory);
+        var noHandler = new NoIntentHandler(_fx.SessionManager.Object, _fx.Config, _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.UserDataManager.Object, _fx.LoggerFactory);
         var response = await noHandler.HandleAsync(
             new IntentRequest { Intent = new Intent { Name = IntentNames.AmazonNo }, Locale = "en-US", RequestId = "no-req" },
             _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), offer.SessionAttributes, CancellationToken.None);

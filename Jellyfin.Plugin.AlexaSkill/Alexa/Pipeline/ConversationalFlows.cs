@@ -38,10 +38,22 @@ public static class ConversationalFlows
         DisambiguationHelper.AttrCrossmediaQuery, DisambiguationHelper.AttrCrossmediaType
     };
 
+    /// <summary>
+    /// Session keys owned by the PlaySong fuzzy-suggestion decline context (JF-871):
+    /// the query a rejected "intendevi X?" suggestion is retried as a song-tier miss
+    /// with. A SEPARATE family, not part of <see cref="DisambiguationKeys"/>: the
+    /// intendevi ask that WRITES the key must keep it live (HandleFuzzyMiss adds the
+    /// extras' keys to its active set), while any LATER ask (including the disambig
+    /// family's own list and offer flavors) must supersede it; that is the exact
+    /// asymmetry the active/others split expresses.
+    /// </summary>
+    public static readonly string[] SongSuggestionKeys = { Handler.DisambiguationHelper.AttrSongSuggestionQuery };
+
     private static readonly string[] AllFlowKeys = FindSongKeys
         .Concat(ResumeKeys)
         .Concat(PaginationKeys)
         .Concat(DisambiguationKeys)
+        .Concat(SongSuggestionKeys)
         .ToArray();
 
     /// <summary>
