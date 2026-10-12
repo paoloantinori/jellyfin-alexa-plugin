@@ -216,6 +216,16 @@ internal static class TestHelpers
         => new(config, LoggerFactory.Create(b => { }).CreateLogger<PlaybackLaunchBuilder>(), (_, _, _) => Task.FromResult(true));
 
     /// <summary>
+    /// The plain localhost builder the builder-pin suites share (JF-799 hoist on
+    /// the third identical private construction): <see cref="CreateLaunchBuilder"/>
+    /// over a default configuration pointing at the local test server, for pins
+    /// that exercise the concat/climb decision and assert URL SHAPES (path,
+    /// query) rather than real addresses.
+    /// </summary>
+    internal static PlaybackLaunchBuilder CreateLocalhostLaunchBuilder()
+        => CreateLaunchBuilder(new PluginConfiguration { ServerAddress = "http://localhost:8096/" });
+
+    /// <summary>
     /// JF-794: the VERIFIED book-folder fixture the VideoApp builders' shared
     /// discriminator demands (the chapter file sits DIRECTLY inside the resolved
     /// folder, so the climb is accepted and the concat URL mints under the folder

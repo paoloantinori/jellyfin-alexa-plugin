@@ -602,7 +602,12 @@ public class ResumeIntentHandler : BaseHandler
                 // No position in either source: the same fresh VideoApp launch
                 // PlayBook's no-progress path uses (no start slice), kept silent
                 // (JF-699 item 1: a refusal throws; RequestPipeline answers it).
-                return Launch.BuildVideoAppAudioResponse(item.Id.ToString(), item, user, context: context, libraryManager: _libraryManager);
+                // JF-799: bookChapterLaunch threads the launch context; behavior-
+                // neutral today (the entry gate above guarantees an AudioBook
+                // item, for which the gated and ungated climbs are identical) and
+                // it keeps this site honest if that gate is ever relaxed for the
+                // remapped shape.
+                return Launch.BuildVideoAppAudioResponse(item.Id.ToString(), item, user, context: context, libraryManager: _libraryManager, bookChapterLaunch: true);
             }
 
             // Chapter progress only: return null so the caller flat-resumes the

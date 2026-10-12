@@ -117,7 +117,7 @@ public class AudiobookMultipartBookAltitudeTests
         => TestHelpers.CreateCollapsedBookUnderContainer();
 
     private static PlaybackLaunchBuilder CreatePlainBuilder()
-        => TestHelpers.CreateLaunchBuilder(new PluginConfiguration { ServerAddress = "http://localhost:8096/" });
+        => TestHelpers.CreateLocalhostLaunchBuilder();
 
     // ---------------- Direction 1: the multi-part chapter climbs to the BOOK ----------------
 
