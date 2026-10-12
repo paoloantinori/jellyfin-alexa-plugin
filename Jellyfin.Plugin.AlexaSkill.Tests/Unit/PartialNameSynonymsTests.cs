@@ -108,13 +108,15 @@ public class PartialNameSynonymsTests
     }
 
     [Fact]
-    public void AppendTo_NonArtistCatalogTypes_AreNoOp()
+    public void AppendTo_NonEnrichedCatalogTypes_AreNoOp()
     {
-        // JF-684 scope: the musician slot only. Album first words stay untouched
+        // JF-684 scope: the musician and movie slots (JF-874 widened it to
+        // movies: the selection gate is type-blind and the colon-subtitle
+        // library shape is the norm). Album first words stay untouched
         // (the AlbumName anchors already steal artist queries, JF-508 family).
         foreach (CatalogType type in Enum.GetValues(typeof(CatalogType)))
         {
-            if (type == CatalogType.Artist)
+            if (PartialNameSynonyms.AppliesTo(type))
             {
                 continue;
             }
@@ -123,6 +125,33 @@ public class PartialNameSynonymsTests
             PartialNameSynonyms.AppendTo(name, type);
             Assert.Null(name.Synonyms);
         }
+    }
+
+    [Fact]
+    public void AppendTo_MovieEntry_AppendsFirstWord()
+    {
+        // JF-874: the colon-subtitle shape is the movie-library norm; the bare
+        // first word ("avatar", "top") must ride the entry so a partial spoken
+        // name clears the catalog selection gate. "top" is under the 4-char
+        // bar, so the Top Gun shape deliberately yields NOTHING (the safe
+        // direction, same as "led" for Led Zeppelin).
+        var name = new CatalogValueName { Value = "Avatar: Fire and Ash" };
+
+        PartialNameSynonyms.AppendTo(name, CatalogType.Movie);
+
+        Assert.NotNull(name.Synonyms);
+        Assert.Contains("Avatar", name.Synonyms);
+    }
+
+    [Fact]
+    public void Generate_MovieShapes_FirstWordOrNothing()
+    {
+        // Real library shapes: the colon subtitle yields the first word (casing
+        // preserved, the Generate contract); a too-short first word yields
+        // nothing (the safe direction).
+        Assert.Equal("Avatar", PartialNameSynonyms.Generate("Avatar: Fire and Ash"));
+        Assert.Null(PartialNameSynonyms.Generate("Top Gun: Maverick"));
+        Assert.Null(PartialNameSynonyms.Generate("Il re leone"));
     }
 
     // ---- The generated catalog payload (the JF-684 live-corpus shapes) ----

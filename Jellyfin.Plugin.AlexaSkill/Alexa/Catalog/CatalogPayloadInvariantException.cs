@@ -7,7 +7,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Catalog;
 /// <summary>
 /// A deterministic catalog payload-build invariant was violated while constructing
 /// a catalog entry (today: the JF-689 structural guard
-/// <see cref="CatalogValueFactory.AssertArtistEnrichment"/>). Derives from
+/// <see cref="CatalogValueFactory.AssertPartialWordEnrichment"/>). Derives from
 /// <see cref="InvalidOperationException"/> because that is the historically pinned
 /// throw contract. The catalog sync isolates this exception per TYPE (JF-695): the
 /// failing type freezes for the run (no version minted, its catalog id not

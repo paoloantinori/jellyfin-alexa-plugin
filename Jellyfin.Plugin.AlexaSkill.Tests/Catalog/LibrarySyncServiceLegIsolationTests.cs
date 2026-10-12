@@ -35,7 +35,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Catalog;
 /// LibrarySyncServiceSeriesTests.SyncUserLibraryAsync_MidSync401_NoRefreshAvailable_FailsLegAfterSingleAttempt).
 /// The violations are simulated through the TypeLegEntryProbeForTest seam because
 /// the real factory cannot produce them by construction (AppendTo and
-/// AssertArtistEnrichment re-derive from the same PartialNameSynonyms.Generate).
+/// AssertPartialWordEnrichment re-derive from the same PartialNameSynonyms.Generate).
 /// </summary>
 [Collection("Plugin")]
 public class LibrarySyncServiceLegIsolationTests : PluginTestBase, IDisposable

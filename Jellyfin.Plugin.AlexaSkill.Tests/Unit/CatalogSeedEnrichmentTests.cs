@@ -441,4 +441,53 @@ public class CatalogSeedEnrichmentTests
 
         Assert.Equal(expected, CatalogSeedEnrichment.GenericAudiobookWords.Keys.ToHashSet(StringComparer.Ordinal));
     }
+
+    // ---- Movie seed arm (JF-874) ----
+
+    /// <summary>
+    /// The movie seeds read the it-IT model's MovieTitle block (the only
+    /// locale declaring the type this task), the AlbumName/AudiobookTitle
+    /// sourcing shape. The catalog supplier REPLACES the saved model's static
+    /// block, so without the merge a pre-seed title ("Il Padrino") vanishes
+    /// from the deployed vocabulary; the exact set is pinned so a template
+    /// edit that drifts the seeds fails here.
+    /// </summary>
+    [Fact]
+    public void GetSeedNames_Movie_SourceIsItItModel()
+    {
+        var seeds = CatalogSeedEnrichment.GetSeedNames(CatalogType.Movie);
+
+        Assert.Equal(
+            new[]
+            {
+                "Forrest Gump", "Guerre Stellari", "Il Gladiatore", "Il Padrino",
+                "Il Signore degli Anelli", "Interstellar", "Jurassic Park",
+                "La Vita è Bella", "Matrix", "Pulp Fiction", "Ritorno al Futuro",
+                "Titanic"
+            },
+            seeds.OrderBy(s => s, StringComparer.Ordinal).ToArray());
+    }
+
+    /// <summary>
+    /// Seed survival on the movie leg: a library-only movie plus the full seed
+    /// set, with the library entry keeping its real Jellyfin id and winning on
+    /// collision (the shared MergeSeeds rule).
+    /// </summary>
+    [Fact]
+    public void MergeInto_MoviePayload_GainsItItSeedWhenNotInLibrary()
+    {
+        var payload = CatalogPayload.FromItems(
+            CatalogType.Movie,
+            new[] { (LibraryAlbumId, "A Library-Only Movie") },
+            NoSynonyms,
+            "it-IT");
+
+        CatalogSeedEnrichment.MergeInto(payload, CatalogType.Movie, NoSynonyms, "it-IT");
+
+        Assert.Contains(payload.Values, v => v.Name.Value == "A Library-Only Movie");
+        Assert.Contains(payload.Values, v => v.Name.Value == "Il Padrino");
+        Assert.Equal(
+            1 + CatalogSeedEnrichment.GetSeedNames(CatalogType.Movie).Count,
+            payload.Values.Count);
+    }
 }

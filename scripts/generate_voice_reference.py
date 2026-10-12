@@ -108,6 +108,9 @@ GROUPS = [
     ]),
     ("Play videos", [
         ("PlayVideoIntent", "Play a video or movie", False),
+        # JF-874: the catalog-backed wrapper twin (one-shot "chiedi a mia
+        # collezione di mettere il film X"); same handler, it-IT only.
+        ("PlayMovieIntent", "Play a movie (one-shot wrapper form)", False),
     ]),
     ("Episodes and series", [
         ("PlayEpisodeIntent", "Play an episode", False),
@@ -245,6 +248,7 @@ SLOT_HINTS = {
         "mood": "umore (rilassato, energico)",
         "playlist_target": "nome della playlist", "playlist": "nome della playlist", "podcast_name": "nome del podcast",
         "title": "titolo del video o del film", "channel": "nome del canale",
+        "movie": "titolo del film",
         "station": "nome della stazione radio", "series_name": "nome della serie",
         "episode_position": "posizione (prossimo, ultimo)",
         "season_number": "numero della stagione",

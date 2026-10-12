@@ -149,20 +149,30 @@ internal static class PartialNameSynonyms
     }
 
     /// <summary>
-    /// The Artist-only scope of the partial-word enrichment, the ONE statement of
-    /// the JF-508 boundary (album first words stay untouched): AppendTo gates on
-    /// it and the <see cref="CatalogValueFactory"/> structural guard gates on it,
-    /// so a deliberate scope widening moves both together.
+    /// The scope of the partial-word enrichment: Artist (the original JF-684
+    /// finding) and Movie (JF-874). The ONE statement of the JF-508 boundary
+    /// (album first words stay untouched, the AlbumName anchors already steal
+    /// artist queries): AppendTo gates on this and the
+    /// <see cref="CatalogValueFactory"/> structural guard gates on it, so a
+    /// deliberate scope widening moves both together. Movies get the same
+    /// treatment because the selection gate is type-blind (a partial spoken
+    /// movie name matches no catalog value and selects nothing) and the
+    /// colon-subtitle library shape is the norm here ("Top Gun: Maverick",
+    /// "Avatar: Fire and Ash", where users say the first word); no JF-508-class
+    /// steal is recorded against movie first words, and under the JF-874 hybrid
+    /// the MovieTitle slot only ever competes for wrapper tails, never for the
+    /// song/album regions the album caution protects.
     /// </summary>
     /// <param name="type">The catalog type to test.</param>
     /// <returns>True when the enrichment applies to the type.</returns>
-    internal static bool AppliesTo(CatalogType type) => type == CatalogType.Artist;
+    internal static bool AppliesTo(CatalogType type) => type is CatalogType.Artist or CatalogType.Movie;
 
     /// <summary>
     /// Appends the partial synonym to a catalog entry's synonym list, no-op for
-    /// non-Artist catalog types (JF-684 scope: the musician slot only; album first
-    /// words stay untouched because the AlbumName anchors already steal artist
-    /// queries, the JF-508 family, and widening that surface was not probed).
+    /// catalog types outside <see cref="AppliesTo"/> (JF-684 scope: the musician
+    /// and movie slots; album first words stay untouched because the AlbumName
+    /// anchors already steal artist queries, the JF-508 family, and widening
+    /// that surface was not probed).
     /// Dedup and the 140-char slot cap ride the shared coverage-variant idiom
     /// (<see cref="PhoneticSynonymGenerator.AppendDistinct"/>) like every other
     /// synonym builder.

@@ -87,6 +87,9 @@ public static class CatalogSeedEnrichment
     private static readonly Lazy<IReadOnlyList<string>> AudiobookSeeds =
         new(LoadAudiobookSeeds);
 
+    private static readonly Lazy<IReadOnlyList<string>> MovieSeeds =
+        new(LoadMovieSeeds);
+
     /// <summary>
     /// Appends the seed values of the catalog-backed slot type to the payload.
     /// Library entries win on collision: a seed whose name matches an existing
@@ -170,6 +173,9 @@ public static class CatalogSeedEnrichment
         CatalogType.Album => AlbumSeeds.Value,
         CatalogType.Artist => ArtistSeeds.Value,
         CatalogType.Audiobook => AudiobookSeeds.Value,
+        // JF-874: the it-IT MovieTitle block is the seed authority, same shape
+        // as Album/Audiobook (the only locale declaring the type this task).
+        CatalogType.Movie => MovieSeeds.Value,
         _ => Array.Empty<string>()
     };
 
@@ -309,6 +315,11 @@ public static class CatalogSeedEnrichment
     private static IReadOnlyList<string> LoadAudiobookSeeds()
     {
         return ReadModelSeeds(ItItSeedLocale, CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Audiobook]);
+    }
+
+    private static IReadOnlyList<string> LoadMovieSeeds()
+    {
+        return ReadModelSeeds(ItItSeedLocale, CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Movie]);
     }
 
     private static List<string> LoadArtistSeeds()

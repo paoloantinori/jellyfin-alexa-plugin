@@ -412,6 +412,19 @@ tests:
     expected_response_type: speech
     expected_speech_contains: "dispositivo con schermo"
 
+  # JF-874 (2026-10-12): the one-shot WRAPPER routes PlayMovieIntent, the
+  # catalog-backed MovieTitle twin (scratch A/B 65da1ba5; the SearchQuery
+  # wrapper-hostility evidence is JF-869's). Green on the live e2e only after
+  # the model deploy AND the next catalog sync pins the MovieTitle version
+  # (JF-684 live-effect path); 'sunny dancer' is a real library movie, and the
+  # screenless gate Tell is the same marker the rows above pin.
+  - utterance: "chiedi a mia collezione di mettere il film sunny dancer"
+    expected_intent: PlayMovieIntent
+    expected_slots:
+      movie: {}
+    expected_response_type: speech
+    expected_speech_contains: "dispositivo con schermo"
+
   # SKIPPED (JF-510 triage 2026-09-06): the invocation-wrapped INFINITIVE
   # one-shot ('chiedi a mia collezione di riprodurre il film ada') still
   # routes AMAZON.FallbackIntent in simulate-skill, the same open item JF-509

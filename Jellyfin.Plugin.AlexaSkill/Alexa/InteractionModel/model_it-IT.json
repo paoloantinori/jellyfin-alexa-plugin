@@ -186,6 +186,21 @@
         ]
       },
       {
+        "name": "PlayMovieIntent",
+        "samples": [
+          "Di riprodurre il film {movie}",
+          "Di mettere il film {movie}",
+          "Di vedere il film {movie}",
+          "Di guardare il film {movie}"
+        ],
+        "slots": [
+          {
+            "name": "movie",
+            "type": "MovieTitle"
+          }
+        ]
+      },
+      {
         "name": "PlayByGenreIntent",
         "samples": [
           "Riproduci {genre}",
@@ -3282,6 +3297,71 @@
           {
             "name": {
               "value": "The Psychology of Money"
+            }
+          }
+        ]
+      },
+      {
+        "name": "MovieTitle",
+        "values": [
+          {
+            "name": {
+              "value": "Il Padrino"
+            }
+          },
+          {
+            "name": {
+              "value": "Il Signore degli Anelli"
+            }
+          },
+          {
+            "name": {
+              "value": "Guerre Stellari"
+            }
+          },
+          {
+            "name": {
+              "value": "Jurassic Park"
+            }
+          },
+          {
+            "name": {
+              "value": "Titanic"
+            }
+          },
+          {
+            "name": {
+              "value": "Forrest Gump"
+            }
+          },
+          {
+            "name": {
+              "value": "Matrix"
+            }
+          },
+          {
+            "name": {
+              "value": "Pulp Fiction"
+            }
+          },
+          {
+            "name": {
+              "value": "Il Gladiatore"
+            }
+          },
+          {
+            "name": {
+              "value": "Ritorno al Futuro"
+            }
+          },
+          {
+            "name": {
+              "value": "Interstellar"
+            }
+          },
+          {
+            "name": {
+              "value": "La Vita è Bella"
             }
           }
         ]

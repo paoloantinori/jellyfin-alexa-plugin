@@ -39,7 +39,7 @@ internal static class CatalogValueFactory
     /// <summary>
     /// Builds one catalog entry under the shared construction contract. For the
     /// enriched types the JF-684 append is verified structurally (see
-    /// AssertArtistEnrichment), so a drifted enrichment path fails the sync
+    /// AssertPartialWordEnrichment), so a drifted enrichment path fails the sync
     /// loudly instead of regressing silently on-device.
     /// BLANK-NAME CONTRACT BOUNDARY (JF-695): this factory deliberately does NOT
     /// filter whitespace-only names; every CALLER owns that skip at its own
@@ -71,42 +71,43 @@ internal static class CatalogValueFactory
 
         // JF-684: after the phonetic family (so it never consumes the per-name
         // variant cap), append the bare first-word synonym, then verify it
-        // structurally. The Artist-only scope is stated once (AppliesTo) and
-        // gates both the append and the guard; AppendTo's internal gate stays as
-        // the policy owner's own defense for direct callers.
+        // structurally. The scope (Artist + Movie since JF-874) is stated once
+        // (AppliesTo) and gates both the append and the guard; AppendTo's
+        // internal gate stays as the policy owner's own defense for direct
+        // callers.
         if (PartialNameSynonyms.AppliesTo(type))
         {
             PartialNameSynonyms.AppendTo(value.Name, type);
-            AssertArtistEnrichment(value.Name);
+            AssertPartialWordEnrichment(value.Name);
         }
 
         return value;
     }
 
     /// <summary>
-    /// The structural guard on the JF-684 enrichment: an Artist entry whose
-    /// (truncated) name yields a partial word MUST carry it among its synonyms.
-    /// The expectation is re-derived from the payload side, so the drift this can
-    /// fire on is between the enrichment VERDICT and the synonym-list mutation
-    /// (AppendTo's plumbing, AppendDistinct) plus non-determinism; Generate-policy
-    /// drift (a changed accept/reject table) is invisible here by construction
-    /// (both sides call the same function) and is owned by the
-    /// PartialNameSynonymsTests accept/reject pins instead. The throw
-    /// (<see cref="CatalogPayloadInvariantException"/>) freezes ONLY its own
-    /// catalog type for the run (JF-695 per-type isolation in
+    /// The structural guard on the JF-684 enrichment: an enriched-type entry
+    /// whose (truncated) name yields a partial word MUST carry it among its
+    /// synonyms. The expectation is re-derived from the payload side, so the
+    /// drift this can fire on is between the enrichment VERDICT and the
+    /// synonym-list mutation (AppendTo's plumbing, AppendDistinct) plus
+    /// non-determinism; Generate-policy drift (a changed accept/reject table) is
+    /// invisible here by construction (both sides call the same function) and is
+    /// owned by the PartialNameSynonymsTests accept/reject pins instead. The
+    /// throw (<see cref="CatalogPayloadInvariantException"/>) freezes ONLY its
+    /// own catalog type for the run (JF-695 per-type isolation in
     /// LibrarySyncService.RunLegAsync): the frozen type mints no version and its
     /// catalog id is not forwarded to the model injection, so the live model
     /// keeps that type's last-good pinned catalog reference, while the sibling
     /// types and the locale's model injection continue. The freeze itself is
     /// deterministic on every run until the drift is fixed: per-entry degradation
-    /// would ship incomplete catalogs. Cost: one extra Generate call per Artist
+    /// would ship incomplete catalogs. Cost: one extra Generate call per enriched
     /// entry, sync-path only.
     /// </summary>
     /// <param name="name">The freshly built entry name block.</param>
     /// <remarks>Internal for the InternalsVisibleTo test seam: the guard's own
     /// throw contract is pinned directly, since every other pin exercises only
     /// the passing side.</remarks>
-    internal static void AssertArtistEnrichment(CatalogValueName name)
+    internal static void AssertPartialWordEnrichment(CatalogValueName name)
     {
         string? expected = PartialNameSynonyms.Generate(name.Value);
         if (expected == null)
@@ -118,7 +119,7 @@ internal static class CatalogValueFactory
         if (name.Synonyms?.Contains(truncated, StringComparer.OrdinalIgnoreCase) != true)
         {
             throw new CatalogPayloadInvariantException(
-                $"Artist catalog entry '{name.Value}' yielded partial synonym '{truncated}' but it is absent from the entry's synonyms; the JF-684 enrichment path is broken.");
+                $"Catalog entry '{name.Value}' yielded partial synonym '{truncated}' but it is absent from the entry's synonyms; the JF-684 enrichment path is broken.");
         }
     }
 }

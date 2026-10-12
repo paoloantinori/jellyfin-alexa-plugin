@@ -88,7 +88,7 @@ public class LibrarySyncServiceTests
         // series) + audiobooks (JF-823 added the fourth leg).
         // All should have TopParentIds set. Membership, not exact length: the
         // resolution may union in physical folder ids (JF-456 item 9).
-        Assert.Equal(4, capturedQueries.Count);
+        Assert.Equal(5, capturedQueries.Count); // JF-874: five type legs (the movie leg joined)
         Assert.All(capturedQueries, q =>
         {
             Assert.NotNull(q.TopParentIds);
@@ -117,7 +117,7 @@ public class LibrarySyncServiceTests
         var result = await service.SyncUserLibraryAsync(user, jellyfinUser, CancellationToken.None);
 
         // Assert
-        Assert.Equal(4, capturedQueries.Count);
+        Assert.Equal(5, capturedQueries.Count); // JF-874: five type legs (the movie leg joined)
         Assert.All(capturedQueries, q =>
         {
             // TopParentIds is not set; InternalItemsQuery initializes it to empty array.
@@ -145,7 +145,7 @@ public class LibrarySyncServiceTests
         var result = await service.SyncUserLibraryAsync(user, jellyfinUser, CancellationToken.None);
 
         // Assert
-        Assert.Equal(4, capturedQueries.Count);
+        Assert.Equal(5, capturedQueries.Count); // JF-874: five type legs (the movie leg joined)
         Assert.All(capturedQueries, q =>
         {
             // TopParentIds is not set; InternalItemsQuery initializes it to empty array.
@@ -175,7 +175,7 @@ public class LibrarySyncServiceTests
         await service.SyncUserLibraryAsync(user, jellyfinUser, CancellationToken.None);
 
         // Assert: four catalog queries (artists + albums + series + audiobooks, JF-823)
-        Assert.Equal(4, capturedQueries.Count);
+        Assert.Equal(5, capturedQueries.Count); // JF-874: five type legs (the movie leg joined)
         Assert.All(capturedQueries, q =>
         {
             Assert.Equal(ExpectedLimit, q.Limit);
@@ -212,6 +212,37 @@ public class LibrarySyncServiceTests
         Assert.Single(seriesQueries);
         Assert.Contains(showLibId, seriesQueries[0].TopParentIds);
         Assert.Equal(50000, seriesQueries[0].Limit);
+    }
+
+    /// <summary>
+    /// JF-874: the movie leg queries BaseItemKind.Movie with the same
+    /// user-access scoping (TopParentIds) and Limit as the sibling type legs,
+    /// so exactly the user's movies feed the MovieTitle catalog.
+    /// </summary>
+    [Fact]
+    public async Task SyncUserLibraryAsync_QueriesMovieItems_ScopedByUserAccess()
+    {
+        // Arrange
+        var movieLibId = Guid.NewGuid();
+        var user = CreatePluginUser(allowedLibraryIds: new List<string> { movieLibId.ToString() });
+        var jellyfinUser = TestHelpers.CreateJellyfinUser();
+        var service = CreateService();
+
+        List<InternalItemsQuery> capturedQueries = new List<InternalItemsQuery>();
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Callback<InternalItemsQuery>(q => capturedQueries.Add(q))
+            .Returns(Array.Empty<BaseItem>());
+
+        // Act
+        await service.SyncUserLibraryAsync(user, jellyfinUser, CancellationToken.None);
+
+        // Assert
+        var movieQueries = capturedQueries
+            .Where(q => q.IncludeItemTypes?.Contains(BaseItemKind.Movie) == true)
+            .ToList();
+        Assert.Single(movieQueries);
+        Assert.Contains(movieLibId, movieQueries[0].TopParentIds);
+        Assert.Equal(50000, movieQueries[0].Limit);
     }
 
     /// <summary>

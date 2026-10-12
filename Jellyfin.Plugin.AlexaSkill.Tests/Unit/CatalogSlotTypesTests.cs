@@ -66,13 +66,28 @@ public class CatalogSlotTypesTests
     }
 
     /// <summary>
-    /// The full static family after JF-823: four synced types. The exact-set
-    /// pin keeps a copy-paste fifth entry (two synced types sharing a
+    /// JF-874: the movie pair agrees the same way. The Names row is currently
+    /// write-only (no dynamic-entity arm pushes movies; the MovieTitle type
+    /// exists for first-turn wrapper selection, which the turn-2+ push cannot
+    /// serve), so this parity pin is the only thing keeping the dead row from
+    /// drifting off the catalog-backed name a future dynamic arm would target.
+    /// </summary>
+    [Fact]
+    public void Movie_StaticAndDynamicSlotTypeNames_Agree()
+    {
+        Assert.Equal(
+            CatalogSlotTypes.Names[CatalogType.Movie],
+            CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Movie]);
+    }
+
+    /// <summary>
+    /// The full static family after JF-874: five synced types. The exact-set
+    /// pin keeps a copy-paste sixth entry (two synced types sharing a
     /// slot-type name) from reaching the reverse map, where it would throw at
     /// type initialization (deliberately loud, see CatalogSlotTypes).
     /// </summary>
     [Fact]
-    public void CatalogSlotTypeNames_IsExactlyTheFourSyncedTypes()
+    public void CatalogSlotTypeNames_IsExactlyTheFiveSyncedTypes()
     {
         var entries = CatalogSlotTypes.CatalogSlotTypeNames
             .OrderBy(kvp => kvp.Key)
@@ -84,8 +99,33 @@ public class CatalogSlotTypesTests
                 (CatalogType.Album, "AlbumName"),
                 (CatalogType.Artist, "JellyfinArtist"),
                 (CatalogType.Audiobook, "AudiobookTitle"),
+                (CatalogType.Movie, "MovieTitle"),
                 (CatalogType.Series, "SeriesName")
             }.OrderBy(t => t.Item1),
             entries.Select(kvp => (kvp.Key, kvp.Value)));
+    }
+
+    /// <summary>
+    /// JF-874: the movie forward entry (it-IT's PlayMovieIntent.movie reads
+    /// this type; without the entry the type is synced but never wired, the
+    /// same KeyNotFoundException mid-sync the audiobook pin guards against).
+    /// </summary>
+    [Fact]
+    public void CatalogSlotTypeNames_Movie_MapsToMovieTitle()
+    {
+        Assert.Equal("MovieTitle", CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Movie]);
+    }
+
+    /// <summary>
+    /// The JF-727 reverse-map derivation for the movie name: ExtractWiring
+    /// keys a live model's MovieTitle block back to the Movie catalog type by
+    /// construction (the derived reverse map snapshots the forward map).
+    /// </summary>
+    [Fact]
+    public void TryGetCatalogTypeForSlotTypeName_MovieTitle_DerivesMovie()
+    {
+        Assert.True(
+            CatalogSlotTypes.TryGetCatalogTypeForSlotTypeName("MovieTitle", out var catalogType));
+        Assert.Equal(CatalogType.Movie, catalogType);
     }
 }

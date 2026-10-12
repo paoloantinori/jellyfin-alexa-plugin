@@ -22,8 +22,11 @@ using Microsoft.Extensions.Logging;
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 
 /// <summary>
-/// Handler for PlayVideoIntent — searches for movies and episodes by title
+/// Handler for PlayVideoIntent: searches for movies and episodes by title
 /// and launches video playback via the Alexa VideoApp interface.
+/// JF-874: also serves PlayMovieIntent, the it-IT catalog-backed wrapper twin
+/// (its MovieTitle slot is what makes the one-shot wrapper tails selectable;
+/// the logic below is shared verbatim, only the title read differs).
 /// </summary>
 public class PlayVideoIntentHandler : BaseHandler
 {
@@ -48,7 +51,9 @@ public class PlayVideoIntentHandler : BaseHandler
     public override bool CanHandle(Request request)
     {
         IntentRequest? intentRequest = request as IntentRequest;
-        return intentRequest != null && string.Equals(intentRequest.Intent.Name, IntentNames.PlayVideo, StringComparison.Ordinal);
+        return intentRequest != null
+            && (string.Equals(intentRequest.Intent.Name, IntentNames.PlayVideo, StringComparison.Ordinal)
+                || string.Equals(intentRequest.Intent.Name, IntentNames.PlayMovie, StringComparison.Ordinal));
     }
 
     /// <inheritdoc/>
@@ -71,7 +76,26 @@ public class PlayVideoIntentHandler : BaseHandler
             return elicitCancel;
         }
 
-        string? titleQuery = GetSlotValue(intentRequest, "title");
+        // JF-874: the title read is intent-shaped. PlayMovieIntent's movie slot
+        // is the MovieTitle catalog type, so the ER canonical (the exact library
+        // name the catalog synced) wins per the JF-659 contract; the raw fill
+        // stays the fallback because the catalog gate does NOT hard-block every
+        // miss: a carrier-anchored wrapper whose title matches no catalog value
+        // still selects the intent with the span raw-filled (live probe
+        // 2026-10-12: 'chiedi a mia collezione di mettere il film ratatouille'
+        // arrived with movie='ratatouille' against a seed-only catalog), and a
+        // movie added after the last sync must keep playing through that path.
+        // PlayVideoIntent's title stays the raw SearchQuery read (no ER there).
+        // ACCEPTED (code-review F2, the JF-690 artist precedent): the canonical
+        // read takes the ER authority's rank-1 value only, so a multi-value
+        // match (a partial-word synonym shared by two movies, reachable since
+        // JF-874 widened PartialNameSynonyms to Movie) auto-plays Amazon's
+        // first pick with no disambiguation; the artist path's
+        // MultiValueErDisambiguation wiring is the tracked follow-up shape
+        // (JF-702 carries the residual-site ledger).
+        string? titleQuery = string.Equals(intentRequest.Intent.Name, IntentNames.PlayMovie, StringComparison.Ordinal)
+            ? Util.SlotValueHelper.GetCanonicalValue(intentRequest, IntentNames.Slots.Movie) ?? GetSlotValue(intentRequest, IntentNames.Slots.Movie)
+            : GetSlotValue(intentRequest, "title");
 
         // JF-509: the AMAZON.SearchQuery title has no catalog to anchor its fill boundary,
         // and the statistical fill drifts between builds: 'voglio guardare il film ada'
@@ -87,6 +111,13 @@ public class PlayVideoIntentHandler : BaseHandler
             // stolen from Recommend's greedy media_type by the new title-less
             // samples) ELICITS the title instead of the dead-mic Tell (JF-549
             // class: a question-shaped response that closed the mic).
+            // JF-874: a PlayMovieIntent arrival with an empty movie slot elicits
+            // through the SAME PlayVideo registration rather than its own: the
+            // ElicitSlots table and every locale's dialog.intents stay in
+            // validator-enforced lockstep (Phase 8), and a PlayMovie entry would
+            // force all 17 locales' dialog sections in the change that
+            // deliberately ships it-IT only. The follow-up arrives as
+            // PlayVideoIntent and re-enters this handler.
             return BuildDialogElicitResponse("DidNotCatchVideoTitle", locale, "title", IntentNames.PlayVideo, Util.ElicitSlots.For(IntentNames.PlayVideo));
         }
 

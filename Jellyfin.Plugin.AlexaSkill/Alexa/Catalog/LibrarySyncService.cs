@@ -56,7 +56,7 @@ public class LibrarySyncService
     /// isolation try at leg entry, before the payload build. Lets the isolation
     /// pins simulate a deterministic payload-build invariant violation (throw
     /// <see cref="CatalogPayloadInvariantException"/>) that the real factory
-    /// cannot produce by construction (AppendTo and AssertArtistEnrichment
+    /// cannot produce by construction (AppendTo and AssertPartialWordEnrichment
     /// re-derive from the same Generate), and pin that non-invariant exceptions
     /// still propagate to the leg-level retry machinery.
     /// </summary>
@@ -246,6 +246,9 @@ public class LibrarySyncService
             // JF-823: the audiobook leg, the one-row edit the JF-711 note above
             // described.
             (CatalogType.Audiobook, BaseItemKind.AudioBook, Array.Empty<BaseItem>(), () => user.AudiobookCatalogId, id => user.AudiobookCatalogId = id, count => result.AudiobookCount = count, "Jellyfin Audiobooks", "Audiobook catalog synced from Jellyfin library"),
+            // JF-874: the movie leg, feeding the catalog-backed MovieTitle slot
+            // type (it-IT's PlayMovieIntent wrapper family). Same one-row shape.
+            (CatalogType.Movie, BaseItemKind.Movie, Array.Empty<BaseItem>(), () => user.MovieCatalogId, id => user.MovieCatalogId = id, count => result.MovieCount = count, "Jellyfin Movies", "Movie catalog synced from Jellyfin library"),
         };
 
         // JF-727: item sourcing derives from the same table, replacing the
@@ -273,7 +276,7 @@ public class LibrarySyncService
 
         if (AllTypeLegsEmpty(typeLegs))
         {
-            _logger.LogWarning("No artists, albums, series or audiobooks found for user {UserId}, skipping sync", user.Id);
+            _logger.LogWarning("No artists, albums, series, audiobooks or movies found for user {UserId}, skipping sync", user.Id);
             return result;
         }
 
@@ -388,10 +391,12 @@ public class LibrarySyncService
                     Minted(CatalogType.Album).CatalogId,
                     Minted(CatalogType.Series).CatalogId,
                     Minted(CatalogType.Audiobook).CatalogId,
+                    Minted(CatalogType.Movie).CatalogId,
                     Minted(CatalogType.Artist).Version,
                     Minted(CatalogType.Album).Version,
                     Minted(CatalogType.Series).Version,
                     Minted(CatalogType.Audiobook).Version,
+                    Minted(CatalogType.Movie).Version,
                     cancellationToken).ConfigureAwait(false);
 
                 // JF-495: catalog-sync model PUTs must appear in the per-locale
@@ -526,8 +531,8 @@ public class LibrarySyncService
             ? $" (partial: {string.Join(", ", result.FrozenTypes)} frozen, Success=false)"
             : string.Empty;
         _logger.LogInformation(
-            "Catalog sync completed for user {UserId}: {Succeeded}/{Total} locales, {Artists} artists, {Albums} albums, {Series} series, {Audiobooks} audiobooks, {ElapsedMs}ms total{FrozenClause}",
-            user.Id, localesSucceeded, locales.Count, result.ArtistCount, result.AlbumCount, result.SeriesCount, result.AudiobookCount, totalSw.ElapsedMilliseconds, frozenClause);
+            "Catalog sync completed for user {UserId}: {Succeeded}/{Total} locales, {Artists} artists, {Albums} albums, {Series} series, {Audiobooks} audiobooks, {Movies} movies, {ElapsedMs}ms total{FrozenClause}",
+            user.Id, localesSucceeded, locales.Count, result.ArtistCount, result.AlbumCount, result.SeriesCount, result.AudiobookCount, result.MovieCount, totalSw.ElapsedMilliseconds, frozenClause);
 
         return result;
     }
@@ -1079,9 +1084,12 @@ public class LibrarySyncService
             return null;
         }
 
+        // Materialized once (JF-874 simplify finding): FromItems and the dedup
+        // debug line below both enumerate this, twice per leg per locale.
         var itemTuples = items
             .Select(i => (i.Id, i.Name))
-            .Where(t => !string.IsNullOrWhiteSpace(t.Name));
+            .Where(t => !string.IsNullOrWhiteSpace(t.Name))
+            .ToList();
 
         // JF-825 (code-review F2): the pre-fix >= warning was the ONLY signal
         // that the fetch itself had silently capped a huge library, and the
@@ -1105,7 +1113,7 @@ public class LibrarySyncService
         // reports stays the FETCH count, so this is the only line that says how
         // many same-named items collapsed into existing values (two editions of
         // one book, the same title in two libraries).
-        int namedItemCount = itemTuples.Count();
+        int namedItemCount = itemTuples.Count;
         if (payload.Values.Count < namedItemCount)
         {
             _logger.LogDebug(

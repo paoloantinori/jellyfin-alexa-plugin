@@ -227,6 +227,45 @@ explicit_intents:
     slots:
       - name: title
         type: AMAZON.SearchQuery
+  # JF-874: the catalog-backed wrapper twin of PlayVideoIntent. WHY a separate
+  # intent: the one-shot wrapper tails ("chiedi a mia collezione di mettere il
+  # film X") are NOT row-fixable while the title span is AMAZON.SearchQuery
+  # (JF-869 A/B), and re-typing PlayVideoIntent's title to MovieTitle collapses
+  # every non-catalog control to PlayByGenre (the JF-874 variant-A probe, two
+  # identical rebuilds: 'metti il film ratatouille', 'metti la musica dei pearl
+  # jam' and 'metti il brano sunny dancer' all fell to PlayByGenreIntent). The
+  # additive shape keeps PlayVideoIntent byte-identical and puts ONLY the
+  # wrapper-tail rows on the catalog-typed slot: wrappers flip green, every
+  # control stays green, and a non-catalog wrapper title still raw-fills
+  # ('mettere il film ratatouille' arrived movie='ratatouille' on the probe
+  # catalog lacking it). Rows are the four Di-form tails ONLY (the wrapper
+  # remainder after the invocation name; JF-844: each spoken verb needs its own
+  # literal row): the imperative and bare-infinitive film forms stay on
+  # PlayVideoIntent, which already routes them. KNOWN COST (probe, stable over
+  # three builds): a trailing span that ER-matches a movie title can pull a
+  # non-film carrier to this intent ('metti il brano sunny dancer', the exact
+  # JF-871 movie/song collision; 'suona il brano wicked' and 'metti il brano la
+  # la land' were NOT pulled), so the JF-871 song-side cascade is bypassed for
+  # movie-titled songs on that shape.
+  # ACCEPTED DUPLICATION (code-review F1): PlayVideoIntent keeps its own four
+  # 'Di <verb> il film {title}' rows above (SearchQuery-typed). Removing them
+  # is an unprobed model change (the B2 shape was verified WITH them present;
+  # removing uncondemned samples shifts trainer statistics we cannot verify
+  # from here, the JF-541 discipline), so the same wrapper tail is claimed by
+  # both intents. A trainer flip across an identical rebuild CAN award the
+  # wrapper to PlayVideoIntent's SearchQuery row: the film still plays (the
+  # raw fill feeds the same handler search) but the ER canonical is lost and
+  # the PlayMovieIntent pins go red; that flip shape, not a FallbackIntent
+  # reading, is the known-benign failure mode to look for when triaging.
+  PlayMovieIntent:
+    samples:
+      - Di riprodurre il film {movie}
+      - Di mettere il film {movie}
+      - Di vedere il film {movie}
+      - Di guardare il film {movie}
+    slots:
+      - name: movie
+        type: MovieTitle
   PlayByGenreIntent:
     samples:
       - Riproduci {genre}
@@ -1209,6 +1248,28 @@ types:
       - Born a Crime
       - Steve Jobs
       - The Psychology of Money
+  # JF-874: the catalog-backed MovieTitle type. In the SAVED (pre-sync) model
+  # this static seed is the whole vocabulary (the AlbumName/AudiobookTitle
+  # shape); the catalog sync replaces the block in place with the user's movie
+  # library + these seeds (CatalogSeedEnrichment reads THIS block, library wins
+  # on collision). Declared by it-IT ONLY this task: the 16 cross-locale
+  # missing-type warnings are the accepted ja-JP GenreType class. Do NOT add
+  # bare-carrier samples on the movie slot (anti-patterns #1/#11; the JF-869
+  # noun-less rejection stands).
+  MovieTitle:
+    values:
+      - Il Padrino
+      - Il Signore degli Anelli
+      - Guerre Stellari
+      - Jurassic Park
+      - Titanic
+      - Forrest Gump
+      - Matrix
+      - Pulp Fiction
+      - Il Gladiatore
+      - Ritorno al Futuro
+      - Interstellar
+      - La Vita è Bella
   MediaInfoType:
     values:
       - value: chi canta

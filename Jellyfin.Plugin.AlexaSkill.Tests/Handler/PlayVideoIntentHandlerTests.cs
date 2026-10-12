@@ -113,6 +113,7 @@ public class PlayVideoIntentHandlerTests : PluginTestBase
 
     [Theory]
     [InlineData("PlayVideoIntent", true)]
+    [InlineData("PlayMovieIntent", true)]
     [InlineData("PlaySongIntent", false)]
     [InlineData("AMAZON.PauseIntent", false)]
     public void CanHandle_ReturnsExpected(string intentName, bool expected)
@@ -121,6 +122,88 @@ public class PlayVideoIntentHandlerTests : PluginTestBase
         var request = new IntentRequest { Intent = new Intent { Name = intentName } };
 
         Assert.Equal(expected, handler.CanHandle(request));
+    }
+
+    // ---- JF-874: the PlayMovieIntent catalog-slot read ----
+
+    private static IntentRequest CreatePlayMovieRequest(Slot? movieSlot)
+    {
+        var slots = new Dictionary<string, Slot>();
+        if (movieSlot != null)
+        {
+            slots["movie"] = movieSlot;
+        }
+
+        return new IntentRequest
+        {
+            Intent = new Intent { Name = "PlayMovieIntent", Slots = slots }
+        };
+    }
+
+    [Fact]
+    public async Task Handle_MovieSlotCanonicalWinsOverRaw()
+    {
+        // JF-659 contract on the MovieTitle catalog slot: the ER canonical (the
+        // exact library name the catalog synced) feeds the search, not the raw
+        // spoken form.
+        var movie = CreateTestItem("Sunny Dancer");
+        var queries = new List<InternalItemsQuery>();
+        _fx.LibraryManager
+            .Setup(lm => lm.GetItemList(Capture.In(queries)))
+            .Returns((InternalItemsQuery q) => q.SearchTerm == "Sunny Dancer" ? new List<BaseItem> { movie } : new List<BaseItem>());
+
+        var handler = CreateHandler();
+        var response = await handler.HandleAsync(
+            CreatePlayMovieRequest(TestHelpers.ResolvedSlot("sunny dancer", "Sunny Dancer", slotName: "movie")),
+            _fx.CreateContext(),
+            TestHelpers.CreateTestUser(),
+            _fx.CreateSession(), CancellationToken.None);
+
+        response.HasDirective<VideoAppLaunchDirective>();
+        Assert.Equal("Sunny Dancer", queries[0].SearchTerm);
+    }
+
+    [Fact]
+    public async Task Handle_MovieSlotRawFallback_PlaysNonCatalogTitle()
+    {
+        // The catalog gate does not hard-block every miss: a carrier-anchored
+        // wrapper whose title matches no catalog value still arrives with the
+        // span raw-filled (live probe 2026-10-12, movie='ratatouille' against a
+        // catalog lacking it). The raw path must keep playing it.
+        var movie = CreateTestItem("Ratatouille");
+        _fx.LibraryManager
+            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns((InternalItemsQuery q) => q.SearchTerm == "ratatouille" ? new List<BaseItem> { movie } : new List<BaseItem>());
+
+        var handler = CreateHandler();
+        var response = await handler.HandleAsync(
+            CreatePlayMovieRequest(TestHelpers.ResolvedSlot("ratatouille", canonical: null, slotName: "movie")),
+            _fx.CreateContext(),
+            TestHelpers.CreateTestUser(),
+            _fx.CreateSession(), CancellationToken.None);
+
+        response.HasDirective<VideoAppLaunchDirective>();
+    }
+
+    [Fact]
+    public async Task Handle_MovieSlotEmpty_ElicitsThroughPlayVideoRegistration()
+    {
+        // The JF-874 delegation: PlayMovieIntent never becomes an elicit target
+        // (an ElicitSlots entry would force all 17 locales' dialog sections);
+        // the empty-slot miss elicits the registered PlayVideo title slot, so
+        // the follow-up arrives as PlayVideoIntent through the shared handler.
+        var handler = CreateHandler();
+        var response = await handler.HandleAsync(
+            CreatePlayMovieRequest(new Slot { Name = "movie", Value = " " }),
+            _fx.CreateContext(),
+            TestHelpers.CreateTestUser(),
+            _fx.CreateSession(), CancellationToken.None);
+
+        var elicit = Assert.Single(response.Response.Directives, d => d.Type == "Dialog.ElicitSlot");
+        var directive = Assert.IsType<ElicitSlotDirective>(elicit);
+        Assert.Equal("PlayVideoIntent", directive.UpdatedIntent.Name);
+        Assert.Equal("title", directive.SlotToElicit);
+        Assert.False(response.Response.ShouldEndSession);
     }
 
     [Fact]

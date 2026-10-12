@@ -72,6 +72,10 @@ public class DynamicEntityBuilder : IDisposable
         IntentNames.PlayEpisode,
         IntentNames.PlayNextEpisode,
         IntentNames.PlayVideo,
+        // JF-874: the catalog-backed wrapper twin is a video intent by
+        // construction (same handler, same media), so a wrapper arriving inside
+        // the 30s continuing-session window keeps the series-vocabulary push.
+        IntentNames.PlayMovie,
         IntentNames.ContinueWatching,
         IntentNames.SearchMedia,
         IntentNames.InProgressMediaList
