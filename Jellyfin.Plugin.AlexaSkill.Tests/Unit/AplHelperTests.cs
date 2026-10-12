@@ -695,10 +695,10 @@ public class AplHelperTests : PluginTestBase
     [Fact]
     public void BuildSlideshowDirective_DocumentAdvancesViaTickHandler()
     {
-        // The JF-624-proven advance mechanism: the pager's handleTick fires a
-        // SetPage on the wrapped next index. Pinning the document shape here is
-        // the unit guard for the slideshow's cycling (validate_apl.py only
-        // checks structure, not this command chain).
+        // Pin the proven advance shape documented on SlideshowTemplate
+        // (AplHelper.cs): the sandbox derisk's rationale lives there. This is
+        // the regression guard because validate_apl.py checks structure only,
+        // not this command chain (its SetPage semantic guard complements it).
         var directive = AplHelper.BuildSlideshowDirective("Trip", new List<string> { "http://img/1", "http://img/2" });
 
         string docStr = directive!.Document.ToString();
@@ -710,6 +710,10 @@ public class AplHelperTests : PluginTestBase
         Assert.Contains("\"minimumDelay\": 8000", docStr);
         Assert.Contains("\"type\": \"SetPage\"", docStr);
         Assert.Contains("\"componentId\": \"slideshowPager\"", docStr);
-        Assert.Contains("% payload.slideshowData.properties.images.length", docStr);
+        Assert.Contains("\"sequencer\": \"slideshowAdvance\"", docStr);
+        Assert.Contains("\"position\": \"relative\"", docStr);
+        Assert.Contains("\"value\": 1", docStr);
+        Assert.DoesNotContain("currentPage", docStr);
+        Assert.DoesNotContain("% payload.slideshowData.properties.images.length", docStr);
     }
 }

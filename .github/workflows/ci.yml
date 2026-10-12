@@ -94,6 +94,22 @@ jobs:
       - name: Validate locale strings
         run: python3 scripts/validate_locales.py
 
+  validate-apl:
+    runs-on: ubuntu-latest
+    # The APL semantic guard (SetPage command contract) only prevents the
+    # regression class if it runs on every push: the 2026-10-12 slideshow
+    # derisk found a shipped value-less SetPage that this validator would
+    # have caught had CI invoked it (it was manual-only until now).
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate APL documents
+        run: python3 scripts/validate_apl.py
+
   validate-backlog:
     runs-on: ubuntu-latest
     # JF-854: the backlog MCP drops content that sits outside its managed

@@ -854,12 +854,22 @@ internal static class AplHelper
 
     // Photo slideshow APL template (JF-329): a full-screen Pager cycling the
     // album's images. The advance mechanism is the handleTick + command shape
-    // already proven in this repo (the JF-624 enhanced NowPlaying tick handler,
-    // verified in the Amazon web simulator runtime): every 8 seconds the
-    // SetPage command moves the pager to the wrapped next page (modulo the
-    // images array's own length, the one source of the count), and the same
-    // expression also serves manual swipes (navigation "wrap"). An AutoPages
-    // component would be fewer moving parts but is unproven on our devices.
+    // proven in the repo (the JF-624 enhanced NowPlaying tick handler) AND for
+    // THIS document in Amazon's official no-login Code Sandbox (the 2026-10-12
+    // night derisk, JF-329 item 2): the original self-referencing SetPage
+    // (${slideshowPager.currentPage}) was REFUTED as shipped on four
+    // independent grounds (value is REQUIRED and was absent; position is the
+    // relative|absolute enum, not an integer expression; the currentPage
+    // self-reference renders EMPTY in data-binding, because the Pager exposes
+    // the page only as event.source.page inside event handlers; and tick
+    // commands run in fast mode where SetPage is documented "Ignored" without
+    // a sequencer).
+    // The proven shape: sequencer promotion out of fast mode + position
+    // "relative" + literal value 1, with the wrap supplied by the Pager's own
+    // navigation "wrap" (which also serves manual swipes). Verified in the
+    // sandbox with the exact production document: one page per 8s tick, full
+    // cycles, wrap back to page 0. AutoPage was tested and rejected (no
+    // wrapping: stops dead on the last image).
     private static readonly string SlideshowTemplate = @"{
   ""type"": ""APL"",
   ""version"": ""1.7"",
@@ -893,8 +903,10 @@ internal static class AplHelper
                 ""commands"": [
                   {
                     ""type"": ""SetPage"",
+                    ""sequencer"": ""slideshowAdvance"",
                     ""componentId"": ""slideshowPager"",
-                    ""position"": ""${(slideshowPager.currentPage + 1) % payload.slideshowData.properties.images.length}""
+                    ""position"": ""relative"",
+                    ""value"": 1
                   }
                 ]
               }

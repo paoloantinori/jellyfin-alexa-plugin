@@ -10,8 +10,10 @@ Requires:
 
 from __future__ import annotations
 
+import importlib.util
 import logging
 import time
+from pathlib import Path
 import warnings
 import xml.etree.ElementTree as ET
 
@@ -581,6 +583,18 @@ def _validate_apl_directive(directive: dict) -> list[str]:
                 errors.append("APL mainTemplate missing 'parameters' — datasource binding broken")
             if "items" not in mt:
                 errors.append("APL mainTemplate missing 'items'")
+            # Command-contract walk (the SetPage guard) shares the ONE owner:
+            # scripts/validate_apl.py (imported by path so the suite runs from
+            # any cwd; the 2026-10-12 review caught this copy lagging behind).
+            _spec = importlib.util.spec_from_file_location(
+                "validate_apl_shared",
+                Path(__file__).resolve().parents[2] / "scripts" / "validate_apl.py",
+            )
+            _shared = importlib.util.module_from_spec(_spec)
+            _spec.loader.exec_module(_shared)
+            _shared._validate_components(
+                mt.get("items", []), "e2e-directive", errors
+            )
 
         if not ds:
             errors.append("APL RenderDocument missing 'datasources' — nothing to render")

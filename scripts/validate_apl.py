@@ -19,6 +19,8 @@ Checks:
     4. Sequence data arrays: ${payload.xxx.properties.items} must exist
     5. TouchWrapper SendEvent arguments must be non-empty strings
     6. Required component properties (type on every component)
+    7. SetPage command contract in handler command arrays (value present,
+       position enum when present)
 """
 
 import json
@@ -160,6 +162,42 @@ def validate_apl_document(doc: dict, name: str = "document") -> list[str]:
     return errors
 
 
+def _check_setpage(cmd, label: str, errors: list[str]):
+    """SetPage command-contract guard (the 2026-10-12 slideshow derisk class:
+    a shipped SetPage with NO value, position misused as an integer expression,
+    and a dead currentPage self-reference passed the structural checks). Per
+    apl-set-page-command.html: value is REQUIRED (Integer; 0 is the first page,
+    so the check is presence, not truthiness); position is OPTIONAL and
+    defaults to absolute, but when present it must be the relative|absolute
+    enum (an integer expression there is invalid); componentId is OPTIONAL and
+    defaults to :source."""
+    if not isinstance(cmd, dict) or cmd.get("type") != "SetPage":
+        return
+    if cmd.get("value") is None:
+        errors.append(
+            f"[{label}] SetPage missing required 'value'; "
+            "the command cannot run (apl-set-page-command.html)"
+        )
+    if "position" in cmd and cmd.get("position") not in ("relative", "absolute"):
+        errors.append(
+            f"[{label}] SetPage 'position' must be "
+            "relative|absolute (an integer expression there is invalid)"
+        )
+
+
+def _walk_commands(cmds, label: str, errors: list[str]):
+    """Walk a handler's command array recursively: command containers
+    (Sequential/Parallel and friends) nest their own 'commands' arrays."""
+    for k, cmd in enumerate(cmds or []):
+        if not isinstance(cmd, dict):
+            continue
+        _check_setpage(cmd, f"{label}.commands[{k}]", errors)
+        _walk_commands(cmd.get("commands"), f"{label}.commands[{k}]", errors)
+
+
+_APL_HANDLER_KEYS = ("handleTick", "onPress", "onMount", "onPageChanged", "onIdle")
+
+
 def _validate_components(items, name: str, errors: list[str], path: str = ""):
     """Recursively validate APL components."""
     if isinstance(items, dict):
@@ -176,6 +214,15 @@ def _validate_components(items, name: str, errors: list[str], path: str = ""):
             errors.append(f"[{name}.{current_path}] Component missing 'type' property")
 
         comp_type = item.get("type", "")
+
+        for handler_key in _APL_HANDLER_KEYS:
+            for j, handler in enumerate(item.get(handler_key, []) or []):
+                if isinstance(handler, dict):
+                    _walk_commands(
+                        handler.get("commands"),
+                        f"{name}.{current_path}.{handler_key}[{j}]",
+                        errors,
+                    )
 
         # TouchWrapper must have onPress with SendEvent arguments
         if comp_type == "TouchWrapper":
