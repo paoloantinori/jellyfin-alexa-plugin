@@ -1136,23 +1136,28 @@ public class LibrarySyncService
         // same-name dedup), not just the fetch: the pre-fix code fetched with
         // Limit=cap but appended the seeds AFTER the bounded fetch, so the
         // payload sailed past the cap and the old warning asserted a
-        // truncation that never happened. The tail cut drops the generic word
-        // and seed titles first, then the library tail in reverse fetch order
-        // (payload order IS priority order, see CatalogPayload.TruncateTo).
+        // truncation that never happened. JF-848: at saturation (the library
+        // block alone fills the cap) the static tail is RESERVED first, so the
+        // cut takes the library tail instead of evicting every seed and the
+        // locale's generic word; below saturation the JF-825 tail cut stands
+        // byte-identical (payload order IS priority order, see
+        // CatalogPayload.TruncateTo). The trade-off: a saturated library sees
+        // fewer of its own values (up to staticAppendedCount of them).
         int staticAppendedCount = payload.Values.Count - libraryValueCount;
-        IReadOnlyList<CatalogValue> droppedValues = payload.TruncateTo(EffectiveMaxCatalogValues);
+        var (droppedValues, droppedStaticCount) = payload.TruncateTo(EffectiveMaxCatalogValues, staticAppendedCount);
         if (droppedValues.Count > 0)
         {
             // The warning fires exactly because entries were dropped and names
-            // them (the debug-logging policy): the composition split is exact
-            // because the static entries occupy the final staticAppendedCount
-            // positions, and the sample bounds the line length when a huge
-            // library drops a huge tail. The library leg of the split reads 0
-            // in every production state (the fetch Limit equals the cap, so
-            // library values alone cannot exceed it); a nonzero value is the
-            // canary for a fetch bound bypassed or a value source inserted
-            // before this cut.
-            int droppedStaticCount = Math.Min(staticAppendedCount, droppedValues.Count);
+            // them (the debug-logging policy): the composition split comes
+            // from the cut itself (TruncateTo owns which block each dropped
+            // entry came from), and the sample bounds the line length when a
+            // huge library drops a huge tail. At saturation the library leg
+            // carries the whole drop (the reserved static floor outranks the
+            // last staticAppendedCount library entries, JF-848), so a nonzero
+            // static leg is the below-saturation seed-tail drop or the canary
+            // for the reserved block alone exceeding the cap (test seams or a
+            // pathological seed block; production static counts are tens
+            // against a 50000 cap).
             _logger.LogWarning(
                 "Truncated {Type} catalog to {Limit} values for user {UserId}: dropped {DroppedCount} lowest-priority entries ({DroppedStaticCount} static seed values, {DroppedLibraryCount} library values); first dropped: {DroppedSample}",
                 catalogType,
