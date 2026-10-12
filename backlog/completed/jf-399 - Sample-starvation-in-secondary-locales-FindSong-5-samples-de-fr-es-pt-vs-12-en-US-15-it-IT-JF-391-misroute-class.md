@@ -3,15 +3,15 @@ id: JF-399
 title: >-
   Sample starvation in secondary locales: FindSong 5 samples (de/fr/es/pt) vs 12
   en-US / 15 it-IT - JF-391 misroute class
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-08-23 05:56'
-updated_date: '2026-09-27 06:22'
+updated_date: '2026-10-12 16:09'
 labels:
   - nlu
   - interaction-model
   - localization
-  - gate:maintainer-call
+  - 'gate:maintainer-call'
 milestone: m-16
 dependencies: []
 priority: high
@@ -75,3 +75,9 @@ REMAINING in this task: (a) the en-US scope decision (carrier-noun expansion of 
 2026-09-27 RESIDUE PASS COMPLETE (commit in 9b0fc105's parent, deployed, models rebuilt 17/17 SUCCEEDED, live-probed): PlayPlaylistIntent ar 6->12 / en-IN 6->16 / en-CA 7->16 / es-MX 8->14 / hi 7->14; PlayArtistSongsIntent ja 13->21 / ar 14->21 / hi 15->23. Live: en-CA 'put on the playlist road trip', es-MX 'escucha la playlist rock clasico', hi 'meri playlist pasandida lagao' all -> PlayPlaylistIntent. The ja artist carriers exposed a REAL find (filed JF-642): noun-qualified artist voice in ja-JP is broadly stolen by PlayByGenre's free-text genre slot - even the canonical pre-existing '{musician} no uta wo saisei shite' routes to genre with two artists probed. The residue pass's ja samples are additive and harmless; JF-642 owns the steal. The task's executable surface is now EXHAUSTED: every starvation the audits found is fixed or owned by a filed task; what remains are the three product calls (en-US density, es-US market, hi Decade).
 MAINTAINER DECISIONS (2026-10-11 21:20, chat): (a) en-US carrier-noun expansion APPROVED with autonomous validation - expand, probe with profile-nlu in autonomy, and UNDO if the results do not pay (his words); (b) es-US market: SPANISH (FindSong forms in Spanish for es-US, coherent with es-ES/es-MX; the routing side stays JF-406); (c) hi-IN Decade swap: deferred as a GH issue placeholder (created).
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+CLOSED 2026-10-12: all three maintainer product calls from the 2026-10-11 decision round are resolved and nothing unowned remains. (a) en-US carrier-noun expansion APPROVED and LANDED (5296cdd4: PlaySong 38 to 73, PlayArtistSongs 34 to 172 samples, PAY verdicts recorded, all regression legs unmoved); (b) es-US FindSong Spanish swap APPROVED and LANDED in the same merge; (c) hi-IN Decade slot deferred to a GitHub issue placeholder per Paolo's call ("Accetto la tua raccomandazione per tutto", 2026-10-11) - not tracked here. The headline starvation (5 samples de/fr/es/pt vs 12 en-US/15 it-IT) was fixed earlier by 959dfcc. No undo window was exercised (no regression observed post-landing).
+<!-- SECTION:FINAL_SUMMARY:END -->

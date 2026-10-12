@@ -3,12 +3,12 @@ id: JF-625
 title: >-
   JF-625 - Music seek mode: the audiobook video-audio pipeline (real seek bar)
   applied to music, spike-first behind a flag
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-24 16:16'
-updated_date: '2026-09-27 19:12'
+updated_date: '2026-10-12 16:09'
 labels:
-  - gate:maintainer-call
+  - 'gate:maintainer-call'
 milestone: 1.0 polish
 dependencies: []
 priority: medium
@@ -70,3 +70,9 @@ Known costs to state in the config UI: a few seconds of first-play encode latenc
 
 MAINTAINER DECISION (2026-10-11 21:20, chat): NO for now, and his reason recorded: even the VIDEO seek bar does not always show the full song length, so trading queue/radio/gapless/album-art for the bar is not worth it today. A GitHub issue placeholder tracks the future option (link in the references when created).
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+CLOSED by maintainer decision (2026-10-11 21:20, recorded in the task notes): NO for now on music seek mode. Paolo's reason, verbatim class: even the VIDEO seek bar does not always show the full song length, so trading queue/radio/gapless/album-art for the bar is not worth it today; a GitHub issue placeholder tracks the future option. What stands: the machinery shipped and stays (NativeControlsForAudio global + per-user VideoAppForAudio resolver, album concat, tracker-keyed resume, the September device-verified spike), OFF by default; the plan's queue-as-concat polish (playlists, radio extension, voice-skip) is DROPPED with this closure. The audiobook path keeps its seek bar (VideoApp family). Reopen vector: the JF-560 SeekController probe family, or the GH placeholder when Amazon opens seek to custom skills.
+<!-- SECTION:FINAL_SUMMARY:END -->
