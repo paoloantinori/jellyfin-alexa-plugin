@@ -3,9 +3,10 @@ id: JF-868
 title: >-
   JF-870: broken-Italian disambiguation trailer ("E 2 in più.") + audiobook stop
   speaks "fermato il video" instead of the book line
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-12 15:43'
+updated_date: '2026-10-12 16:51'
 labels: []
 dependencies: []
 priority: medium
@@ -36,3 +37,17 @@ Both changes are string/branch-level; no model changes. Standard gates (/simplif
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-10-12 execution note (branch jf870, worktree /tmp/wt-jf870, merged 0adfd187): both defects fixed. Trailer: it-IT now "Ne ho {0} in più." (NOT the task's example "Ci sono altri {0} artisti.", deliberately: the JF-729 count-invariance rule in DisambiguationHelper's doc says the hint must stay grammatical at {0}=1, the MOST COMMON overflow, and "Ci sono altri 1 artisti" would speak "uno artisti"; the chosen form is grammatical at every count and Paolo's one-line preference wins if he accepts the 1-edge). Same-class verb-less calques also fixed: fr "Il y en a {0} de plus.", de "Es gibt noch {0} mehr.", nl "Ik heb er nog {0}."; kept as already natural: en (native appositive), es/pt (verb-carrying), ja (full sentence), hi/ar (documented invariant forms); the audit decision is recorded in the AskMultipleArtists doc comment. Book line: BookStoppedByVoice added to all 17 locales next to VideoStoppedByVoice (it "Ho fermato il libro.", en "I've stopped the book.", de Hörbuch, nl luisterboek, ja オーディオブック), PauseIntentHandler's VideoApp arm picks it on PlayingMedium.VideoAppAudiobook (Live TV and VideoAppAudio keep the video line; the seek-mode music gap is filed as JF-873; the worker's transient JF-871 numbering was corrected - JF-871 is the sunny/video-cascade task). Ledger row added; the audiobook pause pin flipped to a Pause+Cancel Theory via the shared AssertStoppedByVoiceTell core.
+
+DoD waivers: #6 N/A (no interaction-model change; templates/models/NLU fixtures untouched per the dispatch). #7 waived for this change: an E2E case for the book stop line would need a live VideoApp audiobook playing on the device ledger, which the simulate-skill harness cannot set up deterministically (each fixture runs session-independent); the handler-logic coverage is the unit Theory, and the medium-classifier leg is already pinned by the JF-858 corroboration suites. #4/#5 untouched surfaces (no session-attribute or HttpClient change in this diff).
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+EXECUTED on branch jf870 (fe0a2aad), merged to main 0adfd187, pushed; deploy rides the next batch after JF-869. Defect 1: it-IT trailer "E {0} in più." is now "Ne ho {0} in più." - count-invariant and grammatical at {0}=1 (the most common overflow), which the suggested "Ci sono altri {0} artisti." is not ("altri 1 artisti" breaks agreement); the divergence is recorded in DisambiguationHelper.AskMultipleArtists's doc and is Paolo's final call. Same calque fixed in fr-FR/fr-CA ("Il y en a {0} de plus."), de-DE ("Es gibt noch {0} mehr."), nl-NL ("Ik heb er nog {0}."); en/es/pt/ja/hi/ar audited and left (already natural verb-bearing forms). Defect 2: BookStoppedByVoice added to all 17 locales; the VideoApp-family pause/cancel arm speaks it for PlayingMedium.VideoAppAudiobook (books stop saying "ho fermato il video"); video, Live TV, VideoAppAudio keep the video line. Ledger row added; the JF-868-era audiobook pin flipped to the book line and widened to a Pause+Cancel Theory. Gates: /simplify (4 agents; AssertStoppedByVoiceTell core hoist, 2 comment restatements removed; altitude verdict: inline ternary is the per-family idiom) + /code-review high (5 findings: 4 stale JF-868-era comments fixed, CannotPauseVideoByVoice retention reason recorded, trailer-audit keep decision recorded; E2E DoD item waived with rationale - simulate-skill cannot deterministically stage a playing VideoApp audiobook). Tests 5792/5792 BOTH TFMs; validate_locales PASS; Release 0/0. Residual FILED: seek-mode music (VideoAppAudio) keeps the video line on stop (JF-873).
+<!-- SECTION:FINAL_SUMMARY:END -->
