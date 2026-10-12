@@ -30,12 +30,14 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 /// a VideoApp-family medium never receives an AudioPlayer.Play directive (the
 /// stale-queue guard), and the music semantics stay byte-identical (a cold
 /// ledger or an audio-owned item keeps the pre-JF-564 behavior).
-/// JF-847/JF-868 pins: the pause branch speaks VideoStoppedByVoice for a
+/// JF-847/JF-868 pins: the pause branch speaks a stopped-by-voice Tell for a
 /// VideoApp-family medium on EVERY context playerActivity. The JF-847
 /// PLAYING-only split was superseded by the 2026-10-11 device evidence (corr
 /// ab55dc39, de7f892a): the common VideoApp shape is a bare STOPPED context
 /// during active playback, the AudioPlayer.Stop directive DOES stop the video,
-/// so the former cannot-pause line contradicted the behavior.
+/// so the former cannot-pause line contradicted the behavior. JF-870 refines
+/// the WORDING only: the audiobook branch speaks the book line, every other
+/// VideoApp medium keeps the video line.
 /// </summary>
 [Collection("Plugin")]
 public class VideoAppGapHonestResponseTests : PluginTestBase, IDisposable
@@ -261,8 +263,9 @@ public class VideoAppGapHonestResponseTests : PluginTestBase, IDisposable
 
     // === Pause/Cancel during VideoApp family: stopped line, session end, Stop kept ===
 
-    // === JF-847/JF-868: the line is ALWAYS VideoStoppedByVoice for a VideoApp
-    // === medium, on every context playerActivity (2026-10-11 device evidence).
+    // === JF-847/JF-868: the line is ALWAYS a stopped-by-voice Tell for a VideoApp
+    // === medium, on every context playerActivity (2026-10-11 device evidence);
+    // === JF-870: the audiobook branch speaks its own book line.
 
     [Theory]
     [InlineData("AMAZON.PauseIntent", null)]
@@ -310,7 +313,8 @@ public class VideoAppGapHonestResponseTests : PluginTestBase, IDisposable
         // Memory pin for the shape the JF-847 branch was built around (the
         // 2026-10-09 stale-token STOPPED context, then treated as an inert stop):
         // JF-868 speaks the stopped line here TOO, per the maintainer's directive
-        // that the VideoApp family always speaks VideoStoppedByVoice. If a future
+        // that the VideoApp family always speaks a stopped line (the book branch
+        // its own wording since JF-870). If a future
         // device session shows the directive genuinely inert against THIS shape,
         // the evidence supersedes and this pin changes with it; until then the
         // speak-truth-vs-behavior contradiction (voice said cannot-pause while the
@@ -351,23 +355,30 @@ public class VideoAppGapHonestResponseTests : PluginTestBase, IDisposable
         TestHelpers.AssertVideoStoppedTell(response);
     }
 
-    [Fact]
-    public async Task Pause_DuringVideoAppAudiobook_SpeaksStoppedLine()
+    [Theory]
+    [InlineData("AMAZON.PauseIntent")]
+    [InlineData("AMAZON.CancelIntent")]
+    public async Task PauseAndCancel_DuringVideoAppAudiobook_SpeaksBookStoppedLine(string intentName)
     {
+        // JF-870: the stopped line names the medium, so the audiobook branch
+        // speaks BookStoppedByVoice ("Ho fermato il libro.", the 2026-10-12
+        // device round's wrong-medium "fermato il video" fix), never the video
+        // line the JF-868 era pinned here. Cancel shares the branch, so it
+        // shares the book line.
         var chapter = Chapter("Book Chapter 3");
 
-        string deviceId = "jf564-pause-book";
+        string deviceId = "jf870-pause-book-" + intentName;
         DeviceQueueManager ledger = CreateLedger(deviceId, chapter);
         var handler = CreatePauseHandler(ledger);
 
         var response = await handler.HandleAsync(
-            CreateIntent("AMAZON.PauseIntent"),
+            CreateIntent(intentName),
             TestHelpers.CreateTestContext(deviceId),
             TestHelpers.CreateTestUser(),
             CreateSession(chapter),
             CancellationToken.None);
 
-        TestHelpers.AssertVideoStoppedTell(response);
+        TestHelpers.AssertBookStoppedTell(response);
     }
 
     [Fact]
@@ -558,7 +569,8 @@ public class VideoAppGapHonestResponseTests : PluginTestBase, IDisposable
     /// held item is the observable live-evidence leg (the minute-90-of-a-movie
     /// shape; a plain VideoApp movie stream has no server-side stamp refresh, so
     /// a window-only bound would lose the video-stopped line exactly there).
-    /// JF-868: the line is VideoStoppedByVoice on every VideoApp shape.
+    /// JF-868: the line is VideoStoppedByVoice on every VideoApp shape, the
+    /// audiobook branch its own line since JF-870.
     /// </summary>
     [Fact]
     public async Task Pause_DaysOldResolvableVideoAppLedger_SessionHoldsMovie_SpeaksStoppedLine_JF858()

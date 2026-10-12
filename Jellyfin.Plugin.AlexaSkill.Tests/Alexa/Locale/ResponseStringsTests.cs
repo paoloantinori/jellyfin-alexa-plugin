@@ -29,11 +29,17 @@ public class ResponseStringsTests
         "StreamTokenNotConfigured",
         "SkillWarmingUp",
         "SkillUpdatingPrefix",
-        "VideoStoppedByVoice", "CannotPauseVideoByVoice",
+        "VideoStoppedByVoice", "CannotPauseVideoByVoice", "BookStoppedByVoice",
         // JF-849: the rest of the Cannot* refusal family, enumerated from the
         // production surface (grep Cannot* keys; note some literals sit in
         // ternary-bound variables, e.g. PauseIntentHandler's lineKey, not
         // directly inside ResponseStrings.Get).
+        // CannotPauseVideoByVoice has had no production speaker since the
+        // JF-868 always-stopped-line change, and is RETAINED deliberately:
+        // the JF-868 pins contemplate speaking it again if device evidence
+        // ever shows the stop directive inert during video (the
+        // Pause_DuringVideo_StaleTokenStoppedContext memory pin records that
+        // supersession rule), so the wording stays warm in all 17 locales.
         "CannotRepeatContent", "CannotRepeatInSeekMode",
         "CannotSetSleepTimerInSeekMode", "CannotSetSleepTimerOverVideo",
         "CannotChangeSpeedOverVideo", "CannotChangeSpeedForBook",

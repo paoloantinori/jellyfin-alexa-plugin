@@ -32,13 +32,15 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// ("responses to StopIntent must end the session"); an empty ledger (cold device)
 /// keeps the music semantics unchanged.
 /// JF-847/JF-868 (device evidence 2026-10-09 and 2026-10-11): the line is
-/// ALWAYS VideoStoppedByVoice for a VideoApp-family medium. The 2026-10-09
+/// ALWAYS a stopped-by-voice Tell for a VideoApp-family medium. The 2026-10-09
 /// PLAYING observation is one device state among several; the 2026-10-11
 /// sessions (corr ab55dc39, de7f892a) are the common VideoApp shape: the context
 /// reports a bare STOPPED with no token while the video actively plays, yet the
 /// AudioPlayer.Stop directive DOES stop it. The former state-aware branch spoke
 /// "cannot pause" while the video stopped, contradicting the behavior; the
-/// playerActivity is now logged for triage only. The platform model lives in the
+/// playerActivity is now logged for triage only. JF-870: the Tell names the
+/// medium, VideoStoppedByVoice everywhere except the audiobook branch, which
+/// speaks BookStoppedByVoice. The platform model lives in the
 /// repo-root CLAUDE.md Stop/Session Routing reference.
 /// </summary>
 public class PauseIntentHandler : BaseHandler
@@ -79,7 +81,7 @@ public class PauseIntentHandler : BaseHandler
     /// <summary>
     /// Pause or stop currently playing media.
     /// All paths send AudioPlayer.Stop. During a VideoApp-family medium (JF-564)
-    /// pause and cancel speak the video-stopped line with the session ended
+    /// pause and cancel speak the medium's stopped line with the session ended
     /// (JF-868: always, regardless of the context's playerActivity).
     /// Otherwise stop/cancel end the session; pause ends it unless PauseKeepsSession
     /// is on (JF-482), in which case the response also speaks a minimal pause word
@@ -113,8 +115,8 @@ public class PauseIntentHandler : BaseHandler
         }
 
         // JF-564/JF-868: during a VideoApp-family medium pause/cancel cannot PAUSE
-        // (no VideoApp.Stop exists), so the skill speaks the video-stopped line
-        // instead of the old silent no-op stop. The line is ALWAYS VideoStoppedByVoice,
+        // (no VideoApp.Stop exists), so the skill speaks the medium's stopped line
+        // instead of the old silent no-op stop. The line is ALWAYS a stopped Tell,
         // superseding the JF-847 PLAYING-only rule: the 2026-10-11 device sessions
         // (corr ab55dc39, de7f892a) showed the common VideoApp shape: the context
         // reports a bare STOPPED (no token, offset 0 or stale) while the video
@@ -133,12 +135,20 @@ public class PauseIntentHandler : BaseHandler
         PlaybackLaunchBuilder.PlayingMedium medium = Launch.ResolvePlayingMediumForFlatTransportGate(context, session, _libraryManager, _queueManager);
         if (PlaybackLaunchBuilder.IsVideoAppMedium(medium))
         {
+            // JF-870: the stopped line names the medium. The audiobook branch
+            // speaks the book line (a stopped book is not a stopped video, the
+            // 2026-10-12 device round's "fermato il video" over an audiobook);
+            // every other VideoApp medium (video, live TV, seek-mode music)
+            // keeps the video line.
+            string lineKey = medium == PlaybackLaunchBuilder.PlayingMedium.VideoAppAudiobook
+                ? "BookStoppedByVoice"
+                : "VideoStoppedByVoice";
             Logger.LogDebug(
-                "PauseIntent: {Medium} playing, activity {Activity}, speaking VideoStoppedByVoice",
-                medium, context.AudioPlayer?.PlayerActivity);
+                "PauseIntent: {Medium} playing, activity {Activity}, speaking {LineKey}",
+                medium, context.AudioPlayer?.PlayerActivity, lineKey);
             SkillResponse stopped = BuildPauseResponse();
             stopped.Response.OutputSpeech = new PlainTextOutputSpeech(
-                ResponseStrings.Get("VideoStoppedByVoice", GetLocale(request)));
+                ResponseStrings.Get(lineKey, GetLocale(request)));
             return Task.FromResult(stopped);
         }
 
