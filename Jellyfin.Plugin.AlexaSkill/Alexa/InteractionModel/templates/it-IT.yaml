@@ -1465,6 +1465,16 @@ templates:
       # JF-549: series-FIRST infinitive twin; the one-shot wrapper presents the
       # series up front and the series-last forms alone dropped series_name (live 2026-09-12).
       - "{infinitive} {series_name} stagione {season_number} episodio {episode_number}"
+      # JF-869 follow-up (2026-10-12): BARE-infinitive twins of the series-first
+      # family, same JF-844 lesson as the numbers-first block above. Live model
+      # post-JF-869 deploy: the NLU fixture "riprodurre breaking bad stagione
+      # uno episodio tre" read FallbackIntent 3/3 (stable) while the Di-form
+      # alone covers the wrapper; the trainer does not generalize the unanchored
+      # bare shape. Four verbs, the established bare-infinitive set.
+      - riprodurre {series_name} stagione {season_number} episodio {episode_number}
+      - suonare {series_name} stagione {season_number} episodio {episode_number}
+      - mettere {series_name} stagione {season_number} episodio {episode_number}
+      - ascoltare {series_name} stagione {season_number} episodio {episode_number}
       # JF-814: season-less family ("metti l'episodio 54 di sailor moon", the
       # 2026-10-08 incident phrase): the season-ed family above minus the season
       # clause; the handler elicits the missing season. The number slot is
