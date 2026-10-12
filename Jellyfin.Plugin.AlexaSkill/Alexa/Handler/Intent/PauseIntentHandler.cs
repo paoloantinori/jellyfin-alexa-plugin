@@ -31,12 +31,15 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// any displaced audio). Stop keeps the docs-mandated silent shape
 /// ("responses to StopIntent must end the session"); an empty ledger (cold device)
 /// keeps the music semantics unchanged.
-/// JF-847 (2026-10-09 device evidence): the line is STATE-AWARE: a PLAYING
-/// context speaks VideoStoppedByVoice (the AudioPlayer.Stop directive reaches the
-/// pipeline's active stream), every other activity keeps the honest cannot-pause
-/// line. The evidence narrative and the PLAYING-only rule are owned by the branch
-/// comment in HandleAsync; the verified platform model lives in the repo-root
-/// CLAUDE.md Stop/Session Routing reference.
+/// JF-847/JF-868 (device evidence 2026-10-09 and 2026-10-11): the line is
+/// ALWAYS VideoStoppedByVoice for a VideoApp-family medium. The 2026-10-09
+/// PLAYING observation is one device state among several; the 2026-10-11
+/// sessions (corr ab55dc39, de7f892a) are the common VideoApp shape: the context
+/// reports a bare STOPPED with no token while the video actively plays, yet the
+/// AudioPlayer.Stop directive DOES stop it. The former state-aware branch spoke
+/// "cannot pause" while the video stopped, contradicting the behavior; the
+/// playerActivity is now logged for triage only. The platform model lives in the
+/// repo-root CLAUDE.md Stop/Session Routing reference.
 /// </summary>
 public class PauseIntentHandler : BaseHandler
 {
@@ -76,9 +79,8 @@ public class PauseIntentHandler : BaseHandler
     /// <summary>
     /// Pause or stop currently playing media.
     /// All paths send AudioPlayer.Stop. During a VideoApp-family medium (JF-564)
-    /// pause and cancel speak an honest line with the session ended: the stopped
-    /// line when the context's playerActivity is PLAYING (JF-847: the directive
-    /// reaches the active stream), otherwise the cannot-pause line.
+    /// pause and cancel speak the video-stopped line with the session ended
+    /// (JF-868: always, regardless of the context's playerActivity).
     /// Otherwise stop/cancel end the session; pause ends it unless PauseKeepsSession
     /// is on (JF-482), in which case the response also speaks a minimal pause word
     /// and carries a reprompt (JF-488; the silent open session timed out on-device).
@@ -110,18 +112,15 @@ public class PauseIntentHandler : BaseHandler
             return Task.FromResult(BuildPauseResponse());
         }
 
-        // JF-564/JF-847: during a VideoApp-family medium pause/cancel cannot PAUSE
-        // (no VideoApp.Stop exists), so the skill says so instead of the old silent
-        // no-op stop. WHICH line is state-aware per the 2026-10-09 device evidence:
-        // the AudioPlayer.Stop directive reliably stops the video iff the request
-        // context's AudioPlayer.PlayerActivity is PLAYING (the video is the
-        // pipeline's active stream; with a non-PLAYING context the directive was
-        // observed inert, the stale-token relaunch shape), so PLAYING speaks the
-        // stopped line and everything else the honest cannot-pause line. The check
-        // is deliberately PLAYING-only, not IsActivelyPlaying: BUFFER_UNDERRUN is
-        // unobserved for a VideoApp stream and the honest refusal is the safe
-        // failure when the stop's reach is unproven (ResumeIntentHandler keeps its
-        // own narrower check for the same reason). The response keeps the
+        // JF-564/JF-868: during a VideoApp-family medium pause/cancel cannot PAUSE
+        // (no VideoApp.Stop exists), so the skill speaks the video-stopped line
+        // instead of the old silent no-op stop. The line is ALWAYS VideoStoppedByVoice,
+        // superseding the JF-847 PLAYING-only rule: the 2026-10-11 device sessions
+        // (corr ab55dc39, de7f892a) showed the common VideoApp shape: the context
+        // reports a bare STOPPED (no token, offset 0 or stale) while the video
+        // actively plays, and the AudioPlayer.Stop directive DOES stop it, so the
+        // former cannot-pause line contradicted the actual behavior. The
+        // playerActivity is logged above for triage only. The response keeps the
         // AudioPlayer.Stop directive (the audio-stop invariant; a displaced audio
         // stream must still be told to stop) and ends the session as a Tell: these
         // are IntentRequests, so the JF-299 event-response rules do not apply. An
@@ -134,15 +133,13 @@ public class PauseIntentHandler : BaseHandler
         PlaybackLaunchBuilder.PlayingMedium medium = Launch.ResolvePlayingMediumForFlatTransportGate(context, session, _libraryManager, _queueManager);
         if (PlaybackLaunchBuilder.IsVideoAppMedium(medium))
         {
-            bool pipelineOwnsStream = string.Equals(context.AudioPlayer?.PlayerActivity, "PLAYING", System.StringComparison.Ordinal);
-            string lineKey = pipelineOwnsStream ? "VideoStoppedByVoice" : "CannotPauseVideoByVoice";
             Logger.LogDebug(
-                "PauseIntent: {Medium} playing, activity {Activity}, speaking {LineKey}",
-                medium, context.AudioPlayer?.PlayerActivity, lineKey);
-            SkillResponse honest = BuildPauseResponse();
-            honest.Response.OutputSpeech = new PlainTextOutputSpeech(
-                ResponseStrings.Get(lineKey, GetLocale(request)));
-            return Task.FromResult(honest);
+                "PauseIntent: {Medium} playing, activity {Activity}, speaking VideoStoppedByVoice",
+                medium, context.AudioPlayer?.PlayerActivity);
+            SkillResponse stopped = BuildPauseResponse();
+            stopped.Response.OutputSpeech = new PlainTextOutputSpeech(
+                ResponseStrings.Get("VideoStoppedByVoice", GetLocale(request)));
+            return Task.FromResult(stopped);
         }
 
         // Cancel on the audio path: silent AudioPlayer.Stop plus session end (JF-299

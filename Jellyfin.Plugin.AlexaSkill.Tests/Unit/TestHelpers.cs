@@ -627,6 +627,20 @@ internal static class TestHelpers
     }
 
     /// <summary>
+    /// The VideoApp pause/cancel Tell assertion (hoisted at JF-868, when the same
+    /// 4-line block had just been re-edited six times across the JF-858 and JF-868
+    /// sweeps): the video-stopped line is spoken, the session ends as a Tell, the
+    /// AudioPlayer.Stop directive is kept, and no AudioPlayer.Play may leave.
+    /// </summary>
+    internal static void AssertVideoStoppedTell(SkillResponse response)
+    {
+        Assert.Contains(ResponseStrings.Get("VideoStoppedByVoice", "en-US"), GetSpeechText(response), StringComparison.OrdinalIgnoreCase);
+        Assert.True(response.Response.ShouldEndSession == true, "the VideoApp pause/cancel response ends the session");
+        AssertHasAudioPlayerStopDirective(response);
+        AssertNoAudioPlayDirective(response);
+    }
+
+    /// <summary>
     /// The always-NotFound <see cref="AlbumPlayService.FuzzyMissHandler"/> stub
     /// the AlbumPlayService unit suites inject (JF-776: was the same discard
     /// lambda in three files, re-edited once already for the delegate's

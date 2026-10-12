@@ -30,10 +30,12 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 /// a VideoApp-family medium never receives an AudioPlayer.Play directive (the
 /// stale-queue guard), and the music semantics stay byte-identical (a cold
 /// ledger or an audio-owned item keeps the pre-JF-564 behavior).
-/// JF-847 pins: the pause/cannot-pause branch is STATE-AWARE per the 2026-10-09
-/// device evidence (AudioPlayer.Stop stops a VideoApp video iff the context's
-/// playerActivity is PLAYING), so the honest line belongs to the non-playing
-/// states only.
+/// JF-847/JF-868 pins: the pause branch speaks VideoStoppedByVoice for a
+/// VideoApp-family medium on EVERY context playerActivity. The JF-847
+/// PLAYING-only split was superseded by the 2026-10-11 device evidence (corr
+/// ab55dc39, de7f892a): the common VideoApp shape is a bare STOPPED context
+/// during active playback, the AudioPlayer.Stop directive DOES stop the video,
+/// so the former cannot-pause line contradicted the behavior.
 /// </summary>
 [Collection("Plugin")]
 public class VideoAppGapHonestResponseTests : PluginTestBase, IDisposable
@@ -257,78 +259,66 @@ public class VideoAppGapHonestResponseTests : PluginTestBase, IDisposable
         TestHelpers.AssertNoAudioPlayDirective(response);
     }
 
-    // === Pause/Cancel during VideoApp family: honest line, session end, Stop kept ===
+    // === Pause/Cancel during VideoApp family: stopped line, session end, Stop kept ===
+
+    // === JF-847/JF-868: the line is ALWAYS VideoStoppedByVoice for a VideoApp
+    // === medium, on every context playerActivity (2026-10-11 device evidence).
 
     [Theory]
-    [InlineData("AMAZON.PauseIntent")]
-    [InlineData("AMAZON.CancelIntent")]
-    public async Task PauseAndCancel_DuringVideo_SpeakHonestLine(string intentName)
+    [InlineData("AMAZON.PauseIntent", null)]
+    [InlineData("AMAZON.CancelIntent", null)]
+    [InlineData("AMAZON.PauseIntent", "PLAYING")]
+    [InlineData("AMAZON.PauseIntent", "STOPPED")]
+    [InlineData("AMAZON.PauseIntent", "BUFFER_UNDERRUN")]
+    [InlineData("AMAZON.PauseIntent", "IDLE")]
+    [InlineData("AMAZON.CancelIntent", "STOPPED")]
+    public async Task PauseAndCancel_DuringVideo_AnyPlayerActivity_SpeakStoppedLine(string intentName, string? activity)
     {
+        // Supersedes the JF-847 state-aware split: the 2026-10-11 device sessions
+        // (corr ab55dc39, de7f892a) showed the common VideoApp shape is a bare
+        // STOPPED context during active playback, yet the AudioPlayer.Stop
+        // directive DOES stop the video, so the former cannot-pause line
+        // contradicted the behavior. Null activity rides the same branch via the
+        // plain test context. Cancel shares the branch, so it shares the line.
         var movie = Movie("Current Movie");
 
-        string deviceId = "jf564-pause-video";
-        DeviceQueueManager ledger = CreateLedger(deviceId, movie);
-        var handler = CreatePauseHandler(ledger);
-
-        var response = await handler.HandleAsync(
-            CreateIntent(intentName),
-            TestHelpers.CreateTestContext(deviceId),
-            TestHelpers.CreateTestUser(),
-            CreateSession(movie),
-            CancellationToken.None);
-
-        // Honest line, session ended as a Tell (an IntentRequest, so the JF-299
-        // event rules do not apply), and the AudioPlayer.Stop directive kept for any
-        // displaced audio stream.
-        Assert.Contains("can't pause video by voice", TestHelpers.GetSpeechText(response), StringComparison.OrdinalIgnoreCase);
-        Assert.True(response.Response.ShouldEndSession);
-        TestHelpers.AssertHasAudioPlayerStopDirective(response);
-        TestHelpers.AssertNoAudioPlayDirective(response);
-    }
-
-    // === JF-847: the VideoApp pause/stop is state-aware (2026-10-09 device evidence) ===
-
-    [Theory]
-    [InlineData("AMAZON.PauseIntent")]
-    [InlineData("AMAZON.CancelIntent")]
-    public async Task PauseAndCancel_DuringVideo_PlayerActivityPlaying_SpeakStoppedLine(string intentName)
-    {
-        // The 2026-10-09 success shape: activity PLAYING, so the stop directive
-        // reaches the active stream and the line must say the video stopped
-        // (evidence narrative at the handler's JF-847 branch comment). Cancel
-        // shares the branch, so it shares the state-aware line.
-        var movie = Movie("Current Movie");
-
-        string deviceId = "jf847-pause-video-playing";
+        string deviceId = "jf847-pause-video-" + (activity ?? "no-activity");
         DeviceQueueManager ledger = CreateLedger(deviceId, movie);
         var handler = CreatePauseHandler(ledger);
 
         // The VideoApp launch never writes the AudioPlayer token (the JF-563
-        // doctrine), so a PLAYING activity with no token is the live shape.
+        // doctrine), so any activity with no token is a live shape.
+        var context = activity is null
+            ? TestHelpers.CreateTestContext(deviceId)
+            : TestHelpers.CreateContextWithToken(null, deviceId, activity);
         var response = await handler.HandleAsync(
             CreateIntent(intentName),
-            TestHelpers.CreateContextWithToken(null, deviceId, "PLAYING"),
+            context,
             TestHelpers.CreateTestUser(),
             CreateSession(movie),
             CancellationToken.None);
 
-        Assert.Contains("I've stopped the video", TestHelpers.GetSpeechText(response), StringComparison.OrdinalIgnoreCase);
-        Assert.True(response.Response.ShouldEndSession);
-        TestHelpers.AssertHasAudioPlayerStopDirective(response);
-        TestHelpers.AssertNoAudioPlayDirective(response);
+        // The video-stopped line, session ended as a Tell (an IntentRequest, so the
+        // JF-299 event rules do not apply), and the AudioPlayer.Stop directive kept
+        // for any displaced audio stream.
+        TestHelpers.AssertVideoStoppedTell(response);
     }
 
     [Fact]
-    public async Task Pause_DuringVideo_StaleStoppedContext_KeepsHonestLine()
+    public async Task Pause_DuringVideo_StaleTokenStoppedContext_SpeaksStoppedLine()
     {
-        // The failed live case: the context carried playerActivity STOPPED with a
-        // STALE token from a previously-stopped launch while the relaunched video
-        // played outside the pipeline the directive reaches, so the stop was inert
-        // and the honest cannot-pause line stays.
+        // Memory pin for the shape the JF-847 branch was built around (the
+        // 2026-10-09 stale-token STOPPED context, then treated as an inert stop):
+        // JF-868 speaks the stopped line here TOO, per the maintainer's directive
+        // that the VideoApp family always speaks VideoStoppedByVoice. If a future
+        // device session shows the directive genuinely inert against THIS shape,
+        // the evidence supersedes and this pin changes with it; until then the
+        // speak-truth-vs-behavior contradiction (voice said cannot-pause while the
+        // video stopped) stays closed on every VideoApp shape.
         var stale = Movie("Previously Stopped Movie");
         var movie = Movie("Relaunched Movie");
 
-        string deviceId = "jf847-pause-video-stale";
+        string deviceId = "jf868-pause-video-stale-token";
         DeviceQueueManager ledger = CreateLedger(deviceId, movie, stale);
         var handler = CreatePauseHandler(ledger);
 
@@ -339,38 +329,11 @@ public class VideoAppGapHonestResponseTests : PluginTestBase, IDisposable
             CreateSession(movie),
             CancellationToken.None);
 
-        Assert.Contains("can't pause video by voice", TestHelpers.GetSpeechText(response), StringComparison.OrdinalIgnoreCase);
-        Assert.True(response.Response.ShouldEndSession);
-        TestHelpers.AssertHasAudioPlayerStopDirective(response);
+        TestHelpers.AssertVideoStoppedTell(response);
     }
 
     [Fact]
-    public async Task Pause_DuringVideo_BufferUnderrun_KeepsHonestLine()
-    {
-        // BUFFER_UNDERRUN deliberately rides the honest branch: the evidence names
-        // exactly PLAYING, an underrun-state VideoApp stream is unobserved, and the
-        // honest refusal is the safe failure when the stop's reach is unproven
-        // (IsActivelyPlaying's underrun arm is audio-path doctrine, not this one).
-        var movie = Movie("Current Movie");
-
-        string deviceId = "jf847-pause-video-underrun";
-        DeviceQueueManager ledger = CreateLedger(deviceId, movie);
-        var handler = CreatePauseHandler(ledger);
-
-        var response = await handler.HandleAsync(
-            CreateIntent("AMAZON.PauseIntent"),
-            TestHelpers.CreateContextWithToken(null, deviceId, "BUFFER_UNDERRUN"),
-            TestHelpers.CreateTestUser(),
-            CreateSession(movie),
-            CancellationToken.None);
-
-        Assert.Contains("can't pause video by voice", TestHelpers.GetSpeechText(response), StringComparison.OrdinalIgnoreCase);
-        Assert.True(response.Response.ShouldEndSession);
-        TestHelpers.AssertHasAudioPlayerStopDirective(response);
-    }
-
-    [Fact]
-    public async Task Pause_DuringLiveTv_SpeaksHonestLine()
+    public async Task Pause_DuringLiveTv_SpeaksStoppedLine()
     {
         var channel = Channel("CNN");
 
@@ -385,13 +348,11 @@ public class VideoAppGapHonestResponseTests : PluginTestBase, IDisposable
             CreateSession(channel),
             CancellationToken.None);
 
-        Assert.Contains("can't pause video by voice", TestHelpers.GetSpeechText(response), StringComparison.OrdinalIgnoreCase);
-        Assert.True(response.Response.ShouldEndSession);
-        TestHelpers.AssertHasAudioPlayerStopDirective(response);
+        TestHelpers.AssertVideoStoppedTell(response);
     }
 
     [Fact]
-    public async Task Pause_DuringVideoAppAudiobook_SpeaksHonestLine()
+    public async Task Pause_DuringVideoAppAudiobook_SpeaksStoppedLine()
     {
         var chapter = Chapter("Book Chapter 3");
 
@@ -406,9 +367,7 @@ public class VideoAppGapHonestResponseTests : PluginTestBase, IDisposable
             CreateSession(chapter),
             CancellationToken.None);
 
-        Assert.Contains("can't pause video by voice", TestHelpers.GetSpeechText(response), StringComparison.OrdinalIgnoreCase);
-        Assert.True(response.Response.ShouldEndSession);
-        TestHelpers.AssertHasAudioPlayerStopDirective(response);
+        TestHelpers.AssertVideoStoppedTell(response);
     }
 
     [Fact]
@@ -562,8 +521,11 @@ public class VideoAppGapHonestResponseTests : PluginTestBase, IDisposable
     /// movie with NO live evidence (no AudioPlayer token, no session now-playing) is
     /// the idle-device shape, and the ordinary pause line must answer exactly as on a
     /// cold device (the AudioPlayer.Stop directive is identical on both paths; only
-    /// the spoken line differed). RED on the pre-JF-858 tree: the CannotPauseVideoByVoice
-    /// line answered over the idle device.
+    /// the spoken line differed). RED on the pre-JF-858 tree: the VideoApp
+    /// stopped-by-voice line answered over the idle device. (JF-868 review: the
+    /// flip itself is unaffected by the always-stopped-line change: the aged arm
+    /// degrades to Unknown and the AUDIO pause path, which never spoke the VideoApp
+    /// line.)
     /// </summary>
     [Fact]
     public async Task Pause_DaysOldResolvableVideoAppLedger_NoEvidence_AnswersOrdinaryPauseShape_JF858()
@@ -595,10 +557,11 @@ public class VideoAppGapHonestResponseTests : PluginTestBase, IDisposable
     /// classification when the session still holds the launched item, because the
     /// held item is the observable live-evidence leg (the minute-90-of-a-movie
     /// shape; a plain VideoApp movie stream has no server-side stamp refresh, so
-    /// a window-only bound would lose the honest line exactly there).
+    /// a window-only bound would lose the video-stopped line exactly there).
+    /// JF-868: the line is VideoStoppedByVoice on every VideoApp shape.
     /// </summary>
     [Fact]
-    public async Task Pause_DaysOldResolvableVideoAppLedger_SessionHoldsMovie_KeepsHonestLine_JF858()
+    public async Task Pause_DaysOldResolvableVideoAppLedger_SessionHoldsMovie_SpeaksStoppedLine_JF858()
     {
         var movie = Movie("Long Movie Minute Ninety");
 
@@ -614,19 +577,17 @@ public class VideoAppGapHonestResponseTests : PluginTestBase, IDisposable
             CreateSession(movie),
             CancellationToken.None);
 
-        Assert.Contains("can't pause video by voice", TestHelpers.GetSpeechText(response), StringComparison.OrdinalIgnoreCase);
-        Assert.True(response.Response.ShouldEndSession);
-        TestHelpers.AssertHasAudioPlayerStopDirective(response);
+        TestHelpers.AssertVideoStoppedTell(response);
     }
 
     /// <summary>
-    /// JF-858 boundary pin, the WINDOW arm: a FRESH VideoApp entry keeps the honest
-    /// line even with no live evidence (the just-launched video whose Jellyfin
-    /// session was dropped), matching the pre-JF-858 answer for every within-window
-    /// shape.
+    /// JF-858 boundary pin, the WINDOW arm: a FRESH VideoApp entry keeps the
+    /// video-stopped line even with no live evidence (the just-launched video whose
+    /// Jellyfin session was dropped), matching the pre-JF-858 answer for every
+    /// within-window shape.
     /// </summary>
     [Fact]
-    public async Task Pause_FreshVideoAppLedger_NoEvidence_KeepsHonestLine_JF858()
+    public async Task Pause_FreshVideoAppLedger_NoEvidence_SpeaksStoppedLine_JF858()
     {
         var movie = Movie("Fresh Movie");
 
@@ -641,8 +602,7 @@ public class VideoAppGapHonestResponseTests : PluginTestBase, IDisposable
             CreateSession(),
             CancellationToken.None);
 
-        Assert.Contains("can't pause video by voice", TestHelpers.GetSpeechText(response), StringComparison.OrdinalIgnoreCase);
-        TestHelpers.AssertHasAudioPlayerStopDirective(response);
+        TestHelpers.AssertVideoStoppedTell(response);
     }
 
     /// <summary>
