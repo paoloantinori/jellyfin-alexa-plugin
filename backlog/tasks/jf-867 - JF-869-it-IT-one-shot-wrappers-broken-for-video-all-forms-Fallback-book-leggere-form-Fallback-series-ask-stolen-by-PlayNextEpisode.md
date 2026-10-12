@@ -3,9 +3,10 @@ id: JF-867
 title: >-
   JF-869: it-IT one-shot wrappers broken for video (all forms Fallback), book
   leggere-form Fallback, series ask stolen by PlayNextEpisode
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-12 15:19'
+updated_date: '2026-10-12 18:37'
 labels: []
 dependencies: []
 priority: high
@@ -38,3 +39,9 @@ All three are template edits + regen it-IT (+ cross-locale audit for the same fa
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+EXECUTED on branch jf869 (316e5410), merged to main f2c77341, pushed. Verified by scratch-skill A/B (JF-560 precedent, baseline reproduced first, final stable across two identical rebuilds): book wrappers leggere/mettere/riprodurre il libro X route PlayBook (were Fallback); new it-IT SkipForwardBack family fills direction/amount/unit (salta avanti was no-selection); la-serie family exact-anchored (PlayNextEpisode by design: empty episode_position = NextUp series-play, JF-583); bare infinitives mettere/guardare/vedere il film X route PlayVideo. VIDEO one-shot wrappers NOT row-fixable (SearchQuery span wrapper-hostile; full row density fails, MusicRecording swap disqualified by control collapse); architectural fix routed to JF-874 (MovieTitle catalog type); skip-family cross-locale rollout + en-US rewind wrong-way bug routed to JF-875; noun-less leggere residual noted in JF-874 (device-vs-profiler). C#: SeekVocabulary ER-first resolution (also fixes en-US backward-synonym), ItalianNumberWords amounts, GetResolvedValue single id-walk owner, 4 new unit tests. Gates: /simplify (3 agents; 3 applied, FrozenSet declined) + /code-review high (4 applied). Tests 5795/5795 BOTH TFMs; Release -warnaserror clean; validators PASS (289 vs 291 baseline warnings, zero rows lost); mirrors regenerated; NLU dry-run 8/8. Deployment: model via the plugin redeployer (locale-scoped it-IT), never a raw SMAPI PUT (strips catalog wiring); scratch probe skill 65da1ba5 left in place (never enabled, deletion banned) for future A/B.
+<!-- SECTION:FINAL_SUMMARY:END -->
