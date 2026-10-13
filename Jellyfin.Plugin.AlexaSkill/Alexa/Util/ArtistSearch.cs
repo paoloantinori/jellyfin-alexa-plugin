@@ -298,9 +298,10 @@ internal static class ArtistSearch
     /// match is the strongest possible signal: it must auto-play. NOT accent-insensitive
     /// by design: an accented query ("måneskin" vs "Måneskin") is ASR accent drift,
     /// which the phonetic tiers exist to resolve. JF-690 also uses it as the
-    /// resolution predicate for ER canonical names (a catalog value IS the library
-    /// artist name, so only the exact hit counts; fuzzy expansion would re-introduce
-    /// the arbitrary arbitration the gate exists to remove), which is why it lives
+    /// EXACT layer of the ER-canonical resolution (<see cref="ResolveErCandidates"/>;
+    /// JF-884 added the fuzzy layer beside it because Amazon ER can promote a
+    /// phonetic VARIANT string to the canonical name, which the exact predicate
+    /// alone read as zero evidence), which is why it lives
     /// here and not on the handler.
     /// </summary>
     /// <param name="query">The query (or ER canonical name).</param>
@@ -337,6 +338,142 @@ internal static class ArtistSearch
             if (match != null && seen.Add(match.Id))
             {
                 resolved.Add(match);
+            }
+        }
+
+        return resolved;
+    }
+
+    /// <summary>
+    /// JF-884: the fuzzy layer's decision-point bar for
+    /// <see cref="ResolveErCandidates"/>: a variant canonical resolved at this
+    /// score or above can AUTO-PLAY the single library artist it collapses to
+    /// (the caller's string gates stand down on that leg), so the bar is the
+    /// judgment idiom's, not the recall floor's
+    /// (<see cref="FuzzyMatcher.GetEffectiveThreshold"/> composes it with the
+    /// user's threshold). 80, the JF-420 alternative-full-name bar: a real
+    /// variant of the library name scores far above it ("P!nk floyd" vs
+    /// "Pink Floyd" at 90), while a coincidental 60s-band score does not
+    /// resolve at all and the leg falls to the caller's search path.
+    /// </summary>
+    internal const int ErVariantResolutionThreshold = 80;
+
+    /// <summary>
+    /// JF-884: resolve ER candidate names to library artists, DEDUPLICATED BY
+    /// RESOLVED ARTIST ID across the exact and the fuzzy layer. Exact-name
+    /// resolution (<see cref="ResolveExactNameMatches"/>) runs first; a candidate
+    /// with NO exact hit falls to the fuzzy layer over the pool: EVERY pool
+    /// artist whose matcher score (<see cref="FuzzyMatcher.Score"/> on the
+    /// query-side name, <see cref="QueryNameFor"/>) reaches
+    /// <paramref name="threshold"/> resolves. The result preserves candidate
+    /// order and carries at most ONE artist per distinct id.
+    /// <paramref name="threshold"/> is a DECISION-point bar, not the recall
+    /// floor: the gate's caller composes it through
+    /// <see cref="FuzzyMatcher.GetEffectiveThreshold"/> with
+    /// <see cref="ErVariantResolutionThreshold"/>, because a resolve here can
+    /// auto-play (distinct = 1) with every downstream string gate stood down.
+    /// Containment-shaped pairs additionally pass the shared
+    /// <see cref="PassesContainmentBand"/> predicate (the JF-381 doctrine: a
+    /// coincidental short-name-inside-a-long-name containment must not resolve).
+    /// <para>
+    /// Why the fuzzy layer exists: the 2026-10-12 catalog re-mint made Amazon
+    /// ER return a PHONETIC VARIANT string as the canonical VALUE name (live
+    /// 2026-10-13: musician canonical "P!nk floyd" while the library has exactly
+    /// one "Pink Floyd"). The exact-only resolver read that variant as zero
+    /// evidence, the gate closed, and the downstream search/gates fired a yes/no
+    /// prompt for an ask with a single provable target. A variant canonical is
+    /// still artist EVIDENCE: resolved through the same matcher the search
+    /// uses, it either lands on the one library artist (distinct = 1, the
+    /// caller auto-plays) or joins the other candidates' resolves in the id
+    /// dedupe (distinct >= 2, the prompt stays honest). The layer deliberately
+    /// collects EVERY threshold-passing artist rather than a best pick: a
+    /// variant that scores against two library artists IS an ambiguity, and
+    /// collapsing it to a best pick could auto-play the wrong artist (the
+    /// containment-exempt short rival, "P!nk", scores the same 90 as the
+    /// full-name match for "P!nk floyd"). No Double Metaphone collision
+    /// requirement: the punctuation-bearing variant and the library name
+    /// encode to DIFFERENT codes ("P!nk floyd" -> NKFL vs "Pink Floyd" ->
+    /// PNKF), so a code-collision bar would reject exactly the shape this
+    /// layer exists to resolve.
+    /// </para>
+    /// </summary>
+    /// <param name="names">The candidate names (ER canonical values, rank order).</param>
+    /// <param name="pool">The user-scoped artist pool (a pinned index view).</param>
+    /// <param name="index">The pinned index view supplying each artist's query-side name (the romaji key for a kana-named artist); null degrades to the raw names. No phonetic codes are consulted: the variant shape this layer exists for encodes to DIFFERENT Double Metaphone codes than the library name.</param>
+    /// <param name="threshold">The decision-point acceptance bar for the fuzzy layer (the caller passes FuzzyMatcher.GetEffectiveThreshold(user, ErVariantResolutionThreshold)).</param>
+    /// <returns>The distinct resolved artists in candidate order; empty when none resolve.</returns>
+    internal static List<BaseItem> ResolveErCandidates(
+        IReadOnlyList<string> names,
+        IReadOnlyList<BaseItem> pool,
+        IArtistIndex? index,
+        int threshold)
+    {
+        List<BaseItem> resolved = new();
+        HashSet<Guid> seen = new();
+
+        // The per-artist query-side name (the romaji key for a kana-named
+        // artist) depends only on the artist; materialized LAZILY on the first
+        // name that falls to the fuzzy layer (the exact-resolved requests,
+        // the ordinary shape, never pay the pool-sized build).
+        (BaseItem Item, string Name)[]? queryNames = null;
+
+        foreach (string name in names)
+        {
+            BaseItem? exact = pool.FirstOrDefault(candidate => IsExactNameMatch(name, candidate.Name));
+            if (exact != null)
+            {
+                if (seen.Add(exact.Id))
+                {
+                    resolved.Add(exact);
+                }
+
+                continue;
+            }
+
+            queryNames ??= pool.Select(c => (c, QueryNameFor(index, c))).ToArray();
+
+            // One candidate scoring against several pool artists is an ambiguity
+            // Amazon's rank cannot order (it ranked the CANONICAL, not the split),
+            // so the inner order is the matcher's: score descending, then the
+            // length-fraction fairness (a full-name match beats a short
+            // containment-exempt rival that scores the same 90 for "P!nk floyd"),
+            // then the stable pool order. The CANDIDATE order above stays Amazon's
+            // rank (the winner-first contract the confirm leg relies on).
+            List<(BaseItem Item, int Score, int LengthDiff)> fuzzy = new();
+            foreach ((BaseItem candidate, string candidateName) in queryNames)
+            {
+                if (seen.Contains(candidate.Id))
+                {
+                    continue;
+                }
+
+                // JF-381, the shared predicate: a containment-shaped score rides
+                // the matcher's ContainmentScore shortcut, and a coincidental
+                // short-name-inside-a-long-name containment ("cup" in "Porcupine
+                // Tree") must not resolve the variant layer the way the search
+                // chain's tier 1 never lets it. Non-containment pairs keep the
+                // plain threshold (the near-identical "P!nk floyd"/"Pink Floyd"
+                // shape has no containment to gate).
+                bool containment = name.Contains(candidateName, StringComparison.OrdinalIgnoreCase)
+                    || candidateName.Contains(name, StringComparison.OrdinalIgnoreCase);
+                if (containment && !PassesContainmentBand(candidateName, name))
+                {
+                    continue;
+                }
+
+                int score = FuzzyMatcher.Score(name, candidateName);
+                if (score >= threshold)
+                {
+                    fuzzy.Add((candidate, score, Math.Abs(candidateName.Length - name.Length)));
+                }
+            }
+
+            foreach ((BaseItem item, _, _) in fuzzy
+                         .OrderByDescending(f => f.Score)
+                         .ThenBy(f => f.LengthDiff))
+            {
+                seen.Add(item.Id);
+                resolved.Add(item);
             }
         }
 

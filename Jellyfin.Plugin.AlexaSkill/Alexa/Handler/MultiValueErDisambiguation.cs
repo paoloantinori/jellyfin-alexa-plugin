@@ -27,17 +27,22 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// (<see cref="SlotValueHelper.GetCanonicalValue(Slot)"/>) keeps only Amazon's
 /// rank #1 and the exact-name hit auto-plays through the JF-420.1 equality
 /// bypass with no prompt, silently. This gate resolves EVERY candidate against
-/// the user's library by exact-name equality and, when TWO OR MORE distinct
-/// library artists resolve, fires the existing JF-420.2 yes/no disambiguation
+/// the user's library (the exact layer first, then the JF-884 fuzzy layer for
+/// canonical values Amazon promoted from a phonetic variant: see
+/// <see cref="ArtistSearch.ResolveErCandidates"/>), DEDUPED BY RESOLVED ARTIST
+/// ID, and when TWO OR MORE distinct library artists resolve, fires the existing
+/// JF-420.2 yes/no disambiguation
 /// (<see cref="DisambiguationHelper.AskMultipleArtists"/>) with real library ids
 /// (the confirm leg resolves ids via GetItemById, so raw ER names without ids
 /// are dead on "yes"). Candidates that no longer exist in the library (stale
 /// catalog) drop out before the prompt, and an ambiguity that collapses to ONE
 /// library artist returns that artist instead of letting the stale rank-#1
-/// canonical drive a not-found. The gate closes without the in-memory index
+/// canonical drive a not-found. JF-884: the gate runs on the single-value shape
+/// too, so a VARIANT canonical ("P!nk floyd") whose resolves collapse to the one
+/// library artist ("Pink Floyd") plays it instead of prompting. The gate closes
+/// without the in-memory index
 /// (the cold/database path keeps today's rank-#1 behavior, the same accepted
-/// trade-off class as the JF-420 alternative pool and the JF-652 near-tie pool)
-/// and on single-value slots (the ordinary shape, byte-identical to before).
+/// trade-off class as the JF-420 alternative pool and the JF-652 near-tie pool).
 /// JF-715: this class is also the home of the gate-consume composite the three
 /// song+musician sites share (<see cref="TryArbitrateOrSearchAsync"/>), of its
 /// constraint-slot probe (<see cref="IsGenericSongConstraint"/>, which OWNS the
@@ -357,9 +362,13 @@ internal static class MultiValueErDisambiguation
     /// library artist (the other values are stale catalog entries), return that
     /// artist: it is proven library evidence and outranks a search driven by the
     /// stale rank-#1 canonical, which today answers not-found with the survivor
-    /// sitting resolved. All closed-gate legs (single ER value, no ready index,
-    /// zero resolves) return the default struct: the caller proceeds on its
-    /// existing single-value path byte-identically.
+    /// sitting resolved. JF-884: the gate runs on the single-value shape too and
+    /// the resolution dedupes by RESOLVED ARTIST ID across the exact and the
+    /// phonetic layers, so a variant canonical ("P!nk floyd") whose resolves
+    /// collapse to one library artist plays that artist instead of prompting.
+    /// All closed-gate legs (no ER values, no ready index, zero resolves) return
+    /// the default struct (zero resolves carries the pool): the caller proceeds
+    /// on its existing single-value path byte-identically.
     /// </summary>
     /// <param name="request">The intent request carrying the slot's entity resolution.</param>
     /// <param name="user">The plugin user (library scope resolution).</param>
@@ -399,7 +408,7 @@ internal static class MultiValueErDisambiguation
         }
 
         IReadOnlyList<string> candidates = SlotValueHelper.GetCanonicalValues(request, IntentNames.Slots.Musician);
-        if (candidates.Count <= 1)
+        if (candidates.Count == 0)
         {
             return default;
         }
@@ -415,12 +424,33 @@ internal static class MultiValueErDisambiguation
 
         Guid[]? topParentIds = LibraryFilter.ResolveForUser(user, libraryManager, logger);
         IReadOnlyList<BaseItem> pool = pinned.GetArtists(topParentIds);
-        List<BaseItem> resolved = ArtistSearch.ResolveExactNameMatches(candidates, pool);
+
+        // JF-884: the resolution is ID-based across the exact AND the fuzzy
+        // layer, and the gate runs on the single-value shape too (a variant
+        // canonical resolving to the one library artist auto-plays it; the
+        // full contract lives on ArtistSearch.ResolveErCandidates). The bar is
+        // the decision-point idiom, not the recall floor: a resolve here can
+        // auto-play with every downstream string gate stood down.
+        List<BaseItem> resolved = ArtistSearch.ResolveErCandidates(
+            candidates, pool, pinned,
+            FuzzyMatcher.GetEffectiveThreshold(user, ArtistSearch.ErVariantResolutionThreshold));
         if (resolved.Count == 1)
         {
-            logger.LogInformation(
-                "MultiValueEr: {Count} ER values on the musician slot collapse to the single library artist '{Artist}'; playing it (JF-690)",
-                candidates.Count, resolved[0].Name);
+            if (candidates.Count > 1)
+            {
+                logger.LogInformation(
+                    "MultiValueEr: {Count} ER values on the musician slot collapse to the single library artist '{Artist}'; playing it (JF-690)",
+                    candidates.Count, resolved[0].Name);
+            }
+            else
+            {
+                // The single-value leg is the ordinary catalog-resolved play;
+                // Information would fire on every such request.
+                logger.LogDebug(
+                    "MultiValueEr: the ER canonical on the musician slot resolves to the single library artist '{Artist}'; playing it (JF-884)",
+                    resolved[0].Name);
+            }
+
             return new ErArtistArbitration(null, resolved[0], pool);
         }
 
@@ -568,13 +598,20 @@ internal static class MultiValueErDisambiguation
     /// leg. <see cref="PinnedIndex"/> is the ONE pinned view the gate and the
     /// search read, returned because PlayArtistSongs' post-search gates consume
     /// it (the song composite pins internally and returns no view, the first
-    /// counterweight that kept these sites off it).
+    /// counterweight that kept these sites off it). <see cref="ErSurvivorAdopted"/>
+    /// is true exactly when the gate ADOPTED the single artist the ER candidates
+    /// resolved to (<see cref="Artists"/> is then that one-element survivor list):
+    /// the caller's JF-377/JF-420 string gates are query-shape heuristics, and a
+    /// canonical the ER resolution collapsed to a single library artist is the
+    /// stronger exactness evidence (the JF-420.1 principle), so the handler
+    /// treats the canonical as exact and skips them.
     /// </summary>
     internal readonly record struct ArtistGateSearchResult(
         SkillResponse? Ask,
         IReadOnlyList<BaseItem> Artists,
         IReadOnlyList<BaseItem>? Pool,
-        IArtistIndex? PinnedIndex);
+        IArtistIndex? PinnedIndex,
+        bool ErSurvivorAdopted = false);
 
     /// <summary>
     /// JF-742: the ARTIST-ONLY sibling of <see cref="TryArbitrateOrSearchAsync"/>,
@@ -625,7 +662,7 @@ internal static class MultiValueErDisambiguation
     /// <param name="logger">The handler's logger.</param>
     /// <param name="locale">The request locale.</param>
     /// <param name="searchMusician">The artist search query (the ER canonical when the slot resolved, the raw value otherwise; the JF-659 contract stays at the caller's slot read).</param>
-    /// <param name="arbitrate">REQUIRED (no default, the fail-open guard the JF-742 code-review F4 finding added): whether the multi-value-ER gate runs at all. The artist sites close it STRUCTURALLY, not through the generic-word probe: FindSong's first turn runs the gate only when the keywords slot is EMPTY (ANY non-empty keywords are in-hand content, a generic word included, a stricter predicate than <see cref="IsGenericSongConstraint"/>'s), and its AwaitingArtist leg only when the musician slot supplied the input (the transcript leg has no slot ER). PlayArtistSongs and QueryArtistLibrary pass true (their only content input IS the musician slot). A future site with in-hand content the ask cannot preserve MUST pass false explicitly; the required parameter makes that decision un-skippable.</param>
+    /// <param name="arbitrate">REQUIRED (no default, the fail-open guard the JF-742 code-review F4 finding added): whether the ER-resolution gate runs at all. JF-884 widened the gate from multi-value-only to the single-value shape too (a VARIANT canonical resolving to one library artist plays it), so "runs" now also means it can ADOPT on single-value slots. The artist sites close it STRUCTURALLY, not through the generic-word probe: FindSong's first turn runs the gate only when the keywords slot is EMPTY (ANY non-empty keywords are in-hand content, a generic word included, a stricter predicate than <see cref="IsGenericSongConstraint"/>'s), and its AwaitingArtist leg only when the musician slot supplied the input (the transcript leg has no slot ER). PlayArtistSongs and QueryArtistLibrary pass true (their only content input IS the musician slot). A future site with in-hand content the ask cannot preserve MUST pass false explicitly; the required parameter makes that decision un-skippable.</param>
     /// <param name="mode">The caller's search-response policy (Fast skips recall tiers; Thorough runs the full chain).</param>
     /// <param name="asrCompoundWordFixEnabled">Whether the DB tier 1 retries ASR compound-word variants (Thorough only).</param>
     /// <param name="parallelDbTiers">Whether the Thorough DB tiers 2-4 run as Task.WhenAll (PlayArtistSongs' Fast/Thorough/Parallel caller; the other sites keep the sequential default).</param>
@@ -673,7 +710,7 @@ internal static class MultiValueErDisambiguation
                 // Information line names the artist without it).
                 logger.LogDebug("MultiValueEr: artist gate collapsed to the survivor '{Name}' (Id={Id})", survivor.Name, survivor.Id);
                 return new ArtistGateSearchResult(
-                    null, new List<BaseItem> { survivor }, arbitration.Pool, pinnedArtistIndex);
+                    null, new List<BaseItem> { survivor }, arbitration.Pool, pinnedArtistIndex, ErSurvivorAdopted: true);
             }
         }
 
