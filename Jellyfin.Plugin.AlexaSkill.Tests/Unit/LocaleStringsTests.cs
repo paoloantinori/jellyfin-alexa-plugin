@@ -46,20 +46,22 @@ public class LocaleStringsTests
     }
 
     /// <summary>
-    /// JF-729: the above-cap multi-artist overflow hint ("plus N more") must
-    /// resolve in every locale (not fall back to the key NAME, which would speak
-    /// the literal "DisambiguateMultipleArtistsMore") and keep the {0} count
-    /// format arg. Per-locale key PRESENCE is guarded by
-    /// scripts/validate_locales.py in CI: this assert cannot see an en-US
-    /// fallback (the en-US value also resolves and carries {0}).
+    /// JF-880: the multi-artist disambiguation lead must resolve in every locale
+    /// (not fall back to the key NAME, which would speak the literal
+    /// "DisambiguateMultipleArtists") and carry BOTH format args: {0} the TOTAL candidate
+    /// count that leads the sentence and {1} the capped name list (the
+    /// FindSongFoundMultiple sibling convention)
+    /// (replacing the JF-729 trailing hint whose More key was removed). The lead
+    /// count is always >= 2 at every call site, so plural forms are safe.
     /// </summary>
     [Theory]
     [MemberData(nameof(AllLocalesData))]
-    public void DisambiguateMultipleArtistsMore_ExistsWithCountArg(string locale)
+    public void DisambiguateMultipleArtists_CarriesListAndTotalCountArgs(string locale)
     {
-        string hint = ResponseStrings.Get("DisambiguateMultipleArtistsMore", locale);
-        Assert.NotEqual("DisambiguateMultipleArtistsMore", hint);
-        Assert.Contains("{0}", hint);
+        string lead = ResponseStrings.Get("DisambiguateMultipleArtists", locale);
+        Assert.NotEqual("DisambiguateMultipleArtists", lead);
+        Assert.Contains("{0}", lead);
+        Assert.Contains("{1}", lead);
     }
 
     [Fact]

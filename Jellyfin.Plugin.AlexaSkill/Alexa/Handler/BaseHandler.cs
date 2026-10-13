@@ -562,24 +562,26 @@ public abstract class BaseHandler
     /// ShouldEndSession=false so bare follow-up commands stay in-skill (the
     /// PauseKeepsSession experiment retesting the JF-299-derived rule; JF-299's
     /// evidence was about play responses during active playback, a different
-    /// contention point), and the open response also carries a minimal
-    /// OutputSpeech plus a Reprompt (JF-488): the JF-482 device matrix saw the
-    /// platform close the silent open session with EXCEEDED_MAX_REPROMPTS ~8s
-    /// after the response, with an error beep. Whether the reprompt prevents
-    /// that timeout is the unverified hypothesis the JF-488 device test decides;
-    /// the device matrix re-ran clean WITH the reprompt on 2026-09-05 (no
-    /// EXCEEDED_MAX_REPROMPTS, no beep, in-skill follow-up, exact-offset
-    /// resume), so the default is now on. Only the PAUSE path may pass
-    /// true: stop and cancel responses always end the session (JF-299 covers
-    /// them, JF-482 does not retest them), and neither play responses nor any
-    /// other session-ending response goes through this builder with the flag
-    /// set. <paramref name="keepSessionOpen"/>=false stays byte-identical to the
-    /// pre-JF-482 pause response: silent, no reprompt, session ended.
+    /// contention point), and the open response carries a minimal OutputSpeech
+    /// with NO Reprompt (JF-872, maintainer call 2026-10-13: the ~8s listen
+    /// window opens on the open session alone, retiring the JF-488
+    /// spoken-reprompt hypothesis). History: the JF-482 device matrix saw the
+    /// platform close the silent open session (NEITHER speech NOR reprompt)
+    /// with EXCEEDED_MAX_REPROMPTS ~8s after the response, with an error beep;
+    /// the 2026-09-05 matrix re-ran clean with speech+reprompt; JF-872 keeps
+    /// the speech and drops only the reprompt, a shape the device round must
+    /// confirm (mic opens silently, "riprendi" in-window works). Only the PAUSE
+    /// path may pass true: stop and cancel responses always end the session
+    /// (JF-299 covers them, JF-482 does not retest them), and neither play
+    /// responses nor any other session-ending response goes through this
+    /// builder with the flag set. <paramref name="keepSessionOpen"/>=false
+    /// stays byte-identical to the pre-JF-482 pause response: silent, no
+    /// reprompt, session ended.
     /// </summary>
     /// <param name="keepSessionOpen">Whether the session stays open (ShouldEndSession=false).
-    /// Audio stops in both modes; the open mode adds minimal speech and a reprompt.</param>
+    /// Audio stops in both modes; the open mode adds minimal speech, no reprompt.</param>
     /// <param name="locale">The request locale, used only for the open-session
-    /// speech and reprompt strings.</param>
+    /// speech string.</param>
     public static SkillResponse BuildPauseResponse(bool keepSessionOpen, string locale)
     {
         var response = ResponseBuilder.AudioPlayerStop();
@@ -587,14 +589,17 @@ public abstract class BaseHandler
         if (keepSessionOpen)
         {
             // An open session carrying neither speech nor reprompt is the shape the
-            // platform timed out on (JF-482 device matrix, test b). The speech is
-            // deliberately minimal so it cannot mask the Stop directive; the
-            // reprompt is the JF-488 hypothesis under device test.
+            // platform timed out on (JF-482 device matrix, test b); the minimal
+            // speech stays. The REPROMPT is now omitted (JF-872, maintainer call
+            // 2026-10-13: "keep it open without the prompt"): shouldEndSession
+            // false alone opens the ~8s listen window, and after silence the
+            // session just closes; the JF-488 spoken reprompt hypothesis is
+            // retired. Device-round check: the mic opens silently and "riprendi"
+            // inside the window works.
             response.Response.OutputSpeech = new PlainTextOutputSpeech
             {
                 Text = ResponseStrings.Get("PauseSessionSpeech", locale)
             };
-            response.Response.Reprompt = new Reprompt(ResponseStrings.Get("PauseSessionReprompt", locale));
         }
 
         return response;

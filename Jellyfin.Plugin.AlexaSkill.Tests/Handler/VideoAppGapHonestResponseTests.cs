@@ -450,7 +450,9 @@ public class VideoAppGapHonestResponseTests : PluginTestBase, IDisposable
 
         Assert.False(response.Response.ShouldEndSession);
         Assert.Equal("Paused.", TestHelpers.GetSpeechText(response));
-        Assert.NotNull(response.Response.Reprompt);
+        // JF-872: the reprompt is gone (maintainer call 2026-10-13); the open
+        // session alone opens the listen window.
+        Assert.Null(response.Response.Reprompt);
         TestHelpers.AssertHasAudioPlayerStopDirective(response);
     }
 

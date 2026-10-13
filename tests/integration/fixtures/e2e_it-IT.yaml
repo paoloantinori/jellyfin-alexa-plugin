@@ -59,7 +59,10 @@ tests:
     expected_response_type: directive
     expected_directive_type: "AudioPlayer.Stop"
     expected_speech_contains: "Pausa"
-    expected_reprompt: true
+    # JF-872 (2026-10-13): the open-session pause carries NO reprompt anymore
+    # (maintainer call; the ~8s listen window opens on shouldEndSession=false
+    # alone). The old JF-488 reprompt pin is retired.
+    expected_reprompt: false
     expected_end_session: false
 
   # --- State change intents ---

@@ -372,12 +372,14 @@ public class PlaybackControlHandlerTests : PluginTestBase
     }
 
     [Fact]
-    public async Task PauseIntentHandler_Pause_FlagOn_SpeaksMinimalPauseWithReprompt()
+    public async Task PauseIntentHandler_Pause_FlagOn_SpeaksMinimalPauseWithoutReprompt()
     {
-        // JF-488: the open-session pause response must carry a reprompt and minimal
-        // speech. Literal values pin the strings: the speech must stay minimal (a
-        // chatty sentence risks masking the Stop directive) and the reprompt is the
-        // JF-488 hypothesis under device test.
+        // JF-872 (maintainer call 2026-10-13): the open-session pause keeps the
+        // minimal speech (a chatty sentence risks masking the Stop directive)
+        // and OMITS the reprompt: shouldEndSession false alone opens the ~8s
+        // listen window, retiring the JF-488 spoken-reprompt hypothesis. The
+        // JF-482 matrix's failing shape was neither speech NOR reprompt; this
+        // keeps the speech.
         _config.PauseKeepsSession = true;
         var handler = new PauseIntentHandler(_sessionManagerMock.Object, _config, _loggerFactory);
 
@@ -390,16 +392,15 @@ public class PlaybackControlHandlerTests : PluginTestBase
         var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
         Assert.Equal("Paused.", speech.Text);
 
-        Assert.NotNull(response.Response.Reprompt);
-        var repromptSpeech = Assert.IsType<PlainTextOutputSpeech>(response.Response.Reprompt.OutputSpeech);
-        Assert.Equal("Tell me whenever you want to resume.", repromptSpeech.Text);
+        Assert.Null(response.Response.Reprompt);
+        Assert.False(response.Response.ShouldEndSession!.Value);
     }
 
     [Fact]
-    public async Task PauseIntentHandler_Pause_FlagOn_LocalizesSpeechAndReprompt()
+    public async Task PauseIntentHandler_Pause_FlagOn_LocalizesSpeech()
     {
-        // The JF-488 speech/reprompt follow the request locale (it-IT is the locale
-        // of the JF-482/JF-488 device tests).
+        // The JF-488 speech follows the request locale (it-IT is the locale
+        // of the JF-482 device tests); the reprompt is gone (JF-872).
         _config.PauseKeepsSession = true;
         var handler = new PauseIntentHandler(_sessionManagerMock.Object, _config, _loggerFactory);
 
@@ -412,8 +413,7 @@ public class PlaybackControlHandlerTests : PluginTestBase
         var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
         Assert.Equal("Pausa.", speech.Text);
 
-        var repromptSpeech = Assert.IsType<PlainTextOutputSpeech>(response.Response.Reprompt.OutputSpeech);
-        Assert.Equal("Dimmi pure quando vuoi riprendere.", repromptSpeech.Text);
+        Assert.Null(response.Response.Reprompt);
     }
 
     [Theory]

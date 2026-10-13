@@ -3,9 +3,10 @@ id: JF-870
 title: >-
   JF-872: pause follow-up session possibly unnecessary (resume works after the
   listen window too) - maintainer call on PauseKeepsSession default
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-12 16:02'
+updated_date: '2026-10-13 05:34'
 labels:
   - 'gate:maintainer-call'
 dependencies: []
@@ -33,3 +34,9 @@ Evidence recorded; the DECISION is Paolo's (gate:maintainer-call): keep PauseKee
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+DECIDED AND IMPLEMENTED 2026-10-13 (maintainer answer in chat: "Puoi tenerlo aperto senza prompt?"): keep the session open WITHOUT the spoken reprompt. BuildPauseResponse's keepSessionOpen arm now sends the minimal pause speech with NO Reprompt object: shouldEndSession=false alone opens the ~8s listen window, and after silence the session just closes. The JF-488 spoken-reprompt hypothesis is retired; the PauseSessionReprompt key removed from all 17 locales. The JF-482 matrix's failing shape was neither speech NOR reprompt; this keeps the speech, so the shape is new to the device: DEVICE CHECK on the next round = the mic opens silently after "Pausa." and "riprendi" inside the window works. Pins flipped: PlaybackControlHandlerTests (two reprompt pins became no-reprompt pins with the session-open assert), VideoAppGapHonestResponseTests JF-482 pin. Suite 5898/5898 both TFMs.
+<!-- SECTION:FINAL_SUMMARY:END -->

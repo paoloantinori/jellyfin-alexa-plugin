@@ -69,8 +69,8 @@ internal static class DisambiguationHelper
     /// <summary>
     /// Build a disambiguation Ask response for the first match.
     /// JF-735 verdict: the STATE list is truncated at
-    /// <see cref="FirstMatchStateCap"/> on purpose (no overflow hint, unlike
-    /// AskMultipleArtists); the defense and the enforced caller census live on
+    /// <see cref="FirstMatchStateCap"/> on purpose (no count in the speech,
+    /// unlike AskMultipleArtists whose lead names the total, JF-880); the defense and the enforced caller census live on
     /// that constant. Do not widen the state or add a hint here without
     /// re-weighing there.
     /// </summary>
@@ -105,8 +105,8 @@ internal static class DisambiguationHelper
     /// <summary>
     /// Build a disambiguation Ask response for the first match, with optional APL carousel.
     /// JF-735 verdict: the STATE list is truncated at
-    /// <see cref="FirstMatchStateCap"/> on purpose (no overflow hint, unlike
-    /// AskMultipleArtists); the defense and the enforced caller census live on
+    /// <see cref="FirstMatchStateCap"/> on purpose (no count in the speech,
+    /// unlike AskMultipleArtists whose lead names the total, JF-880); the defense and the enforced caller census live on
     /// that constant. Do not widen the state or add a hint here without
     /// re-weighing there.
     /// </summary>
@@ -285,7 +285,8 @@ internal static class DisambiguationHelper
     /// <see cref="MultipleArtistsSpeakCap"/>, which caps only SPEECH: that
     /// builder's unbounded caller (the JF-690 ER gate) feeds exact
     /// library-name resolutions where every entry is a real candidate, so rank
-    /// 4+ must stay reachable and hinted (JF-729), while AskFirstMatch's
+    /// 4+ must stay reachable and counted (the JF-880 lead total names how
+    /// many exist), while AskFirstMatch's
     /// multi-candidate callers are the opposite shape and the defense is
     /// structural, not a taste call: every one of them except PlayAlbum's
     /// direct-search leg reaches the ask only through
@@ -353,26 +354,13 @@ internal static class DisambiguationHelper
     /// list is unbounded). The spoken list is capped at
     /// <see cref="MultipleArtistsSpeakCap"/> (JF-707); the session state keeps
     /// the FULL resolved list so no artist the gate resolved becomes unaskable.
-    /// The first match is the one "yes" plays. Above the cap the speech also
-    /// carries the overflow hint (JF-729): a separate
-    /// DisambiguateMultipleArtistsMore sentence naming how many candidates were
-    /// NOT spoken, so the capped list no longer reads as an exhaustive found-set
-    /// (the reprompt's "say no for the next" tail stays the only cycling
-    /// instruction; the hint only says that more exist and how many). A separate
-    /// appended string rather than a second format arg on the main key keeps the
-    /// at/below-cap speech byte-identical to the pre-JF-729 shape. The hint
-    /// APPENDS after the yes/no question (the task's decided shape): the
-    /// reprompt, not the closing sentence, is the mic-open call to action, and
-    /// the count lands as the final beat before the user answers. Locale
-    /// phrasings are count-invariant by design: the most common overflow is
-    /// exactly 1 unspoken, so no locale's hint inflects for the numeral
-    /// (Arabic uses the count-predicate form, Hindi a verbless form; the
-    /// JF-487 singular/plural key split is not needed). The 2026-10-12 wording
-    /// audit (JF-870) reworded the four verb-less standalone calques of
-    /// "And {0} more." (it, fr, de, nl) into full sentences, still
-    /// count-invariant; the rest were kept as already natural (en is the
-    /// native appositive, es/pt carry a verb, ja is a full sentence, and
-    /// hi/ar keep their documented invariant forms).
+    /// The first match is the one "yes" plays. The TOTAL candidate count leads
+    /// the sentence as the {0} format arg ({1} the capped name list, the
+    /// FindSongFoundMultiple sibling convention; JF-880, maintainer call
+    /// 2026-10-13, replacing the JF-729 trailing overflow hint whose
+    /// DisambiguateMultipleArtistsMore key is now removed): the listener hears
+    /// how many exist before the capped names, and every locale's plural form
+    /// is safe because this prompt always carries >= 2 matches.
     /// </summary>
     /// <param name="matches">The candidates in spoken order (winner first).</param>
     /// <param name="locale">The request locale.</param>
@@ -386,15 +374,10 @@ internal static class DisambiguationHelper
         // Plain name list: the flow is yes/no cycling (yes plays the first, no
         // advances via DisambiguateNext), so no numbering.
         string matchList = string.Join(", ", matches.Take(MultipleArtistsSpeakCap).Select(m => m.Name));
-        string speech = ResponseStrings.Get("DisambiguateMultipleArtists", locale, matchList);
 
-        // JF-729: above the cap, speak the UNSPOKEN count (what cycling through
-        // "no" can still reach); at or below the cap the hint is absent.
-        int unspoken = matches.Count - MultipleArtistsSpeakCap;
-        if (unspoken > 0)
-        {
-            speech += " " + ResponseStrings.Get("DisambiguateMultipleArtistsMore", locale, unspoken);
-        }
+        // JF-880: the total count leads; format-arg order {0}=count/{1}=list
+        // matches the FindSongFoundMultiple sibling convention.
+        string speech = ResponseStrings.Get("DisambiguateMultipleArtists", locale, matches.Count, matchList);
 
         var response = ResponseBuilder.Ask(
             speech,
