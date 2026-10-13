@@ -204,6 +204,43 @@ internal static class MultiValueErDisambiguation
     }
 
     /// <summary>
+    /// JF-876: true when the RAW slot value of a NON-music media slot (the
+    /// movie slot today) carries a LEADING song-carrier phrase ("il brano ",
+    /// "la canzone ", "the song ", ...), with the carrier-stripped title in
+    /// <paramref name="songQuery"/>. The ONE table is
+    /// <see cref="StripSongCarrierPhrase"/>, the same carrier vocabulary
+    /// PlaySong strips from its own slot, so the slots cannot disagree on what
+    /// counts as a song ask. Leading-only, like the strip itself: a media
+    /// title that merely CONTAINS a song noun ("Un brano che vale") is not a
+    /// misroute signal. A fill that IS the bare noun, or strips to nothing, is
+    /// not a song ask (the CarrierPhrase empty-cut refusal plus the empty
+    /// guard here). Lives HERE next to the strip it wraps, per the JF-715
+    /// home rationale: the one definition lives with the table, not in a
+    /// handler other sites would reference cross-handler.
+    /// </summary>
+    /// <param name="rawSlotValue">The RAW slot value (pre-ER).</param>
+    /// <param name="songQuery">The carrier-stripped song title when true.</param>
+    /// <returns>True when the value is a song ask misrouted to the slot.</returns>
+    internal static bool TryDetectSongCarrier(string? rawSlotValue, out string songQuery)
+    {
+        songQuery = string.Empty;
+        string trimmed = rawSlotValue?.Trim() ?? string.Empty;
+        if (trimmed.Length == 0)
+        {
+            return false;
+        }
+
+        string stripped = StripSongCarrierPhrase(trimmed);
+        if (stripped.Length == 0 || string.Equals(stripped, trimmed, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        songQuery = stripped;
+        return true;
+    }
+
+    /// <summary>
     /// JF-715: the ONE constraint-slot normalization for the song+musician gate
     /// sites: true when the RAW song slot value normalizes to a generic music
     /// word, via the full pipeline (carrier-phrase strip, katakana

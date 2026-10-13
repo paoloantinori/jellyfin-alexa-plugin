@@ -275,7 +275,8 @@ public class VideoAppCapabilityGateTests : PluginTestBase
             .Returns(new List<BaseItem> { movie });
 
         var handler = new PlayVideoIntentHandler(
-            _fx.SessionManager.Object, _fx.Config, _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.UserDataManager.Object, _fx.LoggerFactory);
+            _fx.SessionManager.Object, _fx.Config, _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.UserDataManager.Object, _fx.LoggerFactory,
+            new PlaySongIntentHandler(_fx.SessionManager.Object, _fx.Config, _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.UserDataManager.Object, _fx.LoggerFactory));
 
         var session = _fx.CreateSession();
         SkillResponse response = await handler.HandleAsync(
@@ -302,7 +303,8 @@ public class VideoAppCapabilityGateTests : PluginTestBase
             .Returns(new List<BaseItem> { movie });
 
         var handler = new PlayVideoIntentHandler(
-            _fx.SessionManager.Object, _fx.Config, _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.UserDataManager.Object, _fx.LoggerFactory);
+            _fx.SessionManager.Object, _fx.Config, _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.UserDataManager.Object, _fx.LoggerFactory,
+            new PlaySongIntentHandler(_fx.SessionManager.Object, _fx.Config, _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.UserDataManager.Object, _fx.LoggerFactory));
 
         var session = _fx.CreateSession();
         SkillResponse response = await handler.HandleAsync(

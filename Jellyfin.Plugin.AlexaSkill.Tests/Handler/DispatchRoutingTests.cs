@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
+using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Apl;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
@@ -12,6 +13,8 @@ using Jellyfin.Plugin.AlexaSkill.Alexa.Handler.Intent;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 using Microsoft.Extensions.DependencyInjection;
+using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Library;
 using Moq;
 using Newtonsoft.Json.Linq;
 using Xunit;
@@ -44,6 +47,14 @@ public class DispatchRoutingTests : PluginTestBase
             nonFallback);
     }
 
+    private static ServiceCollection RunRegistrator()
+    {
+        var services = new ServiceCollection();
+        new Jellyfin.Plugin.AlexaSkill.EntryPoints.Registrator()
+            .RegisterServices(services, Mock.Of<MediaBrowser.Controller.IServerApplicationHost>());
+        return services;
+    }
+
     [Fact]
     public void RealRegistrator_RegistersHandlers_InHarnessOrder()
     {
@@ -52,9 +63,7 @@ public class DispatchRoutingTests : PluginTestBase
         // the harness's order. Without this, a Registrator edit (filter, ordering,
         // service type) would drift production dispatch while the harness stays green,
         // which is exactly the incident class this harness exists to catch.
-        var services = new ServiceCollection();
-        new Jellyfin.Plugin.AlexaSkill.EntryPoints.Registrator()
-            .RegisterServices(services, Mock.Of<MediaBrowser.Controller.IServerApplicationHost>());
+        var services = RunRegistrator();
 
         List<Type> registeredByRegistrator = services
             .Where(d => d.ServiceType == typeof(BaseHandler) && d.ImplementationType != null)
@@ -77,11 +86,77 @@ public class DispatchRoutingTests : PluginTestBase
         // tests construct the cache directly or not at all; DispatchHarness
         // fabricates its own). This pin fails on the deleted or retyped
         // registration (the RealRegistrator mirror shape above).
-        var services = new ServiceCollection();
-        new Jellyfin.Plugin.AlexaSkill.EntryPoints.Registrator()
-            .RegisterServices(services, Mock.Of<MediaBrowser.Controller.IServerApplicationHost>());
+        var services = RunRegistrator();
 
         Assert.Contains(services, d => d.ServiceType == typeof(Jellyfin.Plugin.AlexaSkill.Alexa.Cache.GenreVocabularyCache));
+    }
+
+    [Fact]
+    public void RealRegistrator_RegistersPlaySongTypedSingleton_JF876()
+    {
+        // JF-876's production wiring guard, the JF-645 shape: the song-carrier
+        // delegation target is an OPTIONAL ctor param on PlayVideoIntentHandler,
+        // so a deleted registration silently degrades to the per-request
+        // InvalidOperationException on the misroute shape while the whole suite
+        // stays green (handler tests inject the target explicitly; the harness
+        // fabricates its own). This pin fails on the deleted or retyped
+        // registration.
+        var services = RunRegistrator();
+
+        Assert.Contains(services, d => d.ServiceType == typeof(Jellyfin.Plugin.AlexaSkill.Alexa.Handler.PlaySongIntentHandler));
+    }
+
+    // JF-876 through the full harness path (composition-level, code-review F5):
+    // a misrouted song ask that arrives as PlayMovieIntent with the song
+    // carrier bled into the movie slot fill must dispatch to the PlayVideo
+    // handler and ANSWER as a song play (AudioPlayer, JF-871 cascade intact),
+    // not as a movie launch.
+    [Fact]
+    public async Task SongCarrierMisroute_PlayMovieDispatch_PlaysSongNotMovie()
+    {
+        using var harness = new DispatchHarness();
+        var song = new MediaBrowser.Controller.Entities.Audio.Audio { Name = "Sunny Dancer", Id = Guid.NewGuid() };
+        var movie = new MediaBrowser.Controller.Entities.Movies.Movie { Name = "Sunny Dancer", Id = Guid.NewGuid() };
+
+        var libraryManager = new Mock<MediaBrowser.Controller.Library.ILibraryManager>();
+        libraryManager
+            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns((InternalItemsQuery q) =>
+                string.Equals(q.SearchTerm, "sunny dancer", StringComparison.OrdinalIgnoreCase)
+                    ? (q.IncludeItemTypes.Contains(BaseItemKind.Audio)
+                        ? new List<BaseItem> { song }
+                        : new List<BaseItem> { movie })
+                    : new List<BaseItem>());
+        var userManager = new Mock<MediaBrowser.Controller.Library.IUserManager>();
+        userManager
+            .Setup(um => um.GetUserById(It.IsAny<Guid>()))
+            .Returns(TestHelpers.CreateJellyfinUser());
+        harness.OverrideDependency(libraryManager.Object);
+        harness.OverrideDependency(userManager.Object);
+
+        Entities.User user = harness.EnableExecution();
+
+        var request = new IntentRequest
+        {
+            Intent = new Intent
+            {
+                Name = IntentNames.PlayMovie,
+                Slots = new Dictionary<string, Slot>
+                {
+                    ["movie"] = TestHelpers.ResolvedSlot("il brano sunny dancer", "Sunny Dancer", slotName: "movie")
+                }
+            },
+            Locale = "en-US",
+            RequestId = "jf876-dispatch"
+        };
+        var skillRequest = DispatchHarness.CreateSkillRequest(request, context: DispatchHarness.CreateExecutionContext(user));
+
+        RoutingDecision decision = await harness.DispatchAsync(skillRequest);
+
+        Assert.IsType<PlayVideoIntentHandler>(decision.Handler);
+        Assert.NotNull(decision.Response);
+        Assert.NotEmpty(decision.Response.Response.Directives.OfType<global::Alexa.NET.Response.Directive.AudioPlayerPlayDirective>());
+        Assert.Empty(decision.Response.Response.Directives.OfType<Jellyfin.Plugin.AlexaSkill.Alexa.Directive.VideoAppLaunchDirective>());
     }
 
     [Fact]

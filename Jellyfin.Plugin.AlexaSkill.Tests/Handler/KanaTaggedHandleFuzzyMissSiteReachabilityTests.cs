@@ -178,7 +178,8 @@ public class KanaTaggedHandleFuzzyMissSiteReachabilityTests : PluginTestBase, ID
             .Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem> { suffixed, exact });
         var handler = new PlayVideoIntentHandler(
-            _fx.SessionManager.Object, _fx.Config, _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.UserDataManager.Object, _fx.LoggerFactory);
+            _fx.SessionManager.Object, _fx.Config, _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.UserDataManager.Object, _fx.LoggerFactory,
+            new PlaySongIntentHandler(_fx.SessionManager.Object, _fx.Config, _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.UserDataManager.Object, _fx.LoggerFactory));
 
         SkillResponse response = await handler.HandleAsync(
             IntentWithSlots(IntentNames.PlayVideo, new Dictionary<string, string?> { ["title"] = KanaSongName }),

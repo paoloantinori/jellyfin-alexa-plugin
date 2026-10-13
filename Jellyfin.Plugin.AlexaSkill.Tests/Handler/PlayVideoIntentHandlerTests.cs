@@ -22,6 +22,8 @@ using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
 using Jellyfin.Database.Implementations.Entities;
+using Jellyfin.Data.Enums;
+using Audio = MediaBrowser.Controller.Entities.Audio.Audio;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 
@@ -43,8 +45,9 @@ public class PlayVideoIntentHandlerTests : PluginTestBase
         ILibraryManager libraryManager,
         IUserManager userManager,
         IUserDataManager userDataManager,
-        ILoggerFactory loggerFactory)
-        : PlayVideoIntentHandler(sessionManager, config, libraryManager, userManager, userDataManager, loggerFactory)
+        ILoggerFactory loggerFactory,
+        PlaySongIntentHandler playSongHandler)
+        : PlayVideoIntentHandler(sessionManager, config, libraryManager, userManager, userDataManager, loggerFactory, playSongHandler)
     {
         public ProgressiveSpeechCapture Progressive { get; } = new();
 
@@ -63,8 +66,9 @@ public class PlayVideoIntentHandlerTests : PluginTestBase
         ILibraryManager libraryManager,
         IUserManager userManager,
         IUserDataManager userDataManager,
-        ILoggerFactory loggerFactory)
-        : PlayVideoIntentHandler(sessionManager, config, libraryManager, userManager, userDataManager, loggerFactory)
+        ILoggerFactory loggerFactory,
+        PlaySongIntentHandler playSongHandler)
+        : PlayVideoIntentHandler(sessionManager, config, libraryManager, userManager, userDataManager, loggerFactory, playSongHandler)
     {
         public ProgressiveSpeechCapture Progressive { get; } = new();
 
@@ -78,6 +82,18 @@ public class PlayVideoIntentHandlerTests : PluginTestBase
     private RecordingPlayVideoHandler CreateHandler()
     {
         return new RecordingPlayVideoHandler(
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.UserDataManager.Object,
+            _fx.LoggerFactory,
+            CreateSongHandler());
+    }
+
+    private PlaySongIntentHandler CreateSongHandler()
+    {
+        return new PlaySongIntentHandler(
             _fx.SessionManager.Object,
             _fx.Config,
             _fx.LibraryManager.Object,
@@ -178,6 +194,121 @@ public class PlayVideoIntentHandlerTests : PluginTestBase
         var handler = CreateHandler();
         var response = await handler.HandleAsync(
             CreatePlayMovieRequest(TestHelpers.ResolvedSlot("ratatouille", canonical: null, slotName: "movie")),
+            _fx.CreateContext(),
+            TestHelpers.CreateTestUser(),
+            _fx.CreateSession(), CancellationToken.None);
+
+        response.HasDirective<VideoAppLaunchDirective>();
+    }
+
+    // ---- JF-876: the song-carrier misroute guard ----
+
+    [Fact]
+    public async Task Handle_MovieSlotSongCarrier_DelegatesToSongPath()
+    {
+        // The JF-876 steal shape: a title that is BOTH a song and an exact movie
+        // catalog match ("metti il brano sunny dancer"), where the movie ER pull
+        // selects PlayMovieIntent. The carrier noun in the raw fill must route
+        // the ask to the SONG path (with its JF-871 miss cascade), never to the
+        // movie search, even when the ER canonical names the movie exactly.
+        var song = new Audio { Name = "Sunny Dancer", Id = Guid.NewGuid() };
+        var movie = CreateTestItem("Sunny Dancer");
+        var movieQueries = new List<InternalItemsQuery>();
+        _fx.SetupUserMock();
+        _fx.LibraryManager
+            .Setup(lm => lm.GetItemList(Capture.In(movieQueries)))
+            .Returns((InternalItemsQuery q) => q.SearchTerm == "sunny dancer"
+                ? (q.IncludeItemTypes.Contains(BaseItemKind.Audio)
+                    ? new List<BaseItem> { song }
+                    : new List<BaseItem> { movie })
+                : new List<BaseItem>());
+
+        var handler = CreateHandler();
+        var response = await handler.HandleAsync(
+            CreatePlayMovieRequest(TestHelpers.ResolvedSlot("il brano sunny dancer", "Sunny Dancer", slotName: "movie")),
+            _fx.CreateContext(),
+            TestHelpers.CreateTestUser(),
+            _fx.CreateSession(), CancellationToken.None);
+
+        // The song played through the AudioPlayer path; no video launch happened.
+        var play = Assert.Single(response.Response.Directives.OfType<global::Alexa.NET.Response.Directive.AudioPlayerPlayDirective>());
+        Assert.Contains("/Audio/", play.AudioItem.Stream.Url, StringComparison.Ordinal);
+        Assert.Empty(response.Response.Directives.OfType<VideoAppLaunchDirective>());
+        // No movie-shaped query was ever issued.
+        Assert.DoesNotContain(movieQueries, q => q.IncludeItemTypes.Contains(BaseItemKind.Movie));
+    }
+
+    [Fact]
+    public async Task Handle_SongCarrierWholeSpanTitleEscape_PlaysMovie()
+    {
+        // Code-review F1: a movie whose TITLE begins with a song-carrier phrase
+        // ("The Song of Bernadette") must stay playable: when the raw fill IS
+        // the canonical catalog title verbatim, the leading noun is the title,
+        // not a misroute carrier.
+        var movie = CreateTestItem("The Song of Bernadette");
+        var queries = new List<InternalItemsQuery>();
+        _fx.SetupUserMock();
+        _fx.LibraryManager
+            .Setup(lm => lm.GetItemList(Capture.In(queries)))
+            .Returns((InternalItemsQuery q) => string.Equals(q.SearchTerm, "The Song of Bernadette", StringComparison.OrdinalIgnoreCase)
+                ? new List<BaseItem> { movie }
+                : new List<BaseItem>());
+
+        var handler = CreateHandler();
+        var response = await handler.HandleAsync(
+            CreatePlayMovieRequest(TestHelpers.ResolvedSlot("the song of bernadette", "The Song of Bernadette", slotName: "movie")),
+            _fx.CreateContext(),
+            TestHelpers.CreateTestUser(),
+            _fx.CreateSession(), CancellationToken.None);
+
+        response.HasDirective<VideoAppLaunchDirective>();
+    }
+
+    [Fact]
+    public async Task Handle_SongCarrierDelegation_StripsExactlyOnce()
+    {
+        // Code-review F2: the RAW fill rides the synthesized song slot, so
+        // PlaySong's single-cut strip owns the normalization. A song titled
+        // "Canzone del Sole" behind "il brano canzone del sole" is searched as
+        // "canzone del sole", never double-cut to "del sole".
+        var song = new Audio { Name = "Canzone del Sole", Id = Guid.NewGuid() };
+        var searchTerms = new List<string?>();
+        _fx.SetupUserMock();
+        _fx.LibraryManager
+            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Callback<InternalItemsQuery>(q => searchTerms.Add(q.SearchTerm))
+            .Returns((InternalItemsQuery q) => string.Equals(q.SearchTerm, "canzone del sole", StringComparison.OrdinalIgnoreCase)
+                ? new List<BaseItem> { song }
+                : new List<BaseItem>());
+
+        var handler = CreateHandler();
+        var response = await handler.HandleAsync(
+            CreatePlayMovieRequest(TestHelpers.ResolvedSlot("il brano canzone del sole", canonical: null, slotName: "movie")),
+            _fx.CreateContext(),
+            TestHelpers.CreateTestUser(),
+            _fx.CreateSession(), CancellationToken.None);
+
+        Assert.Contains("canzone del sole", searchTerms);
+        Assert.DoesNotContain("del sole", searchTerms);
+        Assert.Single(response.Response.Directives.OfType<global::Alexa.NET.Response.Directive.AudioPlayerPlayDirective>());
+    }
+
+    [Fact]
+    public async Task Handle_MovieCarrierStillPlaysMovie()
+    {
+        // The movie carrier ("il film X", the JF-509 fill-swallow shape) must
+        // keep playing the movie: the guard is leading song nouns only.
+        var movie = CreateTestItem("Sunny Dancer");
+        _fx.SetupUserMock();
+        _fx.LibraryManager
+            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns((InternalItemsQuery q) => q.SearchTerm == "il film sunny dancer"
+                ? new List<BaseItem> { movie }
+                : new List<BaseItem>());
+
+        var handler = CreateHandler();
+        var response = await handler.HandleAsync(
+            CreatePlayMovieRequest(new Slot { Name = "movie", Value = "il film sunny dancer" }),
             _fx.CreateContext(),
             TestHelpers.CreateTestUser(),
             _fx.CreateSession(), CancellationToken.None);
@@ -383,7 +514,8 @@ public class PlayVideoIntentHandlerTests : PluginTestBase
             _fx.LibraryManager.Object,
             _fx.UserManager.Object,
             _fx.UserDataManager.Object,
-            _fx.LoggerFactory);
+            _fx.LoggerFactory,
+            CreateSongHandler());
 
         var response = await handler.HandleAsync(
             CreatePlayVideoRequest("The Matrix"),

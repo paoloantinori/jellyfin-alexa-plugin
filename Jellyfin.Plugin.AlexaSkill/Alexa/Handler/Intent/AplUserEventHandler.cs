@@ -226,18 +226,7 @@ public class AplUserEventHandler : BaseHandler
         AplUserEventRequest source,
         params (string Slot, string Value)[] slots)
     {
-        return new IntentRequest
-        {
-            RequestId = source.RequestId,
-            Intent = new()
-            {
-                Name = intentName,
-                Slots = slots.ToDictionary(
-                    s => s.Slot,
-                    s => new Slot { Name = s.Slot, Value = s.Value })
-            },
-            Locale = source.Locale
-        };
+        return Util.IntentRequestSynthesis.Synthesize(intentName, source.RequestId, source.Locale, slots);
     }
 
     /// <summary>
@@ -296,25 +285,14 @@ public class AplUserEventHandler : BaseHandler
             // gates and the same play tail as the spoken ordinal. The candidate
             // list is capped at four by construction; a hypothetical longer list
             // degrades to the invalid-pick elicit, never a wrong play. The
-            // target-typed news avoid naming the Intent/Slot types, which this
-            // file's own trailing namespace segment (Handler.Intent) would
-            // shadow.
-            var tapRequest = new IntentRequest
-            {
-                Intent = new()
-                {
-                    Name = IntentNames.FindSongIntent,
-                    Slots = new Dictionary<string, Slot>
-                    {
-                        [IntentNames.Slots.TitleKeywords] = new()
-                        {
-                            Name = IntentNames.Slots.TitleKeywords,
-                            Value = ordinal.ToString(System.Globalization.CultureInfo.InvariantCulture)
-                        }
-                    }
-                },
-                Locale = aplEvent.Locale
-            };
+            // synthesized request rides the tap's RequestId and Locale (the
+            // shared synthesis contract, so any progressive send the pick flow
+            // makes addresses a real request).
+            var tapRequest = Util.IntentRequestSynthesis.Synthesize(
+                IntentNames.FindSongIntent,
+                aplEvent.RequestId,
+                aplEvent.Locale,
+                (IntentNames.Slots.TitleKeywords, ordinal.ToString(System.Globalization.CultureInfo.InvariantCulture)));
 
             Logger.LogDebug("AplUserEvent FindSong tap: ordinal {Ordinal} mapped onto the Disambiguating pick", ordinal);
             return _findSongHandler.HandleAsync(tapRequest, context, user, session, sessionAttributes, cancellationToken);
