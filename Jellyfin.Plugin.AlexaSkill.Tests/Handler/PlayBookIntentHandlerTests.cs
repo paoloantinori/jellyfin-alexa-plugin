@@ -51,9 +51,10 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
         IUserManager userManager,
         IUserDataManager userDataManager,
         ILoggerFactory loggerFactory,
+        PlaySongIntentHandler playSongHandler,
         global::Jellyfin.Plugin.AlexaSkill.Alexa.Playback.DeviceQueueManager queueManager,
         IArtistIndex? artistIndex = null)
-        : PlayBookIntentHandler(sessionManager, config, libraryManager, userManager, userDataManager, loggerFactory, queueManager, artistIndex)
+        : PlayBookIntentHandler(sessionManager, config, libraryManager, userManager, userDataManager, loggerFactory, playSongHandler, queueManager, artistIndex)
     {
         public ProgressiveSpeechCapture Progressive { get; } = new();
 
@@ -70,6 +71,7 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
             _fx.UserManager.Object,
             _fx.UserDataManager.Object,
             _fx.LoggerFactory,
+            _fx.CreateSongHandler(),
             _queueManager,
             artistIndex);
     }
@@ -200,6 +202,135 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
         Assert.NotNull(audioDirective);
         Assert.Equal(PlayBehavior.ReplaceAll, audioDirective.PlayBehavior);
         Assert.True(response.Response.ShouldEndSession);
+    }
+
+    // ---- JF-882: the song-carrier misroute guard (the JF-876 family, book slot) ----
+
+    private static IntentRequest CreateCarrierBookRequest(global::Alexa.NET.Request.Slot bookSlot)
+    {
+        var intent = new Intent { Name = IntentNames.PlayBook };
+        intent.Slots = new Dictionary<string, global::Alexa.NET.Request.Slot> { ["book"] = bookSlot };
+        return new IntentRequest { Intent = intent, Locale = "en-US", RequestId = "test-req" };
+    }
+
+    [Fact]
+    public async Task Handle_BookSlotSongCarrier_BookMissDelegatesToSongPath()
+    {
+        // The JF-876 steal shape on the book slot, at the MISS TAIL: a song
+        // ask ("metti il brano sunny dancer") misrouted to PlayBookIntent,
+        // where the AudiobookTitle catalog's ER pull selected the intent (the
+        // same mechanism as MovieTitle) and the statistical fill swallowed the
+        // carrier noun. The book search runs RAW-FIRST on the unstripped fill
+        // (so a genuine carrier-titled book stays findable, the review-round-2
+        // discipline), and only the confirmed miss delegates the ask to the
+        // SONG path.
+        var song = new Audio { Name = "Sunny Dancer", Id = Guid.NewGuid() };
+        var queries = new List<InternalItemsQuery>();
+        _fx.SetupUserMock();
+        _fx.LibraryManager
+            .Setup(lm => lm.GetItemList(Capture.In(queries)))
+            .Returns((InternalItemsQuery q) => string.Equals(q.SearchTerm, "sunny dancer", StringComparison.OrdinalIgnoreCase)
+                && q.IncludeItemTypes.Contains(BaseItemKind.Audio)
+                ? new List<BaseItem> { song }
+                : new List<BaseItem>());
+
+        var handler = CreateHandler();
+        var response = await handler.HandleAsync(
+            CreateCarrierBookRequest(TestHelpers.ResolvedSlot("il brano sunny dancer", "Sunny Dancer", slotName: "book")),
+            _fx.CreateContext(),
+            _fx.CreateUser(),
+            CreateSession(),
+            CancellationToken.None);
+
+        var play = Assert.Single(response.Response.Directives.OfType<AudioPlayerPlayDirective>());
+        Assert.Contains("/Audio/", play.AudioItem.Stream.Url, StringComparison.Ordinal);
+        // The book search ran FIRST on the RAW fill (the raw-first discipline):
+        // it missed, and the delegation answered as a song play.
+        Assert.Contains(queries, q => q.IncludeItemTypes.Contains(BaseItemKind.AudioBook)
+            && string.Equals(q.SearchTerm, "il brano sunny dancer", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task Handle_BookSlotSongCarrier_CarrierTitledUnsyncedBook_PlaysBook()
+    {
+        // Review round 2, the regression pin: an audiobook GENUINELY titled
+        // with a leading song carrier, absent from the catalog (no canonical;
+        // the JF-874 raw-fill shape), must keep playing through the book
+        // path's own raw search. The preemptive guard shape would have
+        // delegated it to the song path, which has no book tier to recover it.
+        // The staging (the SetupSingleBookPlay shape) answers the raw-fill
+        // AudioBook query regardless of the SearchTerm: the raw search finds
+        // the carrier-titled book and the book path plays it.
+        _fx.SetupUserMock();
+        SetupSingleBookPlay();
+
+        var handler = CreateHandler();
+        var response = await handler.HandleAsync(
+            CreateCarrierBookRequest(new global::Alexa.NET.Request.Slot { Name = "book", Value = "la canzone di natale" }),
+            _fx.CreateContext(),
+            _fx.CreateUser(),
+            CreateSession(),
+            CancellationToken.None);
+
+        Assert.NotEmpty(response.Response.Directives.OfType<AudioPlayerPlayDirective>());
+    }
+
+    [Fact]
+    public async Task Handle_SongCarrierWholeSpanTitleEscape_PlaysBook()
+    {
+        // The whole-span escape (the JF-876 F1 shape): an audiobook whose TITLE
+        // begins with a song-carrier phrase must stay playable when the raw
+        // fill IS the canonical catalog title verbatim.
+        _fx.SetupUserMock();
+        SetupSingleBookPlay();
+
+        var handler = CreateHandler();
+        var response = await handler.HandleAsync(
+            CreateCarrierBookRequest(TestHelpers.ResolvedSlot("the song of bernadette", "The Song of Bernadette", slotName: "book")),
+            _fx.CreateContext(),
+            _fx.CreateUser(),
+            CreateSession(),
+            CancellationToken.None);
+
+        var audioDirective = response.Response.Directives?.FirstOrDefault(d => d is AudioPlayerPlayDirective) as AudioPlayerPlayDirective;
+        Assert.NotNull(audioDirective);
+    }
+
+    [Fact]
+    public async Task Handle_SongCarrierDelegation_AfterBooksFeatureGate_BooksDisabledAnswers()
+    {
+        // The accepted ordering cost of the miss-tail placement (code-review
+        // round 2): the books flag now precedes the tail, so a misrouted song
+        // ask in a books-disabled household answers the disabled Tell instead
+        // of delegating. Pinned so the trade-off is a documented decision, not
+        // an accident.
+        Plugin.Instance!.Configuration.BooksEnabled = false;
+        try
+        {
+            var song = new Audio { Name = "Sunny Dancer", Id = Guid.NewGuid() };
+            _fx.SetupUserMock();
+            _fx.LibraryManager
+                .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+                .Returns((InternalItemsQuery q) => string.Equals(q.SearchTerm, "sunny dancer", StringComparison.OrdinalIgnoreCase)
+                    && q.IncludeItemTypes.Contains(BaseItemKind.Audio)
+                    ? new List<BaseItem> { song }
+                    : new List<BaseItem>());
+
+            var handler = CreateHandler();
+            var response = await handler.HandleAsync(
+                CreateCarrierBookRequest(TestHelpers.ResolvedSlot("il brano sunny dancer", "Sunny Dancer", slotName: "book")),
+                _fx.CreateContext(),
+                _fx.CreateUser(),
+                CreateSession(),
+                CancellationToken.None);
+
+            Assert.Empty(response.Response.Directives.OfType<AudioPlayerPlayDirective>());
+            Assert.True(response.Response.ShouldEndSession);
+        }
+        finally
+        {
+            Plugin.Instance!.Configuration.BooksEnabled = true;
+        }
     }
 
     // ========== JF-807: the book ask's Layer-1 warming gate (the ask-side twin of the JF-806 book-confirm gate) ==========

@@ -34,16 +34,9 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
 {
     private readonly HandlerTestFixture _fx = new HandlerTestFixture();
 
-    private PlaySongIntentHandler CreateSongHandler()
-    {
-        return new PlaySongIntentHandler(
-            _fx.SessionManager.Object,
-            _fx.Config,
-            _fx.LibraryManager.Object,
-            _fx.UserManager.Object,
-            _fx.UserDataManager.Object,
-            _fx.LoggerFactory);
-    }
+    // The fixture's shared builder (JF-882): one construction site over the
+    // class's own configured fixture.
+    private PlaySongIntentHandler CreateSongHandler() => _fx.CreateSongHandler();
 
     private PlayAlbumIntentHandler CreateAlbumHandler(IArtistIndex? artistIndex = null)
     {
@@ -54,6 +47,7 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
             _fx.UserManager.Object,
             _fx.UserDataManager.Object,
             _fx.LoggerFactory,
+            _fx.CreateSongHandler(),
             artistIndex: artistIndex);
     }
 

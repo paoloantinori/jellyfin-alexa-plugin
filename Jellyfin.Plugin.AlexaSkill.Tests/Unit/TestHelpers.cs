@@ -959,7 +959,8 @@ internal static class TestHelpers
             new GoToChapterIntentHandler(
                 sessionManager, config, libraryManager, chapterManager ?? Mock.Of<IChapterManager>(), loggerFactory),
             new PlayEpisodeIntentHandler(
-                sessionManager, config, libraryManager, userManager, userDataManager, tvSeriesManager ?? Mock.Of<ITVSeriesManager>(), loggerFactory));
+                sessionManager, config, libraryManager, userManager, userDataManager, tvSeriesManager ?? Mock.Of<ITVSeriesManager>(), loggerFactory,
+                new PlaySongIntentHandler(sessionManager, config, libraryManager, userManager, userDataManager, loggerFactory)));
 
     /// <summary>
     /// JF-789: backdates a device's last-played freshness stamp to the days-old
@@ -1742,6 +1743,21 @@ internal sealed class HandlerTestFixture
     internal void SetupUserMock()
         => UserManager.Setup(u => u.GetUserById(It.IsAny<Guid>()))
             .Returns(TestHelpers.CreateJellyfinUser());
+
+    /// <summary>
+    /// Builds the PlaySong delegation target the JF-876/JF-882 song-carrier
+    /// guard sites receive as their required ctor dependency, over the
+    /// fixture's own mocks so a delegated ask runs against the same library
+    /// the test staged.
+    /// </summary>
+    internal PlaySongIntentHandler CreateSongHandler()
+        => new(
+            SessionManager.Object,
+            Config,
+            LibraryManager.Object,
+            UserManager.Object,
+            UserDataManager.Object,
+            LoggerFactory);
 
     /// <summary>
     /// Resolves a book FOLDER by id on the fixture's LibraryManager (JF-794): the

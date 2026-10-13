@@ -135,7 +135,9 @@ public class Registrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton<Alexa.Handler.GoToChapterIntentHandler>();
         serviceCollection.AddSingleton<Alexa.Handler.PlayEpisodeIntentHandler>();
         // JF-876: the song-carrier misroute delegation target (PlayVideoIntentHandler
-        // hands a misrouted song ask to it), same typed-singleton rule as above.
+        // hands a misrouted song ask to it; JF-882 extended the guard family to
+        // PlayBook, PlayEpisode, and PlayAlbum, all REQUIRED ctor dependents),
+        // same typed-singleton rule as above.
         serviceCollection.AddSingleton<Alexa.Handler.PlaySongIntentHandler>();
 
         // Request pipeline interceptors (order matters: circuit breaker first for fail-fast,

@@ -264,6 +264,7 @@ public class KanaTaggedFuzzySurfaceReachabilityTests : PluginTestBase, IDisposab
             _fx.UserManager.Object,
             _fx.UserDataManager.Object,
             _fx.LoggerFactory,
+            _fx.CreateSongHandler(),
             _bookQueueManager);
     }
 

@@ -216,6 +216,7 @@ public class MusicPathLaunchRefusalTests : PluginTestBase
             _fx.UserManager.Object,
             _fx.UserDataManager.Object,
             _fx.LoggerFactory,
+            _fx.CreateSongHandler(),
             queueManager);
 
         var intent = new Intent { Name = IntentNames.PlayAlbum };

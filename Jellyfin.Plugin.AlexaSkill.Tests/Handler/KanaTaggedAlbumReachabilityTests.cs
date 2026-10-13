@@ -59,7 +59,8 @@ public class KanaTaggedAlbumReachabilityTests : PluginTestBase, IDisposable
             _fx.LibraryManager.Object,
             _fx.UserManager.Object,
             _fx.UserDataManager.Object,
-            _fx.LoggerFactory);
+            _fx.LoggerFactory,
+            _fx.CreateSongHandler());
 
     private void SetupPlugin()
     {

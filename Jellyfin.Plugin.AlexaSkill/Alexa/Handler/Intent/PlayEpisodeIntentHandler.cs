@@ -37,6 +37,11 @@ public class PlayEpisodeIntentHandler : BaseHandler
     private readonly IUserDataManager _userDataManager;
     private readonly ITVSeriesManager _tvSeriesManager;
 
+    // JF-882: the song-carrier guard's delegation target, REQUIRED (the
+    // JF-876/JF-624 family shape: a dropped DI registration fails at container
+    // construction, not on the first misrouted request).
+    private readonly PlaySongIntentHandler _playSongHandler;
+
     public PlayEpisodeIntentHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
@@ -44,12 +49,14 @@ public class PlayEpisodeIntentHandler : BaseHandler
         IUserManager userManager,
         IUserDataManager userDataManager,
         ITVSeriesManager tvSeriesManager,
-        ILoggerFactory loggerFactory) : base(sessionManager, config, loggerFactory)
+        ILoggerFactory loggerFactory,
+        PlaySongIntentHandler playSongHandler) : base(sessionManager, config, loggerFactory)
     {
         _libraryManager = libraryManager;
         _userManager = userManager;
         _userDataManager = userDataManager;
         _tvSeriesManager = tvSeriesManager;
+        _playSongHandler = playSongHandler;
     }
 
     /// <inheritdoc/>
@@ -172,6 +179,40 @@ public class PlayEpisodeIntentHandler : BaseHandler
         var (series, seriesError) = await TvNextUp.ResolveSeriesForPlaybackAsync(_libraryManager, jellyfinUser!, user, seriesName, locale, cancellationToken).ConfigureAwait(false);
         if (seriesError != null || series is null)
         {
+            // JF-882: the JF-876 song-carrier misroute guard, at the MISS TAIL
+            // (code-review round 2): series_name is the SAME catalog-backed
+            // shape the movie slot is (SeriesName is catalog-wired in every
+            // locale), so the same ER pull can select PlayEpisodeIntent for a
+            // SONG carrier ask ("metti il brano X", X also a series name) on a
+            // future trainer roll, and the statistical fill swallows the
+            // carrier noun (the JF-509 class). Like the book site (and unlike
+            // the movie site, whose PlayVideoIntent twin keeps a preemptive
+            // guard safe), no alternate intent resolves a series and the song
+            // path's JF-871 cascade video tier searches Movie+Episode names
+            // only, so a preemptive delegation would make a genuine
+            // carrier-titled series («La Traccia Perfetta» on a stale catalog)
+            // unresolvable. The raw-first tail fixes both sides: the series
+            // resolution above already served every resolvable series, and
+            // only the confirmed miss delegates. TWO extra policy legs: an ask
+            // with parseable numbers is an episode ask by construction (stand
+            // down; it belongs to the NotFoundEpisode flow below), and the
+            // whole-span escape (canonical-verbatim fill) keeps the honest
+            // series not-found. Accepted cost (the JF-624 tap-delegation
+            // family shape): the misrouted ask pays the series search first,
+            // hears the searching announcement twice, and the video flag
+            // answers before the tail can delegate.
+            if (!hasExplicitNumbers
+                && MultiValueErDisambiguation.IsSongCarrierMisroute(
+                    seriesName,
+                    Util.SlotValueHelper.GetCanonicalValue(intentRequest, "series_name"),
+                    out string detectedSongQuery))
+            {
+                Logger.LogDebug("PlayEpisode: series miss on a song-carrier fill, delegating to PlaySong with '{SongQuery}'", detectedSongQuery);
+                return await _playSongHandler.HandleAsync(
+                    MultiValueErDisambiguation.BuildSongDelegation(intentRequest, seriesName!),
+                    context, user, session, cancellationToken).ConfigureAwait(false);
+            }
+
             return seriesError!;
         }
 

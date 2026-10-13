@@ -34,6 +34,11 @@ public class PlayAlbumIntentHandler : BaseHandler
     private readonly DeviceQueueManager? _queueManager;
     private readonly IArtistIndex? _artistIndex;
 
+    // JF-882: the song-carrier guard's delegation target, REQUIRED (the
+    // JF-876/JF-624 family shape: a dropped DI registration fails at container
+    // construction, not on the first misrouted request).
+    private readonly PlaySongIntentHandler _playSongHandler;
+
     /// <summary>
     /// JF-443: cap on the albums whose track counts are queried on the indefinite
     /// album-by-artist path (one COUNT query each, inside the Alexa response window).
@@ -52,6 +57,7 @@ public class PlayAlbumIntentHandler : BaseHandler
     /// <param name="userManager">Instance of the <see cref="IUserManager"/> interface.</param>
     /// <param name="userDataManager">Instance of the <see cref="IUserDataManager"/> interface.</param>
     /// <param name="loggerFactory">Instance of the <see cref="ILoggerFactory"/> interface.</param>
+    /// <param name="playSongHandler">The song-carrier misroute delegation target (JF-882).</param>
     /// <param name="queueManager">Optional per-device queue manager for crash recovery.</param>
     /// <param name="artistIndex">Optional in-memory artist index for fast search.</param>
     public PlayAlbumIntentHandler(
@@ -61,12 +67,14 @@ public class PlayAlbumIntentHandler : BaseHandler
         IUserManager userManager,
         IUserDataManager userDataManager,
         ILoggerFactory loggerFactory,
+        PlaySongIntentHandler playSongHandler,
         DeviceQueueManager? queueManager = null,
         IArtistIndex? artistIndex = null) : base(sessionManager, config, loggerFactory)
     {
         _libraryManager = libraryManager;
         _userManager = userManager;
         _userDataManager = userDataManager;
+        _playSongHandler = playSongHandler;
         _queueManager = queueManager;
         _artistIndex = artistIndex;
     }
@@ -112,6 +120,53 @@ public class PlayAlbumIntentHandler : BaseHandler
         // all guarantee a non-empty album result downstream, so the fallback is never
         // reached with their values and this capture stays the flag at that site.
         string? canonicalAlbum = Util.SlotValueHelper.GetCanonicalValue(intentRequest, "album");
+
+        // JF-882: the JF-876 song-carrier misroute guard on the album slot, in
+        // the CANONICAL-GATED variant: unlike the movie slot (catalog-backed in
+        // its locales), the album slot is catalog-backed (AlbumName) in it-IT
+        // ONLY, free-text (AMAZON.MusicRecording) in the other 16 locales, and
+        // the runtime signal of the catalog-backed shape is exactly an ER
+        // canonical on the slot. The guard therefore fires ONLY when the
+        // canonical is present: there the same catalog ER pull that stole
+        // "metti il brano X" to PlayMovieIntent (JF-876, X also an album
+        // title) can steal the ask here, and the statistical fill swallows the
+        // carrier noun into the fill (the JF-509 class). With NO canonical the
+        // fill is free text and the carrier may legitimately ride the title
+        // (an album genuinely titled "The Song Is You"; the F6 free-text
+        // rationale), so the guard stands down and the album path's own
+        // raw-first machinery owns the fill. The canonical gate doubles as the
+        // unsynced stand-down, so the preemptive placement is safe here: a
+        // genuine carrier-titled album keeps its path in BOTH catalog states.
+        // On the misroute the delegation lands where the album outcome
+        // survives: the song path's JF-871 miss cascade re-searches the
+        // stripped title as an album (the JF-345 arm), so a title that is ONLY
+        // an album still plays, announced.
+        if (MultiValueErDisambiguation.TryDetectSongCarrier(album, out string detectedSongQuery))
+        {
+            if (canonicalAlbum == null)
+            {
+                Logger.LogDebug("PlayAlbum: song carrier in free-text album fill (no ER canonical), keeping the album path");
+            }
+            else if (Util.SlotValueHelper.IsWholeSpanCanonicalFill(album, canonicalAlbum))
+            {
+                Logger.LogDebug("PlayAlbum: song carrier in fill is the album title itself ('{Album}'), keeping the album path", album);
+            }
+            else
+            {
+                Logger.LogDebug("PlayAlbum: song carrier in ER-resolved album slot fill, delegating to PlaySong with '{SongQuery}'", detectedSongQuery);
+
+                // The musician slot rides along (code-review round 2): a
+                // misrouted "il brano X di Y" arrives with BOTH slots filled,
+                // and the delegated ask must keep the artist scoping the
+                // correctly-routed PlaySong ask would have had. The local is
+                // the article-stripped fill at this point; PlaySong re-strips
+                // idempotently.
+                return await _playSongHandler.HandleAsync(
+                    MultiValueErDisambiguation.BuildSongDelegation(intentRequest, album!, musician),
+                    context, user, session, cancellationToken).ConfigureAwait(false);
+            }
+        }
+
         bool albumKanaOrigin = Util.ArtistSearch.IsKanaOriginQuery(canonicalAlbum, album);
         album = album is null ? null : Util.KatakanaRomanizer.Romanize(album);
         // JF-652: captured on the PRE-romanization value; feeds the JF-471

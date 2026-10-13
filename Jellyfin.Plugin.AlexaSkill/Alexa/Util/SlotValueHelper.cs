@@ -84,6 +84,28 @@ public static class SlotValueHelper
             : null;
 
     /// <summary>
+    /// JF-882: the ONE whole-span-escape predicate of the song-carrier guard
+    /// family (JF-876 code-review F1): true when the slot is ER-resolved AND
+    /// the raw fill IS the canonical title verbatim (case-insensitive), i.e.
+    /// the leading song-carrier noun is part of the TITLE itself («the song of
+    /// bernadette» names the movie «The Song of Bernadette»), not a misroute
+    /// carrier. A true misroute's fill carries the EXTRA carrier noun and
+    /// differs from the canonical («il brano sunny dancer» vs «Sunny Dancer»).
+    /// Pins the null-guard + case-insensitive pairing once for every guard
+    /// site; an unresolved slot (null canonical) never escapes. Both sides are
+    /// TRIMMED before the compare (code-review round 2): detection trims the
+    /// fill, so a whole-span title carrying leading/trailing whitespace (the
+    /// documented whitespace-fill shape) must escape too, not delegate.
+    /// </summary>
+    /// <param name="rawSlotValue">The RAW slot fill (pre-ER).</param>
+    /// <param name="canonicalValue">The canonical the caller read for the same slot.</param>
+    /// <returns>True when the fill IS the canonical title verbatim.</returns>
+    public static bool IsWholeSpanCanonicalFill(string? rawSlotValue, string? canonicalValue)
+        => canonicalValue != null
+           && rawSlotValue != null
+           && string.Equals(rawSlotValue.Trim(), canonicalValue.Trim(), StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
     /// The full resolved entry (id AND canonical name) of the first
     /// ER_SUCCESS_MATCH authority on the slot (JF-869), or null when no
     /// authority matched. The id is the shared cross-locale key space the

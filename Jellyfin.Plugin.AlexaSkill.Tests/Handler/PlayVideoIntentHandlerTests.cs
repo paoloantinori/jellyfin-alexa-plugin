@@ -91,16 +91,9 @@ public class PlayVideoIntentHandlerTests : PluginTestBase
             CreateSongHandler());
     }
 
-    private PlaySongIntentHandler CreateSongHandler()
-    {
-        return new PlaySongIntentHandler(
-            _fx.SessionManager.Object,
-            _fx.Config,
-            _fx.LibraryManager.Object,
-            _fx.UserManager.Object,
-            _fx.UserDataManager.Object,
-            _fx.LoggerFactory);
-    }
+    // The fixture's shared builder (JF-882): one construction site over the
+    // class's own configured fixture.
+    private PlaySongIntentHandler CreateSongHandler() => _fx.CreateSongHandler();
 
     private static IntentRequest CreatePlayVideoRequest(string? title = "The Matrix", string? dialogState = null)
     {
@@ -314,6 +307,138 @@ public class PlayVideoIntentHandlerTests : PluginTestBase
             _fx.CreateSession(), CancellationToken.None);
 
         response.HasDirective<VideoAppLaunchDirective>();
+    }
+
+    // ---- JF-882 (review F6): the free-text title's miss-tail delegation ----
+
+    [Fact]
+    public async Task Handle_FreeTextTitleSongCarrier_VideoMiss_DelegatesToSongPath()
+    {
+        // The F6 residual: a song ask NLU-steered to PlayVideoIntent carries
+        // title='il brano X', runs the video search on the unstripped fill, and
+        // would answer NotFoundVideo. On the confirmed miss the ask must
+        // delegate to the song path instead (the JF-876 contract; the raw fill
+        // rides the song slot, PlaySong strips the carrier once).
+        var song = new Audio { Name = "Sunny Dancer", Id = Guid.NewGuid() };
+        var queries = new List<InternalItemsQuery>();
+        _fx.SetupUserMock();
+        _fx.LibraryManager
+            .Setup(lm => lm.GetItemList(Capture.In(queries)))
+            .Returns((InternalItemsQuery q) => string.Equals(q.SearchTerm, "sunny dancer", StringComparison.OrdinalIgnoreCase)
+                && q.IncludeItemTypes.Contains(BaseItemKind.Audio)
+                ? new List<BaseItem> { song }
+                : new List<BaseItem>());
+
+        var handler = CreateHandler();
+        var response = await handler.HandleAsync(
+            CreatePlayVideoRequest("il brano sunny dancer"),
+            _fx.CreateContext(),
+            TestHelpers.CreateTestUser(),
+            _fx.CreateSession(), CancellationToken.None);
+
+        var play = Assert.Single(response.Response.Directives.OfType<global::Alexa.NET.Response.Directive.AudioPlayerPlayDirective>());
+        Assert.Contains("/Audio/", play.AudioItem.Stream.Url, StringComparison.Ordinal);
+        Assert.Empty(response.Response.Directives.OfType<VideoAppLaunchDirective>());
+    }
+
+    [Fact]
+    public async Task Handle_FreeTextTitleCarrierTitledMovie_RawHit_PlaysMovie()
+    {
+        // The raw-first discipline (the slot has no ER canonical, so the JF-876
+        // whole-span escape is unavailable): a movie genuinely titled with a
+        // leading song carrier is found by the RAW query and plays as a movie;
+        // the miss-tail delegation never runs on a hit.
+        var movie = CreateTestItem("Il Brano di Bernadette");
+        var queries = new List<InternalItemsQuery>();
+        _fx.SetupUserMock();
+        _fx.LibraryManager
+            .Setup(lm => lm.GetItemList(Capture.In(queries)))
+            .Returns((InternalItemsQuery q) => string.Equals(q.SearchTerm, "il brano di bernadette", StringComparison.OrdinalIgnoreCase)
+                ? new List<BaseItem> { movie }
+                : new List<BaseItem>());
+
+        var handler = CreateHandler();
+        var response = await handler.HandleAsync(
+            CreatePlayVideoRequest("il brano di bernadette"),
+            _fx.CreateContext(),
+            TestHelpers.CreateTestUser(),
+            _fx.CreateSession(), CancellationToken.None);
+
+        response.HasDirective<VideoAppLaunchDirective>();
+        Assert.Empty(response.Response.Directives.OfType<global::Alexa.NET.Response.Directive.AudioPlayerPlayDirective>());
+    }
+
+    [Fact]
+    public async Task Handle_FreeTextTitleWithoutCarrier_VideoMiss_KeepsNotFoundVideo()
+    {
+        // The delegation is carrier-gated: an ordinary free-text title that
+        // misses everywhere keeps the honest NotFoundVideo Tell.
+        _fx.SetupUserMock();
+        _fx.LibraryManager
+            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem>());
+
+        var handler = CreateHandler();
+        var response = await handler.HandleAsync(
+            CreatePlayVideoRequest("xyzzyfoo movie"),
+            _fx.CreateContext(),
+            TestHelpers.CreateTestUser(),
+            _fx.CreateSession(), CancellationToken.None);
+
+        Assert.True(response.Response.ShouldEndSession);
+        Assert.Empty(response.Response.Directives.OfType<global::Alexa.NET.Response.Directive.AudioPlayerPlayDirective>());
+        Assert.Contains("xyzzyfoo", TestHelpers.GetSpeechText(response), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Handle_MovieWholeSpanEscapeThatMisses_KeepsNotFoundVideo()
+    {
+        // The miss-tail delegation is the FREE-TEXT branch's alone: a
+        // PlayMovieIntent arrival that survived the entry guard's whole-span
+        // escape (fill IS the canonical title verbatim) is a VERIFIED movie ask,
+        // and its confirmed miss keeps the honest NotFoundVideo Tell instead of
+        // delegating to the song path.
+        _fx.SetupUserMock();
+        _fx.LibraryManager
+            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem>());
+
+        var handler = CreateHandler();
+        var response = await handler.HandleAsync(
+            CreatePlayMovieRequest(TestHelpers.ResolvedSlot("the song of bernadette", "The Song of Bernadette", slotName: "movie")),
+            _fx.CreateContext(),
+            TestHelpers.CreateTestUser(),
+            _fx.CreateSession(), CancellationToken.None);
+
+        Assert.True(response.Response.ShouldEndSession);
+        Assert.Empty(response.Response.Directives.OfType<global::Alexa.NET.Response.Directive.AudioPlayerPlayDirective>());
+        Assert.Contains("bernadette", TestHelpers.GetSpeechText(response), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Handle_SongCarrierWholeSpanTitleEscape_TrimsFill_PlaysMovie()
+    {
+        // Code-review round 2: detection trims the fill, so the escape compare
+        // must trim too; a whole-span title fill with leading/trailing
+        // whitespace (the documented whitespace-fill shape) escapes instead of
+        // delegating to the song path.
+        var movie = CreateTestItem("The Song of Bernadette");
+        _fx.SetupUserMock();
+        _fx.LibraryManager
+            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns((InternalItemsQuery q) => string.Equals(q.SearchTerm?.Trim(), "the song of bernadette", StringComparison.OrdinalIgnoreCase)
+                ? new List<BaseItem> { movie }
+                : new List<BaseItem>());
+
+        var handler = CreateHandler();
+        var response = await handler.HandleAsync(
+            CreatePlayMovieRequest(TestHelpers.ResolvedSlot(" the song of bernadette ", "The Song of Bernadette", slotName: "movie")),
+            _fx.CreateContext(),
+            TestHelpers.CreateTestUser(),
+            _fx.CreateSession(), CancellationToken.None);
+
+        response.HasDirective<VideoAppLaunchDirective>();
+        Assert.Empty(response.Response.Directives.OfType<global::Alexa.NET.Response.Directive.AudioPlayerPlayDirective>());
     }
 
     [Fact]

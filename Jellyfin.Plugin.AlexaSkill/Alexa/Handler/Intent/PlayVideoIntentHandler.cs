@@ -66,6 +66,7 @@ public class PlayVideoIntentHandler : BaseHandler
     public override async Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
         IntentRequest intentRequest = (IntentRequest)request;
+        bool isPlayMovie = string.Equals(intentRequest.Intent.Name, IntentNames.PlayMovie, StringComparison.Ordinal);
 
         // JF-876: the movie catalog's ER pull can select PlayMovieIntent for a
         // SONG carrier ask ("metti il brano X", stable over three scratch
@@ -75,47 +76,25 @@ public class PlayVideoIntentHandler : BaseHandler
         // statistical fill swallows the carrier noun (the JF-509 class), so a
         // movie slot whose raw value carries a leading song-carrier phrase
         // ("il brano ", "la canzone ", ...) is a song ask misrouted here.
-        // Delegate to the PlaySong handler with the carrier-stripped title, so
-        // the full song path owns it: the n-gram/keyword search, and on a miss
-        // the JF-871 cascade (artist, then album, then video, then the honest
-        // not-found). The one-shot request contract mirrors the JF-624 tap
-        // synthesis: the request must look exactly like what the spoken ask
-        // would have delivered (RequestId, Locale, the song slot named and
-        // keyed alike), so the delegated handler's own slot reads, warming
-        // gates, and locale resolution behave identically. The video-disabled
+        // Delegate to the PlaySong handler, so the full song path owns it: the
+        // n-gram/keyword search, and on a miss the JF-871 cascade (artist,
+        // then album, then video, then the honest not-found). The one-shot
+        // request contract (RequestId, Locale, the raw fill on the song slot,
+        // the F1 whole-span escape and the F2 single-cut contract) lives on
+        // the shared guard family helpers since JF-882. The video-disabled
         // gate below is deliberately AFTER this: the ask is a song ask, the
-        // video feature flag must not answer it. One whole-span escape inside:
-        // a fill that IS the canonical movie title verbatim (the title itself
-        // starts with the carrier phrase) stays on the movie path.
+        // video feature flag must not answer it.
         string? rawMovieFill = GetSlotValue(intentRequest, IntentNames.Slots.Movie);
-        if (string.Equals(intentRequest.Intent.Name, IntentNames.PlayMovie, StringComparison.Ordinal)
-            && MultiValueErDisambiguation.TryDetectSongCarrier(rawMovieFill, out string detectedSongQuery))
+        if (isPlayMovie
+            && MultiValueErDisambiguation.IsSongCarrierMisroute(
+                rawMovieFill,
+                Util.SlotValueHelper.GetCanonicalValue(intentRequest, IntentNames.Slots.Movie),
+                out string detectedSongQuery))
         {
-            // The whole-span escape (code-review F1): when the RAW fill IS the
-            // catalog's canonical movie title verbatim, the leading song noun
-            // is part of the TITLE, not a misroute carrier («the song of
-            // bernadette» names the movie «The Song of Bernadette»); the fill
-            // of a true misroute carries the extra carrier noun and differs
-            // from the canonical («il brano sunny dancer» vs «Sunny Dancer»).
-            string? canonicalMovie = Util.SlotValueHelper.GetCanonicalValue(intentRequest, IntentNames.Slots.Movie);
-            if (canonicalMovie != null && string.Equals(rawMovieFill, canonicalMovie, StringComparison.OrdinalIgnoreCase))
-            {
-                Logger.LogDebug("PlayMovie: song carrier in fill is the movie title itself ('{Movie}'), keeping the movie path", rawMovieFill);
-            }
-            else
-            {
-                Logger.LogDebug("PlayMovie: song carrier in movie slot fill, delegating to PlaySong with '{SongQuery}'", detectedSongQuery);
-
-                // The RAW fill rides the synthesized song slot (code-review F2):
-                // PlaySong owns the ONE carrier strip on its own slot, so the
-                // delegated path searches exactly one cut deep like the direct
-                // path (passing the already-stripped title would cut «il brano
-                // canzone del sole» twice, to «del sole»).
-                var songRequest = Util.IntentRequestSynthesis.Synthesize(
-                    IntentNames.PlaySong, intentRequest.RequestId, intentRequest.Locale,
-                    (IntentNames.Slots.Song, rawMovieFill!));
-                return await _playSongHandler.HandleAsync(songRequest, context, user, session, cancellationToken).ConfigureAwait(false);
-            }
+            Logger.LogDebug("PlayMovie: song carrier in movie slot fill, delegating to PlaySong with '{SongQuery}'", detectedSongQuery);
+            return await _playSongHandler.HandleAsync(
+                MultiValueErDisambiguation.BuildSongDelegation(intentRequest, rawMovieFill!),
+                context, user, session, cancellationToken).ConfigureAwait(false);
         }
 
         string locale = GetLocale(request);
@@ -143,7 +122,11 @@ public class PlayVideoIntentHandler : BaseHandler
         // 2026-10-12: 'chiedi a mia collezione di mettere il film ratatouille'
         // arrived with movie='ratatouille' against a seed-only catalog), and a
         // movie added after the last sync must keep playing through that path.
-        // PlayVideoIntent's title stays the raw SearchQuery read (no ER there).
+        // PlayVideoIntent's title stays the raw SearchQuery read (no ER there),
+        // captured ONCE here: it feeds the query below and the JF-882 miss-tail
+        // song-carrier delegation (the free-text slot has no canonical, so no
+        // whole-span escape exists there; the raw-first discipline below is
+        // that slot's own answer).
         // ACCEPTED (code-review F2, the JF-690 artist precedent): the canonical
         // read takes the ER authority's rank-1 value only, so a multi-value
         // match (a partial-word synonym shared by two movies, reachable since
@@ -151,9 +134,10 @@ public class PlayVideoIntentHandler : BaseHandler
         // first pick with no disambiguation; the artist path's
         // MultiValueErDisambiguation wiring is the tracked follow-up shape
         // (JF-702 carries the residual-site ledger).
-        string? titleQuery = string.Equals(intentRequest.Intent.Name, IntentNames.PlayMovie, StringComparison.Ordinal)
-            ? Util.SlotValueHelper.GetCanonicalValue(intentRequest, IntentNames.Slots.Movie) ?? GetSlotValue(intentRequest, IntentNames.Slots.Movie)
-            : GetSlotValue(intentRequest, "title");
+        string? rawTitleFill = isPlayMovie ? null : GetSlotValue(intentRequest, "title");
+        string? titleQuery = isPlayMovie
+            ? Util.SlotValueHelper.GetCanonicalValue(intentRequest, IntentNames.Slots.Movie) ?? rawMovieFill
+            : rawTitleFill;
 
         // JF-509: the AMAZON.SearchQuery title has no catalog to anchor its fill boundary,
         // and the statistical fill drifts between builds: 'voglio guardare il film ada'
@@ -250,6 +234,35 @@ public class PlayVideoIntentHandler : BaseHandler
                 }
                 else
                 {
+                    // JF-882 (review F6): a FREE-TEXT title (PlayVideoIntent
+                    // only; the PlayMovie branch answered this question at the
+                    // entry guard) that reaches the honest not-found while
+                    // carrying a LEADING song-carrier phrase is the misroute
+                    // shape: a song ask NLU-steered here runs the video search
+                    // on the unstripped fill and would answer NotFoundVideo.
+                    // Delegate to the PlaySong handler instead (the n-gram
+                    // search and the JF-871 cascade run on the song path; its
+                    // video arm re-searches the carrier-stripped title, so a
+                    // carrier-leading movie title the raw query missed keeps a
+                    // rescue path). Placement is RAW-FIRST on purpose, the
+                    // JF-509 discipline this slot already follows: every
+                    // genuine-movie avenue (raw query, media-noun-stripped
+                    // retry, fuzzy) runs BEFORE the delegation, because the
+                    // whole-span escape is unavailable on a slot with no ER
+                    // canonical and a movie genuinely titled "The Song of
+                    // Bernadette" must stay findable by its raw title here.
+                    // Accepted cost (the JF-624 tap-delegation family shape):
+                    // the misrouted ask hears the searching announcement twice
+                    // and runs the video chain plus the song chain, each tier
+                    // individually budgeted.
+                    if (MultiValueErDisambiguation.IsSongCarrierMisroute(rawTitleFill, canonicalValue: null, out string missTailSongQuery))
+                    {
+                        Logger.LogDebug("PlayVideo: video miss on a song-carrier title fill, delegating to PlaySong with '{SongQuery}'", missTailSongQuery);
+                        return await _playSongHandler.HandleAsync(
+                            MultiValueErDisambiguation.BuildSongDelegation(intentRequest, rawTitleFill!),
+                            context, user, session, cancellationToken).ConfigureAwait(false);
+                    }
+
                     return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundVideo", locale, titleQuery));
                 }
             }

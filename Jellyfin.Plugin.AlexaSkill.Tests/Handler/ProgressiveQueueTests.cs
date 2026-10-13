@@ -754,7 +754,8 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
             _fx.LibraryManager.Object,
             _fx.UserManager.Object,
             _fx.UserDataManager.Object,
-            _fx.LoggerFactory);
+            _fx.LoggerFactory,
+            _fx.CreateSongHandler());
 
         var session = CreateSession();
         _fx.SetupUserMock();
@@ -817,7 +818,8 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
             _fx.LibraryManager.Object,
             _fx.UserManager.Object,
             _fx.UserDataManager.Object,
-            _fx.LoggerFactory);
+            _fx.LoggerFactory,
+            _fx.CreateSongHandler());
 
         var session = CreateSession();
         _fx.SetupUserMock();
@@ -873,7 +875,8 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
             _fx.LibraryManager.Object,
             _fx.UserManager.Object,
             _fx.UserDataManager.Object,
-            _fx.LoggerFactory);
+            _fx.LoggerFactory,
+            _fx.CreateSongHandler());
 
         var session = CreateSession();
         _fx.SetupUserMock();
@@ -925,7 +928,8 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
             _fx.LibraryManager.Object,
             _fx.UserManager.Object,
             _fx.UserDataManager.Object,
-            _fx.LoggerFactory);
+            _fx.LoggerFactory,
+            _fx.CreateSongHandler());
 
         var session = CreateSession();
         _fx.SetupUserMock();
@@ -970,7 +974,8 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
             _fx.LibraryManager.Object,
             _fx.UserManager.Object,
             _fx.UserDataManager.Object,
-            _fx.LoggerFactory);
+            _fx.LoggerFactory,
+            _fx.CreateSongHandler());
 
         var session = CreateSession();
         _fx.SetupUserMock();
@@ -1454,7 +1459,8 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
             _fx.LibraryManager.Object,
             _fx.UserManager.Object,
             _fx.UserDataManager.Object,
-            _fx.LoggerFactory);
+            _fx.LoggerFactory,
+            _fx.CreateSongHandler());
 
         var session = CreateSession();
         _fx.SetupUserMock();
@@ -1563,7 +1569,8 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
             _fx.LibraryManager.Object,
             _fx.UserManager.Object,
             _fx.UserDataManager.Object,
-            _fx.LoggerFactory);
+            _fx.LoggerFactory,
+            _fx.CreateSongHandler());
 
         var session = CreateSession();
         _fx.SetupUserMock();
@@ -2309,7 +2316,8 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
             _fx.LibraryManager.Object,
             _fx.UserManager.Object,
             _fx.UserDataManager.Object,
-            _fx.LoggerFactory);
+            _fx.LoggerFactory,
+            _fx.CreateSongHandler());
 
         var session = CreateSession();
         _fx.SetupUserMock();
@@ -2379,6 +2387,7 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
             _fx.UserManager.Object,
             _fx.UserDataManager.Object,
             _fx.LoggerFactory,
+            _fx.CreateSongHandler(),
             queueManager);
 
         var session = CreateSession();
@@ -2474,6 +2483,7 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
             _fx.UserManager.Object,
             _fx.UserDataManager.Object,
             _fx.LoggerFactory,
+            _fx.CreateSongHandler(),
             queueManager);
 
         var session = CreateSession();
@@ -2564,7 +2574,8 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
             _fx.LibraryManager.Object,
             _fx.UserManager.Object,
             _fx.UserDataManager.Object,
-            _fx.LoggerFactory);
+            _fx.LoggerFactory,
+            _fx.CreateSongHandler());
 
         var session = CreateSession();
         _fx.SetupUserMock();
@@ -2630,6 +2641,7 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
             _fx.UserManager.Object,
             _fx.UserDataManager.Object,
             _fx.LoggerFactory,
+            _fx.CreateSongHandler(),
             queueManager);
 
         var session = CreateSession();

@@ -64,6 +64,7 @@ public class PlayBookChapterFileNameOrderTests : PluginTestBase, IDisposable
             _fx.UserManager.Object,
             _fx.UserDataManager.Object,
             _fx.LoggerFactory,
+            _fx.CreateSongHandler(),
             _queueManager);
     }
 

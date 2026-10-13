@@ -34,16 +34,9 @@ public class EmptyMusicianSlotTests : PluginTestBase
 {
     private readonly HandlerTestFixture _fx = new HandlerTestFixture(configure: c => c.AsrCompoundWordFixEnabled = false);
 
-    private PlaySongIntentHandler CreateSongHandler()
-    {
-        return new PlaySongIntentHandler(
-            _fx.SessionManager.Object,
-            _fx.Config,
-            _fx.LibraryManager.Object,
-            _fx.UserManager.Object,
-            _fx.UserDataManager.Object,
-            _fx.LoggerFactory);
-    }
+    // The fixture's shared builder (JF-882): one construction site over the
+    // class's own configured fixture.
+    private PlaySongIntentHandler CreateSongHandler() => _fx.CreateSongHandler();
 
     private PlayAlbumIntentHandler CreateAlbumHandler()
     {
@@ -53,7 +46,8 @@ public class EmptyMusicianSlotTests : PluginTestBase
             _fx.LibraryManager.Object,
             _fx.UserManager.Object,
             _fx.UserDataManager.Object,
-            _fx.LoggerFactory);
+            _fx.LoggerFactory,
+            _fx.CreateSongHandler());
     }
 
     private static IntentRequest CreateSongIntentRequest(string song, string? musician)

@@ -205,7 +205,9 @@ internal static class MultiValueErDisambiguation
 
     /// <summary>
     /// JF-876: true when the RAW slot value of a NON-music media slot (the
-    /// movie slot today) carries a LEADING song-carrier phrase ("il brano ",
+    /// movie slot; JF-882 extended the guard family to the book, series_name,
+    /// and ER-resolved album slots, plus the free-text PlayVideo title's
+    /// miss-tail) carries a LEADING song-carrier phrase ("il brano ",
     /// "la canzone ", "the song ", ...), with the carrier-stripped title in
     /// <paramref name="songQuery"/>. The ONE table is
     /// <see cref="StripSongCarrierPhrase"/>, the same carrier vocabulary
@@ -239,6 +241,54 @@ internal static class MultiValueErDisambiguation
         songQuery = stripped;
         return true;
     }
+
+    /// <summary>
+    /// JF-882: the ONE composed question of the song-carrier guard family:
+    /// does the RAW fill of a foreign media slot carry a leading song carrier
+    /// AND fail the whole-span escape? Folds
+    /// <see cref="TryDetectSongCarrier"/> with
+    /// <see cref="Util.SlotValueHelper.IsWholeSpanCanonicalFill"/> so the five
+    /// guard sites cannot disagree on the pairing; each site still owns WHERE
+    /// it asks (entry vs miss tail) and its extra policy legs (PlayAlbum's
+    /// canonical gate, PlayEpisode's number stand-down, the free-text title's
+    /// no-escape shape passing a null canonical).
+    /// </summary>
+    /// <param name="rawSlotValue">The RAW fill of the foreign slot.</param>
+    /// <param name="canonicalValue">The canonical read for the same slot (null on the free-text shapes).</param>
+    /// <param name="songQuery">The carrier-stripped song title when true.</param>
+    /// <returns>True when the fill is a song ask misrouted to the foreign slot.</returns>
+    internal static bool IsSongCarrierMisroute(string? rawSlotValue, string? canonicalValue, out string songQuery)
+        => TryDetectSongCarrier(rawSlotValue, out songQuery)
+           && !Util.SlotValueHelper.IsWholeSpanCanonicalFill(rawSlotValue, canonicalValue);
+
+    /// <summary>
+    /// JF-882: the ONE delegation-request builder of the song-carrier guard
+    /// family (the JF-876 F2 contract, stated once here instead of per site):
+    /// the request a misrouted song ask is handed to the PlaySong handler with
+    /// carries the RAW foreign fill as the song slot, never the
+    /// carrier-stripped title, because PlaySong owns the ONE strip on its own
+    /// slot and the delegated search must run exactly one cut deep like the
+    /// direct path (passing the stripped title would cut «il brano canzone del
+    /// sole» twice, to «del sole»). The synthesized request rides the source's
+    /// RequestId and Locale (the <see cref="Util.IntentRequestSynthesis"/>
+    /// contract). A foreign slot the misrouted ask ALSO filled (PlayAlbum's
+    /// musician, the "il brano X di Y" steal shape) rides along so the
+    /// delegated search keeps the scoping the correctly-routed ask would have
+    /// had (code-review round 2). Each guard site keeps its own firing policy
+    /// and only the mechanical tail lives here.
+    /// </summary>
+    /// <param name="source">The misrouted request (its RequestId and Locale ride the synthesis).</param>
+    /// <param name="rawSlotFill">The RAW fill of the foreign slot.</param>
+    /// <param name="musicianSlotFill">The RAW fill of the request's musician slot, when the foreign intent carries one that is filled.</param>
+    /// <returns>The PlaySong intent request to dispatch.</returns>
+    internal static IntentRequest BuildSongDelegation(IntentRequest source, string rawSlotFill, string? musicianSlotFill = null)
+        => Util.IntentRequestSynthesis.Synthesize(
+            IntentNames.PlaySong,
+            source.RequestId,
+            source.Locale,
+            musicianSlotFill is null
+                ? new[] { (IntentNames.Slots.Song, rawSlotFill) }
+                : new[] { (IntentNames.Slots.Song, rawSlotFill), (IntentNames.Slots.Musician, musicianSlotFill) });
 
     /// <summary>
     /// JF-715: the ONE constraint-slot normalization for the song+musician gate

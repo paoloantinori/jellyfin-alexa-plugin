@@ -34,6 +34,11 @@ public class PlayBookIntentHandler : BaseHandler
     // setups: no gate; the JF-806 YesIntent book-confirm shape).
     private readonly IArtistIndex? _artistIndex;
 
+    // JF-882: the song-carrier guard's delegation target, REQUIRED (the
+    // JF-876/JF-624 family shape: a dropped DI registration fails at container
+    // construction, not on the first misrouted request).
+    private readonly PlaySongIntentHandler _playSongHandler;
+
     public PlayBookIntentHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
@@ -41,12 +46,14 @@ public class PlayBookIntentHandler : BaseHandler
         IUserManager userManager,
         IUserDataManager userDataManager,
         ILoggerFactory loggerFactory,
+        PlaySongIntentHandler playSongHandler,
         DeviceQueueManager queueManager,
         IArtistIndex? artistIndex = null) : base(sessionManager, config, loggerFactory)
     {
         _libraryManager = libraryManager;
         _userManager = userManager;
         _userDataManager = userDataManager;
+        _playSongHandler = playSongHandler;
         _queueManager = queueManager;
         _artistIndex = artistIndex;
     }
@@ -127,6 +134,10 @@ public class PlayBookIntentHandler : BaseHandler
             ? bookSlot.Value
             : null;
 
+        // JF-882: the RAW fill (pre-romanization), captured for the
+        // song-carrier misroute guard at the resolution miss below.
+        string? rawBookFill = book;
+
         if (string.IsNullOrWhiteSpace(book))
         {
             return ResponseBuilder.Ask(
@@ -182,6 +193,39 @@ public class PlayBookIntentHandler : BaseHandler
 
         if (resolution.Item is null && resolution.Matches is null)
         {
+            // JF-882: the JF-876 song-carrier misroute guard, at the MISS TAIL
+            // (code-review round 2): the book slot is the SAME catalog-backed
+            // shape the movie slot is (AudiobookTitle is catalog-synced in
+            // every locale since JF-823), so the same ER pull can select
+            // PlayBookIntent for a SONG carrier ask ("metti il brano X", X
+            // also an audiobook title) on a future trainer roll, and the
+            // statistical fill swallows the carrier noun (the JF-509 class).
+            // Unlike the movie site (whose preemptive JF-876 shape is safe
+            // because a carrier-titled movie stays reachable through
+            // PlayVideoIntent's free-text title), NO other intent plays an
+            // audiobook and the song path's JF-871 cascade has no book tier,
+            // so a preemptive delegation would make a genuine carrier-titled
+            // book («La Canzone di Natale» on a stale catalog) permanently
+            // unplayable. The raw-first tail fixes both sides: the book search
+            // above already played every findable title, and only the
+            // confirmed miss with a leading carrier in the fill delegates to
+            // PlaySong (whole-span escape inside: a canonical-verbatim fill is
+            // a VERIFIED book ask and keeps the honest book not-found).
+            // Accepted cost (the JF-624 tap-delegation family shape): the
+            // misrouted ask pays the book search first, hears the searching
+            // announcement twice, and the disabled-books flag answers before
+            // the tail can delegate.
+            if (MultiValueErDisambiguation.IsSongCarrierMisroute(
+                    rawBookFill,
+                    Util.SlotValueHelper.GetCanonicalValue(intentRequest, "book"),
+                    out string detectedSongQuery))
+            {
+                Logger.LogDebug("PlayBook: book miss on a song-carrier fill, delegating to PlaySong with '{SongQuery}'", detectedSongQuery);
+                return await _playSongHandler.HandleAsync(
+                    MultiValueErDisambiguation.BuildSongDelegation(intentRequest, rawBookFill!),
+                    context, user, session, cancellationToken).ConfigureAwait(false);
+            }
+
             return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundBook", locale, book));
         }
 

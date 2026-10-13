@@ -100,7 +100,9 @@ public class DispatchRoutingTests : PluginTestBase
         // InvalidOperationException on the misroute shape while the whole suite
         // stays green (handler tests inject the target explicitly; the harness
         // fabricates its own). This pin fails on the deleted or retyped
-        // registration.
+        // registration. JF-882 made the same target a REQUIRED ctor dependency
+        // of PlayBook/PlayEpisode/PlayAlbum, so the registration now guards four
+        // dependents at once.
         var services = RunRegistrator();
 
         Assert.Contains(services, d => d.ServiceType == typeof(Jellyfin.Plugin.AlexaSkill.Alexa.Handler.PlaySongIntentHandler));
@@ -157,6 +159,58 @@ public class DispatchRoutingTests : PluginTestBase
         Assert.NotNull(decision.Response);
         Assert.NotEmpty(decision.Response.Response.Directives.OfType<global::Alexa.NET.Response.Directive.AudioPlayerPlayDirective>());
         Assert.Empty(decision.Response.Response.Directives.OfType<Jellyfin.Plugin.AlexaSkill.Alexa.Directive.VideoAppLaunchDirective>());
+    }
+
+    // JF-882 through the full harness path (the JF-876 composition shape, one
+    // representative of the three sibling slots): a misrouted song ask that
+    // arrives as PlayBookIntent with the song carrier bled into the book slot
+    // fill must dispatch to the PlayBook handler and ANSWER as a song play
+    // (AudioPlayer, JF-871 cascade intact), never as a book resolution.
+    [Fact]
+    public async Task SongCarrierMisroute_PlayBookDispatch_PlaysSongNotBook()
+    {
+        using var harness = new DispatchHarness();
+        var song = new MediaBrowser.Controller.Entities.Audio.Audio { Name = "Sunny Dancer", Id = Guid.NewGuid() };
+        var book = new MediaBrowser.Controller.Entities.AudioBook { Name = "Sunny Dancer", Id = Guid.NewGuid() };
+
+        var libraryManager = new Mock<MediaBrowser.Controller.Library.ILibraryManager>();
+        libraryManager
+            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns((InternalItemsQuery q) =>
+                string.Equals(q.SearchTerm, "sunny dancer", StringComparison.OrdinalIgnoreCase)
+                    ? (q.IncludeItemTypes.Contains(BaseItemKind.Audio)
+                        ? new List<BaseItem> { song }
+                        : new List<BaseItem> { book })
+                    : new List<BaseItem>());
+        var userManager = new Mock<MediaBrowser.Controller.Library.IUserManager>();
+        userManager
+            .Setup(um => um.GetUserById(It.IsAny<Guid>()))
+            .Returns(TestHelpers.CreateJellyfinUser());
+        harness.OverrideDependency(libraryManager.Object);
+        harness.OverrideDependency(userManager.Object);
+
+        Entities.User user = harness.EnableExecution();
+
+        var request = new IntentRequest
+        {
+            Intent = new Intent
+            {
+                Name = IntentNames.PlayBook,
+                Slots = new Dictionary<string, Slot>
+                {
+                    ["book"] = TestHelpers.ResolvedSlot("il brano sunny dancer", "Sunny Dancer", slotName: "book")
+                }
+            },
+            Locale = "en-US",
+            RequestId = "jf882-dispatch"
+        };
+        var skillRequest = DispatchHarness.CreateSkillRequest(request, context: DispatchHarness.CreateExecutionContext(user));
+
+        RoutingDecision decision = await harness.DispatchAsync(skillRequest);
+
+        Assert.IsType<PlayBookIntentHandler>(decision.Handler);
+        Assert.NotNull(decision.Response);
+        Assert.NotEmpty(decision.Response.Response.Directives.OfType<global::Alexa.NET.Response.Directive.AudioPlayerPlayDirective>());
     }
 
     [Fact]
