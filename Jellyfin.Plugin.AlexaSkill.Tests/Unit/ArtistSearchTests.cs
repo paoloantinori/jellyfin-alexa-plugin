@@ -1312,7 +1312,7 @@ public class ArtistSearchTests
         Assert.Equal(new[] { "lazy bones", "lazybones", "lazy bones" }, searched);
     }
 
-    // --- IsExactNameMatch / ResolveExactNameMatches (JF-420.1 predicate, JF-690 resolver) ---
+    // --- IsExactNameMatch / ResolveErCandidates (JF-420.1 predicate; the JF-690/JF-884 ER resolver) ---
 
     [Fact]
     public void IsExactNameMatch_TrimmedCaseInsensitive_True()
@@ -1335,65 +1335,89 @@ public class ArtistSearchTests
     }
 
     [Fact]
-    public void ResolveExactNameMatches_ResolvesAllInCandidateOrder()
+    public void ResolveErCandidates_DuplicateCanonicals_SameArtistId_YieldsOneArtist()
     {
-        // The ER rank order is preserved: Amazon's rank #1 first, the entry a
-        // plain "yes" plays in AskMultipleArtists' winner-first contract.
+        // Defense in depth behind GetCanonicalValues' own name de-dup: the id
+        // dedupe must collapse a duplicated candidate (case variants of one
+        // name) AND a variant canonical landing on the same artist whether it
+        // arrives BEFORE or AFTER that artist's exact canonical. Both
+        // cross-layer directions of the JF-884 shape are pinned because they
+        // lean on different guards: variant-then-exact exercises the exact
+        // layer's seen.Add check, exact-then-variant the fuzzy loop's
+        // seen-skip (the fuzzy drain adds unconditionally). Neither direction
+        // may manufacture a two-entry prompt of one artist.
+        var floyd = new MusicArtist { Name = "Pink Floyd", Id = Guid.NewGuid() };
+        var pool = new List<BaseItem> { floyd };
+        int threshold = FuzzyMatcher.GetEffectiveThreshold(null, ArtistSearch.ErVariantResolutionThreshold);
+
+        var byDuplicatedName = ArtistSearch.ResolveErCandidates(new[] { "Pink Floyd", "pink floyd" }, pool, index: null, threshold);
+        var variantThenExact = ArtistSearch.ResolveErCandidates(new[] { "P!nk floyd", "Pink Floyd" }, pool, index: null, threshold);
+        var exactThenVariant = ArtistSearch.ResolveErCandidates(new[] { "Pink Floyd", "P!nk floyd" }, pool, index: null, threshold);
+
+        Assert.Equal(new[] { floyd.Id }, byDuplicatedName.Select(a => a.Id));
+        Assert.Equal(new[] { floyd.Id }, variantThenExact.Select(a => a.Id));
+        Assert.Equal(new[] { floyd.Id }, exactThenVariant.Select(a => a.Id));
+    }
+
+    [Fact]
+    public void ResolveErCandidates_ExactLayer_FollowsCandidateOrder_NotPoolOrder()
+    {
+        // The ER rank order is preserved even when it DIVERGES from pool
+        // order: Amazon's rank #1 must be the first resolved artist, the one
+        // a plain "yes" plays (AskMultipleArtists' winner-first contract).
+        // The gate-level fixtures cannot pin this (their pool and canonical
+        // orders coincide), so the divergence shape lives here.
         var pnk = new MusicArtist { Name = "P!nk", Id = Guid.NewGuid() };
         var floyd = new MusicArtist { Name = "Pink Floyd", Id = Guid.NewGuid() };
         var pool = new List<BaseItem> { floyd, pnk };
 
-        var resolved = ArtistSearch.ResolveExactNameMatches(new[] { "p!nk", " pink floyd " }, pool);
+        var resolved = ArtistSearch.ResolveErCandidates(
+            new[] { "p!nk", " pink floyd " },
+            pool,
+            index: null,
+            FuzzyMatcher.GetEffectiveThreshold(null, ArtistSearch.ErVariantResolutionThreshold));
 
         Assert.Equal(new[] { pnk.Id, floyd.Id }, resolved.Select(a => a.Id));
     }
 
     [Fact]
-    public void ResolveExactNameMatches_UnresolvedNamesDropOut()
+    public void ResolveErCandidates_NoLibraryHit_ReturnsEmpty()
     {
-        // A stale catalog value (artist left the library) must not enter the
-        // prompt: only library-resident candidates survive.
+        // A stale catalog value (artist left the library) must resolve to
+        // NOTHING: no exact hit, and the fuzzy layer stays under the
+        // decision-point bar, so the name contributes no entry. The unit
+        // level negative pin; the surviving containment pin only asserts one
+        // artist stays out, and the gate fixtures pin behavior downstream of
+        // a resolve, never its absence.
         var floyd = new MusicArtist { Name = "Pink Floyd", Id = Guid.NewGuid() };
 
-        var resolved = ArtistSearch.ResolveExactNameMatches(new[] { "P!nk", "Pink Floyd" }, new List<BaseItem> { floyd });
-
-        Assert.Equal(new[] { floyd.Id }, resolved.Select(a => a.Id));
-    }
-
-    [Fact]
-    public void ResolveExactNameMatches_SameNameTwice_YieldsOneArtist()
-    {
-        // Defense in depth behind GetCanonicalValues' own name de-dup: the
-        // resolver also de-dupes by id, so a duplicated candidate can never
-        // manufacture a two-entry prompt of one artist.
-        var pnk = new MusicArtist { Name = "P!nk", Id = Guid.NewGuid() };
-
-        var resolved = ArtistSearch.ResolveExactNameMatches(new[] { "P!nk", "p!nk" }, new List<BaseItem> { pnk });
-
-        Assert.Equal(new[] { pnk.Id }, resolved.Select(a => a.Id));
-    }
-
-    [Fact]
-    public void ResolveExactNameMatches_NoHit_ReturnsEmpty()
-    {
-        var floyd = new MusicArtist { Name = "Pink Floyd", Id = Guid.NewGuid() };
-
-        var resolved = ArtistSearch.ResolveExactNameMatches(new[] { "Nirvana" }, new List<BaseItem> { floyd });
+        var resolved = ArtistSearch.ResolveErCandidates(
+            new[] { "Nirvana" },
+            new List<BaseItem> { floyd },
+            index: null,
+            FuzzyMatcher.GetEffectiveThreshold(null, ArtistSearch.ErVariantResolutionThreshold));
 
         Assert.Empty(resolved);
     }
 
     [Fact]
-    public void ResolveExactNameMatches_BlankNamedPoolEntry_DoesNotThrow()
+    public void ResolveErCandidates_BlankNamedPoolEntry_DoesNotThrow()
     {
         // The resolver walks EVERY published index entry (the JF-455 blank-named
-        // class included), so the predicate must read a null name as "no match",
-        // never throw (code-review finding; the moved IsExactNameMatch's previous
-        // caller only ever saw search-matched, non-null names).
+        // class included): the exact layer leans on IsExactNameMatch's null
+        // guard, and the fuzzy layer must SKIP the blank query-side name
+        // (QueryNameFor floors it to empty, which the JF-381 containment band
+        // then rejects) rather than throw. The variant name walks BOTH layers:
+        // no exact hit, so the pool-sized query-name build materializes with
+        // the blank entry in it.
         var blank = new MusicArtist { Name = null!, Id = Guid.NewGuid() };
         var floyd = new MusicArtist { Name = "Pink Floyd", Id = Guid.NewGuid() };
 
-        var resolved = ArtistSearch.ResolveExactNameMatches(new[] { "pink floyd" }, new List<BaseItem> { blank, floyd });
+        var resolved = ArtistSearch.ResolveErCandidates(
+            new[] { "P!nk floyd" },
+            new List<BaseItem> { blank, floyd },
+            index: null,
+            FuzzyMatcher.GetEffectiveThreshold(null, ArtistSearch.ErVariantResolutionThreshold));
 
         Assert.Equal(new[] { floyd.Id }, resolved.Select(a => a.Id));
     }

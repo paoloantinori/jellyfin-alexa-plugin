@@ -315,36 +315,6 @@ internal static class ArtistSearch
             && string.Equals(query.Trim(), name.Trim(), StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// JF-690: resolve ER candidate names to library artists by exact-name equality
-    /// (<see cref="IsExactNameMatch"/>) over the user-scoped pool. One artist per
-    /// name (first pool hit, deterministic in pool order), de-duplicated by id (a
-    /// deliberate second layer behind the caller's name de-dup: a duplicated
-    /// candidate can never manufacture a two-entry prompt of one artist, whoever
-    /// calls this), and the RESULT preserves the candidates' order: callers feed
-    /// the ER values list, whose order is Amazon's likelihood rank, so the first
-    /// resolved artist is the one a plain "yes" plays (AskMultipleArtists'
-    /// winner-first contract).
-    /// </summary>
-    /// <param name="names">The candidate names (ER canonical values, rank order).</param>
-    /// <param name="pool">The user-scoped artist pool (a pinned index view).</param>
-    /// <returns>The distinct resolved artists in candidate order; empty when none resolve.</returns>
-    internal static List<BaseItem> ResolveExactNameMatches(IReadOnlyList<string> names, IReadOnlyList<BaseItem> pool)
-    {
-        List<BaseItem> resolved = new();
-        HashSet<Guid> seen = new();
-        foreach (string name in names)
-        {
-            BaseItem? match = pool.FirstOrDefault(candidate => IsExactNameMatch(name, candidate.Name));
-            if (match != null && seen.Add(match.Id))
-            {
-                resolved.Add(match);
-            }
-        }
-
-        return resolved;
-    }
-
-    /// <summary>
     /// JF-884: the fuzzy layer's decision-point bar for
     /// <see cref="ResolveErCandidates"/>: a variant canonical resolved at this
     /// score or above can AUTO-PLAY the single library artist it collapses to
@@ -361,8 +331,9 @@ internal static class ArtistSearch
     /// <summary>
     /// JF-884: resolve ER candidate names to library artists, DEDUPLICATED BY
     /// RESOLVED ARTIST ID across the exact and the fuzzy layer. Exact-name
-    /// resolution (<see cref="ResolveExactNameMatches"/>) runs first; a candidate
-    /// with NO exact hit falls to the fuzzy layer over the pool: EVERY pool
+    /// resolution (<see cref="IsExactNameMatch"/> over the pool, inline below)
+    /// runs first; a candidate with NO exact hit falls to the fuzzy layer over
+    /// the pool: EVERY pool
     /// artist whose matcher score (<see cref="FuzzyMatcher.Score"/> on the
     /// query-side name, <see cref="QueryNameFor"/>) reaches
     /// <paramref name="threshold"/> resolves. The result preserves candidate
