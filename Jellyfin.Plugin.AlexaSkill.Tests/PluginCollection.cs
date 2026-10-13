@@ -64,6 +64,30 @@ public abstract class PluginTestBase
         // LATER test classify as a displacement and skip the registration that later
         // test exercises.
         Jellyfin.Plugin.AlexaSkill.Alexa.Playback.PlaybackReportOrdering.Clear();
+        // JF-883: CatalogController's stored-payload cache is process-wide static
+        // state every sync test dirties; without the reset, a marker lookup in a
+        // later test could resolve a stale sibling payload (the seed-name markers
+        // the catalog suites rely on are carried verbatim by every catalog
+        // payload, so the lookup was order-sensitive).
+        ClearCatalogPayloadCache();
+    }
+
+    /// <summary>
+    /// Clears <see cref="global::Jellyfin.Plugin.AlexaSkill.Controller.CatalogController"/>'s
+    /// private static stored-payload cache (it exposes no production
+    /// clear-all API), reached by reflection. Best-effort: a missing or
+    /// reshaped field is skipped here and fails loudly in the catalog
+    /// suites' own reflection lookups instead.
+    /// </summary>
+    private static void ClearCatalogPayloadCache()
+    {
+        var cacheField = typeof(global::Jellyfin.Plugin.AlexaSkill.Controller.CatalogController).GetField(
+            "CatalogCache",
+            BindingFlags.NonPublic | BindingFlags.Static);
+        if (cacheField?.GetValue(null) is System.Collections.IDictionary cache)
+        {
+            cache.Clear();
+        }
     }
 }
 

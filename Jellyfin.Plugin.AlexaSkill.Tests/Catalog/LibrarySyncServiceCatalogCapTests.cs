@@ -13,7 +13,6 @@ using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Catalog;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Controller;
-using Jellyfin.Plugin.AlexaSkill.Lwa;
 using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
@@ -24,21 +23,14 @@ using Xunit;
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Catalog;
 
 /// <summary>
-/// JF-825 + JF-848 cap pins: <see cref="LibrarySyncService.MaxCatalogValues"/>
-/// must bind the FINAL catalog payload (library values + appended seed titles +
-/// the locale's generic word, after the same-name dedup), not just the fetch.
-/// The pre-fix code fetched with Limit=cap but appended the seed values AFTER
-/// the bounded fetch and only LOGGED "Truncated ... to {Limit} items" while the
-/// payload sailed past the cap untouched: SMAPI received the oversized payload
-/// and the log asserted a truncation that never happened. JF-848 reserved the
-/// static tail (seed titles + the JF-823 generic word, the baseline recall
-/// floor) at exact library saturation; JF-879 (the maintainer's "riserva
-/// sempre i seed" decision) generalizes the reservation to ANY over-cap cut:
-/// the tail survives whole and the drop comes out of the library, while a
-/// payload that fits entirely is untouched byte-identical. These pins run the full sync
-/// against the fake SMAPI backend with the
-/// <see cref="LibrarySyncService.MaxCatalogValuesForTest"/> seam set to a small
-/// cap, so both regimes and the warning's honesty (fires exactly when
+/// JF-825 + JF-848/JF-879 cap pins: <see cref="LibrarySyncService.MaxCatalogValues"/>
+/// must bind the FINAL catalog payload (library values + the appended static
+/// tail, after the same-name dedup), not just the fetch; the cut itself is
+/// <see cref="CatalogPayload.TruncateTo"/>'s reserve-on-any-cut partition
+/// (canonical rationale there). These pins run the full sync against the
+/// fake SMAPI backend with the
+/// <see cref="LibrarySyncService.MaxCatalogValuesForTest"/> seam set to a
+/// small cap, so both regimes and the warning's honesty (fires exactly when
 /// something was dropped, naming what) are observable without materializing
 /// fifty thousand items.
 /// </summary>
@@ -127,11 +119,10 @@ public class LibrarySyncServiceCatalogCapTests : PluginTestBase, IDisposable
     /// library block lands exactly AT the cap because the fetch Limit equals
     /// it): the static tail (the seed titles + the locale's generic word) is
     /// reserved FIRST and survives whole, while the library head is cut to
-    /// (cap − staticCount). The pre-JF-848 tail cut dropped EVERY static entry
-    /// in this regime, degrading the bare generic-word and seed one-shots the
-    /// JF-823 live A/B verdict fixed back to NO_SELECTION. The trade-off is
-    /// pinned with it: the library keeps only (cap − staticCount) of its own
-    /// values, and the drop warning names the library tail as what dropped.
+    /// (cap − staticCount). The trade-off is pinned with it: the library
+    /// keeps only (cap − staticCount) of its own values, and the drop
+    /// warning names the library tail as what dropped (policy rationale:
+    /// <see cref="CatalogPayload.TruncateTo"/>).
     /// </summary>
     [Fact]
     public async Task SyncUserLibraryAsync_LibraryFillsCap_ReservesStaticSeedSlots()
@@ -179,7 +170,7 @@ public class LibrarySyncServiceCatalogCapTests : PluginTestBase, IDisposable
         // dropped), and the sample leads with the first dropped book.
         string warning = SingleTruncationWarning();
         int expectedDropped = books.Length - (cap - seedCount);
-        Assert.Contains($"dropped {expectedDropped} lowest-priority entries (0 static seed values, {expectedDropped} library values)", warning, StringComparison.Ordinal);
+        Assert.Contains(ExpectedDropComposition(expectedDropped, 0), warning, StringComparison.Ordinal);
 
         // The dropped sample leads with the first book past the reserved
         // library head; DERIVED from the live seed count so a template seed
@@ -207,11 +198,6 @@ public class LibrarySyncServiceCatalogCapTests : PluginTestBase, IDisposable
         int seedCount = CatalogSeedEnrichment.GetSeedNames(CatalogType.Audiobook).Count;
         string[] books = { "Tiny Cap Book A", "Tiny Cap Book B", "Tiny Cap Book C", "Tiny Cap Book D", "Tiny Cap Book E", "Tiny Cap Book F", "Tiny Cap Book G", "Tiny Cap Book H" };
         _service.MaxCatalogValuesForTest = Cap;
-        // This pin keeps NO library value, so its only in-payload markers are
-        // seed names, which sibling tests' stored payloads also carry: clear
-        // the shared static payload cache so the marker resolves to THIS
-        // test's payload (the other pins dodge this with unique book names).
-        ClearStoredPayloads();
         SetupLibraryWith(BaseItemKind.AudioBook, books);
         var user = TestHelpers.CreateSyncUser();
         var jellyfinUser = TestHelpers.CreateJellyfinUser();
@@ -232,7 +218,7 @@ public class LibrarySyncServiceCatalogCapTests : PluginTestBase, IDisposable
         string warning = SingleTruncationWarning();
         int droppedStatic = seedCount - Cap;
         Assert.Contains(
-            $"dropped {books.Length + droppedStatic} lowest-priority entries ({droppedStatic} static seed values, {books.Length} library values)",
+            ExpectedDropComposition(books.Length + droppedStatic, droppedStatic),
             warning,
             StringComparison.Ordinal);
         Assert.Contains("Tiny Cap Book A", warning, StringComparison.Ordinal);
@@ -270,7 +256,7 @@ public class LibrarySyncServiceCatalogCapTests : PluginTestBase, IDisposable
         Assert.Equal(series.Length, result.SeriesCount);
 
         string warning = SingleTruncationWarning();
-        Assert.Contains($"dropped {series.Length - Cap} lowest-priority entries (0 static seed values, {series.Length - Cap} library values)", warning, StringComparison.Ordinal);
+        Assert.Contains(ExpectedDropComposition(series.Length - Cap, 0), warning, StringComparison.Ordinal);
         Assert.Contains("Sat Series F", warning, StringComparison.Ordinal);
         Assert.Contains(Logs(), l => l.Contains("fetch reached the", StringComparison.Ordinal));
     }
@@ -310,7 +296,7 @@ public class LibrarySyncServiceCatalogCapTests : PluginTestBase, IDisposable
 
         string warning = SingleTruncationWarning();
         int expectedDropped = movies.Length - (cap - seedCount);
-        Assert.Contains($"dropped {expectedDropped} lowest-priority entries (0 static seed values, {expectedDropped} library values)", warning, StringComparison.Ordinal);
+        Assert.Contains(ExpectedDropComposition(expectedDropped, 0), warning, StringComparison.Ordinal);
 
         // Derived from the live seed count (same rationale as the audiobook pin).
         Assert.Contains($"Reserved Movie {cap - seedCount + 1:D2}", warning, StringComparison.Ordinal);
@@ -339,10 +325,6 @@ public class LibrarySyncServiceCatalogCapTests : PluginTestBase, IDisposable
         string[] books = Enumerable.Range(1, 30).Select(i => $"De Book {i:D2}").ToArray();
         const int Cap = 25;
         _service.MaxCatalogValuesForTest = Cap;
-        // The generic word appears only in the es-ES leg's payload (it-IT
-        // rides none), but both legs store payloads: clear so the marker
-        // cannot accidentally match a sibling test's.
-        ClearStoredPayloads();
         SetupLibraryWith(BaseItemKind.AudioBook, books);
         Plugin.Instance!.Configuration.CatalogSyncLocales = "es-ES";
         try
@@ -373,12 +355,15 @@ public class LibrarySyncServiceCatalogCapTests : PluginTestBase, IDisposable
             Assert.Equal(genericWord, names[^1]);
 
             // Both legs truncated; the es-ES leg's warning carries its own
-            // dropped count (30 - (25 - 23) = 28, one more than it-IT's 27).
+            // dropped count (one more than it-IT's, because es-ES reserves
+            // the generic word on top of the seeds), which the full
+            // composition phrase selects on its own.
             var warnings = TruncationWarnings();
             Assert.Equal(2, warnings.Count);
+            int esDropped = books.Length - (Cap - reserved);
             Assert.Contains(
                 warnings,
-                w => w.Contains($"dropped {books.Length - (Cap - reserved)} lowest-priority entries (0 static seed values", StringComparison.Ordinal));
+                w => w.Contains(ExpectedDropComposition(esDropped, 0), StringComparison.Ordinal));
         }
         finally
         {
@@ -387,16 +372,15 @@ public class LibrarySyncServiceCatalogCapTests : PluginTestBase, IDisposable
     }
 
     /// <summary>
-    /// THE JF-879 FLIPPED BAND PIN (the maintainer's "riserva sempre i seed"
-    /// decision, generalizing JF-848's exact-saturation partition): a SMALL
-    /// library whose payload still overflows the cap only because the static
-    /// tail rides along. The old JF-848-era behavior kept every book and cut
-    /// the seed tail (library wins over seeds, the JF-541 below-cap reading);
-    /// now ANY over-cap cut reserves the seed tail FIRST and the library
-    /// takes the loss. When the reserved tail alone exceeds the cap (this
-    /// test's seam shape; production static counts are tens against a 50000
-    /// cap), the library drops whole and the tail's excess drops after it so
-    /// the cap still binds.
+    /// THE JF-879 FLIPPED BAND PIN: a SMALL library whose payload still
+    /// overflows the cap only because the static tail rides along. The
+    /// JF-848-era behavior kept every book and cut the seed tail (library
+    /// wins over seeds, the JF-541 below-cap reading); the reserve-on-any-cut
+    /// policy now makes the library take the loss (rationale:
+    /// <see cref="CatalogPayload.TruncateTo"/>). When the reserved tail alone
+    /// exceeds the cap (this test's seam shape; production static counts are
+    /// tens against a 50000 cap), the library drops whole and the tail's
+    /// excess drops after it so the cap still binds.
     /// </summary>
     [Fact]
     public async Task SyncUserLibraryAsync_OverCapCutReservesSeeds_LibraryTakesTheLoss()
@@ -405,11 +389,6 @@ public class LibrarySyncServiceCatalogCapTests : PluginTestBase, IDisposable
         int seedCount = CatalogSeedEnrichment.GetSeedNames(CatalogType.Audiobook).Count;
         int cap = books.Length + 2;
         _service.MaxCatalogValuesForTest = cap;
-        // This pin keeps NO library value, so its only in-payload markers are
-        // seed names, which sibling tests' stored payloads also carry: clear
-        // the shared static payload cache so the marker resolves to THIS
-        // test's payload.
-        ClearStoredPayloads();
         SetupLibraryWith(BaseItemKind.AudioBook, books);
         var user = TestHelpers.CreateSyncUser();
         var jellyfinUser = TestHelpers.CreateJellyfinUser();
@@ -436,7 +415,7 @@ public class LibrarySyncServiceCatalogCapTests : PluginTestBase, IDisposable
         int droppedStatic = seedCount - cap;
         string warning = SingleTruncationWarning();
         Assert.Contains(
-            $"dropped {books.Length + droppedStatic} lowest-priority entries ({droppedStatic} static seed values, {books.Length} library values)",
+            ExpectedDropComposition(books.Length + droppedStatic, droppedStatic),
             warning,
             StringComparison.Ordinal);
         Assert.Contains("Cap Room Book A", warning, StringComparison.Ordinal);
@@ -450,10 +429,9 @@ public class LibrarySyncServiceCatalogCapTests : PluginTestBase, IDisposable
     /// THE JF-879 JUST-BELOW-CAP CONSEQUENCE PIN, the exact band JF-848
     /// left uncovered: a library one value under the cap (the production
     /// 49999-of-50000 shape, scaled down) whose payload overflows only
-    /// through the appended static tail. The JF-848 tail cut evicted the
-    /// whole seed floor here, the NO_SELECTION regime JF-823 fixed; now the
-    /// tail survives WHOLE and the library head loses the same number of
-    /// values instead.
+    /// through the appended static tail. The tail must survive WHOLE and
+    /// the library head lose the same number of values instead (rationale:
+    /// <see cref="CatalogPayload.TruncateTo"/>).
     /// </summary>
     [Fact]
     public async Task SyncUserLibraryAsync_LibraryJustBelowCap_KeepsWholeSeedTail()
@@ -490,7 +468,7 @@ public class LibrarySyncServiceCatalogCapTests : PluginTestBase, IDisposable
         int expectedDropped = books.Length - (Cap - seedCount);
         string warning = SingleTruncationWarning();
         Assert.Contains(
-            $"dropped {expectedDropped} lowest-priority entries (0 static seed values, {expectedDropped} library values)",
+            ExpectedDropComposition(expectedDropped, 0),
             warning,
             StringComparison.Ordinal);
         Assert.Contains($"Band Book {Cap - seedCount + 1:D2}", warning, StringComparison.Ordinal);
@@ -542,13 +520,19 @@ public class LibrarySyncServiceCatalogCapTests : PluginTestBase, IDisposable
         return (System.Collections.IDictionary)cacheField!.GetValue(null)!;
     }
 
-    /// <summary>
-    /// Clears the stored-payload cache, for the pins whose only in-payload
-    /// markers are seed names shared with sibling tests' stored payloads.
-    /// </summary>
-    private static void ClearStoredPayloads() => CatalogCache().Clear();
-
     private List<string> Logs() => TestCaptureLogger.Snapshot(_logCapture).Select(l => l.Message).ToList();
+
+    /// <summary>
+    /// The drop-composition fragment of LibrarySyncService's truncation
+    /// warning (the "dropped {DroppedCount} lowest-priority entries (...)"
+    /// tail of its "Truncated {Type} catalog ..." LogWarning template; the
+    /// library leg is derived as dropped − static, the same arithmetic the
+    /// template itself logs). Every pin asserts against THIS builder, so a
+    /// template rewording fails the whole suite loudly instead of drifting
+    /// past stale inline literals.
+    /// </summary>
+    private static string ExpectedDropComposition(int dropped, int staticCount) =>
+        $"dropped {dropped} lowest-priority entries ({staticCount} static seed values, {dropped - staticCount} library values)";
 
     private List<string> TruncationWarnings() =>
         Logs().Where(l => l.Contains("Truncated", StringComparison.Ordinal)).ToList();
@@ -564,8 +548,10 @@ public class LibrarySyncServiceCatalogCapTests : PluginTestBase, IDisposable
     /// <summary>
     /// Reads the catalog payload the sync stored for SMAPI to fetch (the
     /// CatalogController cache), selecting the entry that contains the given
-    /// marker. The second private copy of the audiobook suite's helper (hoist
-    /// to TestHelpers on the third, the GetModelTypeNode convention).
+    /// marker. The per-test PluginTestBase reset empties the cache, so the
+    /// marker can only resolve a payload THIS test stored. The second
+    /// private copy of the audiobook suite's helper (hoist to TestHelpers on
+    /// the third, the GetModelTypeNode convention).
     /// </summary>
     private static string ReadStoredPayloadContaining(string marker)
     {

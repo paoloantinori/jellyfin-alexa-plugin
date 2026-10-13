@@ -97,20 +97,17 @@ public class CatalogPayload
     /// the static seed block (0 for seedless types); clamped to
     /// [0, Values.Count].</param>
     /// <returns>The dropped entries in drop order (the library block past
-    /// the reserved head first, then any excess static tail; in the seam-only
-    /// shape where the reserved tail alone exceeds the cap the library drops
-    /// WHOLE, so the list leads with the library head in fetch order) and how
-    /// many of the dropped entries were static seed entries.</returns>
+    /// the reserved head first, then any excess static tail; the seam-only
+    /// shapes are the summary's subject) and how many of the dropped
+    /// entries were static seed entries.</returns>
     internal (IReadOnlyList<CatalogValue> Dropped, int DroppedReservedCount) TruncateTo(int maxValueCount, int reservedTailCount)
     {
         int reserved = Math.Clamp(reservedTailCount, 0, Values.Count);
         int libraryCount = Values.Count - reserved;
 
-        // The reserve-on-any-cut partition (JF-879, generalizing JF-848's
-        // exact-saturation condition libraryCount >= cap; the policy
-        // rationale lives in the summary above). With no reserved tail this
-        // arm degenerates to the plain JF-825 tail cut, byte-identical, so
-        // seedless types are untouched by the reservation.
+        // The reserve-on-any-cut partition (JF-879; the policy rationale,
+        // including the seedless degeneration to the JF-825 tail cut, lives
+        // in the summary above).
         if (Values.Count > maxValueCount)
         {
             int keepLibrary = Math.Max(0, maxValueCount - reserved);

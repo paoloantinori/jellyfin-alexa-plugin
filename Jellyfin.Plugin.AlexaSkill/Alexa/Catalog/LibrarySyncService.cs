@@ -1131,19 +1131,15 @@ public class LibrarySyncService
         int libraryValueCount = payload.Values.Count;
         CatalogSeedEnrichment.MergeInto(payload, catalogType, PhoneticSynonymGenerator.GenerateSynonyms, locale, _logger);
 
-        // JF-825: the cap binds the FINAL payload (library values + appended
-        // seed titles + the locale's generic word, after the FromItems
-        // same-name dedup), not just the fetch: the pre-fix code fetched with
-        // Limit=cap but appended the seeds AFTER the bounded fetch, so the
-        // payload sailed past the cap and the old warning asserted a
-        // truncation that never happened. JF-848, generalized by JF-879 (the
-        // maintainer's "riserva sempre i seed" decision): on ANY over-cap
-        // cut the static tail is RESERVED first, so the cut takes the
-        // library head instead of evicting every seed and the locale's
-        // generic word; a payload that fits entirely is untouched
-        // byte-identical (payload order IS priority order, see
-        // CatalogPayload.TruncateTo). The trade-off: a capped library sees
-        // fewer of its own values (up to staticAppendedCount of them).
+        // JF-825: the cap must bind the FINAL payload (library values + the
+        // appended static tail, after the FromItems same-name dedup), not
+        // just the fetch: the pre-fix code fetched with Limit=cap but
+        // appended the seeds AFTER the bounded fetch, so the payload sailed
+        // past the cap while the log asserted a truncation that never
+        // happened. The cut itself is CatalogPayload.TruncateTo's
+        // reserve-on-any-cut partition (JF-848/JF-879; that policy's
+        // canonical rationale lives there). The trade-off: a capped library
+        // sees fewer of its own values (up to staticAppendedCount of them).
         int staticAppendedCount = payload.Values.Count - libraryValueCount;
         var (droppedValues, droppedStaticCount) = payload.TruncateTo(EffectiveMaxCatalogValues, staticAppendedCount);
         if (droppedValues.Count > 0)
@@ -1152,12 +1148,10 @@ public class LibrarySyncService
             // them (the debug-logging policy): the composition split comes
             // from the cut itself (TruncateTo owns which block each dropped
             // entry came from), and the sample bounds the line length when a
-            // huge library drops a huge tail. On any cut the library leg
-            // carries the whole drop (the reserved static floor outranks the
-            // last staticAppendedCount library entries, JF-848/JF-879), so a
-            // nonzero static leg is the canary for the reserved block alone
-            // exceeding the cap (test seams or a pathological seed block;
-            // production static counts are tens against a 50000 cap).
+            // huge library drops a huge tail. The reserve-on-any-cut policy
+            // puts the whole drop on the library leg, so a nonzero static leg
+            // is the canary for the reserved block alone exceeding the cap
+            // (test seams or a pathological seed block).
             _logger.LogWarning(
                 "Truncated {Type} catalog to {Limit} values for user {UserId}: dropped {DroppedCount} lowest-priority entries ({DroppedStaticCount} static seed values, {DroppedLibraryCount} library values); first dropped: {DroppedSample}",
                 catalogType,
