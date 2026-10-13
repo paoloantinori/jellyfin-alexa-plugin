@@ -57,7 +57,8 @@ public class VideoPlaybackFeatureFlagTests : PluginTestBase, IDisposable
 
         var handler = new PlayVideoIntentHandler(
             _sessionManagerMock.Object, _config,
-            _libraryManagerMock.Object, _userManagerMock.Object, _userDataManagerMock.Object, _loggerFactory);
+            _libraryManagerMock.Object, _userManagerMock.Object, _userDataManagerMock.Object, _loggerFactory,
+            new PlaySongIntentHandler(_sessionManagerMock.Object, _config, _libraryManagerMock.Object, _userManagerMock.Object, _userDataManagerMock.Object, _loggerFactory));
 
         var response = await handler.HandleAsync(
             new IntentRequest { Intent = new Intent { Name = "PlayVideoIntent" } },
@@ -108,7 +109,8 @@ public class VideoPlaybackFeatureFlagTests : PluginTestBase, IDisposable
     {
         var handler = new PlayVideoIntentHandler(
             _sessionManagerMock.Object, _config,
-            _libraryManagerMock.Object, _userManagerMock.Object, _userDataManagerMock.Object, _loggerFactory);
+            _libraryManagerMock.Object, _userManagerMock.Object, _userDataManagerMock.Object, _loggerFactory,
+            new PlaySongIntentHandler(_sessionManagerMock.Object, _config, _libraryManagerMock.Object, _userManagerMock.Object, _userDataManagerMock.Object, _loggerFactory));
 
         var response = await handler.HandleAsync(
             new IntentRequest { Intent = new Intent { Name = "PlayVideoIntent" } },
