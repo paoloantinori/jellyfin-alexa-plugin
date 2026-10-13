@@ -343,7 +343,8 @@ public class ProgressiveResponseIntegrationTests : PluginTestBase
             .Returns(new List<BaseItem>());
 
         var handler = new PlayAlbumIntentHandler(
-            _fx.SessionManager.Object, _fx.Config, _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.UserDataManager.Object, _fx.LoggerFactory);
+            _fx.SessionManager.Object, _fx.Config, _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.UserDataManager.Object, _fx.LoggerFactory,
+            _fx.CreateSongHandler());
 
         var request = new IntentRequest
         {

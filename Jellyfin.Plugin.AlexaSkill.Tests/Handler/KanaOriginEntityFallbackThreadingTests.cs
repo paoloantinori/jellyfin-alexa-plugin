@@ -294,6 +294,7 @@ public class KanaOriginEntityFallbackThreadingTests : PluginTestBase, IDisposabl
             _fx.UserManager.Object,
             _fx.UserDataManager.Object,
             _fx.LoggerFactory,
+            _fx.CreateSongHandler(),
             artistIndex: artistIndex);
 
     [Fact]

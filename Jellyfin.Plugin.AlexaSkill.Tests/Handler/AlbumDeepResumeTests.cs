@@ -59,6 +59,7 @@ public class AlbumDeepResumeTests : PluginTestBase, IDisposable
             _fx.UserManager.Object,
             _fx.UserDataManager.Object,
             _fx.LoggerFactory,
+            _fx.CreateSongHandler(),
             _queueManager);
     }
 

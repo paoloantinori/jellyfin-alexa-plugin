@@ -59,8 +59,9 @@ public class PlayEpisodeIntentHandlerTests : PluginTestBase
         IUserManager userManager,
         IUserDataManager userDataManager,
         ITVSeriesManager tvSeriesManager,
-        ILoggerFactory loggerFactory)
-        : PlayEpisodeIntentHandler(sessionManager, config, libraryManager, userManager, userDataManager, tvSeriesManager, loggerFactory)
+        ILoggerFactory loggerFactory,
+        PlaySongIntentHandler playSongHandler)
+        : PlayEpisodeIntentHandler(sessionManager, config, libraryManager, userManager, userDataManager, tvSeriesManager, loggerFactory, playSongHandler)
     {
         public ProgressiveSpeechCapture Progressive { get; } = new();
 
@@ -77,6 +78,18 @@ public class PlayEpisodeIntentHandlerTests : PluginTestBase
             _userManagerMock.Object,
             _userDataManagerMock.Object,
             _tvSeriesManagerMock.Object,
+            _loggerFactory,
+            CreateSongHandler());
+    }
+
+    private PlaySongIntentHandler CreateSongHandler()
+    {
+        return new PlaySongIntentHandler(
+            _sessionManagerMock.Object,
+            _config,
+            _libraryManagerMock.Object,
+            _userManagerMock.Object,
+            _userDataManagerMock.Object,
             _loggerFactory);
     }
 
@@ -812,5 +825,161 @@ public class PlayEpisodeIntentHandlerTests : PluginTestBase
         Assert.NotNull(response);
         Assert.True(response.Response.ShouldEndSession);
         Assert.DoesNotContain(response.Response.Directives ?? new List<IDirective>(), d => d.Type == "Dialog.Delegate");
+    }
+
+    // ---- JF-882: the song-carrier misroute guard (the JF-876 family, series_name slot) ----
+
+    private static IntentRequest CreateCarrierSeriesRequest(
+        global::Alexa.NET.Request.Slot seriesSlot,
+        string? seasonNumber = null,
+        string? episodeNumber = null)
+    {
+        var intent = new Intent { Name = IntentNames.PlayEpisode };
+        intent.Slots = new Dictionary<string, global::Alexa.NET.Request.Slot> { ["series_name"] = seriesSlot };
+        if (seasonNumber != null)
+        {
+            intent.Slots["season_number"] = new global::Alexa.NET.Request.Slot { Name = "season_number", Value = seasonNumber };
+        }
+
+        if (episodeNumber != null)
+        {
+            intent.Slots["episode_number"] = new global::Alexa.NET.Request.Slot { Name = "episode_number", Value = episodeNumber };
+        }
+
+        return new IntentRequest { Intent = intent, Locale = "en-US", RequestId = "test-req", DialogState = "COMPLETED" };
+    }
+
+    [Fact]
+    public async Task Handle_SeriesSlotSongCarrier_SeriesMissDelegatesToSongPath()
+    {
+        // The JF-876 steal shape on the series slot, at the MISS TAIL: a song
+        // ask ("metti il brano sunny dancer") misrouted to PlayEpisodeIntent,
+        // where the SeriesName catalog's ER pull selected the intent and the
+        // statistical fill swallowed the carrier noun. The series resolution
+        // runs RAW-FIRST on the unstripped fill (so a genuine carrier-titled
+        // series stays resolvable, the review-round-2 discipline), and only
+        // the confirmed miss delegates the ask to the SONG path.
+        var song = new Audio { Name = "Sunny Dancer", Id = Guid.NewGuid() };
+        var queries = new List<InternalItemsQuery>();
+        SetupUserMock();
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemList(Capture.In(queries)))
+            .Returns((InternalItemsQuery q) => string.Equals(q.SearchTerm, "sunny dancer", StringComparison.OrdinalIgnoreCase)
+                && q.IncludeItemTypes.Contains(BaseItemKind.Audio)
+                ? new List<BaseItem> { song }
+                : new List<BaseItem>());
+
+        var handler = CreateHandler();
+        var response = await handler.HandleAsync(
+            CreateCarrierSeriesRequest(TestHelpers.ResolvedSlot("il brano sunny dancer", "Sunny Dancer", slotName: "series_name")),
+            CreateContext(),
+            CreateUser(),
+            CreateSession(),
+            CancellationToken.None);
+
+        var play = Assert.Single(response.Response.Directives.OfType<global::Alexa.NET.Response.Directive.AudioPlayerPlayDirective>());
+        Assert.Contains("/Audio/", play.AudioItem.Stream.Url, StringComparison.Ordinal);
+        // The series resolution ran FIRST on the RAW fill (the raw-first
+        // discipline): it missed, and the delegation answered as a song play.
+        Assert.Contains(queries, q => q.IncludeItemTypes.Contains(BaseItemKind.Series));
+        Assert.DoesNotContain(queries, q => q.IncludeItemTypes.Contains(BaseItemKind.Series)
+            && string.Equals(q.SearchTerm, "sunny dancer", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task Handle_SeriesSlotSongCarrier_CarrierTitledUnsyncedSeries_ResolvesSeries()
+    {
+        // Review round 2, the regression pin: a series GENUINELY titled with a
+        // leading song carrier, absent from the catalog (no canonical; the
+        // JF-874 raw-fill shape), must keep resolving through the episode
+        // path's own raw search. The preemptive guard shape would have
+        // delegated it to the song path, whose cascade video tier searches
+        // Movie+Episode names only and can never recover a Series.
+        var series = new global::MediaBrowser.Controller.Entities.TV.Series { Name = "La Traccia Perfetta", Id = Guid.NewGuid() };
+        var queries = new List<InternalItemsQuery>();
+        SetupUserMock();
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemList(Capture.In(queries)))
+            .Returns((InternalItemsQuery q) => q.IncludeItemTypes.Contains(BaseItemKind.Series)
+                ? new List<BaseItem> { series }
+                : new List<BaseItem>());
+
+        var handler = CreateHandler();
+        var response = await handler.HandleAsync(
+            CreateCarrierSeriesRequest(
+                new global::Alexa.NET.Request.Slot { Name = "series_name", Value = "la traccia perfetta" },
+                seasonNumber: "1",
+                episodeNumber: "1"),
+            CreateContext(),
+            CreateUser(),
+            CreateSession(),
+            CancellationToken.None);
+
+        // The series resolved from the RAW fill; no song-path delegation ran
+        // (no Audio-typed query, no AudioPlayer play), and the flow proceeded
+        // to the episode search.
+        Assert.Contains(queries, q => q.IncludeItemTypes.Contains(BaseItemKind.Series));
+        Assert.DoesNotContain(queries, q => q.IncludeItemTypes.Contains(BaseItemKind.Audio));
+        Assert.Empty(response.Response.Directives.OfType<global::Alexa.NET.Response.Directive.AudioPlayerPlayDirective>());
+    }
+
+    [Fact]
+    public async Task Handle_SeriesSlotSongCarrierWithExplicitNumbers_StaysOnEpisodePath()
+    {
+        // The per-site stand-down: an ask carrying explicit season/episode
+        // numbers is an episode ask by construction. A series genuinely titled
+        // "La Traccia" (carrier-leading, stale catalog so no canonical exists)
+        // must keep the episode path when the numbers are present.
+        var queries = new List<InternalItemsQuery>();
+        SetupUserMock();
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemList(Capture.In(queries)))
+            .Returns(new List<BaseItem>());
+
+        var handler = CreateHandler();
+        var response = await handler.HandleAsync(
+            CreateCarrierSeriesRequest(
+                new global::Alexa.NET.Request.Slot { Name = "series_name", Value = "la traccia" },
+                seasonNumber: "1",
+                episodeNumber: "2"),
+            CreateContext(),
+            CreateUser(),
+            CreateSession(),
+            CancellationToken.None);
+
+        Assert.Empty(response.Response.Directives.OfType<global::Alexa.NET.Response.Directive.AudioPlayerPlayDirective>());
+        Assert.DoesNotContain(queries, q => q.IncludeItemTypes.Contains(BaseItemKind.Audio));
+        Assert.Contains(queries, q => q.IncludeItemTypes.Contains(BaseItemKind.Series));
+    }
+
+    [Fact]
+    public async Task Handle_SongCarrierWholeSpanTitleEscape_StaysOnEpisodePath()
+    {
+        // The whole-span escape (the JF-876 F1 shape): a series whose TITLE
+        // begins with a song-carrier phrase must stay resolvable when the raw
+        // fill IS the canonical catalog title verbatim.
+        var series = new global::MediaBrowser.Controller.Entities.TV.Series { Name = "The Song of Bernadette", Id = Guid.NewGuid() };
+        var queries = new List<InternalItemsQuery>();
+        SetupUserMock();
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemList(Capture.In(queries)))
+            .Returns((InternalItemsQuery q) => q.IncludeItemTypes.Contains(BaseItemKind.Series)
+                ? new List<BaseItem> { series }
+                : new List<BaseItem>());
+
+        var handler = CreateHandler();
+        var response = await handler.HandleAsync(
+            CreateCarrierSeriesRequest(
+                TestHelpers.ResolvedSlot("the song of bernadette", "The Song of Bernadette", slotName: "series_name"),
+                seasonNumber: "1",
+                episodeNumber: "1"),
+            CreateContext(),
+            CreateUser(),
+            CreateSession(),
+            CancellationToken.None);
+
+        Assert.Empty(response.Response.Directives.OfType<global::Alexa.NET.Response.Directive.AudioPlayerPlayDirective>());
+        Assert.DoesNotContain(queries, q => q.IncludeItemTypes.Contains(BaseItemKind.Audio));
+        Assert.Contains(queries, q => q.IncludeItemTypes.Contains(BaseItemKind.Series));
     }
 }

@@ -46,6 +46,15 @@ public class VideoPlaybackFeatureFlagTests : PluginTestBase, IDisposable
 
     public void Dispose() => _loggerFactory.Dispose();
 
+    private PlaySongIntentHandler CreateSongHandler()
+        => new(
+            _sessionManagerMock.Object,
+            _config,
+            _libraryManagerMock.Object,
+            _userManagerMock.Object,
+            _userDataManagerMock.Object,
+            _loggerFactory);
+
     private SessionInfo CreateSession() => TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
     private static Context CreateContext() => TestHelpers.CreateTestContext();
 
@@ -58,7 +67,7 @@ public class VideoPlaybackFeatureFlagTests : PluginTestBase, IDisposable
         var handler = new PlayVideoIntentHandler(
             _sessionManagerMock.Object, _config,
             _libraryManagerMock.Object, _userManagerMock.Object, _userDataManagerMock.Object, _loggerFactory,
-            new PlaySongIntentHandler(_sessionManagerMock.Object, _config, _libraryManagerMock.Object, _userManagerMock.Object, _userDataManagerMock.Object, _loggerFactory));
+            CreateSongHandler());
 
         var response = await handler.HandleAsync(
             new IntentRequest { Intent = new Intent { Name = "PlayVideoIntent" } },
@@ -76,7 +85,8 @@ public class VideoPlaybackFeatureFlagTests : PluginTestBase, IDisposable
 
         var handler = new PlayEpisodeIntentHandler(
             _sessionManagerMock.Object, _config,
-            _libraryManagerMock.Object, _userManagerMock.Object, _userDataManagerMock.Object, _tvSeriesManagerMock.Object, _loggerFactory);
+            _libraryManagerMock.Object, _userManagerMock.Object, _userDataManagerMock.Object, _tvSeriesManagerMock.Object, _loggerFactory,
+            CreateSongHandler());
 
         var response = await handler.HandleAsync(
             new IntentRequest { Intent = new Intent { Name = "PlayEpisodeIntent" } },
@@ -110,7 +120,7 @@ public class VideoPlaybackFeatureFlagTests : PluginTestBase, IDisposable
         var handler = new PlayVideoIntentHandler(
             _sessionManagerMock.Object, _config,
             _libraryManagerMock.Object, _userManagerMock.Object, _userDataManagerMock.Object, _loggerFactory,
-            new PlaySongIntentHandler(_sessionManagerMock.Object, _config, _libraryManagerMock.Object, _userManagerMock.Object, _userDataManagerMock.Object, _loggerFactory));
+            CreateSongHandler());
 
         var response = await handler.HandleAsync(
             new IntentRequest { Intent = new Intent { Name = "PlayVideoIntent" } },
@@ -127,7 +137,8 @@ public class VideoPlaybackFeatureFlagTests : PluginTestBase, IDisposable
     {
         var handler = new PlayEpisodeIntentHandler(
             _sessionManagerMock.Object, _config,
-            _libraryManagerMock.Object, _userManagerMock.Object, _userDataManagerMock.Object, _tvSeriesManagerMock.Object, _loggerFactory);
+            _libraryManagerMock.Object, _userManagerMock.Object, _userDataManagerMock.Object, _tvSeriesManagerMock.Object, _loggerFactory,
+            CreateSongHandler());
 
         var response = await handler.HandleAsync(
             new IntentRequest { Intent = new Intent { Name = "PlayEpisodeIntent" } },

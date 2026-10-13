@@ -99,7 +99,8 @@ public class DialogDelegationTests : PluginTestBase
     public async Task PlayAlbum_MissingSlot_ElicitsAlbumName()
     {
         var handler = new PlayAlbumIntentHandler(
-            _fx.SessionManager.Object, _fx.Config, _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.UserDataManager.Object, _fx.LoggerFactory);
+            _fx.SessionManager.Object, _fx.Config, _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.UserDataManager.Object, _fx.LoggerFactory,
+            _fx.CreateSongHandler());
         var request = CreateIntentRequest(IntentNames.PlayAlbum, "STARTED");
         var session = _fx.CreateSession();
 
@@ -115,7 +116,8 @@ public class DialogDelegationTests : PluginTestBase
     public async Task PlayAlbum_WithPartialSlots_ResolvesAlbumByArtist_NoDelegation()
     {
         var handler = new PlayAlbumIntentHandler(
-            _fx.SessionManager.Object, _fx.Config, _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.UserDataManager.Object, _fx.LoggerFactory);
+            _fx.SessionManager.Object, _fx.Config, _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.UserDataManager.Object, _fx.LoggerFactory,
+            _fx.CreateSongHandler());
         // Album slot missing even though musician is provided: JF-422 routes this into
         // the album-by-artist resolution (play without a title) instead of eliciting.
         // Catalog via the shared fixture mock (JF-442); the play/resolution outcome of
@@ -147,7 +149,8 @@ public class DialogDelegationTests : PluginTestBase
     public async Task PlayEpisode_DoesNotDelegate()
     {
         var handler = new PlayEpisodeIntentHandler(
-            _fx.SessionManager.Object, _fx.Config, _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.UserDataManager.Object, _fx.TvSeriesManager.Object, _fx.LoggerFactory);
+            _fx.SessionManager.Object, _fx.Config, _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.UserDataManager.Object, _fx.TvSeriesManager.Object, _fx.LoggerFactory,
+            _fx.CreateSongHandler());
         var request = CreateIntentRequest(IntentNames.PlayEpisode, "COMPLETED",
             new Dictionary<string, string>
             {

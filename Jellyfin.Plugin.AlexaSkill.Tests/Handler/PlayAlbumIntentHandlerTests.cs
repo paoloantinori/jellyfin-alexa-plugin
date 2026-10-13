@@ -53,6 +53,7 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase, IDisposable
             _fx.UserManager.Object,
             _fx.UserDataManager.Object,
             _fx.LoggerFactory,
+            _fx.CreateSongHandler(),
             _queueManager,
             artistIndex);
     }
@@ -1119,6 +1120,7 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase, IDisposable
             _fx.UserManager.Object,
             _fx.UserDataManager.Object,
             _fx.LoggerFactory,
+            _fx.CreateSongHandler(),
             _queueManager,
             index);
         var request = CreateIntentRequest(musician: "dark side of the moon");
@@ -1160,6 +1162,7 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase, IDisposable
             _fx.UserManager.Object,
             _fx.UserDataManager.Object,
             _fx.LoggerFactory,
+            _fx.CreateSongHandler(),
             _queueManager,
             index);
         var request = CreateIntentRequest(musician: "pink floyd");
@@ -1202,6 +1205,7 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase, IDisposable
             _fx.UserManager.Object,
             _fx.UserDataManager.Object,
             _fx.LoggerFactory,
+            _fx.CreateSongHandler(),
             _queueManager,
             index);
         var request = CreateIntentRequest(musician: "cup");
@@ -1240,6 +1244,7 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase, IDisposable
             _fx.UserManager.Object,
             _fx.UserDataManager.Object,
             _fx.LoggerFactory,
+            _fx.CreateSongHandler(),
             _queueManager,
             index);
         var request = CreateIntentRequest(musician: "miles davis live");
@@ -1278,6 +1283,7 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase, IDisposable
             _fx.UserManager.Object,
             _fx.UserDataManager.Object,
             _fx.LoggerFactory,
+            _fx.CreateSongHandler(),
             _queueManager,
             index);
         var request = CreateIntentRequest(album: "in your dreams", musician: "dark side of the moon");
@@ -1325,6 +1331,7 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase, IDisposable
             _fx.UserManager.Object,
             _fx.UserDataManager.Object,
             _fx.LoggerFactory,
+            _fx.CreateSongHandler(),
             _queueManager,
             index);
         var request = CreateIntentRequest(musician: "dark side of the moon", locale: "it-IT");
@@ -1376,6 +1383,7 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase, IDisposable
             _fx.UserManager.Object,
             _fx.UserDataManager.Object,
             _fx.LoggerFactory,
+            _fx.CreateSongHandler(),
             _queueManager,
             index);
         var request = CreateIntentRequest(musician: "un disco di u2", locale: "it-IT");
@@ -1416,6 +1424,7 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase, IDisposable
             _fx.UserManager.Object,
             _fx.UserDataManager.Object,
             _fx.LoggerFactory,
+            _fx.CreateSongHandler(),
             _queueManager,
             index);
         var request = CreateIntentRequest(musician: "dark side of the moon", locale: "it-IT");
@@ -2030,5 +2039,187 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase, IDisposable
         // carry no album-path calling-word samples (JF-469 survey) and their fills
         // are clean, so their values are never rewritten.
         Assert.False(TestStripHandler.CallTryStripLeadingAlbumCallingWord(raw, locale, out _));
+    }
+
+    // ---- JF-882: the song-carrier misroute guard (the JF-876 family, album slot,
+    // the canonical-gated variant: the album slot is catalog-backed in it-IT only) ----
+
+    private static IntentRequest CreateCarrierAlbumRequest(global::Alexa.NET.Request.Slot albumSlot)
+    {
+        var intent = new Intent { Name = IntentNames.PlayAlbum };
+        intent.Slots = new Dictionary<string, global::Alexa.NET.Request.Slot> { ["album"] = albumSlot };
+        return new IntentRequest { Intent = intent, Locale = "en-US", RequestId = "test-req" };
+    }
+
+    [Fact]
+    public async Task Handle_ErResolvedSongCarrier_DelegatesToSongPath()
+    {
+        // The JF-876 steal shape on the ER-resolved album slot (the it-IT
+        // AlbumName catalog shape): a song ask ("metti il brano sunny dancer")
+        // misrouted to PlayAlbumIntent. The carrier in the raw fill must route
+        // the ask to the SONG path, never to the album search; the song path's
+        // JF-871 cascade re-searches the stripped title as an album on a song
+        // miss, so an album-only title still plays.
+        var song = new Audio { Name = "Sunny Dancer", Id = Guid.NewGuid() };
+        var album = new MusicAlbum { Name = "Sunny Dancer", Id = Guid.NewGuid() };
+        var queries = new List<InternalItemsQuery>();
+        _fx.SetupUserMock();
+        _fx.LibraryManager
+            .Setup(lm => lm.GetItemList(Capture.In(queries)))
+            .Returns((InternalItemsQuery q) => string.Equals(q.SearchTerm, "sunny dancer", StringComparison.OrdinalIgnoreCase)
+                ? (q.IncludeItemTypes.Contains(BaseItemKind.Audio)
+                    ? new List<BaseItem> { song }
+                    : new List<BaseItem> { album })
+                : new List<BaseItem>());
+
+        var handler = CreateHandler();
+        var response = await handler.HandleAsync(
+            CreateCarrierAlbumRequest(TestHelpers.ResolvedSlot("il brano sunny dancer", "Sunny Dancer", slotName: "album")),
+            _fx.CreateContext(),
+            TestHelpers.CreateTestUser(),
+            CreateSession(),
+            CancellationToken.None);
+
+        var play = Assert.Single(response.Response.Directives.OfType<AudioPlayerPlayDirective>());
+        Assert.Contains("/Audio/", play.AudioItem.Stream.Url, StringComparison.Ordinal);
+        Assert.DoesNotContain(queries, q => q.IncludeItemTypes.Contains(BaseItemKind.MusicAlbum));
+    }
+
+    [Fact]
+    public async Task Handle_ErResolvedSongCarrierDelegation_KeepsMusicianScoping()
+    {
+        // Code-review round 2: a misrouted "il brano X di Y" arrives with BOTH
+        // slots filled; the delegated ask must carry the musician slot so the
+        // song search keeps the artist scoping the correctly-routed PlaySong
+        // ask would have had.
+        var artist = new MusicArtist { Name = "Duran Duran", Id = Guid.NewGuid() };
+        var song = new Audio { Name = "Letting Go", Id = Guid.NewGuid() };
+        var queries = new List<InternalItemsQuery>();
+        _fx.SetupUserMock();
+        _fx.LibraryManager
+            .Setup(lm => lm.GetItemList(Capture.In(queries)))
+            .Returns((InternalItemsQuery q) =>
+            {
+                if (q.IncludeItemTypes.Contains(BaseItemKind.MusicArtist))
+                {
+                    return new List<BaseItem> { artist };
+                }
+
+                return q.IncludeItemTypes.Contains(BaseItemKind.Audio)
+                    && string.Equals(q.SearchTerm, "letting go", StringComparison.OrdinalIgnoreCase)
+                    ? new List<BaseItem> { song }
+                    : new List<BaseItem>();
+            });
+
+        var request = new IntentRequest
+        {
+            Intent = new Intent
+            {
+                Name = IntentNames.PlayAlbum,
+                Slots = new Dictionary<string, global::Alexa.NET.Request.Slot>
+                {
+                    ["album"] = TestHelpers.ResolvedSlot("il brano letting go", "Letting Go", slotName: "album"),
+                    ["musician"] = new global::Alexa.NET.Request.Slot { Name = "musician", Value = "duran duran" }
+                }
+            },
+            Locale = "en-US",
+            RequestId = "test-req"
+        };
+
+        var handler = CreateHandler();
+        var response = await handler.HandleAsync(
+            request,
+            _fx.CreateContext(),
+            TestHelpers.CreateTestUser(),
+            CreateSession(),
+            CancellationToken.None);
+
+        // The delegated song search ran ARTIST-SCOPED: an artist query for
+        // "duran duran" ran, and the song query carried the artist's id.
+        Assert.Contains(queries, q => q.IncludeItemTypes.Contains(BaseItemKind.MusicArtist));
+        InternalItemsQuery? scopedSongQuery = queries.FirstOrDefault(q => q.IncludeItemTypes.Contains(BaseItemKind.Audio)
+            && string.Equals(q.SearchTerm, "letting go", StringComparison.OrdinalIgnoreCase));
+        Assert.NotNull(scopedSongQuery);
+        Assert.Contains(scopedSongQuery!.ArtistIds ?? Array.Empty<Guid>(), id => id == artist.Id);
+        Assert.Single(response.Response.Directives.OfType<AudioPlayerPlayDirective>());
+    }
+
+    [Fact]
+    public async Task Handle_SongCarrierWholeSpanTitleEscape_KeepsAlbumPath()
+    {
+        // The whole-span escape (the JF-876 F1 shape): an album whose TITLE
+        // begins with a song-carrier phrase must stay playable when the raw
+        // fill IS the canonical catalog title verbatim.
+        var (album, tracks) = MakeRelease("The Song of Bernadette", 1970, 2, "Bernadette First");
+        var queries = new List<InternalItemsQuery>();
+        _fx.SetupUserMock();
+        _fx.LibraryManager
+            .Setup(lm => lm.GetItemList(Capture.In(queries)))
+            .Returns((InternalItemsQuery q) => q.IncludeItemTypes.Contains(BaseItemKind.MusicAlbum)
+                ? new List<BaseItem> { album }
+                : new List<BaseItem>());
+        _fx.LibraryManager
+            .Setup(lm => lm.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns(new MediaBrowser.Model.Querying.QueryResult<BaseItem>
+            {
+                Items = new[] { tracks[0] },
+                TotalRecordCount = 1
+            });
+
+        var handler = CreateHandler();
+        var response = await handler.HandleAsync(
+            CreateCarrierAlbumRequest(TestHelpers.ResolvedSlot("the song of bernadette", "The Song of Bernadette", slotName: "album")),
+            _fx.CreateContext(),
+            TestHelpers.CreateTestUser(),
+            CreateSession(),
+            CancellationToken.None);
+
+        // The ALBUM played (its first track's token), through the album path's
+        // own play flow, not a delegated song play.
+        var play = Assert.Single(response.Response.Directives.OfType<AudioPlayerPlayDirective>());
+        Assert.Equal(tracks[0].Id.ToString(), play.AudioItem.Stream.Token);
+        Assert.Contains(queries, q => q.IncludeItemTypes.Contains(BaseItemKind.MusicAlbum));
+    }
+
+    [Fact]
+    public async Task Handle_SongCarrierWithoutCanonical_KeepsAlbumPath()
+    {
+        // The canonical gate: with NO ER canonical the album slot is FREE TEXT
+        // (the 16 non-it-IT locales, or an unsynced it-IT title), the carrier
+        // may legitimately ride the title (an album genuinely titled "The Song
+        // Is You"), and the album path's own raw-first machinery owns the fill.
+        var album = new MusicAlbum { Name = "The Song Is You", Id = Guid.NewGuid() };
+        var track = new Audio { Name = "The Song Is You", Id = Guid.NewGuid(), ParentId = album.Id };
+        var queries = new List<InternalItemsQuery>();
+        _fx.SetupUserMock();
+        _fx.LibraryManager
+            .Setup(lm => lm.GetItemList(Capture.In(queries)))
+            .Returns((InternalItemsQuery q) => string.Equals(q.SearchTerm, "the song is you", StringComparison.OrdinalIgnoreCase)
+                ? new List<BaseItem> { album }
+                : new List<BaseItem>());
+        _fx.LibraryManager
+            .Setup(lm => lm.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns(new MediaBrowser.Model.Querying.QueryResult<BaseItem>
+            {
+                Items = new[] { track },
+                TotalRecordCount = 1
+            });
+
+        var handler = CreateHandler();
+        var response = await handler.HandleAsync(
+            CreateCarrierAlbumRequest(new global::Alexa.NET.Request.Slot { Name = "album", Value = "the song is you" }),
+            _fx.CreateContext(),
+            TestHelpers.CreateTestUser(),
+            CreateSession(),
+            CancellationToken.None);
+
+        // The album-title query ran with the RAW fill and the album played; no
+        // song-path delegation happened (no carrier-stripped Audio query).
+        Assert.Contains(queries, q => q.IncludeItemTypes.Contains(BaseItemKind.MusicAlbum)
+            && string.Equals(q.SearchTerm, "the song is you", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(queries, q => q.IncludeItemTypes.Contains(BaseItemKind.Audio)
+            && string.Equals(q.SearchTerm, "is you", StringComparison.OrdinalIgnoreCase));
+        var play = Assert.Single(response.Response.Directives.OfType<AudioPlayerPlayDirective>());
+        Assert.Equal(track.Id.ToString(), play.AudioItem.Stream.Token);
     }
 }

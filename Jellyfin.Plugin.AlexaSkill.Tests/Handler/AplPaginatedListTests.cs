@@ -157,7 +157,14 @@ public class AplPaginatedListTests : PluginTestBase, IDisposable
             _userManager.Object,
             _userDataManager.Object,
             _tvSeriesManager.Object,
-            _loggerFactory);
+            _loggerFactory,
+            new PlaySongIntentHandler(
+                _sessionManager.Object,
+                _config,
+                _libraryManager.Object,
+                _userManager.Object,
+                _userDataManager.Object,
+                _loggerFactory));
 
     private async Task<SkillResponse> RunPlayEpisodeMiss(
         PlayEpisodeIntentHandlerTests.RecordingPlayEpisodeHandler handler,
