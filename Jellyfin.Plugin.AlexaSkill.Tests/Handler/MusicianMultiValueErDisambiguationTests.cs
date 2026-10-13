@@ -84,13 +84,9 @@ public class MusicianMultiValueErDisambiguationTests : PluginTestBase, IDisposab
     /// </summary>
     private void SetupArtistSongs(params Audio[] songs)
     {
-        _fx.SetupUserMock();
-        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(
-                q => q.ArtistIds != null && q.ArtistIds.Length > 0)))
-            .Returns(new List<BaseItem>(songs));
-        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(
-                q => q.ArtistIds == null || q.ArtistIds.Length == 0)))
-            .Returns(new List<BaseItem>());
+        // Delegates to the capturing helper (code-review dedupe): one mock for
+        // the library-manager routing; the capture list is simply ignored.
+        _ = SetupArtistSongsCapturingQueries(songs);
     }
 
     // ---------------------------------------------------------------
@@ -747,7 +743,7 @@ public class MusicianMultiValueErDisambiguationTests : PluginTestBase, IDisposab
     /// library artist played (the play is scoped to rank-1's resolve, never to
     /// a tail value's).
     /// </summary>
-    private List<InternalItemsQuery> SetupArtistSongsCapturingQueries(Audio song)
+    private List<InternalItemsQuery> SetupArtistSongsCapturingQueries(params Audio[] songs)
     {
         _fx.SetupUserMock();
         var queries = new List<InternalItemsQuery>();
@@ -757,7 +753,7 @@ public class MusicianMultiValueErDisambiguationTests : PluginTestBase, IDisposab
                 if (q.ArtistIds != null && q.ArtistIds.Length > 0)
                 {
                     queries.Add(q);
-                    return new List<BaseItem> { song };
+                    return new List<BaseItem>(songs);
                 }
 
                 return new List<BaseItem>();

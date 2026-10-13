@@ -567,6 +567,17 @@ internal static class MultiValueErDisambiguation
             return null;
         }
 
+        // Like-for-like scoring (the JF-755 doctrine; code-review round 2): a
+        // kana rendition must be romanized before scoring against the pool's
+        // romaji query keys, or every artist scores ~0 (no script overlap) and
+        // the margin is noise. The romanization idiom is the one SearchAsync
+        // itself uses at entry. A leading article in the rendition is NOT
+        // stripped: it lowers rank-1 and rivals equally, so the margin is
+        // invariant to it (documented calibration note, not a defect).
+        string scoredRendition = KatakanaRomanizer.ContainsKana(rendition)
+            ? KatakanaRomanizer.Romanize(rendition)
+            : rendition;
+
         List<BaseItem> rank1Resolves = ArtistSearch.ResolveErCandidates(
             new[] { rank1Canonical }, pool, pinned, threshold);
         if (rank1Resolves.Count == 0)
@@ -576,7 +587,7 @@ internal static class MultiValueErDisambiguation
 
         BaseItem rank1Artist = rank1Resolves[0];
 
-        int rank1Score = FuzzyMatcher.Score(rendition, ArtistSearch.QueryNameFor(pinned, rank1Artist));
+        int rank1Score = FuzzyMatcher.Score(scoredRendition, ArtistSearch.QueryNameFor(pinned, rank1Artist));
         int bestOther = 0;
         foreach (BaseItem artist in resolved)
         {
@@ -585,9 +596,15 @@ internal static class MultiValueErDisambiguation
                 continue;
             }
 
-            bestOther = Math.Max(bestOther, FuzzyMatcher.Score(rendition, ArtistSearch.QueryNameFor(pinned, artist)));
+            bestOther = Math.Max(bestOther, FuzzyMatcher.Score(scoredRendition, ArtistSearch.QueryNameFor(pinned, artist)));
         }
 
+        // The margin constant is the JF-420 auto-select margin REFERENCED, but
+        // this comparison runs on RAW FuzzyMatcher.Score values while the
+        // handler gate runs FairComparisonScore-scaled operands: the two sites
+        // are deliberately NOT co-calibrated (fair-scaling the rival here would
+        // auto-play P!nk for the pinned JF-684 "pink" ask); recalibrating
+        // either site must reason about its own scale, not assume the other.
         if (rank1Score - bestOther < PlayArtistSongsIntentHandler.ContainmentVsFullNameMargin)
         {
             return null;
@@ -603,10 +620,34 @@ internal static class MultiValueErDisambiguation
         // mismatch surfacing instead of silently playing the wrong artist.
         // Strictly greater: a tie is the live "P!nk floyd" shape (a
         // containment-exempt pool rival scoring the same 90), which must keep
-        // bypassing.
+        // bypassing; a 0-margin tie riding through is the accepted
+        // string-indistinguishability cost (the JF-377 class), pinned by the
+        // live-case tests. Bounded scan (code-review round 2): only pool
+        // artists whose query name SHARES a token with the rendition can
+        // outscore it, so the guard pays its Levenshtein calls on the
+        // token-overlapping subset, not the whole pool.
+        HashSet<string> renditionTokens = new(
+            scoredRendition.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+            StringComparer.OrdinalIgnoreCase);
         foreach (BaseItem artist in pool)
         {
-            if (FuzzyMatcher.Score(rendition, ArtistSearch.QueryNameFor(pinned, artist)) > rank1Score)
+            if (artist.Id.Equals(rank1Artist.Id))
+            {
+                continue;
+            }
+
+            string queryName = ArtistSearch.QueryNameFor(pinned, artist);
+            bool sharesToken = false;
+            foreach (string token in queryName.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                if (renditionTokens.Contains(token))
+                {
+                    sharesToken = true;
+                    break;
+                }
+            }
+
+            if (sharesToken && FuzzyMatcher.Score(scoredRendition, queryName) > rank1Score)
             {
                 return null;
             }
