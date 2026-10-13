@@ -6,7 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-10-12 21:12'
-updated_date: '2026-10-12 21:25'
+updated_date: '2026-10-13 10:47'
 labels: []
 dependencies: []
 priority: medium
@@ -36,4 +36,6 @@ Residual 2 from JF-874's A/B (worker report, 2026-10-12 night): with PlayMovieIn
 
 <!-- SECTION:NOTES:BEGIN -->
 LIVE OBSERVATION 2026-10-12 23:2x (post-JF-874 deploy, vendor skill, it-IT): the steal did NOT reproduce on the live build. 'metti il brano sunny dancer' reads PlaySongIntent on the deployed model (catalog MovieTitle wired, template rebuilt, wrapper battery green 10/10). The scratch-build prediction (three builds stable) did not transfer; per the nlu_trainer_nondeterminism discipline, do NOT close this on one reading: re-probe 3x on the next model touch and keep an eye on the JF-876 shape. If it stays PlaySong across two model builds, downgrade to a scratch-only anomaly.
+
+EXECUTED 2026-10-13 (maintainer decision: fix now), branch jf876 commit 1a8e6f06 in worktree /tmp/wt-jf876, NOT pushed, NOT deployed. Handler-side guard as directed: PlayVideoIntentHandler detects a leading song-carrier phrase in the RAW movie-slot fill via MultiValueErDisambiguation.TryDetectSongCarrier (new, shares the ONE StripSongCarrierPhrase table) and delegates the whole ask to PlaySongIntentHandler (typed singleton, required ctor param, registration pinned). Whole-span escape keeps carrier-TITLED movies playable (fill == ER canonical verbatim); the RAW fill rides the song slot so exactly one carrier cut happens. No model/template changes. Both TFMs 5904/5904, Release -warnaserror clean, red-green verified. Residuals filed: JF-879 (sibling catalog slots + PlayVideoIntent title path) and JF-883 (stray review findings on JF-879 merge). Known limit: a steal whose fill carries NO carrier noun (clean canonical fill) is invisible to any handler-side guard; if that shape ever shows live, it is a model-side fix.
 <!-- SECTION:NOTES:END -->
