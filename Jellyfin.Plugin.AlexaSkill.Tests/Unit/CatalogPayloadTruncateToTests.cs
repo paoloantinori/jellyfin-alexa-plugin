@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Catalog;
 using Xunit;
@@ -13,23 +14,27 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 /// </summary>
 public class CatalogPayloadTruncateToTests
 {
-    private static CatalogPayload Build(int libraryCount, int tailCount)
+    private static CatalogPayload Build(int libraryCount, int tailCount, string? lastTailName = null)
     {
         // The library block rides the production builder FromItems (unique
         // fixture names, so its same-title dedup is inert); the synthetic
         // tail has no shared helper (MergeSeeds only emits the real seed
-        // names), so it appends directly.
+        // names), so it appends through CatalogValueFactory.Create: the
+        // JF-689 construction contract (truncation, enrichment) then shapes
+        // fixture tail entries exactly as it shapes production ones, so a
+        // pin cannot drift from real factory output.
         var payload = CatalogPayload.FromItems(
             CatalogType.Audiobook,
             Enumerable.Range(1, libraryCount)
-                .Select(i => (System.Guid.NewGuid(), $"Lib {i:D3}")),
+                .Select(i => (Guid.NewGuid(), $"Lib {i:D3}")),
             (_, _) => [],
             "it-IT");
 
         for (int i = 1; i <= tailCount; i++)
         {
+            string name = i == tailCount && lastTailName != null ? lastTailName : $"Seed {i:D3}";
             payload.Values.Add(CatalogValueFactory.Create(
-                CatalogType.Audiobook, System.Guid.NewGuid(), $"Seed {i:D3}", []));
+                CatalogType.Audiobook, Guid.NewGuid(), name, []));
         }
 
         return payload;
@@ -60,9 +65,9 @@ public class CatalogPayloadTruncateToTests
 
     /// <summary>
     /// THE JF-879 BAND PIN: a library one value under the cap with a tail
-    /// that no longer fits whole. JF-848's partition cut the seed tail here
-    /// (the just-below-cap discontinuity); now every cut reserves the tail
-    /// whole and the LIBRARY HEAD loses the excess instead.
+    /// that no longer fits whole. The tail survives whole and the LIBRARY
+    /// HEAD loses the excess (the reserve-on-any-cut policy; rationale at
+    /// <see cref="CatalogPayload.TruncateTo"/>).
     /// </summary>
     [Fact]
     public void TruncateTo_JustBelowCapLibrary_ReservesWholeTail()
@@ -70,18 +75,22 @@ public class CatalogPayloadTruncateToTests
         // 24 library + 6 tail = 30 values, cap 25: the library block alone
         // (24) stays under the cap, so JF-848's condition never fired here.
         var payload = Build(24, 6);
+        string[] originalNames = Names(payload);
 
         var (dropped, droppedReserved) = payload.TruncateTo(25, 6);
 
         Assert.Equal(25, payload.Values.Count);
-        // The tail survives whole, in order, as the final block ...
+        // The kept head is the library block's first (cap - tail) values in
+        // fetch order, pinned in full: the tail-survival and drop assertions
+        // alone would also pass a scrambled head.
+        Assert.Equal(
+            originalNames.Take(25 - 6),
+            payload.Values.Take(25 - 6).Select(v => v.Name.Value));
+
+        // The tail survives whole, in order, as the final block.
         Assert.Equal(
             new[] { "Seed 001", "Seed 002", "Seed 003", "Seed 004", "Seed 005", "Seed 006" },
             payload.Values.Skip(25 - 6).Select(v => v.Name.Value));
-        // ... and the LIBRARY HEAD takes the loss, not the tail.
-        Assert.Equal(
-            new[] { "Lib 001", "Lib 002", "Lib 003" },
-            payload.Values.Take(3).Select(v => v.Name.Value).ToArray());
         Assert.Equal(5, dropped.Count);
         Assert.Equal(0, droppedReserved);
         // The drop leads with the first book past the reserved library head.
@@ -116,8 +125,9 @@ public class CatalogPayloadTruncateToTests
     [Fact]
     public void TruncateTo_StrictlyOverCap_GenericWordSurvivesLast()
     {
-        var payload = Build(30, 3);
-        payload.Values[^1].Name.Value = "generic";
+        // The generic word rides the tail as a factory-built entry (the
+        // production path; see Build), never a post-hoc name mutation.
+        var payload = Build(30, 3, "generic");
 
         var (dropped, droppedReserved) = payload.TruncateTo(25, 3);
 
