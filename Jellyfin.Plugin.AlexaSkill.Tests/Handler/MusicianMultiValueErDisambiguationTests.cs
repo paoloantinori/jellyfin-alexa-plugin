@@ -27,8 +27,9 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 /// the exact-name hit auto-plays through the JF-420.1 equality bypass with no
 /// prompt; these suites pin the gate that asks which artist to play when the
 /// ER ambiguity is REAL in the library, the JF-884 variant-canonical collapse
-/// that auto-plays the single resolved artist instead, and the unchanged cold
-/// paths around them.
+/// that auto-plays the single resolved artist instead, the JF-885 rank-1
+/// dominance bypass that skips the ask when the rendition is decisively
+/// rank-1's ask, and the unchanged cold paths around them.
 /// </summary>
 [Collection("Plugin")]
 public class MusicianMultiValueErDisambiguationTests : PluginTestBase, IDisposable
@@ -40,6 +41,7 @@ public class MusicianMultiValueErDisambiguationTests : PluginTestBase, IDisposab
     private BaseItem Abba() => new MusicArtist { Name = "ABBA", Id = Guid.NewGuid() };
     private BaseItem PinkMartini() => new MusicArtist { Name = "Pink Martini", Id = Guid.NewGuid() };
     private BaseItem PinkFairies() => new MusicArtist { Name = "Pink Fairies", Id = Guid.NewGuid() };
+    private BaseItem KingFloyd() => new MusicArtist { Name = "King Floyd", Id = Guid.NewGuid() };
 
     private static IArtistIndex IndexOf(params BaseItem[] artists)
         => new FakeArtistIndex(artists, FakeArtistIndex.CodesFromArtistNames(artists));
@@ -103,6 +105,10 @@ public class MusicianMultiValueErDisambiguationTests : PluginTestBase, IDisposab
         // musician ER [P!nk, Pink Floyd]. Pre-JF-690 the generic-word fallback
         // silently played Amazon's rank #1; the gate must ask instead, before
         // the artist search is even paid for.
+        // JF-885 non-regression, pinned scores (measured 2026-10-13): the
+        // rendition "pink" scores 75 against rank-1 "P!nk" and 90 against
+        // "Pink Floyd", a margin of -15, far below the JF-420 bar, so the
+        // rank-1 dominance bypass does not fire and the ask stays.
         var pnk = Pnk();
         var floyd = PinkFloyd();
         var song = new Audio { Name = "Just Like a Pill", Id = Guid.NewGuid() };
@@ -122,6 +128,9 @@ public class MusicianMultiValueErDisambiguationTests : PluginTestBase, IDisposab
         // The carrier form of the same evidence ("suona la cantante pink"
         // selects PlayArtistSongs directly): the gap the task file verified in
         // code, the JF-420.1 equality-bypass auto-play of the rank #1 hit.
+        // JF-885 non-regression (pinned scores as in the PlaySong twin above:
+        // "pink" scores 75 vs 90, margin -15): the dominance bypass does not
+        // fire and the ask stays.
         var pnk = Pnk();
         var floyd = PinkFloyd();
         var song = new Audio { Name = "Wish You Were Here", Id = Guid.NewGuid() };
@@ -627,11 +636,39 @@ public class MusicianMultiValueErDisambiguationTests : PluginTestBase, IDisposab
     }
 
     [Fact]
-    public async Task PlayArtistSongs_VariantPlusExactCanonical_TwoDistinctIds_StillAsks()
+    public async Task PlayArtistSongs_VariantPlusExactCanonical_DominantRendition_AutoPlaysRank1()
     {
-        // The dangerous adjacent shape: rank #1 is the variant of one artist,
-        // rank #2 exact-names ANOTHER. The id dedupe must see TWO distinct
-        // artists and keep the JF-684 ask.
+        // JF-885 updates this JF-884-era pin: rank #1 is the variant of one
+        // artist and rank #2 exact-names ANOTHER, and the id dedupe still sees
+        // TWO distinct library artists (that JF-884 contract is unchanged and
+        // still pinned by the close-rendition companion below), but the ask no
+        // longer fires when the rendition is decisively rank-1's ask: "pink
+        // floyd" scores 100 against Pink Floyd and 30 against P!nk (pinned
+        // 2026-10-13), a margin of 70, so the dominant rank-1 plays instead.
+        var pnk = Pnk();
+        var floyd = PinkFloyd();
+        var song = new Audio { Name = "Wish You Were Here", Id = Guid.NewGuid() };
+        List<InternalItemsQuery> queries = SetupArtistSongsCapturingQueries(song);
+
+        var handler = CreateArtistHandler(IndexOf(pnk, floyd));
+        SkillResponse response = await handler.HandleAsync(
+            CreateArtistIntent(TestHelpers.ResolvedSlotMultiValue("pink floyd", "P!nk floyd", "P!nk")),
+            _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
+
+        TestHelpers.AssertNoDisambiguationState(response);
+        Assert.NotNull(TestHelpers.GetPlayDirective(response));
+        Assert.Contains(queries, q => q.ArtistIds!.Length == 1 && q.ArtistIds[0] == floyd.Id);
+        Assert.DoesNotContain(queries, q => q.ArtistIds!.Length == 1 && q.ArtistIds[0] == pnk.Id);
+    }
+
+    [Fact]
+    public async Task PlayArtistSongs_VariantPlusExactCanonical_CloseRendition_StillAsks()
+    {
+        // The companion that keeps the JF-884 id-dedupe ask alive: the SAME
+        // canonical set (variant rank #1 + exact rank #2, two distinct library
+        // ids) under a rendition that leaves the resolved artists close ("pink"
+        // scores 90 against Pink Floyd and 75 against P!nk, margin 15, below
+        // the JF-420 bar), so the two-name ask fires.
         var pnk = Pnk();
         var floyd = PinkFloyd();
         var song = new Audio { Name = "Just Like a Pill", Id = Guid.NewGuid() };
@@ -639,7 +676,7 @@ public class MusicianMultiValueErDisambiguationTests : PluginTestBase, IDisposab
 
         var handler = CreateArtistHandler(IndexOf(pnk, floyd));
         SkillResponse response = await handler.HandleAsync(
-            CreateArtistIntent(TestHelpers.ResolvedSlotMultiValue("pink floyd", "P!nk floyd", "P!nk")),
+            CreateArtistIntent(TestHelpers.ResolvedSlotMultiValue("pink", "P!nk floyd", "P!nk")),
             _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
 
         TestHelpers.AssertMultiArtistAsk(response, floyd, pnk);
@@ -650,7 +687,11 @@ public class MusicianMultiValueErDisambiguationTests : PluginTestBase, IDisposab
     {
         // Guard (c): the collaboration family. Three canonicals that each
         // exact-name a DIFFERENT library artist stay a real ambiguity; the
-        // variant dedupe must not collapse them.
+        // variant dedupe must not collapse them. JF-885 margin check (pinned
+        // 2026-10-13): "pearl jam" scores 100 against rank-1 "Pearl Jam" and
+        // 90 against both "Pearl Jam w" and "Mad Season & Pearl Jam", a margin
+        // of 10, below the JF-420 bar, so the dominance bypass does not fire
+        // and the ask stays.
         var pearlJam = new MusicArtist { Name = "Pearl Jam", Id = Guid.NewGuid() };
         var pearlJamW = new MusicArtist { Name = "Pearl Jam w", Id = Guid.NewGuid() };
         var madSeason = new MusicArtist { Name = "Mad Season & Pearl Jam", Id = Guid.NewGuid() };
@@ -689,6 +730,163 @@ public class MusicianMultiValueErDisambiguationTests : PluginTestBase, IDisposab
         TestHelpers.AssertNoDisambiguationState(response);
         Assert.NotNull(session.NowPlayingQueue);
         Assert.Equal(song.Id, session.NowPlayingQueue![0].Id);
+    }
+
+    // ---------------------------------------------------------------
+    // JF-885: the rank-1 dominance bypass. When Amazon's rank-1 canonical is
+    // decisively what the user asked for, the tail ER values are coincidental
+    // token overlaps and the yes/no ask is noise: rank-1's resolved artist
+    // auto-plays on the JF-420 auto-select margin over the best other resolved
+    // artist. Genuinely close pairs keep the ask (the JF-684 and Pearl Jam
+    // pins above). Rank-1 exactness alone is deliberately NOT a bypass (the
+    // Pearl Jam pin's rendition IS its rank-1 canonical exactly).
+    // ---------------------------------------------------------------
+
+    /// <summary>
+    /// Captures every artist-scoped query so a dominance leg can prove WHICH
+    /// library artist played (the play is scoped to rank-1's resolve, never to
+    /// a tail value's).
+    /// </summary>
+    private List<InternalItemsQuery> SetupArtistSongsCapturingQueries(Audio song)
+    {
+        _fx.SetupUserMock();
+        var queries = new List<InternalItemsQuery>();
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q =>
+            {
+                if (q.ArtistIds != null && q.ArtistIds.Length > 0)
+                {
+                    queries.Add(q);
+                    return new List<BaseItem> { song };
+                }
+
+                return new List<BaseItem>();
+            });
+        return queries;
+    }
+
+    [Fact]
+    public async Task PlayArtistSongs_MultiValueEr_Rank1DominantVariantRendition_AutoPlays_NoAsk()
+    {
+        // JF-885, THE live case (2026-10-13 e2e retry: "metti una canzone dei
+        // pink floyd" with ER [Pink Floyd rank-1, King Floyd], both real library
+        // artists). The rendition Amazon mirrors into the slot is the phonetic
+        // variant "P!nk floyd": it scores 90 against "Pink Floyd" (one
+        // substitution) and 70 against "King Floyd" (three substitutions),
+        // pinned 2026-10-13, a margin of EXACTLY the JF-420 bar. The dominance
+        // leg fires AT the bar (an above-only comparison would leave the live
+        // ask in place, the gap this task closes) and Pink Floyd plays.
+        var floyd = PinkFloyd();
+        var king = KingFloyd();
+        var song = new Audio { Name = "Money", Id = Guid.NewGuid() };
+        List<InternalItemsQuery> queries = SetupArtistSongsCapturingQueries(song);
+
+        var handler = CreateArtistHandler(IndexOf(floyd, king));
+        var session = _fx.CreateSession();
+        SkillResponse response = await handler.HandleAsync(
+            CreateArtistIntent(TestHelpers.ResolvedSlotMultiValue("P!nk floyd", "Pink Floyd", "King Floyd")),
+            _fx.CreateContext(), _fx.CreateUser(), session, CancellationToken.None);
+
+        TestHelpers.AssertNoDisambiguationState(response);
+        Assert.NotNull(TestHelpers.GetPlayDirective(response));
+        Assert.True(response.Response.ShouldEndSession == true, "a play ends the session (JF-299 rule)");
+        Assert.NotNull(session.NowPlayingQueue);
+        Assert.Equal(song.Id, session.NowPlayingQueue![0].Id);
+        Assert.Contains(queries, q => q.ArtistIds!.Length == 1 && q.ArtistIds[0] == floyd.Id);
+        Assert.DoesNotContain(queries, q => q.ArtistIds!.Length == 1 && q.ArtistIds[0] == king.Id);
+    }
+
+    [Fact]
+    public async Task PlayArtistSongs_MultiValueEr_Rank1DominantSpokenRendition_AutoPlays_NoAsk()
+    {
+        // The same ER shape under the plain spoken rendition "pink floyd"
+        // (pinned 2026-10-13: 100 against "Pink Floyd", 80 against "King
+        // Floyd", again a margin of exactly the JF-420 bar). The e2e fixtures'
+        // expected outcome (it-IT "metti una canzone dei pink floyd", the
+        // es/fr "oye los"/"lis les" smoke rows): the play, no ask.
+        var floyd = PinkFloyd();
+        var king = KingFloyd();
+        var song = new Audio { Name = "Comfortably Numb", Id = Guid.NewGuid() };
+        List<InternalItemsQuery> queries = SetupArtistSongsCapturingQueries(song);
+
+        var handler = CreateArtistHandler(IndexOf(floyd, king));
+        SkillResponse response = await handler.HandleAsync(
+            CreateArtistIntent(TestHelpers.ResolvedSlotMultiValue("pink floyd", "Pink Floyd", "King Floyd")),
+            _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
+
+        TestHelpers.AssertNoDisambiguationState(response);
+        Assert.NotNull(TestHelpers.GetPlayDirective(response));
+        Assert.Contains(queries, q => q.ArtistIds!.Length == 1 && q.ArtistIds[0] == floyd.Id);
+        Assert.DoesNotContain(queries, q => q.ArtistIds!.Length == 1 && q.ArtistIds[0] == king.Id);
+    }
+
+    [Fact]
+    public async Task PlaySong_MultiValueEr_Rank1DominantVariantRendition_AutoPlays_NoAsk()
+    {
+        // The song composite carries the same bypass (the generic-word leg the
+        // live it-IT utterance takes): "una canzone" + the live ER shape plays
+        // Pink Floyd through the survivor adoption, no ask.
+        var floyd = PinkFloyd();
+        var king = KingFloyd();
+        var song = new Audio { Name = "Money", Id = Guid.NewGuid() };
+        List<InternalItemsQuery> queries = SetupArtistSongsCapturingQueries(song);
+
+        var handler = CreateSongHandler(IndexOf(floyd, king));
+        var session = _fx.CreateSession();
+        SkillResponse response = await handler.HandleAsync(
+            CreateSongIntent("una canzone", TestHelpers.ResolvedSlotMultiValue("P!nk floyd", "Pink Floyd", "King Floyd")),
+            _fx.CreateContext(), _fx.CreateUser(), session, CancellationToken.None);
+
+        TestHelpers.AssertNoDisambiguationState(response);
+        Assert.NotNull(TestHelpers.GetPlayDirective(response));
+        Assert.True(response.Response.ShouldEndSession == true);
+        Assert.Equal(song.Id, session.NowPlayingQueue![0].Id);
+        Assert.Contains(queries, q => q.ArtistIds!.Length == 1 && q.ArtistIds[0] == floyd.Id);
+    }
+
+    [Fact]
+    public async Task PlayArtistSongs_MultiValueEr_Rank1DominantButLibraryArtistOutscores_StillAsks()
+    {
+        // Code-review round (JF-885), the stale-catalog guard: the library HAS
+        // the artist the user named ("King Floyd") but the catalog lags (the
+        // weekly sync), so Amazon ER matches token-overlapping canonicals
+        // [Pink Floyd, P!nk] instead. The margin alone would auto-play rank-1
+        // Pink Floyd ("king floyd" scores 80 against it and ~20 against P!nk),
+        // but the UNRESOLVED library artist outscores rank-1 (King Floyd at
+        // 100 > 80): the rendition is not decisively rank-1's ask, and the ask
+        // keeps surfacing the mismatch instead of silently playing the wrong
+        // artist.
+        var floyd = PinkFloyd();
+        var pnk = Pnk();
+        var king = KingFloyd();
+        var song = new Audio { Name = "Money", Id = Guid.NewGuid() };
+        SetupArtistSongs(song);
+
+        var handler = CreateArtistHandler(IndexOf(floyd, pnk, king));
+        SkillResponse response = await handler.HandleAsync(
+            CreateArtistIntent(TestHelpers.ResolvedSlotMultiValue("king floyd", "Pink Floyd", "P!nk")),
+            _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
+
+        TestHelpers.AssertMultiArtistAsk(response, floyd, pnk);
+    }
+
+    [Fact]
+    public void TryArbitrate_NoErCanonical_FreeTextSlot_GateStaysClosed()
+    {
+        // Guard (e): a musician slot with NO entity resolution (the free-text
+        // path) never reaches the dominance leg; the gate closes on the empty
+        // canonical list exactly as before JF-885 and the caller's own search
+        // path keeps owning the raw value.
+        var floyd = PinkFloyd();
+        var king = KingFloyd();
+        var request = CreateArtistIntent(new Slot { Name = "musician", Value = "pink floyd" });
+        var logger = _fx.LoggerFactory.CreateLogger("jf885-guard-e");
+
+        var result = MultiValueErDisambiguation.TryArbitrate(
+            request, _fx.CreateUser(), IndexOf(floyd, king), _fx.LibraryManager.Object, logger, "it-IT");
+
+        Assert.Null(result.Ask);
+        Assert.Null(result.ResolvedArtist);
     }
 
     public void Dispose() => _fx.LoggerFactory.Dispose();

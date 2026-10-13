@@ -106,6 +106,24 @@ public static class SlotValueHelper
            && string.Equals(rawSlotValue.Trim(), canonicalValue.Trim(), StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
+    /// The raw spoken value of a named slot on an intent request (trimmed), or
+    /// null when the slot is absent or whitespace (Alexa delivers
+    /// partially-matched slots as empty or whitespace strings;
+    /// IsNullOrWhiteSpace, not IsNullOrEmpty - CLAUDE.md anti-pattern #7).
+    /// JF-594's one-home semantics for slot extraction, exposed at the
+    /// request level beside the canonical reads so static non-handler
+    /// consumers (the JF-885 ER gate) share the ONE definition with
+    /// <see cref="Handler.BaseHandler.GetSlotValue"/> (which delegates here).
+    /// </summary>
+    /// <param name="request">The intent request carrying the slots.</param>
+    /// <param name="slotName">The slot name.</param>
+    /// <returns>The trimmed slot value, or null.</returns>
+    public static string? GetSlotValue(IntentRequest request, string slotName)
+        => request.Intent.Slots != null && request.Intent.Slots.TryGetValue(slotName, out Slot? slot)
+            ? (string.IsNullOrWhiteSpace(slot.Value) ? null : slot.Value.Trim())
+            : null;
+
+    /// <summary>
     /// The full resolved entry (id AND canonical name) of the first
     /// ER_SUCCESS_MATCH authority on the slot (JF-869), or null when no
     /// authority matched. The id is the shared cross-locale key space the

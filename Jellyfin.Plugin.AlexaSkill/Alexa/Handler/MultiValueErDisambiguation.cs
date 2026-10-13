@@ -39,7 +39,12 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// library artist returns that artist instead of letting the stale rank-#1
 /// canonical drive a not-found. JF-884: the gate runs on the single-value shape
 /// too, so a VARIANT canonical ("P!nk floyd") whose resolves collapse to the one
-/// library artist ("Pink Floyd") plays it instead of prompting. The gate closes
+/// library artist ("Pink Floyd") plays it instead of prompting. JF-885: a
+/// two-or-more ask is skipped when Amazon's rank-1 is the DOMINANT match of the
+/// slot rendition (the JF-420 auto-select margin over the best other resolved
+/// artist; <see cref="TryResolveDominantRank1Artist"/>),
+/// because the tail values are then coincidental token overlaps and the ask is
+/// noise. The gate closes
 /// without the in-memory index
 /// (the cold/database path keeps today's rank-#1 behavior, the same accepted
 /// trade-off class as the JF-420 alternative pool and the JF-652 near-tie pool).
@@ -366,6 +371,11 @@ internal static class MultiValueErDisambiguation
     /// the resolution dedupes by RESOLVED ARTIST ID across the exact and the
     /// phonetic layers, so a variant canonical ("P!nk floyd") whose resolves
     /// collapse to one library artist plays that artist instead of prompting.
+    /// JF-885: the two-or-more ask is SKIPPED when Amazon's rank-1 is the
+    /// dominant match of the slot rendition (the JF-420 auto-select margin over
+    /// the best other resolved artist; see
+    /// <see cref="TryResolveDominantRank1Artist"/>) and rank-1's artist plays
+    /// instead, carried on the same survivor adoption the callers already own.
     /// All closed-gate legs (no ER values, no ready index, zero resolves) return
     /// the default struct (zero resolves carries the pool): the caller proceeds
     /// on its existing single-value path byte-identically.
@@ -431,9 +441,8 @@ internal static class MultiValueErDisambiguation
         // full contract lives on ArtistSearch.ResolveErCandidates). The bar is
         // the decision-point idiom, not the recall floor: a resolve here can
         // auto-play with every downstream string gate stood down.
-        List<BaseItem> resolved = ArtistSearch.ResolveErCandidates(
-            candidates, pool, pinned,
-            FuzzyMatcher.GetEffectiveThreshold(user, ArtistSearch.ErVariantResolutionThreshold));
+        int erThreshold = FuzzyMatcher.GetEffectiveThreshold(user, ArtistSearch.ErVariantResolutionThreshold);
+        List<BaseItem> resolved = ArtistSearch.ResolveErCandidates(candidates, pool, pinned, erThreshold);
         if (resolved.Count == 1)
         {
             if (candidates.Count > 1)
@@ -464,6 +473,23 @@ internal static class MultiValueErDisambiguation
             return new ErArtistArbitration(null, null, pool);
         }
 
+        // JF-885: before the ask, the rank-1 dominance bypass. Two library
+        // artists is only worth a prompt when the rendition leaves them
+        // genuinely tied; when rank-1 is what the user asked for, the tail is
+        // coincidental token overlap ("pink floyd" also matching King Floyd on
+        // the shared "floyd") and the ask is noise (the live 2026-10-13 e2e
+        // evidence behind this gate).
+        string? rendition = SlotValueHelper.GetSlotValue(request, IntentNames.Slots.Musician);
+        BaseItem? dominant = TryResolveDominantRank1Artist(
+            candidates[0], resolved, rendition, pool, pinned, erThreshold);
+        if (dominant != null)
+        {
+            logger.LogInformation(
+                "MultiValueEr: ER returned {Count} values on the musician slot naming {Resolved} library artists, but rank-1 '{Artist}' dominates the rendition '{Rendition}'; playing it, no ask (JF-885)",
+                candidates.Count, resolved.Count, dominant.Name, rendition);
+            return new ErArtistArbitration(null, dominant, pool);
+        }
+
         logger.LogInformation(
             "MultiValueEr: ER returned {Count} values on the musician slot naming {Resolved} library artists ({Names}); asking which to play (JF-690)",
             candidates.Count, resolved.Count, string.Join(", ", resolved.Select(a => a.Name)));
@@ -471,6 +497,122 @@ internal static class MultiValueErDisambiguation
             .Select(a => new DisambiguationHelper.MatchInfo { Id = a.Id.ToString(), Name = a.Name })
             .ToList();
         return new ErArtistArbitration(DisambiguationHelper.AskMultipleArtists(matches, locale, context), null, pool);
+    }
+
+    /// <summary>
+    /// JF-885: the rank-1 dominance bypass of the two-or-more ask: the library
+    /// artist Amazon's RANK-1 canonical resolves to, when the slot rendition is
+    /// decisively an ask for it by the JF-420 MARGIN transplanted to the ER
+    /// layer, or null when the resolved artists stay genuinely tied and the ask
+    /// must fire. Every resolved artist's query-side name is scored against the
+    /// rendition with the ONE matcher definition the resolver itself uses
+    /// (<see cref="FuzzyMatcher.Score"/>); rank-1 must beat the best OTHER
+    /// resolved artist (its own split-rivals included, which is why a variant
+    /// canonical that resolves two near-equal artists still asks) by
+    /// <see cref="PlayArtistSongsIntentHandler.ContainmentVsFullNameMargin"/>,
+    /// the JF-420 constant referenced, not re-invented. The comparison fires
+    /// AT the bar (&gt;=), not strictly above it: the live shape sits exactly
+    /// ON the bar under both renditions ("P!nk floyd": Pink Floyd 90 vs King
+    /// Floyd 70; "pink floyd": 100 vs 80, both margins exactly 20, measured
+    /// 2026-10-13), so an above-only rule would leave the live ask in place.
+    /// The pinned non-regressions hold with room to spare: the JF-684 shape
+    /// ("pink": P!nk 75 vs Pink Floyd 90, margin -15) and the Pearl Jam
+    /// collaboration family ("pearl jam": 100 vs 90, margin 10) both keep the
+    /// ask. The raw-score comparison is deliberate: containment-shaped pairs
+    /// ride the matcher's ContainmentScore shortcut (90), so a containment
+    /// rival of rank-1 stays CLOSE on this scale and the ask survives it
+    /// (the conservative side; fair-scaling the rival instead would auto-play
+    /// rank-1 P!nk for the pinned JF-684 "pink" ask).
+    /// <para>
+    /// Two deliberate scoping decisions. Rank-1 EXACTNESS alone (the rendition
+    /// equaling the rank-1 canonical) is NOT a bypass leg: the pinned Pearl Jam
+    /// collaboration family ("pearl jam" IS rank-1 "Pearl Jam" exactly, with
+    /// "Pearl Jam w" and "Mad Season &amp; Pearl Jam" at 90) must keep its
+    /// ask, and an exact-equality fast path is structurally unable to tell
+    /// that family from its own target shape; lifting this for a
+    /// JF-420.1-at-the-ER-layer fast path is a tracked decision that must move
+    /// the Pearl Jam pin first. And the stale-catalog guard (code-review
+    /// round): the margin alone compares only the ER-RESOLVED artists, so the
+    /// bypass additionally requires that NO library artist in the pool
+    /// outscores rank-1 against the rendition (strictly), keeping the ask when
+    /// the rendition demonstrably names an artist Amazon never matched.
+    /// </para>
+    /// Rank-1's artist is identified by resolving the rank-1 canonical in
+    /// ISOLATION: the full resolution dedupes by id in candidate order, but a
+    /// rank-1 canonical that resolves to nothing leaves resolved[0] belonging
+    /// to a LOWER-ranked candidate, and a tail value's resolve must never ride
+    /// the rank-1 banner (null returns, the ask names the first real artist).
+    /// The isolated call is the same ONE resolver over the same pool, view, and
+    /// threshold with the same empty seen-set the rank-1 candidate sees in the
+    /// full call, so its first element is exactly the full call's resolved[0]
+    /// whenever it exists.
+    /// </summary>
+    /// <param name="rank1Canonical">Amazon's rank-1 canonical value (the first ER value).</param>
+    /// <param name="resolved">The gate's resolved library artists (2 or more).</param>
+    /// <param name="rendition">The RAW musician slot value (what the user asked for); null/whitespace never bypasses.</param>
+    /// <param name="pool">The gate's scoped artist pool (the isolated rank-1 resolve).</param>
+    /// <param name="pinned">The pinned index view (query-side names for scoring).</param>
+    /// <param name="threshold">The ER resolution bar the gate already computed.</param>
+    /// <returns>The rank-1 artist when the rendition is decisively its ask; null to keep the ask.</returns>
+    private static BaseItem? TryResolveDominantRank1Artist(
+        string rank1Canonical,
+        IReadOnlyList<BaseItem> resolved,
+        string? rendition,
+        IReadOnlyList<BaseItem> pool,
+        IArtistIndex pinned,
+        int threshold)
+    {
+        if (string.IsNullOrWhiteSpace(rendition))
+        {
+            return null;
+        }
+
+        List<BaseItem> rank1Resolves = ArtistSearch.ResolveErCandidates(
+            new[] { rank1Canonical }, pool, pinned, threshold);
+        if (rank1Resolves.Count == 0)
+        {
+            return null;
+        }
+
+        BaseItem rank1Artist = rank1Resolves[0];
+
+        int rank1Score = FuzzyMatcher.Score(rendition, ArtistSearch.QueryNameFor(pinned, rank1Artist));
+        int bestOther = 0;
+        foreach (BaseItem artist in resolved)
+        {
+            if (artist.Id.Equals(rank1Artist.Id))
+            {
+                continue;
+            }
+
+            bestOther = Math.Max(bestOther, FuzzyMatcher.Score(rendition, ArtistSearch.QueryNameFor(pinned, artist)));
+        }
+
+        if (rank1Score - bestOther < PlayArtistSongsIntentHandler.ContainmentVsFullNameMargin)
+        {
+            return null;
+        }
+
+        // Code-review round (JF-885), the stale-catalog guard: the margin is
+        // computed over the ER-RESOLVED artists only, but the catalog can lag
+        // the library (the weekly sync), so the rendition can name a library
+        // artist Amazon never matched ("king floyd" with King Floyd in the
+        // library but not the catalog, ER returning token-overlapping
+        // canonicals). When an unresolved library artist outscores rank-1, the
+        // rendition is NOT decisively rank-1's ask and the ask keeps today's
+        // mismatch surfacing instead of silently playing the wrong artist.
+        // Strictly greater: a tie is the live "P!nk floyd" shape (a
+        // containment-exempt pool rival scoring the same 90), which must keep
+        // bypassing.
+        foreach (BaseItem artist in pool)
+        {
+            if (FuzzyMatcher.Score(rendition, ArtistSearch.QueryNameFor(pinned, artist)) > rank1Score)
+            {
+                return null;
+            }
+        }
+
+        return rank1Artist;
     }
 
     /// <summary>
