@@ -1136,12 +1136,13 @@ public class LibrarySyncService
         // same-name dedup), not just the fetch: the pre-fix code fetched with
         // Limit=cap but appended the seeds AFTER the bounded fetch, so the
         // payload sailed past the cap and the old warning asserted a
-        // truncation that never happened. JF-848: at saturation (the library
-        // block alone fills the cap) the static tail is RESERVED first, so the
-        // cut takes the library tail instead of evicting every seed and the
-        // locale's generic word; below saturation the JF-825 tail cut stands
+        // truncation that never happened. JF-848, generalized by JF-879 (the
+        // maintainer's "riserva sempre i seed" decision): on ANY over-cap
+        // cut the static tail is RESERVED first, so the cut takes the
+        // library head instead of evicting every seed and the locale's
+        // generic word; a payload that fits entirely is untouched
         // byte-identical (payload order IS priority order, see
-        // CatalogPayload.TruncateTo). The trade-off: a saturated library sees
+        // CatalogPayload.TruncateTo). The trade-off: a capped library sees
         // fewer of its own values (up to staticAppendedCount of them).
         int staticAppendedCount = payload.Values.Count - libraryValueCount;
         var (droppedValues, droppedStaticCount) = payload.TruncateTo(EffectiveMaxCatalogValues, staticAppendedCount);
@@ -1151,13 +1152,12 @@ public class LibrarySyncService
             // them (the debug-logging policy): the composition split comes
             // from the cut itself (TruncateTo owns which block each dropped
             // entry came from), and the sample bounds the line length when a
-            // huge library drops a huge tail. At saturation the library leg
+            // huge library drops a huge tail. On any cut the library leg
             // carries the whole drop (the reserved static floor outranks the
-            // last staticAppendedCount library entries, JF-848), so a nonzero
-            // static leg is the below-saturation seed-tail drop or the canary
-            // for the reserved block alone exceeding the cap (test seams or a
-            // pathological seed block; production static counts are tens
-            // against a 50000 cap).
+            // last staticAppendedCount library entries, JF-848/JF-879), so a
+            // nonzero static leg is the canary for the reserved block alone
+            // exceeding the cap (test seams or a pathological seed block;
+            // production static counts are tens against a 50000 cap).
             _logger.LogWarning(
                 "Truncated {Type} catalog to {Limit} values for user {UserId}: dropped {DroppedCount} lowest-priority entries ({DroppedStaticCount} static seed values, {DroppedLibraryCount} library values); first dropped: {DroppedSample}",
                 catalogType,
