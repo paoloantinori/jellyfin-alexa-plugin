@@ -35,8 +35,12 @@ public class PlayArtistSongsIntentHandler : BaseHandler
     /// Derived from the P!nk floyd case: penalized containment 36 vs genuine 90 = 54
     /// margin (auto-select); a tribute band at ~65 vs penalized 37 = 28 margin (also
     /// auto-select); a genuinely close case would be under 20 (disambiguate).
+    /// JF-885: internal because the ER gate
+    /// (<see cref="MultiValueErDisambiguation"/>) references this SAME bar for its
+    /// rank-1 dominance leg instead of re-inventing the constant; the two decisions
+    /// share one calibration.
     /// </summary>
-    private const double ContainmentVsFullNameMargin = 20.0;
+    internal const double ContainmentVsFullNameMargin = 20.0;
 
     /// <summary>
     /// JF-420/JF-420.3: the bar for an alternative to be "genuinely plausible",
