@@ -261,8 +261,11 @@ public class PlayAlbumIntentHandler : BaseHandler
         // the Alexa window otherwise).
         bool musicianSlotTitleRetryMissed = false;
 
-        // JF-702: set when the multi-value-ER gate resolved the artist by EXACT
-        // library-name equality (the collapse survivor). The JF-471/JF-473 gates
+        // JF-702: set when the ER-resolution gate resolved the artist (the
+        // collapse survivor). JF-884 widened what resolves: exact library-name
+        // equality OR the fuzzy layer's variant-canonical resolve at
+        // ErVariantResolutionThreshold (the "P!nk floyd" -> "Pink Floyd" shape,
+        // deduped by resolved id). The JF-471/JF-473 gates
         // below exist to re-judge SEARCH results (the word-coverage free pass); a
         // survivor is proven evidence and must not be re-scored against the stale
         // rank-#1 canonical the search never validated.

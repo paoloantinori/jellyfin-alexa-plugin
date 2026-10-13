@@ -265,6 +265,18 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         IReadOnlyList<BaseItem> artists = gate.Artists;
         IArtistIndex? pinnedIndex = gate.PinnedIndex;
 
+        // JF-884: the gate ADOPTED the single artist the ER candidates resolved
+        // to (exact or fuzzy variant, deduped by id). That resolution is the
+        // stronger exactness evidence (the JF-420.1 principle: an exact request
+        // must auto-play), so the JF-377/JF-420 query-shape gates below stand
+        // down: they exist to arbitrate a fuzzy match's SHAPE, and re-litigating
+        // a canonical the ER collapse already resolved is what fired the live
+        // yes/no prompt for "P!nk floyd" with exactly one "Pink Floyd" in the
+        // library. The spoken/served name is the RESOLVED artist's real name.
+        // The same adoption-outranks-re-judgment policy PlayAlbum carries as
+        // its JF-702 arbitrationResolvedArtist flag; keep the twins in sync.
+        bool erSurvivorAdopted = gate.ErSurvivorAdopted;
+
         // Re-resolved here for the post-search consumers (cached, so no extra
         // library walk): the JF-420/JF-652 pools fetch from the pinned index
         // scoped to the user's libraries, and the artist-songs query reuses the
@@ -343,6 +355,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         // >= half the query content words (a real multi-word near-match), and boundary-touching
         // containments (whole-word or affixed forms like "outkasts" -> "outkast", JF-408).
         if (artists.Count == 1
+            && !erSurvivorAdopted
             && ArtistSearch.IsCoincidentalContainmentMatch(matchedQuery, Util.ArtistSearch.QueryNameFor(pinnedIndex, artists[0]), locale))
         {
             return AskCoincidentalContainment(artists[0], musicianQuery, locale, context, user);
@@ -358,6 +371,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         // as an alternative (scoring ~65) does NOT trigger: Nirvana auto-plays.
         // JF-755: containment operands are the matched reading pair (see matchedQuery).
         if (artists.Count == 1
+            && !erSurvivorAdopted
             && matchedQuery.Contains(' ')
             && matchedQuery.Contains(Util.ArtistSearch.QueryNameFor(pinnedIndex, artists[0]), StringComparison.OrdinalIgnoreCase)
             && !ArtistSearch.IsExactNameMatch(matchedQuery, Util.ArtistSearch.QueryNameFor(pinnedIndex, artists[0]))
@@ -508,7 +522,10 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         // carrier phrase, so the yes/no prompt is the only no-regression behavior.
         // JF-755: the FINAL pick's matched reading (the collapse paths above may have
         // replaced artists[0] since the entry gate).
+        // JF-884: an adopted ER survivor stands down here too (same exactness
+        // evidence as the entry gate above).
         if (artists.Count == 1
+            && !erSurvivorAdopted
             && ArtistSearch.IsCoincidentalContainmentMatch(matchedQuery, Util.ArtistSearch.QueryNameFor(pinnedIndex, artists[0]), locale))
         {
             return AskCoincidentalContainment(artists[0], musicianQuery, locale, context, user);

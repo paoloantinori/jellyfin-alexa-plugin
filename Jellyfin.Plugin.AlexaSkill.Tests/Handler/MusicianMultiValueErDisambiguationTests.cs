@@ -26,8 +26,9 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 /// artists). The plain JF-659 canonical read keeps only Amazon's rank #1 and
 /// the exact-name hit auto-plays through the JF-420.1 equality bypass with no
 /// prompt; these suites pin the gate that asks which artist to play when the
-/// ER ambiguity is REAL in the library, and the unchanged single-value/cold
-/// paths around it.
+/// ER ambiguity is REAL in the library, the JF-884 variant-canonical collapse
+/// that auto-plays the single resolved artist instead, and the unchanged cold
+/// paths around them.
 /// </summary>
 [Collection("Plugin")]
 public class MusicianMultiValueErDisambiguationTests : PluginTestBase, IDisposable
@@ -296,8 +297,9 @@ public class MusicianMultiValueErDisambiguationTests : PluginTestBase, IDisposab
         // The JF-420.1 equality bypass through the ER path: the canonical IS
         // exactly the matched artist's name ("Soul Coughing") while a longer
         // containment rival ("Soul Coughing & Roni Size") also sits in the
-        // library. The single-value gate stays closed and the exact hit
-        // auto-plays; only a MULTI-value ER list may prompt.
+        // library. JF-884: the single-value gate now resolves the canonical and
+        // ADOPTS the exact hit (the same auto-play the closed gate's search
+        // delivered); only a list resolving to DISTINCT artists may prompt.
         var soulCoughing = new MusicArtist { Name = "Soul Coughing", Id = Guid.NewGuid() };
         var rival = new MusicArtist { Name = "Soul Coughing & Roni Size", Id = Guid.NewGuid() };
         var song = new Audio { Name = "Super Bon Bon", Id = Guid.NewGuid() };
@@ -512,6 +514,181 @@ public class MusicianMultiValueErDisambiguationTests : PluginTestBase, IDisposab
 
         TestHelpers.AssertMultiArtistAsk(viaEmpty.Ask!, pnk, floyd);
         TestHelpers.AssertMultiArtistAsk(viaNull.Ask!, pnk, floyd);
+    }
+
+    // ---------------------------------------------------------------
+    // JF-884: the phonetic-variant canonical. The 2026-10-12 catalog
+    // re-mint made Amazon ER promote a phonetic synonym string to the
+    // canonical VALUE name (live 2026-10-13: "P!nk floyd" with exactly one
+    // "Pink Floyd" in the library); the ID-based dedupe across the exact
+    // and the phonetic layer must auto-play the single resolved artist
+    // instead of prompting, while every genuine multi-id case keeps the ask.
+    // ---------------------------------------------------------------
+
+    [Fact]
+    public async Task PlaySong_VariantCanonical_GenericSongConstraint_PlaysTheResolvedArtist()
+    {
+        // The live e2e shape verbatim ("metti una canzone dei pink floyd",
+        // 2026-10-13): a generic song constraint plus a SINGLE variant canonical
+        // on the musician slot. The song composite runs the same gate, so the
+        // variant must resolve through it and play the artist, no ask.
+        var floyd = PinkFloyd();
+        var abba = Abba();
+        var song = new Audio { Name = "Money", Id = Guid.NewGuid() };
+        SetupArtistSongs(song);
+
+        var handler = CreateSongHandler(IndexOf(floyd, abba));
+        var session = _fx.CreateSession();
+        SkillResponse response = await handler.HandleAsync(
+            CreateSongIntent("una canzone", TestHelpers.ResolvedSlot("pink floyd", "P!nk floyd")),
+            _fx.CreateContext(), _fx.CreateUser(), session, CancellationToken.None);
+
+        TestHelpers.AssertNoDisambiguationState(response);
+        Assert.NotNull(TestHelpers.GetPlayDirective(response));
+        Assert.True(response.Response.ShouldEndSession == true);
+        Assert.Equal(song.Id, session.NowPlayingQueue![0].Id);
+    }
+
+    [Fact]
+    public async Task PlayArtistSongs_VariantCanonical_CollapsesToSingleArtist_AutoPlays()
+    {
+        // THE REGRESSION PIN: canonical "P!nk floyd" (a phonetic variant, not a
+        // library name) with exactly one floyd artist in the library must
+        // auto-play "Pink Floyd" with no ask. Pre-JF-884 the exact-only
+        // resolution read the variant as zero evidence, the gate closed, and
+        // the downstream search/gates fired the yes/no prompt.
+        var floyd = PinkFloyd();
+        var abba = Abba();
+        var song = new Audio { Name = "Wish You Were Here", Id = Guid.NewGuid() };
+        SetupArtistSongs(song);
+
+        var handler = CreateArtistHandler(IndexOf(floyd, abba));
+        var session = _fx.CreateSession();
+        SkillResponse response = await handler.HandleAsync(
+            CreateArtistIntent(TestHelpers.ResolvedSlot("pink floyd", "P!nk floyd")),
+            _fx.CreateContext(), _fx.CreateUser(), session, CancellationToken.None);
+
+        Assert.NotNull(TestHelpers.GetPlayDirective(response));
+        Assert.True(response.Response.ShouldEndSession == true, "the single resolved artist auto-plays (JF-884)");
+        TestHelpers.AssertNoDisambiguationState(response);
+        Assert.NotNull(session.NowPlayingQueue);
+        Assert.Equal(song.Id, session.NowPlayingQueue![0].Id);
+    }
+
+    [Fact]
+    public async Task PlayArtistSongs_AdoptedSurvivor_StandsDownCoincidentalContainmentGate()
+    {
+        // Pins the HANDLER half of JF-884: the erSurvivorAdopted stand-down at
+        // the JF-377/JF-420 string gates. This canonical/artist pair TRIPS
+        // IsCoincidentalContainmentMatch (the artist name is a minority-content
+        // whole-word containment inside a longer canonical), so with the
+        // stand-down conjunct deleted the ask fires and the whole suite stays
+        // green (every other fixture's pair is inert for the predicates). An
+        // ADOPTED survivor outranks the query-shape re-judgment.
+        var bush = new MusicArtist { Name = "Bush", Id = Guid.NewGuid() };
+        var abba = Abba();
+        var song = new Audio { Name = "Machinehead", Id = Guid.NewGuid() };
+        SetupArtistSongs(song);
+
+        var handler = CreateArtistHandler(IndexOf(bush, abba));
+        var session = _fx.CreateSession();
+        SkillResponse response = await handler.HandleAsync(
+            CreateArtistIntent(TestHelpers.ResolvedSlot("bush live wire tonight", "bush live wire tonight")),
+            _fx.CreateContext(), _fx.CreateUser(), session, CancellationToken.None);
+
+        Assert.NotNull(TestHelpers.GetPlayDirective(response));
+        Assert.True(response.Response.ShouldEndSession == true, "the adopted survivor auto-plays, JF-377 stands down (JF-884)");
+        TestHelpers.AssertNoDisambiguationState(response);
+        Assert.NotNull(session.NowPlayingQueue);
+        Assert.Equal(song.Id, session.NowPlayingQueue![0].Id);
+    }
+
+    [Fact]
+    public void ResolveErCandidates_CoincidentalContainment_DoesNotResolve()
+    {
+        // Code-review round (JF-884): the fuzzy layer's score rides the
+        // matcher's ContainmentScore shortcut for substring pairs, so the
+        // JF-381 containment band must gate it exactly as it gates the search
+        // chain's tier 1. "cup" inside "Porcupine Tree" scores 90 but is a
+        // coincidental containment (the band's own doc example) and must NOT
+        // resolve the variant layer; the honest not-resolve falls to the
+        // caller's search path. The JF-377 same-shape downgrade at the handler
+        // covers the search side.
+        var koop = new MusicArtist { Name = "Koop", Id = Guid.NewGuid() };
+        var porcupine = new MusicArtist { Name = "Porcupine Tree", Id = Guid.NewGuid() };
+        var pool = new List<BaseItem> { koop, porcupine };
+        var index = IndexOf(koop, porcupine);
+
+        var resolved = Jellyfin.Plugin.AlexaSkill.Alexa.Util.ArtistSearch.ResolveErCandidates(
+            new[] { "cup" }, pool, index,
+            FuzzyMatcher.GetEffectiveThreshold(null, Jellyfin.Plugin.AlexaSkill.Alexa.Util.ArtistSearch.ErVariantResolutionThreshold));
+
+        Assert.DoesNotContain(resolved, a => a.Id.Equals(porcupine.Id));
+    }
+
+    [Fact]
+    public async Task PlayArtistSongs_VariantPlusExactCanonical_TwoDistinctIds_StillAsks()
+    {
+        // The dangerous adjacent shape: rank #1 is the variant of one artist,
+        // rank #2 exact-names ANOTHER. The id dedupe must see TWO distinct
+        // artists and keep the JF-684 ask.
+        var pnk = Pnk();
+        var floyd = PinkFloyd();
+        var song = new Audio { Name = "Just Like a Pill", Id = Guid.NewGuid() };
+        SetupArtistSongs(song);
+
+        var handler = CreateArtistHandler(IndexOf(pnk, floyd));
+        SkillResponse response = await handler.HandleAsync(
+            CreateArtistIntent(TestHelpers.ResolvedSlotMultiValue("pink floyd", "P!nk floyd", "P!nk")),
+            _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
+
+        TestHelpers.AssertMultiArtistAsk(response, floyd, pnk);
+    }
+
+    [Fact]
+    public async Task PlayArtistSongs_PearlJamCollaborationFamily_DistinctIds_StillAsks()
+    {
+        // Guard (c): the collaboration family. Three canonicals that each
+        // exact-name a DIFFERENT library artist stay a real ambiguity; the
+        // variant dedupe must not collapse them.
+        var pearlJam = new MusicArtist { Name = "Pearl Jam", Id = Guid.NewGuid() };
+        var pearlJamW = new MusicArtist { Name = "Pearl Jam w", Id = Guid.NewGuid() };
+        var madSeason = new MusicArtist { Name = "Mad Season & Pearl Jam", Id = Guid.NewGuid() };
+        var song = new Audio { Name = "Alive", Id = Guid.NewGuid() };
+        SetupArtistSongs(song);
+
+        var handler = CreateArtistHandler(IndexOf(pearlJam, pearlJamW, madSeason));
+        SkillResponse response = await handler.HandleAsync(
+            CreateArtistIntent(TestHelpers.ResolvedSlotMultiValue(
+                "pearl jam", "Pearl Jam", "Pearl Jam w", "Mad Season & Pearl Jam")),
+            _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
+
+        TestHelpers.AssertMultiArtistAsk(response, pearlJam, pearlJamW, madSeason);
+    }
+
+    [Fact]
+    public async Task PlayArtistSongs_ExactNameCanonical_StillBypassesUnchanged()
+    {
+        // Guard (d): an exact-name canonical keeps the JF-420.1 auto-play with
+        // a longer containment rival in the library; the survivor adoption
+        // stands the string gates down on exactly the evidence the bypass
+        // encoded (the canonical IS the matched artist's name).
+        var soulCoughing = new MusicArtist { Name = "Soul Coughing", Id = Guid.NewGuid() };
+        var rival = new MusicArtist { Name = "Soul Coughing & Roni Size", Id = Guid.NewGuid() };
+        var song = new Audio { Name = "Super Bon Bon", Id = Guid.NewGuid() };
+        SetupArtistSongs(song);
+
+        var handler = CreateArtistHandler(IndexOf(soulCoughing, rival));
+        var session = _fx.CreateSession();
+        SkillResponse response = await handler.HandleAsync(
+            CreateArtistIntent(TestHelpers.ResolvedSlot("soul coughing", "Soul Coughing")),
+            _fx.CreateContext(), _fx.CreateUser(), session, CancellationToken.None);
+
+        Assert.NotNull(TestHelpers.GetPlayDirective(response));
+        Assert.True(response.Response.ShouldEndSession == true, "the exact-name hit auto-plays (JF-420.1)");
+        TestHelpers.AssertNoDisambiguationState(response);
+        Assert.NotNull(session.NowPlayingQueue);
+        Assert.Equal(song.Id, session.NowPlayingQueue![0].Id);
     }
 
     public void Dispose() => _fx.LoggerFactory.Dispose();
