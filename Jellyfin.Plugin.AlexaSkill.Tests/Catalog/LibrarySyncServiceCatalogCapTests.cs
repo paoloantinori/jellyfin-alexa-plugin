@@ -30,12 +30,12 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Catalog;
 /// The pre-fix code fetched with Limit=cap but appended the seed values AFTER
 /// the bounded fetch and only LOGGED "Truncated ... to {Limit} items" while the
 /// payload sailed past the cap untouched: SMAPI received the oversized payload
-/// and the log asserted a truncation that never happened. JF-848 adds the
-/// saturation policy: when the library block alone fills the cap, the static
-/// tail (seed titles + the JF-823 generic word, the baseline recall floor) is
-/// RESERVED first and the drop comes out of the library tail; below saturation
-/// the JF-825 tail cut stands byte-identical (the drop is static-only: the
-/// generic word first, then the seed tail; no library value drops). These pins run the full sync
+/// and the log asserted a truncation that never happened. JF-848 reserved the
+/// static tail (seed titles + the JF-823 generic word, the baseline recall
+/// floor) at exact library saturation; JF-879 (the maintainer's "riserva
+/// sempre i seed" decision) generalizes the reservation to ANY over-cap cut:
+/// the tail survives whole and the drop comes out of the library, while a
+/// payload that fits entirely is untouched byte-identical. These pins run the full sync
 /// against the fake SMAPI backend with the
 /// <see cref="LibrarySyncService.MaxCatalogValuesForTest"/> seam set to a small
 /// cap, so both regimes and the warning's honesty (fires exactly when
@@ -387,20 +387,29 @@ public class LibrarySyncServiceCatalogCapTests : PluginTestBase, IDisposable
     }
 
     /// <summary>
-    /// THE JF-848 NON-SATURATION BYTE-IDENTITY PIN: with room left under the
-    /// cap after the library values (the library block stays below the cap),
-    /// the reservation never engages and the JF-825 tail cut stands unchanged:
-    /// the seeds fill the remaining slots (library wins over seeds, the JF-541
-    /// principle) and only the seed tail drops; no library value is lost while
-    /// a seed survives.
+    /// THE JF-879 FLIPPED BAND PIN (the maintainer's "riserva sempre i seed"
+    /// decision, generalizing JF-848's exact-saturation partition): a SMALL
+    /// library whose payload still overflows the cap only because the static
+    /// tail rides along. The old JF-848-era behavior kept every book and cut
+    /// the seed tail (library wins over seeds, the JF-541 below-cap reading);
+    /// now ANY over-cap cut reserves the seed tail FIRST and the library
+    /// takes the loss. When the reserved tail alone exceeds the cap (this
+    /// test's seam shape; production static counts are tens against a 50000
+    /// cap), the library drops whole and the tail's excess drops after it so
+    /// the cap still binds.
     /// </summary>
     [Fact]
-    public async Task SyncUserLibraryAsync_CapLeavesSeedRoom_KeepsAllLibraryThenSeedHead()
+    public async Task SyncUserLibraryAsync_OverCapCutReservesSeeds_LibraryTakesTheLoss()
     {
         string[] books = { "Cap Room Book A", "Cap Room Book B", "Cap Room Book C", "Cap Room Book D" };
         int seedCount = CatalogSeedEnrichment.GetSeedNames(CatalogType.Audiobook).Count;
         int cap = books.Length + 2;
         _service.MaxCatalogValuesForTest = cap;
+        // This pin keeps NO library value, so its only in-payload markers are
+        // seed names, which sibling tests' stored payloads also carry: clear
+        // the shared static payload cache so the marker resolves to THIS
+        // test's payload.
+        ClearStoredPayloads();
         SetupLibraryWith(BaseItemKind.AudioBook, books);
         var user = TestHelpers.CreateSyncUser();
         var jellyfinUser = TestHelpers.CreateJellyfinUser();
@@ -409,28 +418,85 @@ public class LibrarySyncServiceCatalogCapTests : PluginTestBase, IDisposable
 
         Assert.True(result.Success, string.Join("; ", Logs()));
 
-        string payload = ReadStoredPayloadContaining("Cap Room Book A");
+        string payload = ReadStoredPayloadContaining(
+            CatalogSeedEnrichment.GetSeedNames(CatalogType.Audiobook)[0]);
         using var doc = JsonDocument.Parse(payload);
         var values = doc.RootElement.GetProperty("values");
         Assert.Equal(cap, values.GetArrayLength());
 
-        // Every library book survives ...
+        // The reserved seed floor keeps the FIRST seeds in append order; the
+        // seed tail beyond the cap drops after the whole library.
         var names = values.EnumerateArray()
             .Select(v => v.GetProperty("name").GetProperty("value").GetString())
             .ToList();
-        Assert.Equal(books, names.Take(books.Length));
-
-        // ... then the FIRST seeds in append order fill the rest; the seed tail
-        // beyond the cap is what dropped.
         Assert.Equal(
-            CatalogSeedEnrichment.GetSeedNames(CatalogType.Audiobook).Take(cap - books.Length),
-            names.Skip(books.Length));
+            CatalogSeedEnrichment.GetSeedNames(CatalogType.Audiobook).Take(cap),
+            names);
 
+        int droppedStatic = seedCount - cap;
         string warning = SingleTruncationWarning();
-        Assert.Contains($"dropped {seedCount - (cap - books.Length)}", warning, StringComparison.Ordinal);
+        Assert.Contains(
+            $"dropped {books.Length + droppedStatic} lowest-priority entries ({droppedStatic} static seed values, {books.Length} library values)",
+            warning,
+            StringComparison.Ordinal);
+        Assert.Contains("Cap Room Book A", warning, StringComparison.Ordinal);
 
         // The library did not saturate the fetch (4 items < 6 cap), so the
         // fetch-saturation signal must stay quiet here.
+        Assert.DoesNotContain(Logs(), l => l.Contains("fetch reached the", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// THE JF-879 JUST-BELOW-CAP CONSEQUENCE PIN, the exact band JF-848
+    /// left uncovered: a library one value under the cap (the production
+    /// 49999-of-50000 shape, scaled down) whose payload overflows only
+    /// through the appended static tail. The JF-848 tail cut evicted the
+    /// whole seed floor here, the NO_SELECTION regime JF-823 fixed; now the
+    /// tail survives WHOLE and the library head loses the same number of
+    /// values instead.
+    /// </summary>
+    [Fact]
+    public async Task SyncUserLibraryAsync_LibraryJustBelowCap_KeepsWholeSeedTail()
+    {
+        int seedCount = CatalogSeedEnrichment.GetSeedNames(CatalogType.Audiobook).Count;
+        const int Cap = 30;
+        string[] books = Enumerable.Range(1, Cap - 1).Select(i => $"Band Book {i:D2}").ToArray();
+        _service.MaxCatalogValuesForTest = Cap;
+        SetupLibraryWith(BaseItemKind.AudioBook, books);
+        var user = TestHelpers.CreateSyncUser();
+        var jellyfinUser = TestHelpers.CreateJellyfinUser();
+
+        var result = await _service.SyncUserLibraryAsync(user, jellyfinUser, CancellationToken.None);
+
+        Assert.True(result.Success, string.Join("; ", Logs()));
+
+        string payload = ReadStoredPayloadContaining("Band Book 01");
+        using var doc = JsonDocument.Parse(payload);
+        var values = doc.RootElement.GetProperty("values");
+        Assert.Equal(Cap, values.GetArrayLength());
+
+        var names = values.EnumerateArray()
+            .Select(v => v.GetProperty("name").GetProperty("value").GetString())
+            .ToList();
+
+        // The library head keeps (cap - seedCount) books ...
+        Assert.Equal(books.Take(Cap - seedCount), names.Take(Cap - seedCount));
+
+        // ... and the ENTIRE static seed tail survives after it.
+        Assert.Equal(
+            CatalogSeedEnrichment.GetSeedNames(CatalogType.Audiobook),
+            names.Skip(Cap - seedCount));
+
+        int expectedDropped = books.Length - (Cap - seedCount);
+        string warning = SingleTruncationWarning();
+        Assert.Contains(
+            $"dropped {expectedDropped} lowest-priority entries (0 static seed values, {expectedDropped} library values)",
+            warning,
+            StringComparison.Ordinal);
+        Assert.Contains($"Band Book {Cap - seedCount + 1:D2}", warning, StringComparison.Ordinal);
+
+        // The library sat just under the cap, so the fetch-saturation signal
+        // must stay quiet here (the truncation warning is the only signal).
         Assert.DoesNotContain(Logs(), l => l.Contains("fetch reached the", StringComparison.Ordinal));
     }
 
