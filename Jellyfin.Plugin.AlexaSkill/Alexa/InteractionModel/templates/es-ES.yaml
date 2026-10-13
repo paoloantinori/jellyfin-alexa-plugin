@@ -12,6 +12,13 @@
 #
 # Run: python3 scripts/generate_interaction_model.py es-ES
 #
+# JF-855 (2026-10-13): this locale is the MIRROR REFERENCE for
+# PlayEpisodeIntent: es-MX and es-US declare a `mirror` on the family and
+# source their samples from this template, minus the three "que
+# reproduzca" connector rows (es-ES-only, per the JF-844 note above).
+# Editing a row here changes the siblings at their next regen; deleting an
+# excluded row errors their generation until the exclude list is updated.
+#
 # JF-844 (2026-10-09): PlayEpisodeIntent gained the CONNECTOR-RESIDUE
 # subjunctive twins ("que reproduzca ...", both word orders + the
 # season-less twin). Live verdict after the JF-814 roll: the residue
