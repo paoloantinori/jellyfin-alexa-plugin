@@ -20,9 +20,37 @@ A template may declare its intents in either form (not both):
   item is either a bare string (a name-only intent) or a mapping with
   `name` plus optional `samples` (verbatim list), `templates`
   (vocabulary-expanded; template strings without {vocab} refs pass through
-  unchanged), and `slots`. The authored list order is preserved exactly,
-  so static AMAZON.* intents can sit between custom intents the way the
-  committed hand-grown models have them.
+  unchanged), `slots`, and `mirror` (see below). The authored list order is
+  preserved exactly, so static AMAZON.* intents can sit between custom
+  intents the way the committed hand-grown models have them.
+
+Mirror directive (JF-855): an ordered intent may declare `mirror` instead
+of `samples`/`templates`:
+
+    - name: PlayEpisodeIntent
+      slots: [...]
+      mirror:
+        locale: es-ES
+        exclude:
+          - que reproduzca ...   # rows the reference carries and this locale does not
+
+The samples become the reference locale's SAME intent samples, in the
+reference's order, minus the `exclude` rows. This relaxes the JF-316
+verbatim-transcription decision for DECLARED-MIRROR families only: every
+non-mirrored intent of the sibling stays verbatim, and the reference locale
+keeps hand-authoring its own rows. Mirroring is then enforced at generation
+time by construction - a reference row the sibling did not exclude is
+inherited on the sibling's next regen, so the per-family drift lints (the
+JF-844.1 es-trio class) retire. The generator raises on: a missing reference
+template or reference intent, a mirrored reference with no samples, an
+`exclude` row absent from the reference samples (a stale divergence), a
+mirror producing zero samples, `mirror` combined with `samples`/`templates`,
+an unknown `mirror` key, and a mirror cycle (A mirroring B mirroring A, or a
+locale mirroring itself). The intent's emitted `samples` sit at the position
+of the `mirror` key in the YAML, the same rule as `samples`/`templates`.
+Chains are allowed (A mirrors B mirrors C); the cycle guard bounds them.
+`build_model` takes the building locale so the directive can resolve its
+reference; templates with no `mirror` key build identically without it.
 
 Shared sections: `vocabulary` (Cartesian-product word sets referenced from
 templates as {vocab_name}), `types` (custom slot types), `dialog` and
@@ -172,19 +200,23 @@ def build_type_value(v) -> dict:
     return entry
 
 
-def build_ordered_intent(item, vocabulary: dict[str, list[str]]) -> dict:
+def build_ordered_intent(item, vocabulary: dict[str, list[str]], locale: str | None,
+                         mirror_stack: tuple[str, ...]) -> dict:
     """Build one intent from an ordered `intents` list entry.
 
     A bare string becomes a name-only intent. A mapping requires `name`
     and may carry `samples` (emitted verbatim, in order), `templates`
     (vocabulary-expanded; expansions are appended after the verbatim
-    samples), and `slots` (verbatim, key order preserved).
+    samples), `mirror` (JF-855: samples sourced from a reference locale's
+    same intent, see the module docstring), and `slots` (verbatim, key
+    order preserved). `mirror` excludes `samples`/`templates`: exactly one
+    sample source per intent.
 
     As with type values, the emitted key order follows the YAML document
     order (committed hand-grown models mix `name, samples, slots` and
-    `name, slots, samples`). The merged samples list (verbatim +
-    template expansions) is emitted once, at the position of whichever
-    of `samples`/`templates` appears first in the YAML.
+    `name, slots, samples`). The merged samples list is emitted once, at
+    the position of whichever of `samples`/`templates`/`mirror` appears
+    first in the YAML.
     """
     if isinstance(item, str):
         return {"name": item}
@@ -195,13 +227,22 @@ def build_ordered_intent(item, vocabulary: dict[str, list[str]]) -> dict:
     samples = list(item.get("samples", []))
     if "templates" in item:
         samples.extend(generate_samples(item["templates"], vocabulary, slot_names))
-    has_samples = "samples" in item or "templates" in item
+    if "mirror" in item:
+        if "samples" in item or "templates" in item:
+            raise ValueError(
+                f"ordered intent {name!r} declares `mirror` together with "
+                "`samples`/`templates`; exactly one sample source is allowed"
+            )
+        samples = resolve_mirrored_samples(
+            item["mirror"], name, locale, mirror_stack, slot_names
+        )
+    has_samples = "samples" in item or "templates" in item or "mirror" in item
 
     intent: dict = {}
     for key in item:
         if key == "name":
             intent["name"] = name
-        elif key in ("samples", "templates"):
+        elif key in ("samples", "templates", "mirror"):
             if has_samples and "samples" not in intent:
                 intent["samples"] = samples
         elif key == "slots":
@@ -209,9 +250,112 @@ def build_ordered_intent(item, vocabulary: dict[str, list[str]]) -> dict:
         else:
             raise ValueError(
                 f"unknown key {key!r} in ordered intent {name!r} "
-                "(allowed: name, samples, templates, slots)"
+                "(allowed: name, samples, templates, mirror, slots)"
             )
     return intent
+
+
+MIRROR_KEYS = frozenset({"locale", "exclude"})
+
+
+def load_template_config(locale: str) -> dict:
+    """Load a sibling template by locale (the mirror reference resolver)."""
+    template_path = MODELS_DIR / "templates" / f"{locale}.yaml"
+    if not template_path.is_file():
+        raise ValueError(f"mirror reference template not found: {template_path}")
+    with open(template_path) as f:
+        return yaml.safe_load(f)
+
+
+def resolve_mirrored_samples(mirror: dict, intent_name: str, locale: str | None,
+                             mirror_stack: tuple[str, ...],
+                             slot_names: frozenset[str] = frozenset()) -> list[str]:
+    """Resolve a `mirror` directive into the sibling's sample list (JF-855).
+
+    The reference locale's own template is built (recursively, so a
+    reference may itself mirror a third locale) and its same-named
+    intent's samples are returned in the reference's order, minus the
+    declared `exclude` rows. Every drift shape the retired per-family
+    lints caught after the fact is an error here at generation time:
+    missing reference template/intent, a sample-less reference, a stale
+    `exclude` row, an empty result, a bad directive shape, and mirror
+    cycles (the stack carries the locales already being built). The
+    returned samples run the same {ref}-vs-declared-slots guard as
+    generate_samples: a reference row using a slot the mirroring intent
+    does not declare is the same silent-broken-sample class.
+    """
+    if locale is None:
+        raise ValueError(
+            f"intent {intent_name!r} declares `mirror`; build_model needs the "
+            "building locale to resolve the reference template"
+        )
+    if not isinstance(mirror, dict):
+        raise ValueError(
+            f"`mirror` of intent {intent_name!r} must be a mapping with "
+            f"locale/exclude keys, got {mirror!r}"
+        )
+    _reject_unknown_keys(mirror, MIRROR_KEYS, f"{locale} intent {intent_name!r} mirror")
+    ref_locale = mirror.get("locale")
+    if not isinstance(ref_locale, str) or not ref_locale:
+        raise ValueError(
+            f"`mirror.locale` of intent {intent_name!r} in {locale} must be a "
+            f"non-empty string, got {ref_locale!r}"
+        )
+    if ref_locale == locale or ref_locale in mirror_stack:
+        chain = " -> ".join((*mirror_stack, locale, ref_locale))
+        raise ValueError(f"mirror cycle in intent {intent_name!r}: {chain}")
+
+    ref_model = build_model(
+        load_template_config(ref_locale),
+        locale=ref_locale,
+        _mirror_stack=(*mirror_stack, locale),
+    )
+    ref_intent = next(
+        (i for i in ref_model["languageModel"]["intents"] if i["name"] == intent_name),
+        None,
+    )
+    if ref_intent is None:
+        raise ValueError(
+            f"`mirror` of intent {intent_name!r} in {locale}: reference locale "
+            f"{ref_locale} has no {intent_name!r} intent"
+        )
+    ref_samples = ref_intent.get("samples", [])
+    if not ref_samples:
+        raise ValueError(
+            f"`mirror` of intent {intent_name!r} in {locale}: reference locale "
+            f"{ref_locale} carries the intent with no samples"
+        )
+
+    exclude = mirror.get("exclude", [])
+    if not isinstance(exclude, list) or not all(isinstance(r, str) for r in exclude):
+        raise ValueError(
+            f"`mirror.exclude` of intent {intent_name!r} in {locale} must be a "
+            f"list of sample strings, got {exclude!r}"
+        )
+    exclude_set = set(exclude)
+    stale = sorted(exclude_set - set(ref_samples))
+    if stale:
+        raise ValueError(
+            f"`mirror.exclude` of intent {intent_name!r} in {locale} lists row(s) "
+            f"{stale} that {ref_locale}'s {intent_name!r} no longer carries; "
+            "update the exclude list (the divergence is stale)"
+        )
+    samples = [s for s in ref_samples if s not in exclude_set]
+    for sample in samples:
+        for ref in SLOT_RE.findall(sample):
+            if ref not in slot_names:
+                raise ValueError(
+                    f"`mirror` of intent {intent_name!r} in {locale}: row "
+                    f"{sample!r} inherited from {ref_locale} references "
+                    f"{{{ref}}}, which this intent does not declare as a slot "
+                    f"(declared: {sorted(slot_names)})"
+                )
+    if not samples:
+        raise ValueError(
+            f"`mirror` of intent {intent_name!r} in {locale} produces zero "
+            f"samples (every {ref_locale} row is excluded)"
+        )
+    return samples
 
 
 LEGACY_INTENT_SECTIONS = ("static_intents", "explicit_intents", "templates")
@@ -223,8 +367,14 @@ MODELS_DIR = Path(__file__).resolve().parent.parent / "Jellyfin.Plugin.AlexaSkil
 """The interaction-model layout owner: templates/ and model_<locale>.json live here."""
 
 
-def build_model(config: dict) -> dict:
-    """Build the full interaction model from YAML config."""
+def build_model(config: dict, locale: str | None = None,
+                _mirror_stack: tuple[str, ...] = ()) -> dict:
+    """Build the full interaction model from YAML config.
+
+    `locale` is the building locale; it is only required when the template
+    carries a `mirror` directive (JF-855), which needs it to resolve the
+    reference template. `_mirror_stack` is internal cycle bookkeeping.
+    """
     # A template declares its intents in exactly one of the two forms; a
     # mix would silently concatenate both lists with no ordering rule.
     used_legacy = [s for s in LEGACY_INTENT_SECTIONS if s in config]
@@ -272,7 +422,9 @@ def build_model(config: dict) -> dict:
     # sections; a template uses either form, never both. See the module
     # docstring for the entry shapes.
     for item in config.get("intents", []):
-        intents.append(build_ordered_intent(item, vocabulary))
+        intents.append(
+            build_ordered_intent(item, vocabulary, locale, _mirror_stack)
+        )
 
     # Build language model
     language_model = {
@@ -343,7 +495,7 @@ def main():
     with open(template_path) as f:
         config = yaml.safe_load(f)
 
-    model = build_model(config)
+    model = build_model(config, locale=locale)
 
     # Count samples for reporting
     total_samples = sum(
