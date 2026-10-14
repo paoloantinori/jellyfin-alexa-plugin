@@ -855,8 +855,8 @@ Invocation name: **"mia collezione"**
 | Set Reminder | `Ricordami tra {reminder_duration}` · `Ricordami alle {reminder_time}` · `Imposta un promemoria tra {reminder_duration}` · `Imposta un promemoria per le {reminder_time}` |
 | Show More | `mostra di più` · `altra pagina` · `più risultati` · `vedi altro` · `altro` · `cos'altro` |
 | Show Photo Album | `mostra le mie foto` · `mostra le foto di {photoAlbum}` · `mostrami le mie foto` · `mostra le mie foto di {photoAlbum}` · `mostrami le foto di {photoAlbum}` · `apri le foto di {photoAlbum}` |
-| Shuffle All Off | `Disattiva mescolamento` · `Disattiva il casuale` · `Ripristina l'ordine della coda` · `disattivare il mescolamento` · `Di disattivare il mescolamento` |
-| Shuffle All On | `Attiva mescolamento` · `Attiva il casuale` · `Mescola la coda` · `Mescola la riproduzione` · `attivare il mescolamento` · `mescolare la coda` |
+| Shuffle All Off | `Disattiva mescolamento` · `Disattiva il casuale` · `Disattiva il mescolamento` · `Ripristina l'ordine della coda` · `disattivare il mescolamento` · `Di disattivare il mescolamento` |
+| Shuffle All On | `Attiva mescolamento` · `Attiva il casuale` · `Attiva il mescolamento` · `Mescola la coda` · `Mescola la riproduzione` · `attivare il mescolamento` |
 | Shuffle Play | `Mescola la playlist {playlist}` · `Mescola playlist {playlist}` · `Riproduci la playlist {playlist} in modalità casuale` · `Riproduci la playlist {playlist} a caso` · `Suona la playlist {playlist} in modalità casuale` |
 | Skip Forward Back | `salta {seek_direction}` · `salta {seek_direction} di {seek_amount} {seek_unit}` · `salta di {seek_amount} {seek_unit}` · `vai {seek_direction} di {seek_amount} {seek_unit}` · `saltare {seek_direction}` · `saltare {seek_direction} di {seek_amount} {seek_unit}` |
 | Sleep Timer | `Imposta timer {sleep_duration}` · `Timer per dormire {sleep_duration}` · `Spegimento automatico {sleep_duration}` · `Ferma dopo {sleep_duration}` · `Fermare la riproduzione tra {sleep_duration}` · `Ferma la riproduzione tra {sleep_duration}` |

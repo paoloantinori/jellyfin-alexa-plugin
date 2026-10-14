@@ -96,13 +96,39 @@ explicit_intents:
       - disattivare ripetizione
       - Di disattivare loop
       - Di disattivare ripetizione
+      # JF-889 article twins: live probes 2026-10-14 (post JF-887 deploy) had
+      # 'disattiva il loop' shuffle-stealing to ShuffleAllOffIntent (via the
+      # 'Disattiva il casuale' region) and 'disattiva la ripetizione' stealing
+      # to TurnRadioOffIntent; the infinitive article forms were green only by
+      # generalization. 'Disattiva il ripetizione' is deliberately
+      # UNGRAMMATICAL (ripetizione is feminine): the gender-confused spoken
+      # form is a real device shape ('disattiva il ripetizione' AND its
+      # infinitive 'disattivare il ripetizione' both shuffle-stole live, probe
+      # 2026-10-14), so the whole gender-confused sub-family is completed in
+      # one pass (imperative + infinitive + Di twins); coverage over
+      # precision, same doctrine as the phonetic-synonym program.
+      - Disattiva il loop
+      - Disattiva la ripetizione
+      - Disattiva il ripetizione
+      - disattivare il loop
+      - disattivare la ripetizione
+      - disattivare il ripetizione
+      - Di disattivare il loop
+      - Di disattivare la ripetizione
+      - Di disattivare il ripetizione
   ShuffleAllOnIntent:
     samples:
       # Live incident 2026-09-23: «mescola la coda» statistically landed on
       # ClearQueueIntent (the AMAZON.ShuffleOn built-in carries no custom samples,
       # anti-pattern #5). Custom twins per the LoopAllOn precedent (JF-450/JF-562).
+      # 'Attiva il mescolamento' (JF-889): imperative-article exact row; the
+      # loop family's new 'Attiva il ...' rows compete in this exact prefix
+      # region, so the shuffle boundary gets the same-depth pin instead of
+      # riding generalization (the fixture's 'attiva il mescolamento' control
+      # depends on it).
       - Attiva mescolamento
       - Attiva il casuale
+      - Attiva il mescolamento
       - Mescola la coda
       - Mescola la riproduzione
       - attivare il mescolamento
@@ -110,8 +136,11 @@ explicit_intents:
       - Di attivare il mescolamento
   ShuffleAllOffIntent:
     samples:
+      # 'Disattiva il mescolamento' (JF-889): imperative-article exact row,
+      # the off twin of the ShuffleAllOn pin above.
       - Disattiva mescolamento
       - Disattiva il casuale
+      - Disattiva il mescolamento
       - Ripristina l'ordine della coda
       - disattivare il mescolamento
       - Di disattivare il mescolamento
@@ -129,6 +158,34 @@ explicit_intents:
       - attivare ripetizione
       - Di attivare loop
       - Di attivare ripetizione
+      # JF-889 article twins: live probes 2026-10-14 (post JF-887 deploy) had
+      # 'attiva il loop' shuffle-stealing to ShuffleAllOnIntent (via the
+      # 'Attiva il casuale' region) and the gender-confused 'attiva il
+      # ripetizione' stealing the same way; the infinitive article forms were
+      # green only by generalization (exact rows per the JF-887 lesson above).
+      # The ungrammatical 'Attiva il ripetizione' row is the same
+      # coverage-over-precision insurance as its off-twin on LoopAllOffIntent.
+      - Attiva il loop
+      - Attiva la ripetizione
+      - Attiva il ripetizione
+      - attivare il loop
+      - attivare la ripetizione
+      - attivare il ripetizione
+      - Di attivare il loop
+      - Di attivare la ripetizione
+      - Di attivare il ripetizione
+      # JF-889 bare-noun claim: bare 'loop' stole to ShowMoreIntent (the
+      # pagination family's generalization region, probes 2026-10-14; bare
+      # 'ripetizione' stole the same way and is deliberately left unclaimed,
+      # one bare-noun experiment at a time). 'loop' dominantly means loop-on
+      # here, but NOT exclusively: LoopSongOn also uses the noun ('metti in
+      # loop questo brano'), so a bare 'loop' wanting repeat-one lands on
+      # queue-loop; unlike 'ancora' (again vs more) there is no pagination
+      # meaning to protect. Whether the trainer honors the exact row over the
+      # ShowMore generalization is a post-deploy check (decision protocol and
+      # steal controls live on the fixture's JF-889 pins; ShowMore's own bare
+      # rows are not touched, in-session pagination depends on them).
+      - loop
   RepeatSingleOnIntent:
     samples:
       # JF-438: the old "Suonalo ancora"/"Suonala ancora" forms collided with the

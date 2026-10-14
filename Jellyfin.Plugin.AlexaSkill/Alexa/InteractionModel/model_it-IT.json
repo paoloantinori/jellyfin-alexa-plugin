@@ -83,7 +83,16 @@
           "disattivare loop",
           "disattivare ripetizione",
           "Di disattivare loop",
-          "Di disattivare ripetizione"
+          "Di disattivare ripetizione",
+          "Disattiva il loop",
+          "Disattiva la ripetizione",
+          "Disattiva il ripetizione",
+          "disattivare il loop",
+          "disattivare la ripetizione",
+          "disattivare il ripetizione",
+          "Di disattivare il loop",
+          "Di disattivare la ripetizione",
+          "Di disattivare il ripetizione"
         ]
       },
       {
@@ -91,6 +100,7 @@
         "samples": [
           "Attiva mescolamento",
           "Attiva il casuale",
+          "Attiva il mescolamento",
           "Mescola la coda",
           "Mescola la riproduzione",
           "attivare il mescolamento",
@@ -103,6 +113,7 @@
         "samples": [
           "Disattiva mescolamento",
           "Disattiva il casuale",
+          "Disattiva il mescolamento",
           "Ripristina l'ordine della coda",
           "disattivare il mescolamento",
           "Di disattivare il mescolamento"
@@ -116,7 +127,17 @@
           "attivare loop",
           "attivare ripetizione",
           "Di attivare loop",
-          "Di attivare ripetizione"
+          "Di attivare ripetizione",
+          "Attiva il loop",
+          "Attiva la ripetizione",
+          "Attiva il ripetizione",
+          "attivare il loop",
+          "attivare la ripetizione",
+          "attivare il ripetizione",
+          "Di attivare il loop",
+          "Di attivare la ripetizione",
+          "Di attivare il ripetizione",
+          "loop"
         ]
       },
       {
