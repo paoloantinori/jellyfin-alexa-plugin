@@ -820,8 +820,8 @@ Invocation name: **"mia collezione"**
 | In Progress Media List | `Cosa stavo guardando` · `Mostrami i video in corso` · `Riprendi a guardare` · `Cosa ho lasciato a metà` · `Cosa ho lasciato a meta` · `quali video non ho finito` |
 | Learn My Voice | `Impara la mia voce` · `Riconosci la mia voce` · `Associa la mia voce` · `Collega la mia voce` · `Impara chi sono` · `Riconoscimi` |
 | List Queue | `cosa c'è nella coda` · `cosa c'è in coda` · `cosa c'è dopo` · `cosa suona dopo` · `mostra la coda` · `elenca la coda` |
-| Loop All Off | `Disattiva loop` · `Disattiva ripetizione` |
-| Loop All On | `Attiva loop` · `Attiva ripetizione` |
+| Loop All Off | `Disattiva loop` · `Disattiva ripetizione` · `disattivare loop` · `disattivare ripetizione` · `Di disattivare loop` · `Di disattivare ripetizione` |
+| Loop All On | `Attiva loop` · `Attiva ripetizione` · `attivare loop` · `attivare ripetizione` · `Di attivare loop` · `Di attivare ripetizione` |
 | Loop Song On | `ripeti questo brano` · `ripeti questa canzone` · `metti in loop questo brano` · `metti in loop questa canzone` · `ripeti per sempre questo brano` |
 | Mark Favorite | `Aggiungi ai preferiti` · `Metti nei preferiti` · `Segna come preferito` · `Mi piace` · `Aggiungi questo ai preferiti` · `Metti questo nei preferiti` |
 | Media Info | `Cosa sta suonando` · `{media_info_type}` · `Cosa sta suonando adesso` · `Che brano è questo` · `Che canzone è questa` · `Chi è questo artista` |

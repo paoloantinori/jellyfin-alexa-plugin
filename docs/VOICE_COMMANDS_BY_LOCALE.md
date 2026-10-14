@@ -8294,7 +8294,7 @@ Placeholder legend:
 | `<titolo del video o del film>` | `{title}` |
 | `<parole del titolo del brano>` | `{titleKeywords}` |
 
-Complete phrase list (1635 phrases across 74 commands):
+Complete phrase list (1643 phrases across 74 commands):
 
 #### Play music
 
@@ -9821,6 +9821,10 @@ Complete phrase list (1635 phrases across 74 commands):
 
 - `Attiva loop`
 - `Attiva ripetizione`
+- `attivare loop`
+- `attivare ripetizione`
+- `Di attivare loop`
+- `Di attivare ripetizione`
 
 **Shuffle queue**
 
@@ -9844,6 +9848,10 @@ Complete phrase list (1635 phrases across 74 commands):
 
 - `Disattiva loop`
 - `Disattiva ripetizione`
+- `disattivare loop`
+- `disattivare ripetizione`
+- `Di disattivare loop`
+- `Di disattivare ripetizione`
 
 #### Favorites
 
