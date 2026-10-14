@@ -63,8 +63,15 @@ BATTERY: dict[str, list[tuple[str, str, str]]] = {
         # the rebuilt it-IT model AND the next catalog sync pins the MovieTitle
         # version (the JF-684 live-effect path); the neighboring wrapper rows
         # staying green is the marker that only the pending flip is red.
-        ("simulate", "chiedi a mia collezione di riprodurre il film ada", "PlayMovieIntent"),
-        ("simulate", "chiedi a mia collezione di mettere il film ada", "PlayMovieIntent"),
+        # 2026-10-14: 'ada' is NOT in the MovieTitle catalog (a non-catalog
+        # title), so the wrapper may raw-fill through EITHER arm of the split:
+        # PlayMovieIntent (the catalog-carrier arm, what profile-nlu resolves
+        # 3/3) or PlayVideoIntent (the SearchQuery arm, what simulate's ASR
+        # picks). Both PLAY the film (PlayVideoIntentHandler serves both since
+        # JF-874); the row asserts the wrapper reaches the skill and plays a
+        # video family intent, so both are accepted (the JF-298 divergence).
+        ("simulate", "chiedi a mia collezione di riprodurre il film ada", "PlayMovieIntent|PlayVideoIntent"),
+        ("simulate", "chiedi a mia collezione di mettere il film ada", "PlayMovieIntent|PlayVideoIntent"),
         ("simulate", "chiedi a mia collezione di riprodurre brani simili", "PlayRadioIntent"),
         ("simulate", "chiedi a mia collezione di fermare dopo un minuto", "SleepTimerIntent"),
         ("simulate", "chiedi a mia collezione di aggiungere alla playlist prova echo", "AddSongToPlaylistIntent"),
@@ -138,10 +145,16 @@ def profile_nlu(skill_id: str, locale: str, phrase: str) -> str | None:
 
 
 def simulate_intent(skill_id: str, locale: str, phrase: str) -> tuple[bool, str | None]:
-    """Full-pipeline simulate. Returns (invoked, intent name or None)."""
+    """Full-pipeline simulate. Returns (invoked, intent name or None).
+
+    2026-10-14: the ask CLI REMOVED the --locale option from simulate-skill
+    (passing it errors with "unknown option '--locale'", which this script
+    misread as the simulate outage for ~30h: the init call failed before any
+    simulation started). --device-locale is the surviving option.
+    """
     init = _run_ask(["ask", "smapi", "simulate-skill", "--skill-id", skill_id,
                      "--stage", "development", "--device-locale", locale,
-                     "--locale", locale, "--input-content", phrase])
+                     "--input-content", phrase])
     try:
         sim = json.loads(init.stdout)
     except json.JSONDecodeError:
@@ -161,13 +174,22 @@ def simulate_intent(skill_id: str, locale: str, phrase: str) -> tuple[bool, str 
         result = body.get("result", body)
         status = body.get("status") or data.get("status")
         if status in ("SUCCESSFUL", "FAILED"):
-            inv = result.get("skillInvocationInfo") if isinstance(result, dict) else None
+            invocations = []
+            if isinstance(result, dict):
+                # 2026-10-14: the simulation result moved to the invocations
+                # ARRAY under skillExecutionInfo (verified live; the old flat
+                # skillInvocationInfo key disappeared, which the 2026-10-13/14
+                # "outage" actually was - a parser drift, not Amazon downtime).
+                invocations = (result.get("skillExecutionInfo") or {}).get("invocations") or []
+                # Backward compatibility with the pre-drift flat shape.
+                if not invocations and result.get("skillInvocationInfo"):
+                    invocations = [result["skillInvocationInfo"]]
             intent = None
-            if inv:
+            if invocations:
                 # The intent name sits inside the invocation payload's request.
-                payload = inv.get("invocationRequest", {}).get("body", {}).get("request", {})
+                payload = (invocations[0].get("invocationRequest") or {}).get("body", {}).get("request", {})
                 intent = (payload.get("intent") or {}).get("name")
-            return (bool(inv), intent)
+            return (bool(invocations), intent)
     return (False, None)
 
 
@@ -214,8 +236,11 @@ def main() -> int:
             got = profile_nlu(skill_id, args.locale, phrase)
             time.sleep(delay)
 
-        status = "PASS" if got == expected else "FAIL"
-        if got != expected:
+        # Alternation support ("A|B"): the row passes when the routing lands on
+        # any listed intent (used for shapes whose engine legitimately differs,
+        # e.g. the catalog-carrier vs SearchQuery arms of the JF-874 split).
+        status = "PASS" if got in expected.split("|") else "FAIL"
+        if status == "FAIL":
             failures += 1
         print(f"{status}  {phrase!r} -> {got} (expected {expected})")
 
