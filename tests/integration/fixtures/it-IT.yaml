@@ -705,6 +705,9 @@ tests:
   # JF-426: article-carrying artist forms MUST deliver the slot with the article
   # STRIPPED Amazon-side for in-catalog artists (drift here means the stripping
   # moved and out-of-catalog artists would search with the article).
+  # Also the JF-438 collision guard: the nominative-article form was stolen by
+  # the RepeatSingle "Suonala ancora" collision (removed from the template);
+  # the former second copy of this row (deduped 2026-10-14) pinned only that.
   - utterance: "suona i pink floyd"
     expected_intent: PlayArtistSongsIntent
     expected_slots:
@@ -1277,14 +1280,8 @@ tests:
     expected_slots:
       musician: {}
 
-  # JF-438 regression guards: the nominative-article and band-carrier forms were
-  # stolen by the RepeatSingle "Suonala ancora" collision (removed from the
-  # template); both must stay on PlayArtistSongsIntent.
-  - utterance: "suona i pink floyd"
-    expected_intent: PlayArtistSongsIntent
-    expected_slots:
-      musician: {}
-
+  # JF-438 regression guards: the nominative-article form is pinned at the
+  # JF-426 row above (deduped 2026-10-14); the band-carrier form here.
   - utterance: "suona la band radiohead"
     expected_intent: PlayArtistSongsIntent
     expected_slots:

@@ -187,8 +187,11 @@ def test_e2e_full_chain(dry_run, e2e_fixture, e2e_smapi_client, jellyfin_client)
             assert e2e_fixture.get("expected_directive_type"), (
                 f"expected_directive_type required when response_type is 'directive'"
             )
-        assert e2e_fixture.get("expected_reprompt") in (None, True), (
-            f"expected_reprompt must be true or omitted for '{utterance}'"
+        # JF-872 (2026-10-13): false is a legitimate expectation (the
+        # open-session pause now carries NO reprompt); the validator accepts
+        # all three arms, the assertion itself checks the actual reprompt.
+        assert e2e_fixture.get("expected_reprompt") in (None, True, False), (
+            f"expected_reprompt must be a bool or omitted for '{utterance}'"
         )
         if "expected_end_session" in e2e_fixture:
             assert isinstance(e2e_fixture["expected_end_session"], bool), (
