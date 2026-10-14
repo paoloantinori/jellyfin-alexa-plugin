@@ -70,7 +70,7 @@
   "CrossMediaArtistOffer": "I couldn't find a song or album called '{0}'. Did you mean the artist {1}? Shall I play their music?",
   "CrossMediaArtistOfferSsml": "I couldn't find a song or album called '{0}'.<break time=\"200ms\"/>Did you mean the artist {1}? Shall I play their music?",
   "CrossMediaVideoOffer": "I couldn't find a song called '{0}'. Did you mean the video {1}? Want me to play it?",
-  "CrossMediaVideoOfferSsml": "I couldn't find a song called '{0}'.<break time=\\\"200ms\\\"/>Did you mean the video {1}? Want me to play it?",
+  "CrossMediaVideoOfferSsml": "I couldn't find a song called '{0}'.<break time=\"200ms\"/>Did you mean the video {1}? Want me to play it?",
   "GenreExpanded": "Playing {0} and similar genres.",
   "HoursAndMinutes": "{0} hours and {1} minutes",
   "InProgressItemWithPosition": "{0} at {1}",

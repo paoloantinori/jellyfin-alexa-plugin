@@ -222,7 +222,7 @@
   "CrossMediaArtistOffer": "I couldn't find a song or album called '{0}'. Did you mean the artist {1}? Want me to play their music?",
   "CrossMediaArtistOfferSsml": "I couldn't find a song or album called '{0}'.<break time=\"200ms\"/>Did you mean the artist {1}? Want me to play their music?",
   "CrossMediaVideoOffer": "I couldn't find a song called '{0}'. Did you mean the video {1}? Want me to play it?",
-  "CrossMediaVideoOfferSsml": "I couldn't find a song called '{0}'.<break time=\\\"200ms\\\"/>Did you mean the video {1}? Want me to play it?",
+  "CrossMediaVideoOfferSsml": "I couldn't find a song called '{0}'.<break time=\"200ms\"/>Did you mean the video {1}? Want me to play it?",
   "ResumePrompt": "You were listening to {0}. Would you like to resume?",
   "ResumePromptSsml": "You were listening to {0}.<break time=\"200ms\"/>Would you like to resume?",
   "ResumeReprompt": "Would you like to continue where you left off?",

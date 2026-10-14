@@ -247,6 +247,41 @@ public class LocaleStringsTests
         Assert.Contains("dispositivo con schermo", ResponseStrings.Get("VideoRequiresScreen", "it-IT"));
     }
 
+    [Theory]
+    [MemberData(nameof(ResponseStringLocaleRows))]
+    public void AllSsmlKeys_ParseAsXmlInsideSpeak(string locale)
+    {
+        // Live device incident 2026-10-14 (Paolo's round): the JF-865
+        // CrossMediaVideoOfferSsml was REJECTED by Alexa as "Invalid SSML
+        // Output Speech ... [1,68]" because the locale value carried an
+        // over-escaped literal backslash before the break tag's quotes
+        // (time=\"200ms\"); the device parser dies at the backslash. The class
+        // is every Ssml-suffixed template (23 keys x 17 locales; all are
+        // runtime-wrapped in <speak> by SpeechBuilder), and simulate-skill
+        // does NOT validate SSML, so the guard sweeps EVERY *Ssml key per
+        // locale, parse-only (some values are tag-free plain prose, so no
+        // element assertion), placeholders left in place ({n} is XML-inert).
+        // The thrown XmlException names the parse position; the theory row
+        // names the locale; ReadLocaleResource is the same loader the prose
+        // sweeps in this file use.
+        foreach (KeyValuePair<string, string> pair in ReadLocaleResource(locale))
+        {
+            if (!pair.Key.EndsWith("Ssml", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            try
+            {
+                _ = System.Xml.Linq.XElement.Parse($"<speak>{pair.Value}</speak>");
+            }
+            catch (System.Xml.XmlException ex)
+            {
+                Assert.Fail($"Ssml key '{pair.Key}' ({locale}) is not parseable XML: {ex.Message}");
+            }
+        }
+    }
+
     public static TheoryData<string> AllLocalesData()
     {
         var data = new TheoryData<string>();

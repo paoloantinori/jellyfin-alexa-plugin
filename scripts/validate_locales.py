@@ -139,6 +139,19 @@ def main() -> int:
 
         keys = set(data.keys())
 
+        # SSML over-escape gate (2026-10-14 device incident): a literal
+        # backslash inside any *Ssml template value reaches Alexa's parser
+        # and kills the response ("Invalid SSML Output Speech"; the JF-865
+        # CrossMediaVideoOfferSsml shipped time=\"200ms\" in all 17 locales).
+        # The dotnet suite parses every *Ssml key as XML; this is the cheap
+        # authoring-side mirror that fails CI on the raw backslash class.
+        for k, v in data.items():
+            if isinstance(v, str) and k.endswith("Ssml") and "\\" in v:
+                all_errors.append(
+                    f"  [{locale}] Key '{k}' contains a literal backslash; "
+                    "SSML attribute quotes must be plain \" in the JSON value"
+                )
+
         # Check for missing keys
         missing = ref_keys - keys
         known_missing = set(baseline.get(locale, []))
@@ -218,7 +231,12 @@ def main() -> int:
             print(w)
 
     if all_errors:
-        print(f"FAIL: {len(all_errors)} NEW missing key(s) not in baseline:")
+        # Neutral header: the error list mixes classes (NEW missing keys,
+        # Ssml over-escapes); each line names its own class, so the header
+        # must not claim they are all missing keys (code-review catch:
+        # a backslash error printed under the missing-key header misdirects
+        # triage).
+        print(f"FAIL: {len(all_errors)} locale error(s):")
         for e in all_errors:
             print(e)
         return 1

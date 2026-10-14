@@ -222,7 +222,7 @@
   "CrossMediaArtistOffer": "Je n'ai pas trouvé de chanson ou d'album appelé '{0}'. Cherchiez-vous l'artiste {1} ? Voulez-vous que je lance sa musique ?",
   "CrossMediaArtistOfferSsml": "Je n'ai pas trouvé de chanson ou d'album appelé '{0}'.<break time=\"200ms\"/>Cherchiez-vous l'artiste {1} ? Voulez-vous que je lance sa musique ?",
   "CrossMediaVideoOffer": "Je n'ai pas trouvé de chanson appelée '{0}'. Cherchiez-vous la vidéo {1} ? Voulez-vous que je la lance ?",
-  "CrossMediaVideoOfferSsml": "Je n'ai pas trouvé de chanson appelée '{0}'.<break time=\\\"200ms\\\"/>Cherchiez-vous la vidéo {1} ? Voulez-vous que je la lance ?",
+  "CrossMediaVideoOfferSsml": "Je n'ai pas trouvé de chanson appelée '{0}'.<break time=\"200ms\"/>Cherchiez-vous la vidéo {1} ? Voulez-vous que je la lance ?",
   "ResumePrompt": "Vous écoutiez {0}. Voulez-vous reprendre?",
   "ResumePromptSsml": "Vous écoutiez {0}.<break time=\"200ms\"/>Voulez-vous reprendre?",
   "ResumeReprompt": "Voulez-vous continuer où vous vous êtes arrêté?",

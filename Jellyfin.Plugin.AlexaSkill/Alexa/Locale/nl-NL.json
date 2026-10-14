@@ -222,7 +222,7 @@
   "CrossMediaArtistOffer": "Ik heb geen nummer of album gevonden genaamd '{0}'. Bedoelde je de artiest {1}? Zal ik zijn muziek afspelen?",
   "CrossMediaArtistOfferSsml": "Ik heb geen nummer of album gevonden genaamd '{0}'.<break time=\"200ms\"/>Bedoelde je de artiest {1}? Zal ik zijn muziek afspelen?",
   "CrossMediaVideoOffer": "Ik heb geen nummer gevonden genaamd '{0}'. Bedoelde je de video {1}? Zal ik hem afspelen?",
-  "CrossMediaVideoOfferSsml": "Ik heb geen nummer gevonden genaamd '{0}'.<break time=\\\"200ms\\\"/>Bedoelde je de video {1}? Zal ik hem afspelen?",
+  "CrossMediaVideoOfferSsml": "Ik heb geen nummer gevonden genaamd '{0}'.<break time=\"200ms\"/>Bedoelde je de video {1}? Zal ik hem afspelen?",
   "ResumePrompt": "Je was naar {0} aan het luisteren. Wil je hervatten?",
   "ResumePromptSsml": "Je was naar {0} aan het luisteren.<break time=\"200ms\"/>Wil je hervatten?",
   "ResumeReprompt": "Wil je verdergaan waar je gebleven was?",
