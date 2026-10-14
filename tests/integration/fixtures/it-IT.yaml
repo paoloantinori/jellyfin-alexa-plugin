@@ -35,6 +35,35 @@ tests:
     expected_intent: LoopAllOffIntent
     expected_slots: {}
 
+  # JF-889 article twins (off family). Live pre-fix probes 2026-10-14 (post
+  # JF-887 deploy): 'disattiva il loop' STOLE to ShuffleAllOffIntent (the
+  # 'Disattiva il casuale' region), 'disattiva la ripetizione' STOLE to
+  # TurnRadioOffIntent, 'disattiva il ripetizione' (gender-confused but
+  # spoken) STOLE to ShuffleAllOffIntent, while 'disattivare il/la ...' were
+  # green only by generalization. RED-UNTIL-DEPLOY rows (the JF-766
+  # convention) except the two infinitive forms, which are green live now and
+  # must STAY green once their exact rows land (the JF-887 family-boundary
+  # flip risk).
+  - utterance: "disattiva il loop"
+    expected_intent: LoopAllOffIntent
+    expected_slots: {}
+
+  - utterance: "disattiva la ripetizione"
+    expected_intent: LoopAllOffIntent
+    expected_slots: {}
+
+  - utterance: "disattiva il ripetizione"
+    expected_intent: LoopAllOffIntent
+    expected_slots: {}
+
+  - utterance: "disattivare il loop"
+    expected_intent: LoopAllOffIntent
+    expected_slots: {}
+
+  - utterance: "disattivare la ripetizione"
+    expected_intent: LoopAllOffIntent
+    expected_slots: {}
+
   # -------------------------------------------------------------------------
   # 2. LoopAllOnIntent (no slots)
   # -------------------------------------------------------------------------
@@ -81,6 +110,74 @@ tests:
   # after the deploy before trusting the class.
   - utterance: "chiedi a mia collezione di attivare loop"
     expected_intent: LoopAllOnIntent
+    expected_slots: {}
+
+  # JF-889 article twins (on family). Live pre-fix probes 2026-10-14 (post
+  # JF-887 deploy): 'attiva il loop' STOLE to ShuffleAllOnIntent (the 'Attiva
+  # il casuale' region) and the gender-confused 'attiva il ripetizione' stole
+  # the same way; 'attiva la ripetizione'/'attivare il loop' were green only
+  # by generalization ('attivare il loop' read Fallback before the JF-887
+  # deploy). RED-UNTIL-DEPLOY rows except the generalization-green forms,
+  # which must stay green.
+  - utterance: "attiva il loop"
+    expected_intent: LoopAllOnIntent
+    expected_slots: {}
+
+  - utterance: "attiva la ripetizione"
+    expected_intent: LoopAllOnIntent
+    expected_slots: {}
+
+  - utterance: "attiva il ripetizione"
+    expected_intent: LoopAllOnIntent
+    expected_slots: {}
+
+  - utterance: "attivare il loop"
+    expected_intent: LoopAllOnIntent
+    expected_slots: {}
+
+  - utterance: "attivare la ripetizione"
+    expected_intent: LoopAllOnIntent
+    expected_slots: {}
+
+  # JF-889 bare-noun claim: bare 'loop' STOLE to ShowMoreIntent (the
+  # pagination family's generalization region; bare 'ripetizione' stole the
+  # same way and stays unclaimed, one bare-noun experiment at a time). 'loop'
+  # names exactly one thing in this vocabulary, so claiming it for loop-on is
+  # right for intent; whether the trainer honors the exact row over the
+  # ShowMore generalization is the POST-DEPLOY DECISION: if this row stays red
+  # (ShowMore keeps it), drop the bare 'loop' template row and keep the
+  # documented trade-off (the JF-377 string-indistinguishability class); do
+  # NOT remove ShowMore's bare rows. The pagination controls below must stay
+  # green either way.
+  - utterance: "loop"
+    expected_intent: LoopAllOnIntent
+    expected_slots: {}
+
+  # JF-889 steal controls for the three regions named above (the 'Attiva il
+  # casuale' shuffle region, the bare-noun pagination region, and the
+  # TurnRadioOff 'disattiva la ...' region that stole 'disattiva la
+  # ripetizione' live). 'disattiva la radio' is an exact TurnRadioOff row;
+  # 'attiva il mescolamento' rides generalization until this change's
+  # 'Attiva il mescolamento' exact row deploys, exact after. If either ever
+  # flips red on a rebuild, fix the model, never loosen the pin.
+  - utterance: "attiva il mescolamento"
+    expected_intent: ShuffleAllOnIntent
+    expected_slots: {}
+
+  - utterance: "disattiva la radio"
+    expected_intent: TurnRadioOffIntent
+    expected_slots: {}
+
+  - utterance: "mostra di più"
+    expected_intent: ShowMoreIntent
+    expected_slots: {}
+
+  - utterance: "continua"
+    expected_intent: ShowMoreIntent
+    expected_slots: {}
+
+  - utterance: "ancora"
+    expected_intent: ShowMoreIntent
     expected_slots: {}
 
   # -------------------------------------------------------------------------

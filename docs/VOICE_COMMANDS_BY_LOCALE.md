@@ -8294,7 +8294,7 @@ Placeholder legend:
 | `<titolo del video o del film>` | `{title}` |
 | `<parole del titolo del brano>` | `{titleKeywords}` |
 
-Complete phrase list (1643 phrases across 74 commands):
+Complete phrase list (1664 phrases across 74 commands):
 
 #### Play music
 
@@ -9825,11 +9825,22 @@ Complete phrase list (1643 phrases across 74 commands):
 - `attivare ripetizione`
 - `Di attivare loop`
 - `Di attivare ripetizione`
+- `Attiva il loop`
+- `Attiva la ripetizione`
+- `Attiva il ripetizione`
+- `attivare il loop`
+- `attivare la ripetizione`
+- `attivare il ripetizione`
+- `Di attivare il loop`
+- `Di attivare la ripetizione`
+- `Di attivare il ripetizione`
+- `loop`
 
 **Shuffle queue**
 
 - `Attiva mescolamento`
 - `Attiva il casuale`
+- `Attiva il mescolamento`
 - `Mescola la coda`
 - `Mescola la riproduzione`
 - `attivare il mescolamento`
@@ -9840,6 +9851,7 @@ Complete phrase list (1643 phrases across 74 commands):
 
 - `Disattiva mescolamento`
 - `Disattiva il casuale`
+- `Disattiva il mescolamento`
 - `Ripristina l'ordine della coda`
 - `disattivare il mescolamento`
 - `Di disattivare il mescolamento`
@@ -9852,6 +9864,15 @@ Complete phrase list (1643 phrases across 74 commands):
 - `disattivare ripetizione`
 - `Di disattivare loop`
 - `Di disattivare ripetizione`
+- `Disattiva il loop`
+- `Disattiva la ripetizione`
+- `Disattiva il ripetizione`
+- `disattivare il loop`
+- `disattivare la ripetizione`
+- `disattivare il ripetizione`
+- `Di disattivare il loop`
+- `Di disattivare la ripetizione`
+- `Di disattivare il ripetizione`
 
 #### Favorites
 

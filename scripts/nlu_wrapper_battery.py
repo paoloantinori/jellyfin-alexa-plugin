@@ -66,6 +66,12 @@ BATTERY: dict[str, list[tuple[str, str, str]]] = {
         ("simulate", "chiedi a mia collezione di attivare loop", "LoopAllOnIntent"),
         ("simulate", "chiedi a mia collezione di disattivare loop", "LoopAllOffIntent"),
         ("simulate", "chiedi a mia collezione di attivare il mescolamento", "ShuffleAllOnIntent"),
+        # JF-889: the article-tail twins, the wrapper shape of the live-failing
+        # article forms ('attiva il loop' shuffle-stole live). RED-UNTIL-DEPLOY:
+        # the 'Di attivare il loop' suffix rows land with this change's model
+        # deploy; the article-less rows above are the evergreen controls.
+        ("simulate", "chiedi a mia collezione di attivare il loop", "LoopAllOnIntent"),
+        ("simulate", "chiedi a mia collezione di disattivare il loop", "LoopAllOffIntent"),
         # JF-874: the film wrapper routes the catalog-backed MovieTitle twin
         # (PlayMovieIntent, served by the PlayVideo handler); the expectation
         # flips from PlayVideoIntent with the deployed model + movie catalog
