@@ -86,6 +86,16 @@ explicit_intents:
     samples:
       - Disattiva loop
       - Disattiva ripetizione
+      # JF-887 infinitive twins (the JF-844 wrapper discipline). Exact rows pin
+      # the off family against the new near-identical LoopAllOn rows below
+      # (generalization alone cannot be trusted to keep them apart across
+      # trainer rebuilds): live pre-fix state already had 'disattivare
+      # ripetizione' misrouting to LoopAllOnIntent (2026-10-14 probe), and
+      # 'disattivare loop' must keep this family once 'attivare loop' exists.
+      - disattivare loop
+      - disattivare ripetizione
+      - Di disattivare loop
+      - Di disattivare ripetizione
   ShuffleAllOnIntent:
     samples:
       # Live incident 2026-09-23: «mescola la coda» statistically landed on
@@ -109,6 +119,16 @@ explicit_intents:
     samples:
       - Attiva loop
       - Attiva ripetizione
+      # JF-887: the article-less bare-infinitive 'attivare loop' shape had no
+      # row; the wrapper 'chiedi a mia collezione di attivare loop' fell to
+      # LoopAllOffIntent (live battery 2026-10-14) and 'di attivare loop'
+      # NO_SELECTIONd. Literal rows per the shuffle-family precedent above
+      # (JF-551/JF-844); 'attivare il mescolamento' already worked, the gap
+      # was the loop twin.
+      - attivare loop
+      - attivare ripetizione
+      - Di attivare loop
+      - Di attivare ripetizione
   RepeatSingleOnIntent:
     samples:
       # JF-438: the old "Suonalo ancora"/"Suonala ancora" forms collided with the

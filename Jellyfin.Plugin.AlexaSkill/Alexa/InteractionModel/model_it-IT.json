@@ -79,7 +79,11 @@
         "name": "LoopAllOffIntent",
         "samples": [
           "Disattiva loop",
-          "Disattiva ripetizione"
+          "Disattiva ripetizione",
+          "disattivare loop",
+          "disattivare ripetizione",
+          "Di disattivare loop",
+          "Di disattivare ripetizione"
         ]
       },
       {
@@ -108,7 +112,11 @@
         "name": "LoopAllOnIntent",
         "samples": [
           "Attiva loop",
-          "Attiva ripetizione"
+          "Attiva ripetizione",
+          "attivare loop",
+          "attivare ripetizione",
+          "Di attivare loop",
+          "Di attivare ripetizione"
         ]
       },
       {

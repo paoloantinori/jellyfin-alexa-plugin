@@ -53,7 +53,18 @@ BATTERY: dict[str, list[tuple[str, str, str]]] = {
         ("simulate", "chiedi a mia collezione di riprodurre musica a caso", "PlayRandomIntent"),
         ("simulate", "chiedi a mia collezione di mettere rapsodia in coda", "AddToQueueIntent"),
         ("simulate", "chiedi a mia collezione di riprodurre rapsodia dopo", "PlayNextIntent"),
+        # JF-887: PRE-DEPLOY WINDOW for the ON row. The article-less
+        # 'attivare loop' tail had no LoopAllOn row, so the wrapper fell to
+        # LoopAllOffIntent (live 2026-10-14) and profile-nlu read the same
+        # steal on the bare tail; it stays red until the orchestrator deploys
+        # the rebuilt it-IT model (DLL embedded template + rebuild endpoint).
+        # The OFF row is the steal control: green pre-deploy (live probe
+        # 2026-10-14, LoopAllOffIntent with LoopAllOn considered second) and
+        # it must STAY green once LoopAllOn gains its near-identical
+        # 'attivare loop' rows. The neighboring mescolamento row staying green
+        # is the marker that only the pending flip is red.
         ("simulate", "chiedi a mia collezione di attivare loop", "LoopAllOnIntent"),
+        ("simulate", "chiedi a mia collezione di disattivare loop", "LoopAllOffIntent"),
         ("simulate", "chiedi a mia collezione di attivare il mescolamento", "ShuffleAllOnIntent"),
         # JF-874: the film wrapper routes the catalog-backed MovieTitle twin
         # (PlayMovieIntent, served by the PlayVideo handler); the expectation

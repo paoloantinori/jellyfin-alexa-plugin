@@ -12,6 +12,29 @@ tests:
     expected_intent: LoopAllOffIntent
     expected_slots: {}
 
+  # JF-887 steal controls (red-until-deploy except where noted): the live
+  # pre-fix state already had 'disattivare ripetizione' misrouting to
+  # LoopAllOnIntent; once LoopAllOn gains its 'attivare loop' rows these
+  # near-identical shapes must NOT flip across the family boundary. The
+  # battery's simulate row 'chiedi a mia collezione di disattivare loop'
+  # (green pre-deploy, live probe 2026-10-14) covers the same control at the
+  # wrapper layer.
+  - utterance: "disattivare loop"
+    expected_intent: LoopAllOffIntent
+    expected_slots: {}
+
+  - utterance: "disattivare ripetizione"
+    expected_intent: LoopAllOffIntent
+    expected_slots: {}
+
+  - utterance: "di disattivare loop"
+    expected_intent: LoopAllOffIntent
+    expected_slots: {}
+
+  - utterance: "di disattivare ripetizione"
+    expected_intent: LoopAllOffIntent
+    expected_slots: {}
+
   # -------------------------------------------------------------------------
   # 2. LoopAllOnIntent (no slots)
   # -------------------------------------------------------------------------
@@ -20,6 +43,43 @@ tests:
     expected_slots: {}
 
   - utterance: "Attiva ripetizione"
+    expected_intent: LoopAllOnIntent
+    expected_slots: {}
+
+  # JF-887 (2026-10-14): the article-less infinitive twins (the JF-844
+  # discipline). Live pre-fix state: 'attivare loop' stole to
+  # LoopAllOffIntent and 'di attivare loop' NO_SELECTIONd (the one-shot
+  # wrapper 'chiedi a mia collezione di attivare loop' fell to
+  # LoopAllOffIntent in the battery); 'attivare ripetizione' routed green by
+  # generalization alone. RED-UNTIL-DEPLOY rows (the JF-766 convention): they
+  # go green on the live suite only after the model deploy (DLL embedded
+  # template + rebuild endpoint); the imperative rows above are the evergreen
+  # controls and stay green throughout.
+  - utterance: "attivare loop"
+    expected_intent: LoopAllOnIntent
+    expected_slots: {}
+
+  - utterance: "attivare ripetizione"
+    expected_intent: LoopAllOnIntent
+    expected_slots: {}
+
+  - utterance: "di attivare loop"
+    expected_intent: LoopAllOnIntent
+    expected_slots: {}
+
+  - utterance: "di attivare ripetizione"
+    expected_intent: LoopAllOnIntent
+    expected_slots: {}
+
+  # The wrapper twin. Live probe 2026-10-14: 'chiedi a mia collezione di
+  # attivare il mescolamento' routes ShuffleAllOnIntent on profile-nlu
+  # because the phrase ends with the literal 'Di attivare il mescolamento'
+  # sample; the new 'Di attivare loop' row gives this phrase the same no-slot
+  # exact-suffix shape. If it still reads Fallback post-deploy, the wrapper
+  # belongs to the prefixed-phrase artifact class (see the podcast note below)
+  # and the pin moves to the battery's simulate row instead; verify once
+  # after the deploy before trusting the class.
+  - utterance: "chiedi a mia collezione di attivare loop"
     expected_intent: LoopAllOnIntent
     expected_slots: {}
 
@@ -405,6 +465,20 @@ tests:
     expected_slots:
       book: {}
   - utterance: "di riprodurre il podcast generazione"
+    expected_intent: PlayPodcastIntent
+    expected_slots:
+      podcast_name: {}
+  # JF-887 (2026-10-14): the bare-infinitive twin of the Di row above (both
+  # model rows ship since JF-551). Green live (3/3 profile-nlu 2026-10-14).
+  # The WRAPPER form is deliberately NOT pinned here: a prefixed phrase with a
+  # slotted tail reads Fallback on profile-nlu BY DESIGN (no invocation layer;
+  # same artifact class as the pinned book-wrapper rows, which also read
+  # Fallback against the live model); the wrapper is covered by the battery's
+  # simulate row, which read green twice in detail 2026-10-14
+  # (PlayPodcastIntent, podcast_name=generazione, invocation reached the
+  # endpoint). The battery's one AddSongToPlaylistIntent read that day was the
+  # simulate flake class.
+  - utterance: "riprodurre il podcast generazione"
     expected_intent: PlayPodcastIntent
     expected_slots:
       podcast_name: {}
