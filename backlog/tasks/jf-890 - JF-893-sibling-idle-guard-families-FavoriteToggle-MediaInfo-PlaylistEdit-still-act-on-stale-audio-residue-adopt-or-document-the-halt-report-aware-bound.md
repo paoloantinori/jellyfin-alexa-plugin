@@ -4,9 +4,10 @@ title: >-
   JF-893: sibling idle-guard families (FavoriteToggle, MediaInfo, PlaylistEdit)
   still act on stale-audio residue; adopt or document the halt-report-aware
   bound
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-15 17:30'
+updated_date: '2026-10-15 19:01'
 labels: []
 dependencies: []
 priority: low
@@ -18,7 +19,22 @@ priority: low
 <!-- SECTION:DESCRIPTION:BEGIN -->
 Found by the JF-892 simplify/altitude review (2026-10-15). The JF-892 doctrine (an explicit halt report with no corroborating live evidence withdraws the frozen AudioPlayer token as liveness proof; see PlaybackLaunchBuilder.IsStaleAudioPlaybackResidue, consumed by the ONE loop/shuffle write-family gate ProgressReporter.TryAnswerModeWriteMediumGate) is scoped to the write family only. The OTHER HasCurrentPlaybackEvidence-guarded families still act on the same stale-audio-residue shape: on an idle device after music (frozen song token, playerActivity=STOPPED, empty session, Audio-routed ledger) the guard's TOKEN leg passes (PlaybackLaunchBuilder.HasCurrentPlaybackEvidence treats any token as evidence) and ResolveCurrentPlayingItem's token leg resolves the dead item, so FavoriteToggle favorites it, MediaInfo reports it as now-playing, and PlaylistEdit mutates the queue around it. Verified from source: FavoriteToggleIntentHandler.cs:96 (guard) then :104 (resolver call); the same structure in MediaInfoIntentHandler.cs:97 and PlaylistEditHandlerBase.cs:174. Unlike JF-890's video residual this one is not recorded as an accepted residual anywhere. Decide per family: adopt the halt-report-aware evidence leg (with its own red proofs per family; the JF-789 recency fold was evaluated and rejected on this predicate's doc, but the halt-report fold never was) or document it as a deliberate accepted residual. Do NOT fold it into the write-family gate; these families do not call that gate.
 <!-- SECTION:DESCRIPTION:END -->
+
 <!-- SECTION:DESCRIPTION:END -->
+
+## Definition of Done
+<!-- DOD:BEGIN -->
+- [ ] #1 dotnet build passes with 0 errors
+- [ ] #2 dotnet test passes
+- [ ] #3 No new compiler warnings introduced
+- [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
+- [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
+- [ ] #6 NLU test fixtures updated if interaction model changed
+- [ ] #7 E2E test added for new intent or handler logic
+- [ ] #8 Locale response strings added to all 17 locales
+- [ ] #9 /simplify passed (no blocking cleanups remaining)
+- [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
+<!-- DOD:END -->
 
 ## Implementation Notes
 
@@ -36,16 +52,8 @@ Recency-bounded middle ground, evaluated and REJECTED (JF-893 code review findin
 Red proof: the four pins were run against a scratch adopt (IsStaleAudioPlaybackResidue wired into all three guards) and went 12/12 RED, then the scratch was reverted and the suite went green: the pins genuinely exercise the residue path and a future adoption cannot land silently. Each pin also carries a shape-guard assertion (Assert.True(IsStaleAudioPlaybackResidue(...)), JF-893 code review finding 3) so the guarantee survives predicate-leg drift (e.g. RecordLastPlayed someday arming the flag): the pin reddens itself instead of silently vacating. Full suite 6000/6000 on net9.0 and net10.0 (build 0 warnings).
 <!-- SECTION:NOTES:END -->
 
-## Definition of Done
-<!-- DOD:BEGIN -->
-- [ ] #1 dotnet build passes with 0 errors
-- [ ] #2 dotnet test passes
-- [ ] #3 No new compiler warnings introduced
-- [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
-- [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
-- [ ] #6 NLU test fixtures updated if interaction model changed
-- [ ] #7 E2E test added for new intent or handler logic
-- [ ] #8 Locale response strings added to all 17 locales
-- [ ] #9 /simplify passed (no blocking cleanups remaining)
-- [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
-<!-- DOD:END -->
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+EXECUTED on branch jf893 (86b35440), merged to main 6f2185dd, pushed. Decision: DOCUMENT for all three families, decided from the code paths (the review hint's split was overridden): the stale-residue shape IS the just-stopped shape, so adopting the JF-892 bound would refuse each family's canonical just-stopped interaction (FavoriteToggle would regress the JF-629 fix; MediaInfo would lose the only handle for the just-finished ask; PlaylistEdit's remove twin has no by-name alternate - the JF-876/JF-882 rule). The task's queue-corruption premise dissolved at the code paths (Jellyfin-playlist writes only, named and reversible; tag-verified caveat: duplicates dedupe on 10.11.x, plain-append on 12.x, remove strips on both; the false AddCurrentToPlaylist class doc corrected). Deliverables: accepted-residual comments at the three guard sites, the canonical JF-893 BOUNDARY FACT on HasCurrentPlaybackEvidence's doc (a fourth family must decide, not inherit), four shape-class pins with shape-guard asserts. Red-proof: 12/12 RED under a scratch adopt, green reverted. The recency middle ground evaluated and rejected (ledger stamp = launch age, not halt age). Gates: /simplify (4 agents) + /code-review high (3 applied, confirmed back). Tests 6000/6000 BOTH TFMs; build 0/0. No deploy needed (comments + tests only; the corrected class doc rides the next batch).
+<!-- SECTION:FINAL_SUMMARY:END -->
