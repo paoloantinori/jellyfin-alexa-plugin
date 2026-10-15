@@ -3,9 +3,10 @@ id: JF-887
 title: >-
   JF-890: loop/shuffle medium gate refuses on a STALE STOPPED video token
   (nothing playing) - must gate on playerActivity, not just the token's medium
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-15 11:48'
+updated_date: '2026-10-15 15:04'
 labels: []
 dependencies: []
 priority: high
@@ -30,3 +31,9 @@ Paolo's 2026-10-15 12:49 device round (corr 847bcda6): fresh one-shot 'chiedi a 
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+EXECUTED on branch jf890 (029859cd), merged to main 1efa9381, pushed, DEPLOYED to minix and build-verified on the active DLL (ReportsPlaybackHalted present, CannotShuffleContent x17, NoMediaPlaying key present; health 200, config 1 user). The orchestrator ran the four-angle /simplify on the merged range IN THIS TRANSCRIPT (reuse clean; efficiency clean; altitude clean at current depth with the belt-bound counterfactual traced; Finding-1 comment trims applied + the SleepTimer immunity and JF-891 pointer documented on the gate doc) and /code-review was dispatched on the worker diff at merge time (5 findings: 3 applied, 2 dismissed with reasons) plus a second pass on the comment-only simplify delta; JF-891 (SetPlaybackSpeed stale wrong-line) filed same-turn with the consumer-local constraint. Suite 5970/5970 BOTH TFMs. DEVICE RETEST: 'attiva loop' on the idle device now answers the nothing-playing line, never the video refusal.
+<!-- SECTION:FINAL_SUMMARY:END -->
