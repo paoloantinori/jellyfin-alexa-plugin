@@ -26,7 +26,9 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// the AudioPlayer path, where a ReplaceAll re-issue is normal queue behavior.
 /// Over a VideoApp-routed medium the handler answers the honest refusal (the
 /// JF-632 SleepTimer precedent: a re-issue would be parallel unstoppable audio,
-/// and the VideoApp seek path tolerates no launch interaction mid-stream).
+/// and the VideoApp seek path tolerates no launch interaction mid-stream);
+/// since JF-891 the refusal demands a corroborated-current VideoApp verdict
+/// (stale residue answers the no-media Tell, rationale at the gate).
 /// JF-655: the Audio verdict alone does not license the re-launch either: the
 /// medium classifier reads the PERSISTENT last-played ledger, so the re-launch
 /// additionally requires the active-playback signal (the event-owned flag set by
@@ -132,6 +134,30 @@ public class SetPlaybackSpeedIntentHandler : BaseHandler
         PlaybackLaunchBuilder.PlayingMedium medium = Launch.ResolveScreenOwningMedium(context, _libraryManager, _queueManager);
         if (PlaybackLaunchBuilder.IsVideoAppMedium(medium))
         {
+            // JF-891, the consumer-local JF-890 mirror (the altitude-review
+            // constraint: NEVER bound the belt itself, ResolveScreenOwningMedium
+            // keeps answering who-could-own-the-screen for every consumer): the
+            // belt's verdict reads the PERSISTENT ledger and the frozen token, so
+            // a speed ask on an idle device whose video residue carries an
+            // explicit halt report and no session-held item used to speak this
+            // refusal about a playback that ended long ago (an idle device with
+            // NO player report still refuses: absence cannot read as halted, the
+            // JF-632 live seek-mode shape). The refusal demands a
+            // corroborated-current verdict
+            // (<see cref="PlaybackLaunchBuilder.IsVideoAppMediumCorroborated"/>
+            // owns the legs and the JF-868 parity); stale residue answers the
+            // honest no-media Tell, a PLAIN Tell with no Stop directive (nothing
+            // corroborated is playing), the same line the cold item-resolve path
+            // above owns. ACCEPTED RESIDUAL (the JF-890 mirror trade): a VideoApp
+            // stream whose session was LOST while it still plays lands here too,
+            // so the Stop the old refusal carried no longer reaches it; voice
+            // pause/stop (the JF-858 flat gates) remains that shape's exit.
+            if (!PlaybackLaunchBuilder.IsVideoAppMediumCorroborated(context, session))
+            {
+                Logger.LogDebug("SetPlaybackSpeed: {Medium} verdict is stale residue (halted report, no session item), answering the no-media tell", medium);
+                return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get("NoMediaPlaying", locale)));
+            }
+
             Logger.LogDebug("SetPlaybackSpeed: {Medium} playing, refusing the re-launch honestly", medium);
 
             // The JF-564/JF-632 refusal shape: the honest line rides a response
