@@ -93,14 +93,6 @@ public class LoopIntentHandlerTests : PluginTestBase
         _ => new LoopSongOnIntentHandler(_sessionManagerMock.Object, _config, _libraryManager.Object, _loggerFactory, queueManager),
     };
 
-    private void SetupLibraryResolves(params BaseItem[] items)
-    {
-        foreach (BaseItem item in items)
-        {
-            _libraryManager.Setup(l => l.GetItemById(item.Id)).Returns(item);
-        }
-    }
-
     public static TheoryData<string, string> HandledIntentNames => new()
     {
         { "AMAZON.LoopOnIntent", IntentNames.LoopAllOn },
@@ -132,7 +124,7 @@ public class LoopIntentHandlerTests : PluginTestBase
     {
         BaseHandler handler = CreateOwner(intentName);
         Audio song = Song("Happy Path");
-        SetupLibraryResolves(song);
+        TestHelpers.SetupLibraryResolves(_libraryManager, song);
         Context context = ContextWithPlayingToken(song.Id.ToString());
         SessionInfo session = CreateSession();
 
@@ -186,7 +178,7 @@ public class LoopIntentHandlerTests : PluginTestBase
     {
         BaseHandler handler = CreateOwner(IntentNames.RepeatSingleOn);
         Audio song = Song("Survivor");
-        SetupLibraryResolves(song);
+        TestHelpers.SetupLibraryResolves(_libraryManager, song);
         SessionInfo session = CreateSession();
         session.FullNowPlayingItem = null;
         session.NowPlayingItem = null; // the cleared-session shape
@@ -214,7 +206,7 @@ public class LoopIntentHandlerTests : PluginTestBase
     {
         DeviceQueueManager queues = TestHelpers.CreateDeviceQueueManager("loop-idle");
         Audio oldSong = Song("Days Old");
-        SetupLibraryResolves(oldSong);
+        TestHelpers.SetupLibraryResolves(_libraryManager, oldSong);
         queues.RecordLastPlayed("loop-idle-device", oldSong.Id.ToString(), DeviceQueueManager.LaunchRoute.Audio);
         BaseHandler handler = CreateOwner(IntentNames.RepeatSingleOn, queues);
         SessionInfo session = CreateSession(); // no token in context, no session item
@@ -243,7 +235,7 @@ public class LoopIntentHandlerTests : PluginTestBase
         DeviceQueueManager queues = TestHelpers.CreateDeviceQueueManager("loop-displace");
         Audio oldSong = Song("Old Song");
         var movie = new Movie { Name = "Current Movie", Id = Guid.NewGuid(), Path = "/movies/c.mkv" };
-        SetupLibraryResolves(oldSong, movie);
+        TestHelpers.SetupLibraryResolves(_libraryManager, oldSong, movie);
         queues.RecordLastPlayed("loop-displace-device", movie.Id.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
         BaseHandler handler = CreateOwner(IntentNames.LoopAllOn, queues);
         SessionInfo session = CreateSession();
@@ -273,7 +265,7 @@ public class LoopIntentHandlerTests : PluginTestBase
     {
         DeviceQueueManager queues = TestHelpers.CreateDeviceQueueManager("loop-seek");
         Audio seekSong = Song("Seek Mode Song");
-        SetupLibraryResolves(seekSong);
+        TestHelpers.SetupLibraryResolves(_libraryManager, seekSong);
         queues.RecordLastPlayed("loop-seek-device", seekSong.Id.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
         BaseHandler handler = CreateOwner(IntentNames.RepeatSingleOn, queues);
         SessionInfo session = CreateSession(); // no token, no session item: the one-shot shape
@@ -303,7 +295,7 @@ public class LoopIntentHandlerTests : PluginTestBase
     {
         DeviceQueueManager queues = TestHelpers.CreateDeviceQueueManager("loop-session");
         Audio song = Song("Session Song");
-        SetupLibraryResolves(song);
+        TestHelpers.SetupLibraryResolves(_libraryManager, song);
         queues.RecordLastPlayed("loop-session-device", song.Id.ToString(), DeviceQueueManager.LaunchRoute.Audio);
         BaseHandler handler = CreateOwner(IntentNames.LoopAllOff, queues);
         SessionInfo session = CreateSession();
@@ -335,7 +327,7 @@ public class LoopIntentHandlerTests : PluginTestBase
     {
         DeviceQueueManager queues = TestHelpers.CreateDeviceQueueManager("loop-held-jf785");
         Audio song = Song("Held Song");
-        SetupLibraryResolves(song);
+        TestHelpers.SetupLibraryResolves(_libraryManager, song);
         queues.RecordLastPlayed("loop-held-jf785-device", song.Id.ToString(), DeviceQueueManager.LaunchRoute.Audio);
         BaseHandler handler = CreateOwner(IntentNames.RepeatSingleOn, queues);
         SessionInfo session = CreateSession();
@@ -368,7 +360,7 @@ public class LoopIntentHandlerTests : PluginTestBase
     {
         DeviceQueueManager queues = TestHelpers.CreateDeviceQueueManager("loop-door-jf785");
         Audio oldSong = Song("Days Old Song");
-        SetupLibraryResolves(oldSong);
+        TestHelpers.SetupLibraryResolves(_libraryManager, oldSong);
         queues.RecordLastPlayed("loop-door-jf785-device", oldSong.Id.ToString(), DeviceQueueManager.LaunchRoute.Audio);
         BaseHandler handler = CreateOwner(IntentNames.LoopAllOn, queues);
         SessionInfo session = CreateSession();
@@ -399,7 +391,7 @@ public class LoopIntentHandlerTests : PluginTestBase
     {
         DeviceQueueManager queues = TestHelpers.CreateDeviceQueueManager("loop-sameitem");
         Audio seekSong = Song("Same Item Seek Song");
-        SetupLibraryResolves(seekSong);
+        TestHelpers.SetupLibraryResolves(_libraryManager, seekSong);
         queues.RecordLastPlayed("loop-sameitem-device", seekSong.Id.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
         BaseHandler handler = CreateOwner(IntentNames.RepeatSingleOn, queues);
         SessionInfo session = CreateSession(); // empty session: the token is the only request evidence
@@ -465,7 +457,7 @@ public class LoopIntentHandlerTests : PluginTestBase
     {
         DeviceQueueManager queues = TestHelpers.CreateDeviceQueueManager("loop-resolvable-jf789");
         var movie = TestHelpers.CreateMovie("Days Old Resolvable Movie");
-        SetupLibraryResolves(movie);
+        TestHelpers.SetupLibraryResolves(_libraryManager, movie);
         queues.RecordLastPlayed("loop-resolvable-jf789-device", movie.Id.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
         TestHelpers.BackdateLastPlayedStamp(queues, "loop-resolvable-jf789-device", TimeSpan.FromDays(3));
         BaseHandler handler = CreateOwner(IntentNames.LoopAllOn, queues);
@@ -493,7 +485,7 @@ public class LoopIntentHandlerTests : PluginTestBase
     {
         DeviceQueueManager queues = TestHelpers.CreateDeviceQueueManager("loop-book");
         var book = new AudioBook { Name = "VideoApp Book", Id = Guid.NewGuid(), Path = "/books/b.m4b" };
-        SetupLibraryResolves(book);
+        TestHelpers.SetupLibraryResolves(_libraryManager, book);
         queues.RecordLastPlayed("loop-book-device", book.Id.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
         BaseHandler handler = CreateOwner(IntentNames.RepeatSingleOn, queues);
 
@@ -509,5 +501,165 @@ public class LoopIntentHandlerTests : PluginTestBase
             TestHelpers.GetSpeechText(response), StringComparison.OrdinalIgnoreCase);
         _sessionManagerMock.Verify(
             s => s.OnPlaybackProgress(It.IsAny<PlaybackProgressInfo>(), It.IsAny<bool>()), Times.Never);
+    }
+
+    /// <summary>
+    /// THE JF-890 regression pin (live corr 847bcda6): a fresh one-shot "attiva
+    /// loop" with NOTHING playing, the context reporting playerActivity=STOPPED
+    /// over the VIDEO token frozen at the last stop (offset 106054ms), an empty
+    /// session, and the VideoApp-routed movie ledger still within the recency
+    /// window. The device carries the last played item in context across
+    /// sessions, so the belt classifies the stale residue as the Video medium;
+    /// the refusal it used to ground on that residue is gone: the honest answer
+    /// is the no-media tell, and the mode write must NOT land on the stale token
+    /// (falling through to the idle guard would resolve the token's movie).
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_StaleStoppedVideoToken_EmptySession_NoMediaInsteadOfRefusal_JF890()
+    {
+        DeviceQueueManager queues = TestHelpers.CreateDeviceQueueManager("loop-stale-jf890");
+        var movie = TestHelpers.CreateMovie("Sunny Dancer");
+        TestHelpers.SetupLibraryResolves(_libraryManager, movie);
+        queues.RecordLastPlayed("loop-stale-jf890-device", movie.Id.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
+        BaseHandler handler = CreateOwner(IntentNames.LoopAllOn, queues);
+        SessionInfo session = CreateSession(); // session.new=true: nothing held
+
+        SkillResponse response = await handler.HandleAsync(
+            IntentRequestFor(IntentNames.LoopAllOn),
+            TestHelpers.CreateContextWithToken(movie.Id.ToString(), "loop-stale-jf890-device", "STOPPED"),
+            CreateUser(), session, CancellationToken.None);
+
+        Assert.Contains(
+            ResponseStrings.Get("NoMediaPlaying", "en-US"),
+            TestHelpers.GetSpeechText(response), StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(
+            ResponseStrings.Get("CannotRepeatContent", "en-US"),
+            TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+        _sessionManagerMock.Verify(
+            s => s.OnPlaybackProgress(It.IsAny<PlaybackProgressInfo>(), It.IsAny<bool>()), Times.Never);
+        Assert.Equal(RepeatMode.RepeatNone, session.PlayState!.RepeatMode);
+    }
+
+    /// <summary>
+    /// The JF-890 active bound: the SAME video shape with the device reporting
+    /// PLAYING keeps the honest video-family refusal (guard c: loop during
+    /// active video still refuses).
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_ActiveVideoPlaying_StillRefuses_JF890()
+    {
+        DeviceQueueManager queues = TestHelpers.CreateDeviceQueueManager("loop-active-jf890");
+        var movie = TestHelpers.CreateMovie("Active Movie");
+        TestHelpers.SetupLibraryResolves(_libraryManager, movie);
+        queues.RecordLastPlayed("loop-active-jf890-device", movie.Id.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
+        BaseHandler handler = CreateOwner(IntentNames.LoopAllOn, queues);
+        SessionInfo session = CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(
+            IntentRequestFor(IntentNames.LoopAllOn),
+            TestHelpers.CreateContextWithToken(movie.Id.ToString(), "loop-active-jf890-device", "PLAYING"),
+            CreateUser(), session, CancellationToken.None);
+
+        Assert.Contains(
+            ResponseStrings.Get("CannotRepeatContent", "en-US"),
+            TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            ResponseStrings.Get("NoMediaPlaying", "en-US"),
+            TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+        _sessionManagerMock.Verify(
+            s => s.OnPlaybackProgress(It.IsAny<PlaybackProgressInfo>(), It.IsAny<bool>()), Times.Never);
+    }
+
+    /// <summary>
+    /// The JF-868 parity boundary of the JF-890 bound: an explicit STOPPED report
+    /// does NOT disarm the refusal when the session still holds the item, because
+    /// during ACTIVE VideoApp playback the common device shape IS a bare STOPPED
+    /// (JF-868, corr ab55dc39/de7f892a) and the held item is the VideoApp
+    /// evidence leg (the JF-785 Leg B parity).
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_HaltedReportSessionHoldsVideo_StillRefuses_JF890()
+    {
+        DeviceQueueManager queues = TestHelpers.CreateDeviceQueueManager("loop-held-jf890");
+        var movie = TestHelpers.CreateMovie("Held Movie");
+        TestHelpers.SetupLibraryResolves(_libraryManager, movie);
+        queues.RecordLastPlayed("loop-held-jf890-device", movie.Id.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
+        BaseHandler handler = CreateOwner(IntentNames.LoopAllOn, queues);
+        SessionInfo session = CreateSession();
+        session.FullNowPlayingItem = movie;
+
+        SkillResponse response = await handler.HandleAsync(
+            IntentRequestFor(IntentNames.LoopAllOn),
+            TestHelpers.CreateContextWithToken(movie.Id.ToString(), "loop-held-jf890-device", "STOPPED"),
+            CreateUser(), session, CancellationToken.None);
+
+        Assert.Contains(
+            ResponseStrings.Get("CannotRepeatContent", "en-US"),
+            TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+        _sessionManagerMock.Verify(
+            s => s.OnPlaybackProgress(It.IsAny<PlaybackProgressInfo>(), It.IsAny<bool>()), Times.Never);
+    }
+
+    /// <summary>
+    /// Guard b: loop during ACTIVE music (PLAYING + audio token on an
+    /// Audio-routed ledger) still takes the mode write; the JF-890 activity
+    /// bound only ever widens the VideoApp branch.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_ActiveMusicPlaying_StillWrites_JF890()
+    {
+        DeviceQueueManager queues = TestHelpers.CreateDeviceQueueManager("loop-music-jf890");
+        Audio song = Song("Active Song");
+        TestHelpers.SetupLibraryResolves(_libraryManager, song);
+        queues.RecordLastPlayed("loop-music-jf890-device", song.Id.ToString(), DeviceQueueManager.LaunchRoute.Audio);
+        BaseHandler handler = CreateOwner(IntentNames.LoopAllOn, queues);
+        SessionInfo session = CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(
+            IntentRequestFor(IntentNames.LoopAllOn),
+            TestHelpers.CreateContextWithToken(song.Id.ToString(), "loop-music-jf890-device", "PLAYING"),
+            CreateUser(), session, CancellationToken.None);
+
+        PlaybackProgressInfo? info = AppliedProgressInfo();
+        Assert.NotNull(info);
+        Assert.Equal(RepeatMode.RepeatAll, info!.RepeatMode);
+        Assert.Equal(song.Id, info.ItemId);
+        Assert.Contains(
+            ResponseStrings.Get("RepeatAllEnabled", "en-US"),
+            TestHelpers.GetSpeechText(response), StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// The seek-mode arm of the JF-890 stale shape (code-review finding): the
+    /// ledger entry is a SONG recorded on the VideoApp route (the seek-mode
+    /// belt hole: the classifier's token-ownership arm answers Audio and only
+    /// the belt re-classifies to VideoAppAudio), the device reports STOPPED,
+    /// the session is empty. The same staleness bound must hold on this arm:
+    /// the no-media tell, never the seek-mode refusal, no write.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_StaleStoppedSeekModeToken_EmptySession_NoMediaInsteadOfSeekRefusal_JF890()
+    {
+        DeviceQueueManager queues = TestHelpers.CreateDeviceQueueManager("loop-stale-seek-jf890");
+        Audio seekSong = Song("Stale Seek Song");
+        TestHelpers.SetupLibraryResolves(_libraryManager, seekSong);
+        queues.RecordLastPlayed("loop-stale-seek-jf890-device", seekSong.Id.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
+        BaseHandler handler = CreateOwner(IntentNames.LoopAllOn, queues);
+        SessionInfo session = CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(
+            IntentRequestFor(IntentNames.LoopAllOn),
+            TestHelpers.CreateContextWithToken(seekSong.Id.ToString(), "loop-stale-seek-jf890-device", "STOPPED"),
+            CreateUser(), session, CancellationToken.None);
+
+        Assert.Contains(
+            ResponseStrings.Get("NoMediaPlaying", "en-US"),
+            TestHelpers.GetSpeechText(response), StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(
+            ResponseStrings.Get("CannotRepeatInSeekMode", "en-US"),
+            TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+        _sessionManagerMock.Verify(
+            s => s.OnPlaybackProgress(It.IsAny<PlaybackProgressInfo>(), It.IsAny<bool>()), Times.Never);
+        Assert.Equal(RepeatMode.RepeatNone, session.PlayState!.RepeatMode);
     }
 }

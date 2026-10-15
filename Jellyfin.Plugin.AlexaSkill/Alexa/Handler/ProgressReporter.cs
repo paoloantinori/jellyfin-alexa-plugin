@@ -754,6 +754,79 @@ public sealed class ProgressReporter
     }
 
     /// <summary>
+    /// The ONE loop/shuffle write-family medium gate (the JF-632 refusal plus the
+    /// JF-890 staleness bound), shared by ApplyRepeatModeAsync and both shuffle
+    /// handlers so the decision cannot drift between the twins. Answers the
+    /// honest VideoApp refusal Tell when a VideoApp-family medium owns the screen
+    /// AND the verdict is corroborated as current
+    /// (<see cref="PlaybackLaunchBuilder.IsVideoAppMediumCorroborated"/>); the
+    /// no-media tell when the verdict is stale residue (an explicit halt report
+    /// with no session-held item: nothing is playing, there is no queue or stream
+    /// to attach a mode to, and the flag write is skipped entirely, JF-890 live
+    /// corr 847bcda6); null when the medium is Audio/Unknown so the caller's
+    /// ordinary body runs. The gate runs BEFORE the loop caller's idle guard
+    /// because the live JF-632 incident shape (a one-shot over seek-mode
+    /// playback) carries
+    /// no AudioPlayer token and an empty session, so the ledger's recorded route is
+    /// the only evidence and the honest answer is the refusal, not no-media; that
+    /// shape reports no playerActivity at all, so it stays on the refusal side of
+    /// the JF-890 bound. ACCEPTED RESIDUAL (the JF-868 mirror): a VideoApp
+    /// stream whose session was LOST while it keeps playing (a server restart
+    /// mid-movie, a dropped session) reports STOPPED with no held item, so this
+    /// gate answers no-media over a playing stream; that is the safe direction
+    /// for a write that launches nothing (the mirror error, refusing every cold
+    /// device, was the JF-890 live bug), and the JF-858 flat gates keep
+    /// refusing the same shape because their actions launch streams. The
+    /// refusal strings stay per family: the caller passes
+    /// its video-family and seek-mode keys (loop CannotRepeatContent /
+    /// CannotRepeatInSeekMode, shuffle CannotShuffleContent /
+    /// CannotShuffleInSeekMode); the belt answer itself is the ONE
+    /// <see cref="PlaybackLaunchBuilder.ResolveScreenOwningMedium"/>.
+    /// </summary>
+    /// <param name="context">The context of the skill intent request (AudioPlayer token, halt report, device-ledger key).</param>
+    /// <param name="session">The session instance (the held-item corroboration legs).</param>
+    /// <param name="libraryManager">The caller's library manager (the medium classification reads it).</param>
+    /// <param name="queueManager">The caller's device queue manager (the last-played ledger); null falls back to <c>Plugin.Instance</c>'s (JF-627).</param>
+    /// <param name="locale">The request locale, for the spoken strings.</param>
+    /// <param name="label">Log label identifying the calling intent.</param>
+    /// <param name="videoFamilyKey">The family's refusal key for video/live TV/audiobook mediums.</param>
+    /// <param name="seekModeKey">The family's refusal key for the VideoAppAudio (seek-mode music) medium.</param>
+    /// <returns>The refusal or no-media Tell, or null when the caller should proceed with its ordinary body.</returns>
+    internal SkillResponse? TryAnswerModeWriteMediumGate(
+        Context context,
+        SessionInfo session,
+        ILibraryManager libraryManager,
+        DeviceQueueManager? queueManager,
+        string locale,
+        string label,
+        string videoFamilyKey,
+        string seekModeKey)
+    {
+        PlaybackLaunchBuilder.PlayingMedium medium = _launch.ResolveScreenOwningMedium(context, libraryManager, queueManager);
+        if (!PlaybackLaunchBuilder.IsVideoAppMedium(medium))
+        {
+            return null;
+        }
+
+        if (PlaybackLaunchBuilder.IsVideoAppMediumCorroborated(context, session))
+        {
+            _logger.LogDebug("{Label}: {Medium} playing, refusing the mode write", label, medium);
+            string refusalKey = medium == PlaybackLaunchBuilder.PlayingMedium.VideoAppAudio
+                ? seekModeKey
+                : videoFamilyKey;
+            return ResponseBuilder.Tell(ResponseStrings.Get(refusalKey, locale));
+        }
+
+        // JF-890: the belt's VideoApp verdict rides only frozen residue (an explicit
+        // halt report, no session-held item), so nothing is playing: the honest
+        // answer is the no-media tell and the mode write is skipped (returning
+        // without falling through matters: the idle guard's token leg would
+        // otherwise resolve the stale video token and write the mode to it).
+        _logger.LogDebug("{Label}: {Medium} verdict is stale residue (halted report, no session item), answering the no-media tell", label, medium);
+        return ResponseBuilder.Tell(ResponseStrings.Get("NoMediaPlaying", locale));
+    }
+
+    /// <summary>
     /// Shared body of the loop-mode intents (LoopOn/LoopOff/LoopSongOn, JF-450):
     /// attaches the given repeat mode to the currently playing item via the
     /// session manager's progress reporting. JF-635 item 2 moved the body onto the
@@ -788,36 +861,20 @@ public sealed class ProgressReporter
 
         _logger.LogDebug("{Label}: entered, token={Token}, offset={OffsetMs}ms", label, requestState?.Token, requestState?.OffsetInMilliseconds);
 
-        // JF-632 medium gate, loop-family edition: it runs BEFORE the idle guard
-        // because the live incident shape (a one-shot over seek-mode playback)
-        // carries NO AudioPlayer token and an empty session, so the device
-        // ledger's recorded route is the only evidence and the honest answer is
-        // the refusal, not no-media. THE FORMER KNOWN TRADEOFF IS TAKEN (JF-789
-        // step 4), with its exact scope: the belt inside
-        // ResolveScreenOwningMedium ages out, so an idle device whose VideoApp
-        // ledger entry is outside the recency window AND is one of the belt's
-        // two hole shapes (unresolvable, or the same-item seek shape) falls
-        // through to the idle guard's no-media tell instead of this refusal. A
-        // RESOLVABLE video-kind entry still refuses at any age (the classifier's
-        // route/kind ladder is deliberately unbounded; its flat transport
-        // consumers are outside JF-789's scope, pinned by the loop suite's
-        // days-old-resolvable proof). No refusal string died: every
-        // within-window belt shape still refuses.
-        // The ONE belt-inclusive screen-owner answer
-        // (classifier + raw ledger route + kind kernel) lives on
-        // PlaybackLaunchBuilder.ResolveScreenOwningMedium; the refusal STRINGS
-        // are this family's own: seek-mode music (VideoAppAudio) gets the loop
-        // line, the video family (and a VideoApp-routed audiobook, whose kind the
-        // kernel separates from plain Audio) keeps the RepeatIntentHandler gate's
-        // CannotRepeatContent wording.
-        PlaybackLaunchBuilder.PlayingMedium medium = _launch.ResolveScreenOwningMedium(context, libraryManager, queueManager);
-        if (PlaybackLaunchBuilder.IsVideoAppMedium(medium))
+        // JF-632 medium gate, loop-family edition, since JF-890 through the ONE
+        // loop/shuffle write-family gate (TryAnswerModeWriteMediumGate, which owns
+        // the full rationale): the refusal only stands when the VideoApp verdict is
+        // corroborated current; an explicit halt report with no session-held item
+        // answers the no-media tell and skips the write (the stale-video-token
+        // live bug). The belt's JF-789 aging scope is unchanged: a within-window
+        // belt shape with no halt report still refuses, and a resolvable
+        // video-kind entry with no halt report still refuses at any age.
+        SkillResponse? gated = TryAnswerModeWriteMediumGate(
+            context, session, libraryManager, queueManager, locale, label,
+            videoFamilyKey: "CannotRepeatContent", seekModeKey: "CannotRepeatInSeekMode");
+        if (gated != null)
         {
-            _logger.LogDebug("{Label}: {Medium} playing, refusing the repeat-mode write", label, medium);
-            string refusalKey = medium == PlaybackLaunchBuilder.PlayingMedium.VideoAppAudio
-                ? "CannotRepeatInSeekMode"
-                : "CannotRepeatContent";
-            return ResponseBuilder.Tell(ResponseStrings.Get(refusalKey, locale));
+            return gated;
         }
 
         string? deviceId = context.System?.Device?.DeviceID;

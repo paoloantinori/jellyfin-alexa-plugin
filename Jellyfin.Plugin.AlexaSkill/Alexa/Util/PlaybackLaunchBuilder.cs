@@ -654,6 +654,60 @@ public sealed class PlaybackLaunchBuilder
     }
 
     /// <summary>
+    /// Whether the device's own AudioPlayer report says playback has HALTED (JF-890):
+    /// an explicit <c>STOPPED</c>, <c>FINISHED</c> or <c>IDLE</c> playerActivity. A
+    /// missing AudioPlayer object, a null activity, <c>PLAYING</c>,
+    /// <c>BUFFER_UNDERRUN</c> and <c>PAUSED</c> all answer false: null or absent is
+    /// NO report at all (the live JF-632 one-shot over seek-mode playback carried no
+    /// AudioPlayer token, so absence cannot be read as stopped), and PAUSED names a
+    /// loaded, resumable stream rather than a halted one. CAUTION (JF-868, the
+    /// stop-routing reference): during ACTIVE VideoApp playback the device also
+    /// reports a bare STOPPED, so a halt report alone never proves nothing is
+    /// playing; it only withdraws the frozen token and ledger residue as proof that
+    /// something IS playing (the device keeps the last played item in
+    /// context.AudioPlayer across sessions, live corr 847bcda6).
+    /// </summary>
+    /// <param name="context">The Alexa request context (may carry no AudioPlayer object).</param>
+    /// <returns>True when the device explicitly reported playback halted.</returns>
+    internal static bool ReportsPlaybackHalted(Context? context)
+    {
+        string? activity = context?.AudioPlayer?.PlayerActivity;
+        return string.Equals(activity, "STOPPED", StringComparison.Ordinal)
+            || string.Equals(activity, "FINISHED", StringComparison.Ordinal)
+            || string.Equals(activity, "IDLE", StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// JF-890: whether a VideoApp-family medium verdict from the belt
+    /// (<see cref="ResolveScreenOwningMedium"/>) is corroborated as CURRENT by this
+    /// request, for the loop/shuffle write gates. The live bug (corr 847bcda6): a
+    /// fresh one-shot "attiva loop" with NOTHING playing, the context reporting
+    /// playerActivity=STOPPED over the video token frozen at the last stop, got the
+    /// video-medium refusal because the belt classified the medium from token and
+    /// ledger alone regardless of activity. Corroborating legs, either suffices:
+    /// the activity is not an explicit halt (<see cref="ReportsPlaybackHalted"/>
+    /// false: PLAYING, BUFFER_UNDERRUN, PAUSED, or no report at all, which keeps the
+    /// JF-632 one-shot over live seek-mode playback refusing), or the session still
+    /// holds a now-playing item (<see cref="HasCurrentPlaybackEvidence"/>'s session
+    /// legs; the JF-785 Leg B parity: during a movie the held item is the VideoApp
+    /// evidence leg, and per JF-868 the common active VideoApp shape reports
+    /// STOPPED, so the held item must keep the refusal standing). The TOKEN leg is
+    /// deliberately NOT corroborating here: the frozen stale token is exactly the
+    /// residue this predicate exists to discount. Scope: only the loop/shuffle
+    /// write gates consult this; the JF-858 flat transport gates keep their own
+    /// corroboration (there a stale token still corroborates, because their
+    /// refusals guard stream-launching actions where refusing on a possibly-live
+    /// VideoApp stream is the safe direction; the loop/shuffle writes launch
+    /// nothing, so for them the honest idle answer is the safer trade).
+    /// </summary>
+    /// <param name="context">The Alexa request context (the playerActivity report).</param>
+    /// <param name="session">The Jellyfin session (the held-item legs; may be null).</param>
+    /// <returns>True when the VideoApp verdict may honestly ground a refusal.</returns>
+    internal static bool IsVideoAppMediumCorroborated(Context? context, SessionInfo? session)
+        => !ReportsPlaybackHalted(context)
+            || SessionHoldsNowPlayingItem(session);
+
+    /// <summary>
     /// The JF-655 active-audio signal: whether CURRENT evidence says the device is
     /// playing AudioPlayer audio. Two arms, either suffices: (a) the per-request
     /// platform report (<see cref="IsActivelyPlaying"/>, the context's own
@@ -932,9 +986,11 @@ public sealed class PlaybackLaunchBuilder
     /// reduce to <see cref="IsVideoAppMedium"/> plus a
     /// <c>medium == PlayingMedium.VideoAppAudio</c> check; the refusal STRINGS stay
     /// per action family (the BuildVideoAppTransportRefusal pattern: one shared
-    /// shape answer, per-family wording). Current consumers: the loop-family gate
-    /// (ProgressReporter.ApplyRepeatModeAsync), the sleep-timer re-issue gate
-    /// (SleepTimerIntentHandler), and the playback-speed re-launch gate
+    /// shape answer, per-family wording). Current consumers: the loop/shuffle
+    /// write-family gate (ProgressReporter.TryAnswerModeWriteMediumGate, feeding
+    /// ApplyRepeatModeAsync and both shuffle handlers, itself bounded since JF-890
+    /// by <see cref="IsVideoAppMediumCorroborated"/>), the sleep-timer re-issue
+    /// gate (SleepTimerIntentHandler), and the playback-speed re-launch gate
     /// (SetPlaybackSpeedIntentHandler, migrated JF-637); Pause/Repeat/
     /// next-previous moved OFF this belt question in JF-858 onto the corroborated
     /// flat-gate classifier (<see cref="ResolvePlayingMediumForFlatTransportGate"/>).
@@ -1334,8 +1390,19 @@ public sealed class PlaybackLaunchBuilder
     /// <returns>True when at least one live evidence source exists.</returns>
     internal static bool HasCurrentPlaybackEvidence(Context? context, SessionInfo? session)
         => !string.IsNullOrEmpty(context?.AudioPlayer?.Token)
-            || session?.FullNowPlayingItem != null
-            || session?.NowPlayingItem != null;
+            || SessionHoldsNowPlayingItem(session);
+
+    /// <summary>
+    /// Whether the Jellyfin session still holds a now-playing item (the full
+    /// entity or its DTO): the ONE held-item definition (JF-890 extraction),
+    /// shared by <see cref="HasCurrentPlaybackEvidence"/> and
+    /// <see cref="IsVideoAppMediumCorroborated"/> so the two evidence predicates
+    /// cannot drift onto different legs (the JF-625 parallel-ladders lesson).
+    /// </summary>
+    /// <param name="session">The session to inspect; null holds nothing.</param>
+    /// <returns>True when either now-playing slot is populated.</returns>
+    private static bool SessionHoldsNowPlayingItem(SessionInfo? session)
+        => session?.FullNowPlayingItem != null || session?.NowPlayingItem != null;
 
     /// <summary>
     /// The ONE per-medium answer for the queue-navigation transport intents during a

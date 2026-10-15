@@ -18,14 +18,17 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 
 public class ShuffleOffIntentHandler : BaseHandler
 {
+    private readonly ILibraryManager _libraryManager;
     private readonly Playback.DeviceQueueManager? _queueManager;
 
     public ShuffleOffIntentHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
+        ILibraryManager libraryManager,
         ILoggerFactory loggerFactory,
         Playback.DeviceQueueManager? queueManager = null) : base(sessionManager, config, loggerFactory)
     {
+        _libraryManager = libraryManager;
         _queueManager = queueManager;
     }
 
@@ -63,6 +66,19 @@ public class ShuffleOffIntentHandler : BaseHandler
         bool tokenValid = StreamTokenCodec.TryGetItemId(currentToken, out currentId);
 
         Logger.LogDebug("ShuffleOff: entered, token={Token}, offset={OffsetMs}ms", currentToken, requestState.OffsetInMilliseconds);
+
+        // JF-890: the ONE loop/shuffle write-family medium gate (the shared
+        // TryAnswerModeWriteMediumGate owns the rationale): an honestly-corroborated
+        // VideoApp medium refuses (the shuffle twins of the loop strings), a stale
+        // residue verdict (explicit halt report, no session item) answers the
+        // no-media tell and skips every write below, and Audio/Unknown proceeds.
+        SkillResponse? gated = Progress.TryAnswerModeWriteMediumGate(
+            context, session, _libraryManager, _queueManager, GetLocale(request), "ShuffleOff",
+            videoFamilyKey: "CannotShuffleContent", seekModeKey: "CannotShuffleInSeekMode");
+        if (gated != null)
+        {
+            return gated;
+        }
 
         // Keep Jellyfin's session PlayState in sync (shown in the dashboard UI).
         if (tokenValid)
