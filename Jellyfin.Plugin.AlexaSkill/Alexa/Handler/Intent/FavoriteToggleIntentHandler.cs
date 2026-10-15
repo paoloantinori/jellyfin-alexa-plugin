@@ -93,6 +93,20 @@ public abstract class FavoriteToggleIntentHandler : BaseHandler
         // unified this door's tell with the other guarded families
         // (playlist-edit, media-info, the ProgressReporter loop-mode applier;
         // NOT RepeatIntentHandler, an unguarded tail rider): NoMediaPlaying.
+        // JF-893 ACCEPTED RESIDUAL: on stale audio residue (the halt-reported
+        // frozen token; HasCurrentPlaybackEvidence's doc owns the boundary
+        // fact, IsStaleAudioPlaybackResidue's doc the legs) the guard's TOKEN
+        // leg still passes, so "mi piace" on a just-stopped or long-idle
+        // device favorites the last-played item. Tolerated: the action is
+        // item-scoped user data (reversible by the twin intent, and no
+        // by-name favorite intent exists as an alternate route), and the
+        // just-stopped favorite is the exact interaction JF-629 restored.
+        // The long-idle half was weighed against a recency-bounded refusal
+        // and rejected: the ledger stamp measures LAUNCH age, not halt age
+        // (JF-789 step 5's lesson), so the split needs new halt-age state
+        // for a LOW-severity reversible write (the JF-893 notes own the
+        // full evaluation). Pinned by
+        // HandleAsync_HaltReportedFrozenToken_StillFavorites_JF893.
         if (!PlaybackLaunchBuilder.HasCurrentPlaybackEvidence(context, session))
         {
             Logger.LogDebug("FavoriteToggle ({IntentName}): idle device (no token, no session item), answering NoMediaPlaying", IntentName);

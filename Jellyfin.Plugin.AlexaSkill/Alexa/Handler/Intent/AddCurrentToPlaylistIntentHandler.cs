@@ -19,8 +19,9 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler.Intent;
 /// <summary>
 /// Adds the currently playing track to a named playlist ("add this to the
 /// playlist X"). The track comes from the AudioPlayer token (or the session's
-/// now-playing item as fallback); duplicates are ignored server-side
-/// (Jellyfin dedupes against the playlist's linked children).
+/// now-playing item as fallback); duplicate adds are absorbed server-side on
+/// Jellyfin 10.11.x but plain-append on 12.x (tag-verified JF-893 review:
+/// 10.11.8 filters against the playlist's linked children, 12.x does not).
 /// </summary>
 public class AddCurrentToPlaylistIntentHandler : PlaylistEditHandlerBase
 {

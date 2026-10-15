@@ -14,6 +14,7 @@ using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler.Intent;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 using MediaBrowser.Controller.Entities;
@@ -70,8 +71,8 @@ public class PlaylistEditIntentHandlerTests : PluginTestBase
     private AddSongToPlaylistIntentHandler CreateAddSong() =>
         new(_playlistManagerMock.Object, _sessionManagerMock.Object, _config, _userManagerMock.Object, _libraryManagerMock.Object, _loggerFactory);
 
-    private RemoveCurrentFromPlaylistIntentHandler CreateRemove() =>
-        new(_playlistManagerMock.Object, _sessionManagerMock.Object, _config, _userManagerMock.Object, _libraryManagerMock.Object, _loggerFactory);
+    private RemoveCurrentFromPlaylistIntentHandler CreateRemove(DeviceQueueManager? ledger = null) =>
+        new(_playlistManagerMock.Object, _sessionManagerMock.Object, _config, _userManagerMock.Object, _libraryManagerMock.Object, _loggerFactory, ledger);
 
     private CreatePlaylistIntentHandler CreateCreate() =>
         new(_playlistManagerMock.Object, _sessionManagerMock.Object, _config, _userManagerMock.Object, _libraryManagerMock.Object, _loggerFactory);
@@ -376,6 +377,71 @@ public class PlaylistEditIntentHandlerTests : PluginTestBase
             CreateRequest(IntentNames.RemoveCurrentFromPlaylist, new() { ["playlist"] = "road trip" }),
             CreateTokenContext(SongId), CreateUser(), session: null!, CancellationToken.None);
 
+        _playlistManagerMock.Verify(
+            p => p.RemoveItemFromPlaylistAsync(
+                PlaylistId.ToString("N", System.Globalization.CultureInfo.InvariantCulture),
+                It.Is<IEnumerable<string>>(ids => ids.Contains(SongId.ToString("N", System.Globalization.CultureInfo.InvariantCulture)))),
+            Times.Once());
+    }
+
+    /// <summary>
+    /// The JF-893 documented-residual pin, ADD twin: on stale audio residue
+    /// (every halt-reported activity over the frozen token; the
+    /// ResolveCurrentItem doc owns the rationale) the playlist add still
+    /// lands on the token's item. RED if anyone wires
+    /// IsStaleAudioPlaybackResidue into the family guard without re-deciding
+    /// JF-893.
+    /// </summary>
+    [Theory]
+    [InlineData("STOPPED")]
+    [InlineData("FINISHED")]
+    [InlineData("IDLE")]
+    public async void AddCurrent_HaltReportedFrozenToken_StillAdds_JF893(string playerActivity)
+    {
+        string deviceId = "playlist-add-stale-audio-jf893-device";
+        var ledger = TestHelpers.CreateDeviceQueueManager("playlist-add-stale-audio-jf893");
+        ledger.RecordLastPlayed(deviceId, SongId.ToString(), DeviceQueueManager.LaunchRoute.Audio); // flag never armed
+        Context context = TestHelpers.CreateContextWithToken(SongId.ToString(), deviceId, playerActivity);
+
+        // Shape guard (JF-893 code review; the FavoriteToggle twin owns the
+        // full comment): the red-proof guarantee holds only while this shape
+        // classifies as residue.
+        Assert.True(PlaybackLaunchBuilder.IsStaleAudioPlaybackResidue(context, null, ledger),
+            "the pin's shape must classify as stale audio residue");
+
+        SkillResponse response = await CreateAddCurrent(ledger).HandleAsync(
+            CreateRequest(IntentNames.AddCurrentToPlaylist, new() { ["playlist"] = "road trip" }),
+            context, CreateUser(),
+            session: null!, CancellationToken.None);
+
+        Assert.Contains("Circles", GetSpeech(response), StringComparison.Ordinal);
+        VerifyAddItem(PlaylistId, id => id == SongId, Times.Once());
+    }
+
+    /// <summary>
+    /// The JF-893 documented-residual pin, REMOVE twin (the family's sharper
+    /// edge): the same residue shape still removes the token's item. Same
+    /// rationale and same red condition as the ADD twin above.
+    /// </summary>
+    [Theory]
+    [InlineData("STOPPED")]
+    [InlineData("FINISHED")]
+    [InlineData("IDLE")]
+    public async void RemoveCurrent_HaltReportedFrozenToken_StillRemoves_JF893(string playerActivity)
+    {
+        string deviceId = "playlist-remove-stale-audio-jf893-device";
+        var ledger = TestHelpers.CreateDeviceQueueManager("playlist-remove-stale-audio-jf893");
+        ledger.RecordLastPlayed(deviceId, SongId.ToString(), DeviceQueueManager.LaunchRoute.Audio); // flag never armed
+        Context context = TestHelpers.CreateContextWithToken(SongId.ToString(), deviceId, playerActivity);
+        Assert.True(PlaybackLaunchBuilder.IsStaleAudioPlaybackResidue(context, null, ledger),
+            "the pin's shape must classify as stale audio residue"); // shape guard, see the ADD twin
+
+        SkillResponse response = await CreateRemove(ledger).HandleAsync(
+            CreateRequest(IntentNames.RemoveCurrentFromPlaylist, new() { ["playlist"] = "road trip" }),
+            context, CreateUser(),
+            session: null!, CancellationToken.None);
+
+        Assert.Contains("Circles", GetSpeech(response), StringComparison.Ordinal);
         _playlistManagerMock.Verify(
             p => p.RemoveItemFromPlaylistAsync(
                 PlaylistId.ToString("N", System.Globalization.CultureInfo.InvariantCulture),

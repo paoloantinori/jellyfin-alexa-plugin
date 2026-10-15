@@ -8,6 +8,7 @@ using global::Alexa.NET.Response;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Audio;
@@ -339,5 +340,48 @@ public class FavoriteToggleIntentHandlerTests : PluginTestBase
             It.IsAny<UserItemData>(),
             It.IsAny<UserDataSaveReason>(),
             It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    /// <summary>
+    /// The JF-893 documented-residual pin: on stale audio residue (every
+    /// halt-reported activity over the frozen token; the guard site comment
+    /// owns the rationale) the favorite write still lands on the token's
+    /// item. RED if anyone wires IsStaleAudioPlaybackResidue into this guard
+    /// without re-deciding JF-893.
+    /// </summary>
+    [Theory]
+    [InlineData("STOPPED")]
+    [InlineData("FINISHED")]
+    [InlineData("IDLE")]
+    public async Task HandleAsync_HaltReportedFrozenToken_StillFavorites_JF893(string playerActivity)
+    {
+        var song = TestHelpers.CreateSong("Frozen Token Song");
+        var data = SetupHappyPath(song);
+        string deviceId = "fav-stale-audio-jf893-device";
+        var queues = TestHelpers.CreateDeviceQueueManager("fav-stale-audio-jf893");
+        queues.RecordLastPlayed(deviceId, song.Id.ToString(), DeviceQueueManager.LaunchRoute.Audio); // flag never armed
+        var handler = CreateHandler(queues);
+        var session = _fx.CreateSession();
+        Assert.Null(session.NowPlayingItem);
+        var context = TestHelpers.CreateContextWithToken(song.Id.ToString(), deviceId, playerActivity);
+
+        // Shape guard (JF-893 code review): the pin's red-proof guarantee
+        // holds only while this shape classifies as residue; if a leg drifts
+        // (RecordLastPlayed arming the flag, the session starting to hold an
+        // item), a future adoption would no longer redden the pin.
+        Assert.True(PlaybackLaunchBuilder.IsStaleAudioPlaybackResidue(context, session, queues),
+            "the pin's shape must classify as stale audio residue");
+
+        var response = await handler.HandleAsync(
+            Request(), context, TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        Assert.True(data.IsFavorite, "the halt-reported token track is still favorited (the JF-893 documented residual)");
+        _fx.UserDataManager.Verify(u => u.SaveUserData(
+            It.IsAny<Jellyfin.Database.Implementations.Entities.User>(),
+            It.Is<BaseItem>(i => i.Id == song.Id),
+            data,
+            UserDataSaveReason.UpdateUserRating,
+            It.IsAny<CancellationToken>()), Times.Once);
+        Assert.Contains("added to favorites", TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
     }
 }
