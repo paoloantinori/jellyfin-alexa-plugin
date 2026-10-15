@@ -4,9 +4,10 @@ title: >-
   JF-892: shuffle twins - null-context NRE at entry, stale-audio write path,
   cold-device empty-queue write (the JF-450/JF-655/JF-629 hardening the loop
   family has, the twins never got)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-15 15:16'
+updated_date: '2026-10-15 18:05'
 labels: []
 dependencies: []
 priority: high
@@ -35,3 +36,9 @@ All three live in the same two files; one worker, one pass. Pins: null-context -
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+EXECUTED on branch jf892 (2a6988da), merged to main 842a17f2, pushed, batch-DEPLOYED with JF-891 (DLL + restart; IsStaleAudioPlaybackResidue verified on the active DLL, health 200, config 1 user). All three defects fixed: (1) the null-context NRE (nullable reads mirroring ApplyRepeatModeAsync, deviceId through the ONE GetDeviceId helper); (2) the stale-audio residue fixed ONCE in the shared gate (the non-VideoApp staleness leg + IsStaleAudioPlaybackResidue = halt report + no session item + no JF-655 audio signal; null activity is never residue), which also fixes the loop twin's probe-confirmed shared tail; (3) the cold-device JF-629 idle-guard line on both twins (no empty-queue persistence). Review findings applied incl. the Unknown-medium escape (the leg extends to all non-VideoApp verdicts) and the documented Audio-leg residual. 11 new pins; RED PROOF 7 defect pins fail on the reverted tree. Gates: /simplify (4 agents) + /code-review high. Tests 5984/5984 BOTH TFMs; Release 0/0. JF-893 filed (sibling families adopt-or-document).
+<!-- SECTION:FINAL_SUMMARY:END -->
