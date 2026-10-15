@@ -9,9 +9,11 @@ using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
+using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Session;
 using Microsoft.Extensions.Logging;
@@ -28,6 +30,7 @@ public class ShuffleIntentHandlerTests : IDisposable
 {
     private readonly string _tempDir;
     private readonly Mock<ISessionManager> _sessionManagerMock;
+    private readonly Mock<ILibraryManager> _libraryManager;
     private readonly PluginConfiguration _config;
     private readonly ILoggerFactory _loggerFactory;
 
@@ -40,6 +43,7 @@ public class ShuffleIntentHandlerTests : IDisposable
         _sessionManagerMock
             .Setup(s => s.OnPlaybackProgress(It.IsAny<PlaybackProgressInfo>(), It.IsAny<bool>()))
             .Returns(Task.CompletedTask);
+        _libraryManager = new Mock<ILibraryManager>();
         _config = new PluginConfiguration();
         _loggerFactory = LoggerFactory.Create(b => { });
     }
@@ -60,7 +64,7 @@ public class ShuffleIntentHandlerTests : IDisposable
     [InlineData("AMAZON.ShuffleOnIntent")]
     public void CanHandle_AcceptsBothShuffleOnNames(string intentName)
     {
-        var onHandler = new ShuffleOnIntentHandler(_sessionManagerMock.Object, _config, _loggerFactory);
+        var onHandler = new ShuffleOnIntentHandler(_sessionManagerMock.Object, _config, _libraryManager.Object, _loggerFactory);
         Assert.True(onHandler.CanHandle(ShuffleRequest(intentName)));
     }
 
@@ -69,7 +73,7 @@ public class ShuffleIntentHandlerTests : IDisposable
     [InlineData("AMAZON.ShuffleOffIntent")]
     public void CanHandle_AcceptsBothShuffleOffNames(string intentName)
     {
-        var offHandler = new ShuffleOffIntentHandler(_sessionManagerMock.Object, _config, _loggerFactory);
+        var offHandler = new ShuffleOffIntentHandler(_sessionManagerMock.Object, _config, _libraryManager.Object, _loggerFactory);
         Assert.True(offHandler.CanHandle(ShuffleRequest(intentName)));
     }
 
@@ -103,7 +107,7 @@ public class ShuffleIntentHandlerTests : IDisposable
         mgr.SetQueue("test-device", ids, currentIndex: 0);
         SessionInfo session = NewSession(guids);
 
-        var handler = new ShuffleOnIntentHandler(_sessionManagerMock.Object, _config, _loggerFactory, mgr);
+        var handler = new ShuffleOnIntentHandler(_sessionManagerMock.Object, _config, _libraryManager.Object, _loggerFactory, mgr);
         Context context = ContextWithToken(guids[0].ToString());
 
         await handler.HandleAsync(ShuffleRequest(IntentNames.AmazonShuffleOn), context, TestHelpers.CreateTestUser(), session, default);
@@ -127,7 +131,7 @@ public class ShuffleIntentHandlerTests : IDisposable
         mgr.SetQueue("test-device", guids.Select(g => g.ToString()).ToList(), 0);
         SessionInfo session = NewSession(guids);
 
-        var handler = new ShuffleOnIntentHandler(_sessionManagerMock.Object, _config, _loggerFactory, mgr);
+        var handler = new ShuffleOnIntentHandler(_sessionManagerMock.Object, _config, _libraryManager.Object, _loggerFactory, mgr);
         await handler.HandleAsync(ShuffleRequest(IntentNames.AmazonShuffleOn), ContextWithToken(guids[0].ToString()), TestHelpers.CreateTestUser(), session, default);
 
         DeviceQueue q = mgr.GetOrCreateQueue("test-device");
@@ -139,7 +143,7 @@ public class ShuffleIntentHandlerTests : IDisposable
     public async Task ShuffleOn_WithoutQueueManager_DoesNotThrow()
     {
         SessionInfo session = NewSession(new[] { Guid.NewGuid() });
-        var handler = new ShuffleOnIntentHandler(_sessionManagerMock.Object, _config, _loggerFactory);
+        var handler = new ShuffleOnIntentHandler(_sessionManagerMock.Object, _config, _libraryManager.Object, _loggerFactory);
         SkillResponse response = await handler.HandleAsync(
             ShuffleRequest(IntentNames.AmazonShuffleOn),
             ContextWithToken(session.NowPlayingQueue[0].Id.ToString()),
@@ -159,7 +163,7 @@ public class ShuffleIntentHandlerTests : IDisposable
         mgr.SetQueue("test-device", guids.Select(g => g.ToString()).ToList(), currentIndex: 0);
         SessionInfo session = NewSession(guids);
 
-        var handler = new ShuffleOnIntentHandler(_sessionManagerMock.Object, _config, _loggerFactory, mgr);
+        var handler = new ShuffleOnIntentHandler(_sessionManagerMock.Object, _config, _libraryManager.Object, _loggerFactory, mgr);
         SkillResponse response = await handler.HandleAsync(
             ShuffleRequest(IntentNames.AmazonShuffleOn),
             ContextWithToken(dup.ToString()),
@@ -182,10 +186,10 @@ public class ShuffleIntentHandlerTests : IDisposable
         mgr.SetQueue("test-device", ids, currentIndex: 0);
         SessionInfo session = NewSession(guids);
 
-        var onHandler = new ShuffleOnIntentHandler(_sessionManagerMock.Object, _config, _loggerFactory, mgr);
+        var onHandler = new ShuffleOnIntentHandler(_sessionManagerMock.Object, _config, _libraryManager.Object, _loggerFactory, mgr);
         await onHandler.HandleAsync(ShuffleRequest(IntentNames.AmazonShuffleOn), ContextWithToken(guids[0].ToString()), TestHelpers.CreateTestUser(), session, default);
 
-        var offHandler = new ShuffleOffIntentHandler(_sessionManagerMock.Object, _config, _loggerFactory, mgr);
+        var offHandler = new ShuffleOffIntentHandler(_sessionManagerMock.Object, _config, _libraryManager.Object, _loggerFactory, mgr);
         await offHandler.HandleAsync(ShuffleRequest(IntentNames.AmazonShuffleOff), ContextWithToken(guids[0].ToString()), TestHelpers.CreateTestUser(), session, default);
 
         DeviceQueue q = mgr.GetOrCreateQueue("test-device");
@@ -198,7 +202,7 @@ public class ShuffleIntentHandlerTests : IDisposable
     public async Task ShuffleOff_WithoutQueueManager_DoesNotThrow()
     {
         SessionInfo session = NewSession(new[] { Guid.NewGuid() });
-        var handler = new ShuffleOffIntentHandler(_sessionManagerMock.Object, _config, _loggerFactory);
+        var handler = new ShuffleOffIntentHandler(_sessionManagerMock.Object, _config, _libraryManager.Object, _loggerFactory);
         SkillResponse response = await handler.HandleAsync(
             ShuffleRequest(IntentNames.AmazonShuffleOff),
             ContextWithToken(session.NowPlayingQueue[0].Id.ToString()),
@@ -229,7 +233,7 @@ public class ShuffleIntentHandlerTests : IDisposable
 
         SessionInfo session = NewSession(reshuffled);
 
-        var offHandler = new ShuffleOffIntentHandler(_sessionManagerMock.Object, _config, _loggerFactory, mgr);
+        var offHandler = new ShuffleOffIntentHandler(_sessionManagerMock.Object, _config, _libraryManager.Object, _loggerFactory, mgr);
         await offHandler.HandleAsync(
             ShuffleRequest(IntentNames.AmazonShuffleOff),
             ContextWithToken(playingNow.ToString()),
@@ -255,7 +259,7 @@ public class ShuffleIntentHandlerTests : IDisposable
             deviceId, current.ToString(), cachedNext,
             new MediaBrowser.Controller.Entities.Audio.Audio { Name = "Cached Next", Id = cachedNext }, "https://stream/next");
 
-        var handler = new ShuffleOnIntentHandler(_sessionManagerMock.Object, _config, _loggerFactory, mgr);
+        var handler = new ShuffleOnIntentHandler(_sessionManagerMock.Object, _config, _libraryManager.Object, _loggerFactory, mgr);
         await handler.HandleAsync(
             ShuffleRequest(IntentNames.AmazonShuffleOn),
             ContextWithToken(current.ToString(), deviceId),
@@ -285,12 +289,231 @@ public class ShuffleIntentHandlerTests : IDisposable
             deviceId, current.ToString(), cachedNext,
             new MediaBrowser.Controller.Entities.Audio.Audio { Name = "Cached Next", Id = cachedNext }, "https://stream/next");
 
-        var handler = new ShuffleOffIntentHandler(_sessionManagerMock.Object, _config, _loggerFactory, mgr);
+        var handler = new ShuffleOffIntentHandler(_sessionManagerMock.Object, _config, _libraryManager.Object, _loggerFactory, mgr);
         await handler.HandleAsync(
             ShuffleRequest(IntentNames.AmazonShuffleOff),
             ContextWithToken(current.ToString(), deviceId),
             TestHelpers.CreateTestUser(), NewSession(new[] { current }), default);
 
         Assert.False(NextTrackPrecomputeCache.TryGet(deviceId, current.ToString(), out _, out _, out _, out _));
+    }
+
+    // =====================================================================
+    // JF-890: the loop/shuffle write-family medium gate (stale VideoApp token)
+    // =====================================================================
+
+    /// <summary>
+    /// THE JF-890 regression pin, shuffle edition (live corr 847bcda6 was the
+    /// loop ask; the shuffle twins share the ONE gate): playerActivity=STOPPED
+    /// over the video token frozen at the last stop, an empty session, and a
+    /// fresh VideoApp-routed movie ledger. Nothing is playing, so the honest
+    /// answer is the no-media tell and NO write happens: the queue keeps its
+    /// order (no SetPlaybackOrder, no progress report, no reshuffle).
+    /// </summary>
+    [Fact]
+    public async Task ShuffleOn_StaleStoppedVideoToken_EmptySession_NoMediaNoWrite_JF890()
+    {
+        using DeviceQueueManager mgr = new(_tempDir, _loggerFactory.CreateLogger<DeviceQueueManager>());
+        var movie = TestHelpers.CreateMovie("Sunny Dancer");
+        TestHelpers.SetupLibraryResolves(_libraryManager, movie);
+        string deviceId = "shuffle-stale-jf890-device";
+        mgr.RecordLastPlayed(deviceId, movie.Id.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
+        SessionInfo session = TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
+
+        var handler = new ShuffleOnIntentHandler(_sessionManagerMock.Object, _config, _libraryManager.Object, _loggerFactory, mgr);
+        SkillResponse response = await handler.HandleAsync(
+            ShuffleRequest(IntentNames.AmazonShuffleOn),
+            TestHelpers.CreateContextWithToken(movie.Id.ToString(), deviceId, "STOPPED"),
+            TestHelpers.CreateTestUser(), session, default);
+
+        Assert.Contains(
+            ResponseStrings.Get("NoMediaPlaying", "en-US"),
+            TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            ResponseStrings.Get("CannotShuffleContent", "en-US"),
+            TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+        Assert.Equal("Default", mgr.GetOrCreateQueue(deviceId).PlaybackOrder);
+        _sessionManagerMock.Verify(
+            s => s.OnPlaybackProgress(It.IsAny<PlaybackProgressInfo>(), It.IsAny<bool>()), Times.Never);
+    }
+
+    /// <summary>
+    /// Guard c, shuffle edition: the same video shape with the device reporting
+    /// PLAYING keeps the honest video-family refusal (the shuffle twin of the
+    /// loop strings).
+    /// </summary>
+    [Fact]
+    public async Task ShuffleOn_ActiveVideoPlaying_Refuses_JF890()
+    {
+        using DeviceQueueManager mgr = new(_tempDir, _loggerFactory.CreateLogger<DeviceQueueManager>());
+        var movie = TestHelpers.CreateMovie("Active Movie");
+        TestHelpers.SetupLibraryResolves(_libraryManager, movie);
+        string deviceId = "shuffle-active-jf890-device";
+        mgr.RecordLastPlayed(deviceId, movie.Id.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
+        SessionInfo session = TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
+
+        var handler = new ShuffleOnIntentHandler(_sessionManagerMock.Object, _config, _libraryManager.Object, _loggerFactory, mgr);
+        SkillResponse response = await handler.HandleAsync(
+            ShuffleRequest(IntentNames.AmazonShuffleOn),
+            TestHelpers.CreateContextWithToken(movie.Id.ToString(), deviceId, "PLAYING"),
+            TestHelpers.CreateTestUser(), session, default);
+
+        Assert.Contains(
+            ResponseStrings.Get("CannotShuffleContent", "en-US"),
+            TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+        _sessionManagerMock.Verify(
+            s => s.OnPlaybackProgress(It.IsAny<PlaybackProgressInfo>(), It.IsAny<bool>()), Times.Never);
+    }
+
+    /// <summary>
+    /// The string-decision pin (the loop family's seek-mode split, mirrored): a
+    /// VideoAppAudio medium (the same-item seek shape: the token names the SONG
+    /// the VideoApp route re-recorded) refuses with the SEEK-MODE line, not the
+    /// video-family line, because the content IS music.
+    /// </summary>
+    [Fact]
+    public async Task ShuffleOn_SeekModeVideoAppAudioPlaying_RefusesWithSeekLine_JF890()
+    {
+        using DeviceQueueManager mgr = new(_tempDir, _loggerFactory.CreateLogger<DeviceQueueManager>());
+        var seekSong = TestHelpers.CreateSong("Seek Mode Song");
+        TestHelpers.SetupLibraryResolves(_libraryManager, seekSong);
+        string deviceId = "shuffle-seek-jf890-device";
+        mgr.RecordLastPlayed(deviceId, seekSong.Id.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
+        SessionInfo session = TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
+
+        var handler = new ShuffleOnIntentHandler(_sessionManagerMock.Object, _config, _libraryManager.Object, _loggerFactory, mgr);
+        SkillResponse response = await handler.HandleAsync(
+            ShuffleRequest(IntentNames.AmazonShuffleOn),
+            TestHelpers.CreateContextWithToken(seekSong.Id.ToString(), deviceId, "PLAYING"),
+            TestHelpers.CreateTestUser(), session, default);
+
+        Assert.Contains(
+            ResponseStrings.Get("CannotShuffleInSeekMode", "en-US"),
+            TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            ResponseStrings.Get("CannotShuffleContent", "en-US"),
+            TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+        _sessionManagerMock.Verify(
+            s => s.OnPlaybackProgress(It.IsAny<PlaybackProgressInfo>(), It.IsAny<bool>()), Times.Never);
+    }
+
+    /// <summary>
+    /// Guard b, shuffle edition: active music (PLAYING + audio token over a real
+    /// queue) still shuffles: the gate passes Audio/Unknown through untouched.
+    /// </summary>
+    [Fact]
+    public async Task ShuffleOn_ActiveMusicPlaying_StillShuffles_JF890()
+    {
+        using DeviceQueueManager mgr = new(_tempDir, _loggerFactory.CreateLogger<DeviceQueueManager>());
+        List<Guid> guids = Enumerable.Range(0, 6).Select(_ => Guid.NewGuid()).ToList();
+        string deviceId = "shuffle-music-jf890-device";
+        mgr.SetQueue(deviceId, guids.Select(g => g.ToString()).ToList(), currentIndex: 0);
+        SessionInfo session = NewSession(guids);
+
+        var handler = new ShuffleOnIntentHandler(_sessionManagerMock.Object, _config, _libraryManager.Object, _loggerFactory, mgr);
+        SkillResponse response = await handler.HandleAsync(
+            ShuffleRequest(IntentNames.AmazonShuffleOn),
+            TestHelpers.CreateContextWithToken(guids[0].ToString(), deviceId, "PLAYING"),
+            TestHelpers.CreateTestUser(), session, default);
+
+        Assert.Contains(
+            ResponseStrings.Get("ShuffleEnabled", "en-US"),
+            TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+        Assert.Equal("Shuffle", mgr.GetOrCreateQueue(deviceId).PlaybackOrder);
+    }
+
+    /// <summary>
+    /// The seek-mode arm of the JF-890 stale shape (code-review finding): a
+    /// SONG recorded on the VideoApp route (the belt re-classifies the
+    /// classifier's Audio answer to VideoAppAudio), device reports STOPPED,
+    /// empty session. Nothing is playing: the no-media tell, never the
+    /// seek-mode refusal, and no write.
+    /// </summary>
+    [Fact]
+    public async Task ShuffleOn_StaleStoppedSeekModeToken_EmptySession_NoMediaNoWrite_JF890()
+    {
+        using DeviceQueueManager mgr = new(_tempDir, _loggerFactory.CreateLogger<DeviceQueueManager>());
+        var seekSong = TestHelpers.CreateSong("Stale Seek Song");
+        TestHelpers.SetupLibraryResolves(_libraryManager, seekSong);
+        string deviceId = "shuffle-stale-seek-jf890-device";
+        mgr.RecordLastPlayed(deviceId, seekSong.Id.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
+        SessionInfo session = TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
+
+        var handler = new ShuffleOnIntentHandler(_sessionManagerMock.Object, _config, _libraryManager.Object, _loggerFactory, mgr);
+        SkillResponse response = await handler.HandleAsync(
+            ShuffleRequest(IntentNames.AmazonShuffleOn),
+            TestHelpers.CreateContextWithToken(seekSong.Id.ToString(), deviceId, "STOPPED"),
+            TestHelpers.CreateTestUser(), session, default);
+
+        Assert.Contains(
+            ResponseStrings.Get("NoMediaPlaying", "en-US"),
+            TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            ResponseStrings.Get("CannotShuffleInSeekMode", "en-US"),
+            TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+        Assert.Equal("Default", mgr.GetOrCreateQueue(deviceId).PlaybackOrder);
+        _sessionManagerMock.Verify(
+            s => s.OnPlaybackProgress(It.IsAny<PlaybackProgressInfo>(), It.IsAny<bool>()), Times.Never);
+    }
+
+    /// <summary>
+    /// The JF-890 pin for the OFF twin: on the stale STOPPED video residue the
+    /// shuffle-off answers the no-media tell and does NOT touch the queue state
+    /// (an already-shuffled queue keeps its shuffle: no SetPlaybackOrder, no
+    /// RestoreOrder, no progress report).
+    /// </summary>
+    [Fact]
+    public async Task ShuffleOff_StaleStoppedVideoToken_EmptySession_NoMediaNoRestore_JF890()
+    {
+        using DeviceQueueManager mgr = new(_tempDir, _loggerFactory.CreateLogger<DeviceQueueManager>());
+        var movie = TestHelpers.CreateMovie("Sunny Dancer");
+        TestHelpers.SetupLibraryResolves(_libraryManager, movie);
+        string deviceId = "shuffle-off-stale-jf890-device";
+        mgr.RecordLastPlayed(deviceId, movie.Id.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
+        List<Guid> guids = Enumerable.Range(0, 4).Select(_ => Guid.NewGuid()).ToList();
+        mgr.SetQueue(deviceId, guids.Select(g => g.ToString()).ToList(), currentIndex: 0);
+        mgr.SetPlaybackOrder(deviceId, "Shuffle");
+        SessionInfo session = TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
+
+        var handler = new ShuffleOffIntentHandler(_sessionManagerMock.Object, _config, _libraryManager.Object, _loggerFactory, mgr);
+        SkillResponse response = await handler.HandleAsync(
+            ShuffleRequest(IntentNames.AmazonShuffleOff),
+            TestHelpers.CreateContextWithToken(movie.Id.ToString(), deviceId, "STOPPED"),
+            TestHelpers.CreateTestUser(), session, default);
+
+        Assert.Contains(
+            ResponseStrings.Get("NoMediaPlaying", "en-US"),
+            TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+        DeviceQueue q = mgr.GetOrCreateQueue(deviceId);
+        Assert.Equal("Shuffle", q.PlaybackOrder);
+        _sessionManagerMock.Verify(
+            s => s.OnPlaybackProgress(It.IsAny<PlaybackProgressInfo>(), It.IsAny<bool>()), Times.Never);
+    }
+
+    /// <summary>
+    /// The OFF twin's active refusal: PLAYING over the video medium keeps the
+    /// honest shuffle refusal line.
+    /// </summary>
+    [Fact]
+    public async Task ShuffleOff_ActiveVideoPlaying_Refuses_JF890()
+    {
+        using DeviceQueueManager mgr = new(_tempDir, _loggerFactory.CreateLogger<DeviceQueueManager>());
+        var movie = TestHelpers.CreateMovie("Active Movie");
+        TestHelpers.SetupLibraryResolves(_libraryManager, movie);
+        string deviceId = "shuffle-off-active-jf890-device";
+        mgr.RecordLastPlayed(deviceId, movie.Id.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
+        SessionInfo session = TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
+
+        var handler = new ShuffleOffIntentHandler(_sessionManagerMock.Object, _config, _libraryManager.Object, _loggerFactory, mgr);
+        SkillResponse response = await handler.HandleAsync(
+            ShuffleRequest(IntentNames.AmazonShuffleOff),
+            TestHelpers.CreateContextWithToken(movie.Id.ToString(), deviceId, "PLAYING"),
+            TestHelpers.CreateTestUser(), session, default);
+
+        Assert.Contains(
+            ResponseStrings.Get("CannotShuffleContent", "en-US"),
+            TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+        _sessionManagerMock.Verify(
+            s => s.OnPlaybackProgress(It.IsAny<PlaybackProgressInfo>(), It.IsAny<bool>()), Times.Never);
     }
 }

@@ -41,6 +41,9 @@ public class ResponseStringsTests
         // Pause_DuringVideo_StaleTokenStoppedContext memory pin records that
         // supersession rule), so the wording stays warm in all 17 locales.
         "CannotRepeatContent", "CannotRepeatInSeekMode",
+        // JF-890: the shuffle twins of the loop refusal pair, spoken by the
+        // shared loop/shuffle write-family medium gate.
+        "CannotShuffleContent", "CannotShuffleInSeekMode",
         "CannotSetSleepTimerInSeekMode", "CannotSetSleepTimerOverVideo",
         "CannotChangeSpeedOverVideo", "CannotChangeSpeedForBook",
         "CannotNavigateVideoByVoice", "CannotNavigateLiveTvByVoice", "CannotNavigateMusicByVoice",

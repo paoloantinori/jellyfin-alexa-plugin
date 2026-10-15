@@ -404,6 +404,22 @@ internal static class TestHelpers
         string name = "Test Movie", Guid? id = null)
         => new() { Name = name, Id = id ?? Guid.NewGuid() };
 
+    /// <summary>
+    /// Wires a library-manager mock to resolve the given items by id (the
+    /// GetItemById setup every medium-classifier suite needs; JF-890 hoist on
+    /// the third active copy, the CreateMovie policy: pre-existing per-suite
+    /// privates repoint here as they are touched, no bulk migration).
+    /// </summary>
+    internal static void SetupLibraryResolves(
+        Moq.Mock<MediaBrowser.Controller.Library.ILibraryManager> libraryManager,
+        params MediaBrowser.Controller.Entities.BaseItem[] items)
+    {
+        foreach (MediaBrowser.Controller.Entities.BaseItem item in items)
+        {
+            libraryManager.Setup(l => l.GetItemById(item.Id)).Returns(item);
+        }
+    }
+
     internal static Context CreateContextWithoutApl()
     {
         return new Context

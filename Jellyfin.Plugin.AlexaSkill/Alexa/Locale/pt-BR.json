@@ -13,6 +13,8 @@
   "NoMediaPlaying": "Nada está tocando no momento.",
   "CannotRepeatContent": "Desculpe, não consigo repetir vídeos, TV ou audiolivros daqui. Posso repetir música.",
   "CannotRepeatInSeekMode": "Desculpe, não dá para ativar a repetição enquanto a música toca com a barra de progresso.",
+  "CannotShuffleContent": "Desculpe, não consigo embaralhar vídeos, TV ou audiolivros daqui. Posso embaralhar música.",
+  "CannotShuffleInSeekMode": "Desculpe, não dá para embaralhar enquanto a música toca com a barra de progresso.",
   "CannotNavigateVideoByVoice": "Desculpe, não consigo alternar entre vídeos por voz. Use a tela touch para escolher o que assistir.",
   "CannotNavigateMusicByVoice": "Desculpe, não posso pular a faixa por voz durante a reprodução com a barra de progresso. Use a barra na tela para navegar na fila.",
   "CannotNavigateLiveTvByVoice": "A TV ao vivo continua sozinha. Use a tela touch para mudar de canal.",
