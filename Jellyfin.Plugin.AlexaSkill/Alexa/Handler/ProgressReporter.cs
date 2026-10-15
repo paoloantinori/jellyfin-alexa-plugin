@@ -776,7 +776,11 @@ public sealed class ProgressReporter
     /// gate answers no-media over a playing stream; that is the safe direction
     /// for a write that launches nothing (the mirror error, refusing every cold
     /// device, was the JF-890 live bug), and the JF-858 flat gates keep
-    /// refusing the same shape because their actions launch streams. The
+    /// refusing the same shape because their actions launch streams.
+    /// SleepTimer is structurally immune to the JF-890 shape (its
+    /// session.FullNowPlayingItem null guard precedes its belt read), so it
+    /// does not need this gate; SetPlaybackSpeed retains a same-class
+    /// wrong-line residual and owns its consumer-local fix (JF-891). The
     /// refusal strings stay per family: the caller passes
     /// its video-family and seek-mode keys (loop CannotRepeatContent /
     /// CannotRepeatInSeekMode, shuffle CannotShuffleContent /
@@ -817,11 +821,9 @@ public sealed class ProgressReporter
             return ResponseBuilder.Tell(ResponseStrings.Get(refusalKey, locale));
         }
 
-        // JF-890: the belt's VideoApp verdict rides only frozen residue (an explicit
-        // halt report, no session-held item), so nothing is playing: the honest
-        // answer is the no-media tell and the mode write is skipped (returning
-        // without falling through matters: the idle guard's token leg would
-        // otherwise resolve the stale video token and write the mode to it).
+        // JF-890: stale residue (rationale on the method doc). Returning here,
+        // not falling through, is load-bearing: the idle guard's token leg
+        // would otherwise resolve the stale video token and write the mode.
         _logger.LogDebug("{Label}: {Medium} verdict is stale residue (halted report, no session item), answering the no-media tell", label, medium);
         return ResponseBuilder.Tell(ResponseStrings.Get("NoMediaPlaying", locale));
     }
@@ -862,13 +864,10 @@ public sealed class ProgressReporter
         _logger.LogDebug("{Label}: entered, token={Token}, offset={OffsetMs}ms", label, requestState?.Token, requestState?.OffsetInMilliseconds);
 
         // JF-632 medium gate, loop-family edition, since JF-890 through the ONE
-        // loop/shuffle write-family gate (TryAnswerModeWriteMediumGate, which owns
-        // the full rationale): the refusal only stands when the VideoApp verdict is
-        // corroborated current; an explicit halt report with no session-held item
-        // answers the no-media tell and skips the write (the stale-video-token
-        // live bug). The belt's JF-789 aging scope is unchanged: a within-window
-        // belt shape with no halt report still refuses, and a resolvable
-        // video-kind entry with no halt report still refuses at any age.
+        // loop/shuffle write-family gate (rationale on TryAnswerModeWriteMediumGate).
+        // The belt's JF-789 aging scope is unchanged: a within-window belt shape
+        // with no halt report still refuses, and a resolvable video-kind entry
+        // with no halt report still refuses at any age.
         SkillResponse? gated = TryAnswerModeWriteMediumGate(
             context, session, libraryManager, queueManager, locale, label,
             videoFamilyKey: "CannotRepeatContent", seekModeKey: "CannotRepeatInSeekMode");

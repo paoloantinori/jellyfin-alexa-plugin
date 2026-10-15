@@ -67,11 +67,8 @@ public class ShuffleOnIntentHandler : BaseHandler
 
         Logger.LogDebug("ShuffleOn: entered, token={Token}, offset={OffsetMs}ms", currentToken, requestState.OffsetInMilliseconds);
 
-        // JF-890: the ONE loop/shuffle write-family medium gate (the shared
-        // TryAnswerModeWriteMediumGate owns the rationale): an honestly-corroborated
-        // VideoApp medium refuses (the shuffle twins of the loop strings), a stale
-        // residue verdict (explicit halt report, no session item) answers the
-        // no-media tell and skips every write below, and Audio/Unknown proceeds.
+        // JF-890: the shared write-family medium gate; rationale on
+        // TryAnswerModeWriteMediumGate.
         SkillResponse? gated = Progress.TryAnswerModeWriteMediumGate(
             context, session, _libraryManager, _queueManager, GetLocale(request), "ShuffleOn",
             videoFamilyKey: "CannotShuffleContent", seekModeKey: "CannotShuffleInSeekMode");
