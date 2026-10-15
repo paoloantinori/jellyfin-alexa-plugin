@@ -693,8 +693,11 @@ public sealed class PlaybackLaunchBuilder
     /// evidence leg, and per JF-868 the common active VideoApp shape reports
     /// STOPPED, so the held item must keep the refusal standing). The TOKEN leg is
     /// deliberately NOT corroborating here: the frozen stale token is exactly the
-    /// residue this predicate exists to discount. Scope: only the loop/shuffle
-    /// write gates consult this; the JF-858 flat transport gates keep their own
+    /// residue this predicate exists to discount. Scope: the loop/shuffle write
+    /// gates plus the SetPlaybackSpeed belt read (JF-891, consumer-local; its
+    /// bounded arm answers the plain no-media Tell where the old refusal carried
+    /// AudioPlayer.Stop, and never launches) consult this; the JF-858 flat
+    /// transport gates keep their own
     /// corroboration (there a stale token still corroborates, because their
     /// refusals guard stream-launching actions where refusing on a possibly-live
     /// VideoApp stream is the safe direction; the loop/shuffle writes launch
@@ -991,7 +994,8 @@ public sealed class PlaybackLaunchBuilder
     /// ApplyRepeatModeAsync and both shuffle handlers, itself bounded since JF-890
     /// by <see cref="IsVideoAppMediumCorroborated"/>), the sleep-timer re-issue
     /// gate (SleepTimerIntentHandler), and the playback-speed re-launch gate
-    /// (SetPlaybackSpeedIntentHandler, migrated JF-637); Pause/Repeat/
+    /// (SetPlaybackSpeedIntentHandler, migrated JF-637, its refusal arm bounded
+    /// since JF-891 by the same corroboration predicate); Pause/Repeat/
     /// next-previous moved OFF this belt question in JF-858 onto the corroborated
     /// flat-gate classifier (<see cref="ResolvePlayingMediumForFlatTransportGate"/>).
     /// Cost note (inherited, not by construction): the classifier resolves the

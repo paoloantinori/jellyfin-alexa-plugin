@@ -443,6 +443,136 @@ public class SetPlaybackSpeedIntentHandlerTests : PluginTestBase, IDisposable
         Assert.Null(user.PodcastSpeedPerMille);
     }
 
+    // ---- the JF-891 stale-residue bound (the JF-890 mirror) ----
+
+    /// <summary>
+    /// THE JF-891 regression pin (the JF-890 mirror, live corr class 847bcda6):
+    /// a fresh one-shot speed ask with NOTHING playing, the context reporting
+    /// playerActivity=STOPPED over the VIDEO token frozen at the last stop, an
+    /// empty session, and the VideoApp-routed movie ledger still within the
+    /// recency window. The item resolver answers the movie and the belt answers
+    /// the Video medium, so the pre-JF-891 code spoke the video refusal
+    /// (CannotChangeSpeedOverVideo) about a playback that ended long ago; the
+    /// honest answer is the no-media tell, as a PLAIN Tell (no Stop directive,
+    /// nothing corroborated is playing), and no preference write may happen.
+    /// </summary>
+    [Fact]
+    public async Task StaleStoppedVideoToken_EmptySession_NoMediaInsteadOfVideoRefusal_JF891()
+    {
+        var movie = TestHelpers.CreateMovie("Sunny Dancer");
+        SetupItemLookup(movie);
+        _queueManager.RecordLastPlayed(DeviceId, movie.Id.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
+
+        var handler = CreateHandler();
+        var user = TestHelpers.CreateTestUser();
+
+        SkillResponse response = await handler.HandleAsync(
+            CreateIntentRequest(RateSlot("uno e mezzo", "1500")),
+            TestHelpers.CreateContextWithToken(movie.Id.ToString(), DeviceId, "STOPPED"),
+            user,
+            CreateSession(null),
+            CancellationToken.None);
+
+        Assert.Null(TestHelpers.GetPlayDirective(response));
+        Assert.Null(response.Response.Directives?.FirstOrDefault(d => d.Type == "AudioPlayer.Stop"));
+        Assert.Contains("Nessun contenuto in riproduzione", SpeechText(response), StringComparison.Ordinal);
+        Assert.DoesNotContain("non posso cambiare la velocità", SpeechText(response), StringComparison.Ordinal);
+        Assert.Null(user.PodcastSpeedPerMille);
+    }
+
+    /// <summary>
+    /// Guard b (the JF-890 active bound): the SAME video shape with the device
+    /// reporting PLAYING keeps the honest video refusal (speed during active
+    /// video still refuses; the JF-891 bound only ever disarms the stale shape).
+    /// The empty session isolates the activity leg of the corroboration.
+    /// </summary>
+    [Fact]
+    public async Task ActiveVideoPlaying_EmptySession_StillRefuses_JF891()
+    {
+        var movie = TestHelpers.CreateMovie("Active Movie");
+        SetupItemLookup(movie);
+        _queueManager.RecordLastPlayed(DeviceId, movie.Id.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
+
+        var handler = CreateHandler();
+        var user = TestHelpers.CreateTestUser();
+
+        SkillResponse response = await handler.HandleAsync(
+            CreateIntentRequest(RateSlot("uno e mezzo", "1500")),
+            TestHelpers.CreateContextWithToken(movie.Id.ToString(), DeviceId, "PLAYING"),
+            user,
+            CreateSession(null),
+            CancellationToken.None);
+
+        Assert.Null(TestHelpers.GetPlayDirective(response));
+        TestHelpers.AssertHasAudioPlayerStopDirective(response);
+        Assert.Contains("non posso cambiare la velocità", SpeechText(response), StringComparison.Ordinal);
+        Assert.DoesNotContain("Nessun contenuto in riproduzione", SpeechText(response), StringComparison.Ordinal);
+        Assert.Null(user.PodcastSpeedPerMille);
+    }
+
+    /// <summary>
+    /// The JF-868 parity boundary of the JF-891 bound: an explicit STOPPED report
+    /// does NOT disarm the refusal when the session still holds the item, because
+    /// during ACTIVE VideoApp playback the common device shape IS a bare STOPPED
+    /// (JF-868) and the held item is the VideoApp evidence leg.
+    /// </summary>
+    [Fact]
+    public async Task HaltedReportSessionHoldsVideo_StillRefuses_JF891()
+    {
+        var movie = TestHelpers.CreateMovie("Held Movie");
+        SetupItemLookup(movie);
+        _queueManager.RecordLastPlayed(DeviceId, movie.Id.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
+
+        var handler = CreateHandler();
+        var user = TestHelpers.CreateTestUser();
+
+        SkillResponse response = await handler.HandleAsync(
+            CreateIntentRequest(RateSlot("uno e mezzo", "1500")),
+            TestHelpers.CreateContextWithToken(movie.Id.ToString(), DeviceId, "STOPPED"),
+            user,
+            CreateSession(movie),
+            CancellationToken.None);
+
+        Assert.Null(TestHelpers.GetPlayDirective(response));
+        TestHelpers.AssertHasAudioPlayerStopDirective(response);
+        Assert.Contains("non posso cambiare la velocità", SpeechText(response), StringComparison.Ordinal);
+        Assert.Null(user.PodcastSpeedPerMille);
+    }
+
+    /// <summary>
+    /// The seek-mode arm of the JF-891 stale shape: the ledger entry is a SONG
+    /// recorded on the VideoApp route (the seek-mode belt hole: the classifier's
+    /// token-ownership arm answers Audio and only the belt re-classifies to
+    /// VideoAppAudio), the device reports STOPPED, the session is empty. The
+    /// same staleness bound must hold on this arm: the no-media tell, never the
+    /// video refusal, no re-launch. Observable-outcome pin only: the Audio
+    /// arm's JF-655 gate answers the same Tell on this shape, so the belt's
+    /// VideoAppAudio re-classification itself is not what this fact isolates.
+    /// </summary>
+    [Fact]
+    public async Task StaleStoppedSeekModeToken_EmptySession_NoMediaInsteadOfVideoRefusal_JF891()
+    {
+        Audio seekSong = CreateEpisode(60);
+        SetupItemLookup(seekSong);
+        _queueManager.RecordLastPlayed(DeviceId, seekSong.Id.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
+
+        var handler = CreateHandler();
+        var user = TestHelpers.CreateTestUser();
+
+        SkillResponse response = await handler.HandleAsync(
+            CreateIntentRequest(RateSlot("uno e mezzo", "1500")),
+            TestHelpers.CreateContextWithToken(seekSong.Id.ToString(), DeviceId, "STOPPED"),
+            user,
+            CreateSession(null),
+            CancellationToken.None);
+
+        Assert.Null(TestHelpers.GetPlayDirective(response));
+        Assert.Null(response.Response.Directives?.FirstOrDefault(d => d.Type == "AudioPlayer.Stop"));
+        Assert.Contains("Nessun contenuto in riproduzione", SpeechText(response), StringComparison.Ordinal);
+        Assert.DoesNotContain("non posso cambiare la velocità", SpeechText(response), StringComparison.Ordinal);
+        Assert.Null(user.PodcastSpeedPerMille);
+    }
+
     // ---- the JF-655 active-playback gate ----
 
     /// <summary>

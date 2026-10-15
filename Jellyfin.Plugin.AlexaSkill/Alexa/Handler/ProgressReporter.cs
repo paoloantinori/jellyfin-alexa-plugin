@@ -779,9 +779,9 @@ public sealed class ProgressReporter
     /// refusing the same shape because their actions launch streams.
     /// SleepTimer is structurally immune to the JF-890 shape (its
     /// session.FullNowPlayingItem null guard precedes its belt read), so it
-    /// does not need this gate; SetPlaybackSpeed retains a same-class
-    /// wrong-line residual and owns its consumer-local fix (JF-891). The
-    /// refusal strings stay per family: the caller passes
+    /// does not need this gate; SetPlaybackSpeed owns the same-class fix as a
+    /// consumer-local JF-891 mirror at its own belt read. The refusal strings
+    /// stay per family: the caller passes
     /// its video-family and seek-mode keys (loop CannotRepeatContent /
     /// CannotRepeatInSeekMode, shuffle CannotShuffleContent /
     /// CannotShuffleInSeekMode); the belt answer itself is the ONE
