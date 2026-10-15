@@ -743,6 +743,41 @@ public sealed class PlaybackLaunchBuilder
     }
 
     /// <summary>
+    /// JF-892: whether the request's evidence is stale residue for a
+    /// non-VideoApp medium verdict (Audio, or Unknown), the Audio mirror of the
+    /// JF-890 video stale-residue bound (the write-family gate consults both).
+    /// Unknown is covered because a live skill playback always has a written
+    /// ledger entry, so Unknown plus a halt report and no live evidence is
+    /// never a playing device (the wiped-ledger idle shape a frozen token would
+    /// otherwise still drive writes through). An idle device keeps the song
+    /// token frozen in <c>context.AudioPlayer</c> across sessions (the audio
+    /// twin of the live corr 847bcda6 video shape), so the classifier's Audio
+    /// verdict alone says nothing about liveness. Three legs, ALL required: the
+    /// device reports an explicit
+    /// halt (<see cref="ReportsPlaybackHalted"/>: STOPPED, FINISHED or IDLE; a
+    /// null activity is NO report and never residue, which keeps every
+    /// no-report request shape on the ordinary body), no session-held item
+    /// corroborates (<see cref="SessionHoldsNowPlayingItem"/>, the JF-868 mirror:
+    /// a bare STOPPED can name a live stream, so the halt report alone never
+    /// proves idleness), and the JF-655 active-audio signal is off
+    /// (<see cref="IsAudioPlaybackActive"/>; under a halt report only the
+    /// event-owned flag arm can still fire, and reading it through the ONE signal
+    /// keeps the re-launch gates and this predicate on one definition). PAUSED
+    /// music always passes: it is not a halt report and the flag survives a
+    /// pause. The frozen TOKEN is deliberately not evidence here, the same rule
+    /// <see cref="IsVideoAppMediumCorroborated"/> applies to the video token.
+    /// Scope: only the loop/shuffle write-family gate consults this.
+    /// </summary>
+    /// <param name="context">The Alexa request context (the halt report, the device id for the flag read).</param>
+    /// <param name="session">The Jellyfin session (the held-item corroboration leg; may be null).</param>
+    /// <param name="queueManager">The caller's device queue manager (the flag store); null falls back to <c>Plugin.Instance</c>'s (the classifier-half idiom).</param>
+    /// <returns>True when the non-VideoApp verdict is residue of a halted playback with no live evidence.</returns>
+    internal static bool IsStaleAudioPlaybackResidue(Context? context, SessionInfo? session, DeviceQueueManager? queueManager)
+        => ReportsPlaybackHalted(context)
+            && !SessionHoldsNowPlayingItem(session)
+            && !IsAudioPlaybackActive(context, queueManager);
+
+    /// <summary>
     /// The JF-655 review launch-token mint: the AudioPlayer.Play stream token an
     /// AudioPlayer.Play directive carries. CONDITIONAL by construction: a launch on a
     /// device with NO active same-item playback keeps the bare item id every earlier

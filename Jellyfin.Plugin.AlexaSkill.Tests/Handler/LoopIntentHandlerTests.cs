@@ -662,4 +662,64 @@ public class LoopIntentHandlerTests : PluginTestBase
             s => s.OnPlaybackProgress(It.IsAny<PlaybackProgressInfo>(), It.IsAny<bool>()), Times.Never);
         Assert.Equal(RepeatMode.RepeatNone, session.PlayState!.RepeatMode);
     }
+
+    /// <summary>
+    /// THE JF-892 shared-site pin, loop family: the AUDIO twin of the JF-890
+    /// residue. An idle device after music keeps the song token frozen with
+    /// playerActivity=STOPPED over an Audio-routed ledger; the classifier
+    /// answers Audio, the idle guard's token leg passes, and the resolver's
+    /// token leg would resolve the dead item (the shared tail the review
+    /// found). The gate's Audio staleness bound (fixed once for loop and both
+    /// shuffle twins) must answer the no-media tell and skip the mode write.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_StaleStoppedAudioToken_EmptySession_NoMediaNoWrite_JF892()
+    {
+        DeviceQueueManager queues = TestHelpers.CreateDeviceQueueManager("loop-stale-audio-jf892");
+        Audio song = Song("Frozen Audio Token Song");
+        TestHelpers.SetupLibraryResolves(_libraryManager, song);
+        queues.RecordLastPlayed("loop-stale-audio-jf892-device", song.Id.ToString(), DeviceQueueManager.LaunchRoute.Audio);
+        BaseHandler handler = CreateOwner(IntentNames.LoopAllOn, queues);
+        SessionInfo session = CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(
+            IntentRequestFor(IntentNames.LoopAllOn),
+            TestHelpers.CreateContextWithToken(song.Id.ToString(), "loop-stale-audio-jf892-device", "STOPPED"),
+            CreateUser(), session, CancellationToken.None);
+
+        Assert.Contains(
+            ResponseStrings.Get("NoMediaPlaying", "en-US"),
+            TestHelpers.GetSpeechText(response), StringComparison.OrdinalIgnoreCase);
+        _sessionManagerMock.Verify(
+            s => s.OnPlaybackProgress(It.IsAny<PlaybackProgressInfo>(), It.IsAny<bool>()), Times.Never);
+        Assert.Equal(RepeatMode.RepeatNone, session.PlayState!.RepeatMode);
+    }
+
+    /// <summary>
+    /// The JF-892 code-review arm, loop family: the same halt-reported frozen
+    /// token with NO ledger entry (the wiped-ledger idle shape) classifies
+    /// Unknown, and the shared gate's residue bound must cover the non-VideoApp
+    /// verdicts there too; the resolver's token leg would otherwise resolve the
+    /// dead item and take the mode write.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_HaltReportedTokenNoLedger_NoMediaNoWrite_JF892()
+    {
+        BaseHandler handler = CreateOwner(IntentNames.LoopAllOn);
+        Audio song = Song("Ledgerless Loop Song");
+        TestHelpers.SetupLibraryResolves(_libraryManager, song);
+        SessionInfo session = CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(
+            IntentRequestFor(IntentNames.LoopAllOn),
+            TestHelpers.CreateContextWithToken(song.Id.ToString(), "loop-noledger-jf892-device", "STOPPED"),
+            CreateUser(), session, CancellationToken.None);
+
+        Assert.Contains(
+            ResponseStrings.Get("NoMediaPlaying", "en-US"),
+            TestHelpers.GetSpeechText(response), StringComparison.OrdinalIgnoreCase);
+        _sessionManagerMock.Verify(
+            s => s.OnPlaybackProgress(It.IsAny<PlaybackProgressInfo>(), It.IsAny<bool>()), Times.Never);
+        Assert.Equal(RepeatMode.RepeatNone, session.PlayState!.RepeatMode);
+    }
 }

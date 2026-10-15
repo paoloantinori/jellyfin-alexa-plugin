@@ -755,16 +755,22 @@ public sealed class ProgressReporter
 
     /// <summary>
     /// The ONE loop/shuffle write-family medium gate (the JF-632 refusal plus the
-    /// JF-890 staleness bound), shared by ApplyRepeatModeAsync and both shuffle
-    /// handlers so the decision cannot drift between the twins. Answers the
+    /// JF-890 staleness bound, plus the JF-892 Audio staleness bound), shared by
+    /// ApplyRepeatModeAsync and both shuffle handlers so the decision cannot
+    /// drift between the twins. Answers the
     /// honest VideoApp refusal Tell when a VideoApp-family medium owns the screen
     /// AND the verdict is corroborated as current
     /// (<see cref="PlaybackLaunchBuilder.IsVideoAppMediumCorroborated"/>); the
     /// no-media tell when the verdict is stale residue (an explicit halt report
     /// with no session-held item: nothing is playing, there is no queue or stream
     /// to attach a mode to, and the flag write is skipped entirely, JF-890 live
-    /// corr 847bcda6); null when the medium is Audio/Unknown so the caller's
-    /// ordinary body runs. The gate runs BEFORE the loop caller's idle guard
+    /// corr 847bcda6); since JF-892 the SAME no-media answer for a
+    /// non-VideoApp verdict's stale residue, Audio or Unknown
+    /// (<see cref="PlaybackLaunchBuilder.IsStaleAudioPlaybackResidue"/>; the
+    /// loop caller shared that tail through the resolver's token leg, so the
+    /// bound lives HERE, fixed once for all three callers); null when the
+    /// caller's ordinary body should run (an Audio/Unknown medium with live
+    /// evidence, or any no-report token shape). The gate runs BEFORE the loop caller's idle guard
     /// because the live JF-632 incident shape (a one-shot over seek-mode
     /// playback) carries
     /// no AudioPlayer token and an empty session, so the ledger's recorded route is
@@ -776,7 +782,15 @@ public sealed class ProgressReporter
     /// gate answers no-media over a playing stream; that is the safe direction
     /// for a write that launches nothing (the mirror error, refusing every cold
     /// device, was the JF-890 live bug), and the JF-858 flat gates keep
-    /// refusing the same shape because their actions launch streams.
+    /// refusing the same shape because their actions launch streams. The SAME
+    /// residual class covers the JF-892 Audio leg, twice over: a live audio
+    /// stream whose flag and session are both down (a plugin restart
+    /// mid-playback orphaning the in-memory flag, or a dropped session) while
+    /// the device reports STOPPED answers no-media, the identical safe
+    /// direction; and the inter-track queue-advance window (Finished(N-1)
+    /// cleared the flag and the session item before Started(N) is processed)
+    /// refuses an ask that would otherwise have keyed the write on the
+    /// just-finished item.
     /// SleepTimer is structurally immune to the JF-890 shape (its
     /// session.FullNowPlayingItem null guard precedes its belt read), so it
     /// does not need this gate; SetPlaybackSpeed owns the same-class fix as a
@@ -809,6 +823,15 @@ public sealed class ProgressReporter
         PlaybackLaunchBuilder.PlayingMedium medium = _launch.ResolveScreenOwningMedium(context, libraryManager, queueManager);
         if (!PlaybackLaunchBuilder.IsVideoAppMedium(medium))
         {
+            // JF-892: the Audio/Unknown staleness bound (rationale on the method
+            // doc); returning here, not falling through, is load-bearing for the
+            // same reason as the JF-890 leg below.
+            if (PlaybackLaunchBuilder.IsStaleAudioPlaybackResidue(context, session, queueManager))
+            {
+                _logger.LogDebug("{Label}: {Medium} verdict is stale residue (halted report, no live evidence), answering the no-media tell", label, medium);
+                return ResponseBuilder.Tell(ResponseStrings.Get("NoMediaPlaying", locale));
+            }
+
             return null;
         }
 

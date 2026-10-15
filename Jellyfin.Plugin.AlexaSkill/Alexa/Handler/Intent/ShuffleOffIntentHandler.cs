@@ -7,6 +7,7 @@ using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
@@ -53,34 +54,46 @@ public class ShuffleOffIntentHandler : BaseHandler
     /// <param name="user">The user instance.</param>
     /// <param name="session">The session instance.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>The spoken shuffle confirmation Tell.</returns>
+    /// <returns>The spoken shuffle confirmation Tell, or the honest no-media/refusal tell when nothing is playing or a VideoApp-family medium owns the screen.</returns>
     public override async Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
-        PlaybackState requestState = context.AudioPlayer;
-        string deviceId = context.System.Device.DeviceID;
-        string? currentToken = requestState.Token;
+        PlaybackState? requestState = context.AudioPlayer;
+        string deviceId = context.GetDeviceId();
+        string? currentToken = requestState?.Token;
         Guid currentId = Guid.Empty;
         // Round-3 sweep: the shared codec, not raw Guid.TryParse, so a
         // generation- or sleep-suffixed token still resolves (the raw parse fails
         // composites and the index re-sync below would silently skip).
         bool tokenValid = StreamTokenCodec.TryGetItemId(currentToken, out currentId);
 
-        Logger.LogDebug("ShuffleOff: entered, token={Token}, offset={OffsetMs}ms", currentToken, requestState.OffsetInMilliseconds);
+        Logger.LogDebug("ShuffleOff: entered, token={Token}, offset={OffsetMs}ms", currentToken, requestState?.OffsetInMilliseconds);
+
+        string locale = GetLocale(request);
 
         // JF-890: the shared write-family medium gate; rationale on
         // TryAnswerModeWriteMediumGate.
         SkillResponse? gated = Progress.TryAnswerModeWriteMediumGate(
-            context, session, _libraryManager, _queueManager, GetLocale(request), "ShuffleOff",
+            context, session, _libraryManager, _queueManager, locale, "ShuffleOff",
             videoFamilyKey: "CannotShuffleContent", seekModeKey: "CannotShuffleInSeekMode");
         if (gated != null)
         {
             return gated;
         }
 
+        // JF-892 idle guard, the ONE predicate (the loop twin ApplyRepeatModeAsync
+        // and the favorite/media-info/playlist-edit families carry the same line):
+        // with no current evidence, nothing is playing NOW, and the write below
+        // would create and persist an empty device queue over nothing (JF-629).
+        if (!PlaybackLaunchBuilder.HasCurrentPlaybackEvidence(context, session))
+        {
+            Logger.LogDebug("ShuffleOff: idle device (no token, no session item), returning the no-media tell");
+            return ResponseBuilder.Tell(ResponseStrings.Get("NoMediaPlaying", locale));
+        }
+
         // Keep Jellyfin's session PlayState in sync (shown in the dashboard UI).
         if (tokenValid)
         {
-            await Progress.ReportPlaybackProgress(session, deviceId, currentId, requestState.OffsetInMilliseconds, PlaybackOrder.Default, cancellationToken).ConfigureAwait(false);
+            await Progress.ReportPlaybackProgress(session, deviceId, currentId, requestState?.OffsetInMilliseconds ?? 0, PlaybackOrder.Default, cancellationToken).ConfigureAwait(false);
         }
 
         // Authoritative plugin-side state: clear flag and restore original order.
@@ -106,6 +119,6 @@ public class ShuffleOffIntentHandler : BaseHandler
 
         // Spoken confirmation (review round 2026-09-22): same class as the loop
         // family's speech-less session end that read as "nothing happened".
-        return ResponseBuilder.Tell(ResponseStrings.Get("ShuffleDisabled", GetLocale(request)));
+        return ResponseBuilder.Tell(ResponseStrings.Get("ShuffleDisabled", locale));
     }
 }
