@@ -516,4 +516,324 @@ public class ShuffleIntentHandlerTests : IDisposable
         _sessionManagerMock.Verify(
             s => s.OnPlaybackProgress(It.IsAny<PlaybackProgressInfo>(), It.IsAny<bool>()), Times.Never);
     }
+
+    // =====================================================================
+    // JF-892: null-context NRE, stale AUDIO token, cold device
+    // =====================================================================
+
+    /// <summary>
+    /// The JF-450 mirror for the twins: a request whose context carries NO
+    /// AudioPlayer object (Alexa.NET leaves it null; the open-session
+    /// nothing-playing shape) must answer the no-media tell, never the NRE the
+    /// old non-nullable token read threw. No write: no queue is created and no
+    /// progress is reported.
+    /// </summary>
+    [Fact]
+    public async Task ShuffleOn_NoAudioPlayerContext_NoMediaNoWrite_JF892()
+    {
+        using DeviceQueueManager mgr = new(_tempDir, _loggerFactory.CreateLogger<DeviceQueueManager>());
+        string deviceId = "shuffle-nullctx-jf892-device";
+        SessionInfo session = TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
+
+        var handler = new ShuffleOnIntentHandler(_sessionManagerMock.Object, _config, _libraryManager.Object, _loggerFactory, mgr);
+        SkillResponse response = await handler.HandleAsync(
+            ShuffleRequest(IntentNames.AmazonShuffleOn),
+            TestHelpers.CreateTestContext(deviceId), // no AudioPlayer object at all
+            TestHelpers.CreateTestUser(), session, default);
+
+        Assert.Contains(
+            ResponseStrings.Get("NoMediaPlaying", "en-US"),
+            TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+        Assert.Null(mgr.GetQueue(deviceId)); // no empty queue created or persisted
+        _sessionManagerMock.Verify(
+            s => s.OnPlaybackProgress(It.IsAny<PlaybackProgressInfo>(), It.IsAny<bool>()), Times.Never);
+    }
+
+    /// <summary>
+    /// The OFF twin of the JF-450 mirror: same null-AudioPlayer shape, same
+    /// no-media tell, and additionally no RestoreOrder side effect.
+    /// </summary>
+    [Fact]
+    public async Task ShuffleOff_NoAudioPlayerContext_NoMediaNoWrite_JF892()
+    {
+        using DeviceQueueManager mgr = new(_tempDir, _loggerFactory.CreateLogger<DeviceQueueManager>());
+        string deviceId = "shuffle-off-nullctx-jf892-device";
+        SessionInfo session = TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
+
+        var handler = new ShuffleOffIntentHandler(_sessionManagerMock.Object, _config, _libraryManager.Object, _loggerFactory, mgr);
+        SkillResponse response = await handler.HandleAsync(
+            ShuffleRequest(IntentNames.AmazonShuffleOff),
+            TestHelpers.CreateTestContext(deviceId), // no AudioPlayer object at all
+            TestHelpers.CreateTestUser(), session, default);
+
+        Assert.Contains(
+            ResponseStrings.Get("NoMediaPlaying", "en-US"),
+            TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+        Assert.Null(mgr.GetQueue(deviceId));
+        _sessionManagerMock.Verify(
+            s => s.OnPlaybackProgress(It.IsAny<PlaybackProgressInfo>(), It.IsAny<bool>()), Times.Never);
+    }
+
+    /// <summary>
+    /// THE JF-892 defect-2 pin, ON twin: an idle device after music keeps the
+    /// song token frozen with an explicit halt report (the audio twin of the
+    /// JF-890 video residue; every ReportsPlaybackHalted activity, so a future
+    /// edit that drops an arm goes red here). The gate's Audio staleness bound
+    /// must answer the no-media tell and skip the whole write: no progress
+    /// report on the dead item, no SetPlaybackOrder, no physical reshuffle
+    /// (the queue keeps its original order).
+    /// </summary>
+    [Theory]
+    [InlineData("STOPPED")]
+    [InlineData("FINISHED")]
+    [InlineData("IDLE")]
+    public async Task ShuffleOn_HaltReportedAudioToken_EmptySession_NoMediaNoWrite_JF892(string playerActivity)
+    {
+        using DeviceQueueManager mgr = new(_tempDir, _loggerFactory.CreateLogger<DeviceQueueManager>());
+        var song = TestHelpers.CreateSong("Frozen Token Song");
+        TestHelpers.SetupLibraryResolves(_libraryManager, song);
+        string deviceId = "shuffle-stale-audio-jf892-device";
+        mgr.RecordLastPlayed(deviceId, song.Id.ToString(), DeviceQueueManager.LaunchRoute.Audio);
+        List<Guid> guids = Enumerable.Range(0, 6).Select(_ => Guid.NewGuid()).ToList();
+        List<string> ids = guids.Select(g => g.ToString()).ToList();
+        mgr.SetQueue(deviceId, ids, currentIndex: 0);
+        SessionInfo session = TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
+
+        var handler = new ShuffleOnIntentHandler(_sessionManagerMock.Object, _config, _libraryManager.Object, _loggerFactory, mgr);
+        SkillResponse response = await handler.HandleAsync(
+            ShuffleRequest(IntentNames.AmazonShuffleOn),
+            TestHelpers.CreateContextWithToken(song.Id.ToString(), deviceId, playerActivity),
+            TestHelpers.CreateTestUser(), session, default);
+
+        Assert.Contains(
+            ResponseStrings.Get("NoMediaPlaying", "en-US"),
+            TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+        DeviceQueue q = mgr.GetOrCreateQueue(deviceId);
+        Assert.Equal("Default", q.PlaybackOrder);   // flag never written
+        Assert.Equal(ids, q.ItemIds);               // tail never reshuffled
+        Assert.Null(q.OriginalItemIds);             // no shuffle snapshot taken
+        _sessionManagerMock.Verify(
+            s => s.OnPlaybackProgress(It.IsAny<PlaybackProgressInfo>(), It.IsAny<bool>()), Times.Never);
+    }
+
+    /// <summary>
+    /// The code-review arm of the JF-892 bound: the same halt-reported frozen
+    /// token with NO ledger entry (the wiped-ledger idle shape) classifies
+    /// Unknown, and the residue bound must cover it too; without the non-VideoApp
+    /// scope the write would slip past the gate and the idle guard's token leg.
+    /// </summary>
+    [Fact]
+    public async Task ShuffleOn_HaltReportedTokenNoLedger_NoMediaNoWrite_JF892()
+    {
+        using DeviceQueueManager mgr = new(_tempDir, _loggerFactory.CreateLogger<DeviceQueueManager>());
+        var song = TestHelpers.CreateSong("Ledgerless Song");
+        TestHelpers.SetupLibraryResolves(_libraryManager, song);
+        string deviceId = "shuffle-noledger-jf892-device";
+        List<Guid> guids = Enumerable.Range(0, 4).Select(_ => Guid.NewGuid()).ToList();
+        mgr.SetQueue(deviceId, guids.Select(g => g.ToString()).ToList(), currentIndex: 0);
+        SessionInfo session = TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
+
+        var handler = new ShuffleOnIntentHandler(_sessionManagerMock.Object, _config, _libraryManager.Object, _loggerFactory, mgr);
+        SkillResponse response = await handler.HandleAsync(
+            ShuffleRequest(IntentNames.AmazonShuffleOn),
+            TestHelpers.CreateContextWithToken(song.Id.ToString(), deviceId, "STOPPED"),
+            TestHelpers.CreateTestUser(), session, default);
+
+        Assert.Contains(
+            ResponseStrings.Get("NoMediaPlaying", "en-US"),
+            TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+        DeviceQueue q = mgr.GetOrCreateQueue(deviceId);
+        Assert.Equal("Default", q.PlaybackOrder);
+        _sessionManagerMock.Verify(
+            s => s.OnPlaybackProgress(It.IsAny<PlaybackProgressInfo>(), It.IsAny<bool>()), Times.Never);
+    }
+
+    /// <summary>
+    /// THE JF-892 defect-2 pin, OFF twin: the same stale audio residue must not
+    /// restore anything; an already-shuffled queue keeps its shuffle (no
+    /// SetPlaybackOrder to Default, no RestoreOrder, no index re-sync, no
+    /// progress report).
+    /// </summary>
+    [Fact]
+    public async Task ShuffleOff_StaleStoppedAudioToken_EmptySession_NoMediaNoRestore_JF892()
+    {
+        using DeviceQueueManager mgr = new(_tempDir, _loggerFactory.CreateLogger<DeviceQueueManager>());
+        var song = TestHelpers.CreateSong("Frozen Token Song");
+        TestHelpers.SetupLibraryResolves(_libraryManager, song);
+        string deviceId = "shuffle-off-stale-audio-jf892-device";
+        mgr.RecordLastPlayed(deviceId, song.Id.ToString(), DeviceQueueManager.LaunchRoute.Audio);
+        List<Guid> guids = Enumerable.Range(0, 4).Select(_ => Guid.NewGuid()).ToList();
+        List<string> ids = guids.Select(g => g.ToString()).ToList();
+        mgr.SetQueue(deviceId, ids, currentIndex: 0);
+
+        // Known shuffled state over the snapshot (the RestoreOrder precondition):
+        // if the handler wrongly ran, ItemIds reverts to ids and the snapshot
+        // is consumed to null.
+        DeviceQueue dq = mgr.GetOrCreateQueue(deviceId);
+        List<string> shuffledOrder = new() { ids[0], ids[3], ids[1], ids[2] };
+        dq.ItemIds = shuffledOrder;
+        dq.OriginalItemIds = new List<string>(ids);
+        dq.PlaybackOrder = "Shuffle";
+        SessionInfo session = TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
+
+        var handler = new ShuffleOffIntentHandler(_sessionManagerMock.Object, _config, _libraryManager.Object, _loggerFactory, mgr);
+        SkillResponse response = await handler.HandleAsync(
+            ShuffleRequest(IntentNames.AmazonShuffleOff),
+            TestHelpers.CreateContextWithToken(song.Id.ToString(), deviceId, "STOPPED"),
+            TestHelpers.CreateTestUser(), session, default);
+
+        Assert.Contains(
+            ResponseStrings.Get("NoMediaPlaying", "en-US"),
+            TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+        DeviceQueue q = mgr.GetOrCreateQueue(deviceId);
+        Assert.Equal("Shuffle", q.PlaybackOrder);   // flag never cleared
+        Assert.Equal(shuffledOrder, q.ItemIds);     // order never restored
+        Assert.Equal(ids, q.OriginalItemIds);       // snapshot never consumed
+        _sessionManagerMock.Verify(
+            s => s.OnPlaybackProgress(It.IsAny<PlaybackProgressInfo>(), It.IsAny<bool>()), Times.Never);
+    }
+
+    /// <summary>
+    /// THE JF-892 defect-3 pin: a COLD device (an AudioPlayer object present
+    /// but carrying no token at all, the fresh-context shape) answers the
+    /// no-media tell and the queue manager is never touched: no empty queue is
+    /// created or persisted (GetOrCreateQueue inside SetPlaybackOrder is the
+    /// old write path).
+    /// </summary>
+    [Fact]
+    public async Task ShuffleOn_ColdDeviceNoToken_NoMediaNoEmptyQueuePersisted_JF892()
+    {
+        using DeviceQueueManager mgr = new(_tempDir, _loggerFactory.CreateLogger<DeviceQueueManager>());
+        string deviceId = "shuffle-cold-jf892-device";
+        SessionInfo session = TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
+
+        var handler = new ShuffleOnIntentHandler(_sessionManagerMock.Object, _config, _libraryManager.Object, _loggerFactory, mgr);
+        SkillResponse response = await handler.HandleAsync(
+            ShuffleRequest(IntentNames.AmazonShuffleOn),
+            TestHelpers.CreateContextWithToken(null, deviceId, "IDLE"), // AudioPlayer present, token absent
+            TestHelpers.CreateTestUser(), session, default);
+
+        Assert.Contains(
+            ResponseStrings.Get("NoMediaPlaying", "en-US"),
+            TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+        Assert.Null(mgr.GetQueue(deviceId)); // the manager was never touched
+        _sessionManagerMock.Verify(
+            s => s.OnPlaybackProgress(It.IsAny<PlaybackProgressInfo>(), It.IsAny<bool>()), Times.Never);
+    }
+
+    /// <summary>
+    /// The defect-3 pin, OFF twin: same cold-device shape, no empty queue, no
+    /// RestoreOrder.
+    /// </summary>
+    [Fact]
+    public async Task ShuffleOff_ColdDeviceNoToken_NoMediaNoEmptyQueuePersisted_JF892()
+    {
+        using DeviceQueueManager mgr = new(_tempDir, _loggerFactory.CreateLogger<DeviceQueueManager>());
+        string deviceId = "shuffle-off-cold-jf892-device";
+        SessionInfo session = TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
+
+        var handler = new ShuffleOffIntentHandler(_sessionManagerMock.Object, _config, _libraryManager.Object, _loggerFactory, mgr);
+        SkillResponse response = await handler.HandleAsync(
+            ShuffleRequest(IntentNames.AmazonShuffleOff),
+            TestHelpers.CreateContextWithToken(null, deviceId, "IDLE"),
+            TestHelpers.CreateTestUser(), session, default);
+
+        Assert.Contains(
+            ResponseStrings.Get("NoMediaPlaying", "en-US"),
+            TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+        Assert.Null(mgr.GetQueue(deviceId));
+        _sessionManagerMock.Verify(
+            s => s.OnPlaybackProgress(It.IsAny<PlaybackProgressInfo>(), It.IsAny<bool>()), Times.Never);
+    }
+
+    /// <summary>
+    /// The JF-892 boundary pin, pause arm: PAUSED music is a loaded, resumable
+    /// stream, not a halt, so shuffle still works while paused (the Audio
+    /// staleness bound must not over-refuse).
+    /// </summary>
+    [Fact]
+    public async Task ShuffleOn_PausedMusic_StillShuffles_JF892()
+    {
+        using DeviceQueueManager mgr = new(_tempDir, _loggerFactory.CreateLogger<DeviceQueueManager>());
+        var song = TestHelpers.CreateSong("Paused Song");
+        TestHelpers.SetupLibraryResolves(_libraryManager, song);
+        string deviceId = "shuffle-paused-jf892-device";
+        mgr.RecordLastPlayed(deviceId, song.Id.ToString(), DeviceQueueManager.LaunchRoute.Audio);
+        List<Guid> guids = Enumerable.Range(0, 6).Select(_ => Guid.NewGuid()).ToList();
+        mgr.SetQueue(deviceId, guids.Select(g => g.ToString()).ToList(), currentIndex: 0);
+        SessionInfo session = TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
+
+        var handler = new ShuffleOnIntentHandler(_sessionManagerMock.Object, _config, _libraryManager.Object, _loggerFactory, mgr);
+        SkillResponse response = await handler.HandleAsync(
+            ShuffleRequest(IntentNames.AmazonShuffleOn),
+            TestHelpers.CreateContextWithToken(song.Id.ToString(), deviceId, "PAUSED"),
+            TestHelpers.CreateTestUser(), session, default);
+
+        Assert.Contains(
+            ResponseStrings.Get("ShuffleEnabled", "en-US"),
+            TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+        Assert.Equal("Shuffle", mgr.GetOrCreateQueue(deviceId).PlaybackOrder);
+    }
+
+    /// <summary>
+    /// The JF-892 boundary pin, flag arm (the JF-655 signal): an explicit halt
+    /// report does NOT make the verdict stale while the event-owned flag says a
+    /// stream is live (the queue-advance race: Finished(old) reported while
+    /// Started(new) already fired), so the write still runs.
+    /// </summary>
+    [Fact]
+    public async Task ShuffleOn_HaltedReportButActiveFlag_StillShuffles_JF892()
+    {
+        using DeviceQueueManager mgr = new(_tempDir, _loggerFactory.CreateLogger<DeviceQueueManager>());
+        var song = TestHelpers.CreateSong("Race Song");
+        TestHelpers.SetupLibraryResolves(_libraryManager, song);
+        string deviceId = "shuffle-flag-jf892-device";
+        mgr.RecordLastPlayed(deviceId, song.Id.ToString(), DeviceQueueManager.LaunchRoute.Audio);
+        mgr.MarkAudioPlaybackStarted(deviceId);
+        List<Guid> guids = Enumerable.Range(0, 6).Select(_ => Guid.NewGuid()).ToList();
+        mgr.SetQueue(deviceId, guids.Select(g => g.ToString()).ToList(), currentIndex: 0);
+        SessionInfo session = TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
+
+        var handler = new ShuffleOnIntentHandler(_sessionManagerMock.Object, _config, _libraryManager.Object, _loggerFactory, mgr);
+        SkillResponse response = await handler.HandleAsync(
+            ShuffleRequest(IntentNames.AmazonShuffleOn),
+            TestHelpers.CreateContextWithToken(song.Id.ToString(), deviceId, "STOPPED"),
+            TestHelpers.CreateTestUser(), session, default);
+
+        Assert.Contains(
+            ResponseStrings.Get("ShuffleEnabled", "en-US"),
+            TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+        Assert.Equal("Shuffle", mgr.GetOrCreateQueue(deviceId).PlaybackOrder);
+    }
+
+    /// <summary>
+    /// The JF-892 boundary pin, held-item arm (the JF-868 mirror): a bare
+    /// STOPPED never proves idleness while the session still holds the item, so
+    /// the write still runs.
+    /// </summary>
+    [Fact]
+    public async Task ShuffleOn_HaltedReportSessionHoldsSong_StillShuffles_JF892()
+    {
+        using DeviceQueueManager mgr = new(_tempDir, _loggerFactory.CreateLogger<DeviceQueueManager>());
+        var song = TestHelpers.CreateSong("Held Song");
+        TestHelpers.SetupLibraryResolves(_libraryManager, song);
+        string deviceId = "shuffle-held-jf892-device";
+        mgr.RecordLastPlayed(deviceId, song.Id.ToString(), DeviceQueueManager.LaunchRoute.Audio);
+        List<Guid> guids = Enumerable.Range(0, 6).Select(_ => Guid.NewGuid()).ToList();
+        guids[0] = song.Id;
+        mgr.SetQueue(deviceId, guids.Select(g => g.ToString()).ToList(), currentIndex: 0);
+        SessionInfo session = TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
+        session.FullNowPlayingItem = song;
+
+        var handler = new ShuffleOnIntentHandler(_sessionManagerMock.Object, _config, _libraryManager.Object, _loggerFactory, mgr);
+        SkillResponse response = await handler.HandleAsync(
+            ShuffleRequest(IntentNames.AmazonShuffleOn),
+            TestHelpers.CreateContextWithToken(song.Id.ToString(), deviceId, "STOPPED"),
+            TestHelpers.CreateTestUser(), session, default);
+
+        Assert.Contains(
+            ResponseStrings.Get("ShuffleEnabled", "en-US"),
+            TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+        Assert.Equal("Shuffle", mgr.GetOrCreateQueue(deviceId).PlaybackOrder);
+    }
 }
