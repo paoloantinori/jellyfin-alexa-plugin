@@ -1423,6 +1423,18 @@ public sealed class PlaybackLaunchBuilder
     /// session dropped for inactivity, a session-lookup miss) keeps the
     /// no-media answer; the boundary pins live in
     /// PlaylistEditIntentHandlerTests (revisited unchanged by JF-789 step 5).
+    /// JF-893 BOUNDARY FACT (the halt-report question, decided per family):
+    /// this predicate's TOKEN leg deliberately still passes on stale audio
+    /// residue (an explicit halt report over the frozen token with no held
+    /// item and the JF-655 flag off; <see cref="IsStaleAudioPlaybackResidue"/>'s
+    /// doc owns the legs): evidence-of-existence here is deliberately weaker
+    /// than proof-of-liveness, because the three item-scoped families behind
+    /// this guard (FavoriteToggle, MediaInfo, PlaylistEdit) resolve "this"
+    /// from the frozen token right after playback halts, which is their
+    /// canonical just-stopped interaction. The loop/shuffle write family
+    /// instead treats the same shape as residue (JF-892, its own gate). The
+    /// per-family accept decisions and rationales live at the three guard
+    /// sites (JF-893); a fourth guarded family must decide, not inherit.
     /// </summary>
     /// <param name="context">The Alexa context (the AudioPlayer token leg).</param>
     /// <param name="session">The Jellyfin session (the held-item and DTO legs).</param>

@@ -8,7 +8,9 @@ using global::Alexa.NET.Request.Type;
 using global::Alexa.NET.Response;
 using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 using MediaBrowser.Controller.Dto;
@@ -121,6 +123,48 @@ public class MediaInfoIntentHandlerTests : PluginTestBase
 
         Assert.Contains("Super Bon Bon", text);
         Assert.Contains("Soul Coughing", text);
+    }
+
+    /// <summary>
+    /// The JF-893 documented-residual pin: on stale audio residue (every
+    /// halt-reported activity over the frozen token; the guard site comment
+    /// owns the rationale) the answer still reports the token's track. RED if
+    /// anyone wires IsStaleAudioPlaybackResidue into this guard without
+    /// re-deciding JF-893.
+    /// </summary>
+    [Theory]
+    [InlineData("STOPPED")]
+    [InlineData("FINISHED")]
+    [InlineData("IDLE")]
+    public async Task Handle_HaltReportedFrozenToken_StillReportsTrack_JF893(string playerActivity)
+    {
+        TestHelpers.SetServerAddress(_config, "https://test.example.com");
+        var song = TestHelpers.CreateSong("Frozen Token Song");
+        TestHelpers.SetupLibraryResolves(_libraryManagerMock, song);
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem>());
+        string deviceId = "mediainfo-stale-audio-jf893-device";
+        var queues = TestHelpers.CreateDeviceQueueManager("mediainfo-stale-audio-jf893");
+        queues.RecordLastPlayed(deviceId, song.Id.ToString(), DeviceQueueManager.LaunchRoute.Audio); // flag never armed
+        var handler = CreateHandler(queues);
+        var session = CreateSession();
+        Assert.Null(session.NowPlayingItem);
+        var context = TestHelpers.CreateContextWithToken(song.Id.ToString(), deviceId, playerActivity);
+
+        // Shape guard (JF-893 code review; the FavoriteToggle twin owns the
+        // full comment): the red-proof guarantee holds only while this shape
+        // classifies as residue.
+        Assert.True(PlaybackLaunchBuilder.IsStaleAudioPlaybackResidue(context, session, queues),
+            "the pin's shape must classify as stale audio residue");
+
+        var text = GetSpeechText(await handler.HandleAsync(
+            CreateMediaInfoRequest(),
+            context,
+            TestHelpers.CreateTestUser(), session, CancellationToken.None));
+
+        Assert.Contains("Frozen Token Song", text);
+        Assert.DoesNotContain(ResponseStrings.Get("NoMediaPlaying", "en-US"), text, StringComparison.Ordinal);
     }
 
     /// <summary>

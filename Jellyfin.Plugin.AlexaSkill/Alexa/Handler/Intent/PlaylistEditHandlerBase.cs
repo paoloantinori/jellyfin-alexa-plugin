@@ -165,6 +165,28 @@ public abstract class PlaylistEditHandlerBase : BaseHandler
     /// side: the tail is refused (allowLedgerTailAnswers false; the resolver's
     /// doc owns the contract), so an UNRESOLVABLE evidence shape also answers
     /// NoMediaPlaying.
+    /// JF-893 ACCEPTED RESIDUAL: on stale audio residue (the halt-reported
+    /// frozen token; HasCurrentPlaybackEvidence's doc owns the boundary fact,
+    /// IsStaleAudioPlaybackResidue's doc the legs) the guard's TOKEN leg
+    /// still passes, so add-current/remove-current on a halted device mutate
+    /// the persisted Jellyfin playlist around the last-played item. Tolerated
+    /// because the writes are item-scoped curation of a real, resolvable
+    /// library item, not playback state: neither leg touches the device queue
+    /// or any ordering invariant, both confirmations name the item so a
+    /// misfire is announced and reversible, and the just-stopped "add this"
+    /// is the canonical use of the token leg this family has resolved "this"
+    /// through since JF-325 (the CLAUDE.md resume rule the class doc names).
+    /// Server-semantics caveat (tag-verified, JF-893 code review): a
+    /// duplicate add is absorbed on Jellyfin 10.11.x but plain-appends on
+    /// 12.x, and a remove strips every matching entry on both lines, so
+    /// repeated idle misfires can stack copies on 12.x; accepted at this
+    /// task's LOW severity (each copy is named in its confirmation and one
+    /// remove clears them all). The remove twin has NO by-name alternate
+    /// intent (AddSongToPlaylist covers adds only), so wiring the JF-892
+    /// bound here would strand a just-stopped intentional remove with no
+    /// voice recovery (the JF-876/JF-882 alternate-route rule). Pinned by
+    /// AddCurrent_HaltReportedFrozenToken_StillAdds_JF893 and
+    /// RemoveCurrent_HaltReportedFrozenToken_StillRemoves_JF893.
     /// </summary>
     /// <param name="context">The Alexa request context.</param>
     /// <param name="session">The Jellyfin session.</param>

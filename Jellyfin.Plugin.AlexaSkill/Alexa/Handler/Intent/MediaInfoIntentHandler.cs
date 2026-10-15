@@ -94,6 +94,15 @@ public class MediaInfoIntentHandler : BaseHandler
         // ledger tail (recency-bounded since JF-789, but still answering a
         // within-window idle device) must not answer it; the predicate's doc
         // owns the evidence legs and the REJECTED JF-789 fold.
+        // JF-893 ACCEPTED RESIDUAL: on stale audio residue (the halt-reported
+        // frozen token; HasCurrentPlaybackEvidence's doc owns the boundary
+        // fact, IsStaleAudioPlaybackResidue's doc the legs) the guard's TOKEN
+        // leg still passes, so "what's playing" on a halted device reports
+        // the last-played track in present tense. Tolerated: the answer is
+        // read-only, the halt-reported token is the only handle for the
+        // just-finished "what was that song" ask, and the cold-device shape
+        // (no token at all) already answers NoMediaPlaying below. Pinned by
+        // Handle_HaltReportedFrozenToken_StillReportsTrack_JF893.
         if (!PlaybackLaunchBuilder.HasCurrentPlaybackEvidence(context, session))
         {
             Logger.LogInformation("MediaInfoIntent: no media currently playing");
