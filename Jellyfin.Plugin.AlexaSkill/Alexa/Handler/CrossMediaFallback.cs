@@ -941,6 +941,41 @@ public sealed class CrossMediaFallback
             return null;
         }
 
+        // JF-892 (the JF-776 B1 shadowing class, DB path): the tier-1 SearchTerm
+        // row list is unordered (GetItemList with no OrderBy, the JF-427 note),
+        // so a coincidental-containment candidate listed BEFORE the exact-named
+        // artist wins the single-best collapse's early exit at ContainmentScore
+        // and the exact artist is never scored; the JF-382 downgrade then demotes
+        // the coincidental winner and the no-offer callers answer the clean
+        // not-found with the named artist in the library (live shape: query
+        // 'goldbug stories' over rows [Bug, Goldbug Stories]). Exact-first
+        // ORDERING of the chain results before the collapse, the JF-743
+        // PlayAlbum exact-first precedent's shape: a pure stable reordering of
+        // the candidate list at THIS acceptance point, never a matcher change
+        // (the JF-408 doctrine: ScoreBestWithCodes stays the recall layer). An
+        // exact-named candidate is the strongest signal (JF-420.1), and once it
+        // is scored first the collapse returns it at 100 before any containment
+        // rival's early exit can fire; every downstream gate then judges it as
+        // it already judges any exact winner (the JF-382 downgrade cannot demote
+        // an exact name, ResolveContainmentTie bypasses on equality). Rivals
+        // stay in the list (reorder, not replace) so the tie gates'
+        // chain-results pool is unchanged for every non-exact winner.
+        BaseItem originalFirstRow = artists[0];
+        artists = artists
+            .OrderByDescending(a => Util.ArtistSearch.IsExactNameMatch(cleaned, Util.ArtistSearch.QueryNameFor(pinnedArtistIndex, a)))
+            .ToList();
+
+        // Information, not Debug: the reorder changed WHICH artist wins the
+        // collapse (the debug-logging policy's handler-branching-decision
+        // class), and the strict-accept line below cannot distinguish an exact
+        // row that was listed first from one this reorder rescued.
+        if (!ReferenceEquals(artists[0], originalFirstRow))
+        {
+            _logger.LogInformation(
+                "{Label}: exact-named artist '{ArtistName}' listed behind '{FirstRow}' for query='{Query}', reordered ahead before the single-best collapse (JF-892)",
+                logLabel, artists[0].Name, originalFirstRow.Name, cleaned);
+        }
+
         // JF-446 finding 2: accept through the PHONETIC matcher when the artist index is
         // available (the same lookup Search.FuzzyMatchPhonetic and ArtistSearch's own tiers use).
         // Threshold rationale: the strict bar stays Math.Max(normal, CrossMediaArtistThreshold)
