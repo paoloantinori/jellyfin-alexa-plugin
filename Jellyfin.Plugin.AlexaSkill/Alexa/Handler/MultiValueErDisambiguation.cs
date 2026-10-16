@@ -509,7 +509,7 @@ internal static class MultiValueErDisambiguation
     /// (<see cref="FuzzyMatcher.Score"/>); rank-1 must beat the best OTHER
     /// resolved artist (its own split-rivals included, which is why a variant
     /// canonical that resolves two near-equal artists still asks) by
-    /// <see cref="PlayArtistSongsIntentHandler.ContainmentVsFullNameMargin"/>,
+    /// <see cref="ArtistFairComparison.ContainmentVsFullNameMargin"/>,
     /// the JF-420 constant referenced, not re-invented. The comparison fires
     /// AT the bar (&gt;=), not strictly above it: the live shape sits exactly
     /// ON the bar under both renditions ("P!nk floyd": Pink Floyd 90 vs King
@@ -605,7 +605,7 @@ internal static class MultiValueErDisambiguation
         // are deliberately NOT co-calibrated (fair-scaling the rival here would
         // auto-play P!nk for the pinned JF-684 "pink" ask); recalibrating
         // either site must reason about its own scale, not assume the other.
-        if (rank1Score - bestOther < PlayArtistSongsIntentHandler.ContainmentVsFullNameMargin)
+        if (rank1Score - bestOther < ArtistFairComparison.ContainmentVsFullNameMargin)
         {
             return null;
         }

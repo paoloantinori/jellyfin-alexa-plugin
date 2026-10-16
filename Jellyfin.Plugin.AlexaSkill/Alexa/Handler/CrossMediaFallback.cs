@@ -45,7 +45,11 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// JF-408-class decision, not cleanup). JF-865's video leg (TryVideoFallbackAsync,
 /// the maintainer's JF-844 decision) is such a deliberate extension: a NEW
 /// acceptance surface reusing the existing judgment pieces (the word guard, the
-/// JF-412 walk, the JF-363 modes) rather than a new matcher semantics.
+/// JF-412 walk, the JF-363 modes) rather than a new matcher semantics. JF-894's
+/// containment-tie arbitration (ResolveContainmentTie) is the same class of
+/// deliberate extension: a live wrong-artist auto-play (corr 72eca45c) fixed by
+/// reusing the JF-420 fair-comparison core (ArtistFairComparison), not by new
+/// matcher semantics.
 /// NAMESPACE PLACEMENT, deliberate (divergence from the Util home of
 /// SearchService/PlaybackLaunchBuilder): BuildCrossMediaArtistOfferAsk is wired
 /// into DisambiguationHelper's session-attribute vocabulary, which lives in THIS
@@ -952,6 +956,12 @@ public sealed class CrossMediaFallback
         BaseItem? bestItem = best.HasValue ? best.Value.Item : null;
         int bestScore = best.HasValue ? best.Value.Score : 0;
 
+        // JF-894: only the STRICT-bar winner enters the containment-tie arbitration
+        // below (the JF-363 suggestion band and the word-coverage valve carry their
+        // own acceptance semantics; a raised user threshold can leave a band-scored
+        // winner that is containment-band by score but sub-strict by the user's bar).
+        bool strictAccepted = false;
+
         if (bestItem != null && bestScore >= threshold)
         {
             // JF-652: the kana-origin auto-play bar. A strict-bar score that carries
@@ -990,6 +1000,7 @@ public sealed class CrossMediaFallback
             _logger.LogInformation(
                 "{Label}: artist fallback found '{ArtistName}' with score={Score} for query='{Query}' (threshold={Threshold})",
                 logLabel, bestItem.Name, bestScore, cleaned, threshold);
+            strictAccepted = true;
         }
         else if (kana && bestItem != null)
         {
@@ -1010,6 +1021,11 @@ public sealed class CrossMediaFallback
             // opt-in). The offer carries the RAW slot text so the decline speaks the
             // user's own words. Single candidate only (same design as the copies this
             // replaced: disambiguating among cross-media guesses is wrong UX).
+            // JF-894 SCOPE NOTE: the single-candidate rule governs THIS sub-strict
+            // band only; the strict-bar containment-tie arbitration below the JF-382
+            // check deliberately asks among TIED candidates (two real artists scoring
+            // alike is not a guess) and ignores the suggestion modes, the JF-652 kana
+            // tie ask's shape.
             // PRECEDENCE (review finding, pinned by CrossMediaTypeFallbackTests
             // .JF363_BandWinsOverWordCoverageValve_Confirm): the band is checked
             // BEFORE the word-coverage valve so it wins for the callers that enabled
@@ -1094,6 +1110,35 @@ public sealed class CrossMediaFallback
                 "{Label}: artist fallback match '{ArtistName}' for query='{Query}' is coincidental-containment with no offer machinery, treating as a miss (JF-382)",
                 logLabel, bestItem.Name, cleaned);
             return null;
+        }
+
+        // JF-894: the Latin containment-tie arbitration (the kana class has its own
+        // JF-652 block in the strict branch above). It runs AFTER the JF-382
+        // coincidental-containment downgrade, the PlayArtistSongs family order (its
+        // JF-377 entry gate outranks its JF-420 gate): a coincidental winner keeps
+        // its offer ask / clean miss, and the rival scan below refuses
+        // coincidental-shaped rivals so an auto-selected rival can never be one the
+        // JF-382 rule would have demoted. Returns the multi-artist ask when the
+        // strict winner is only one of several tied artists, replaces an arbitrary
+        // first-90 pick with a clearly dominant rival, or leaves a unique match to
+        // play below. Deliberately NOT gated on the JF-363 suggestion modes: an ask
+        // that names the tied candidates is the no-silent-substitution outcome the
+        // JF-652 kana tie ask (this method's own sibling) already fires regardless
+        // of the mode.
+        if (!kana && strictAccepted)
+        {
+            ContainmentTieVerdict? containmentVerdict = ResolveContainmentTie(
+                bestItem!, bestScore, artists, cleaned, scopedPool, pinnedArtistIndex, libraryManager, user, locale, logLabel, context);
+            if (containmentVerdict?.Ask is { } containmentAsk)
+            {
+                return containmentAsk;
+            }
+
+            if (containmentVerdict?.AutoSelected is { } dominantRival)
+            {
+                bestItem = dominantRival;
+                bestScore = containmentVerdict.Value.AutoSelectedScore;
+            }
         }
 
         return await BuildArtistSongsResponseAsync(
@@ -1370,12 +1415,8 @@ public sealed class CrossMediaFallback
     /// AskMultipleArtists, the PlayArtistSongs JF-420.2 shape) is fired instead of a
     /// wrong auto-play; null means a clear margin and playback proceeds. Pool
     /// sourcing (this method's only remaining job next to the ask) needs the FULL
-    /// artist pool because the search chain returns a single best: the caller's
-    /// preloaded pool (JF-715, the same fetch the search chain consumed) comes
-    /// first, then the pinned index's own scoped fetch (the cold shape re-fetching
-    /// through the view), library-scoped either way so an excluded-library name is
-    /// never spoken (the JF-457 contract). Without an index the chain result list
-    /// is the only pool and no rival can be found there (single-best shape).
+    /// artist pool because the search chain returns a single best:
+    /// <see cref="ResolveRivalPool"/> (the JF-457 contract lives there).
     /// </summary>
     private SkillResponse? ResolveKanaOriginTie(
         BaseItem bestItem,
@@ -1391,9 +1432,7 @@ public sealed class CrossMediaFallback
         string logLabel,
         Context? context = null)
     {
-        IReadOnlyList<BaseItem> pool = preloadedPool
-            ?? pinnedIndex?.GetArtists(LibraryFilter.ResolveForUser(user, libraryManager, _logger))
-            ?? chainResults;
+        IReadOnlyList<BaseItem> pool = ResolveRivalPool(preloadedPool, pinnedIndex, chainResults, user, libraryManager);
         var pair = Util.ArtistSearch.FindNearTiedRunnerUp(cleanedQuery, bestItem, bestScore, pool, pinnedIndex, normalThreshold);
         if (pair == null)
         {
@@ -1409,6 +1448,228 @@ public sealed class CrossMediaFallback
             new() { Id = pair.Value.Second.Id.ToString(), Name = pair.Value.Second.Name }
         };
         return DisambiguationHelper.AskMultipleArtists(matchInfos, locale, context);
+    }
+
+    /// <summary>
+    /// The ONE rival-pool resolution for the two strict-acceptance tie checks
+    /// (ResolveKanaOriginTie JF-652, ResolveContainmentTie JF-894): the caller's
+    /// preloaded pool (JF-715, the same fetch the search chain consumed) first,
+    /// then the pinned index's own scoped fetch (the cold shape re-fetching through
+    /// the view), then the chain result list, library-scoped either way so an
+    /// excluded-library name is never spoken (the JF-457 contract). Without an
+    /// index the chain result list is the only pool.
+    /// </summary>
+    private IReadOnlyList<BaseItem> ResolveRivalPool(
+        IReadOnlyList<BaseItem>? preloadedPool,
+        IArtistIndex? pinnedIndex,
+        IReadOnlyList<BaseItem> chainResults,
+        Entities.User user,
+        ILibraryManager libraryManager)
+        => preloadedPool
+            ?? pinnedIndex?.GetArtists(LibraryFilter.ResolveForUser(user, libraryManager, _logger))
+            ?? chainResults;
+
+    /// <summary>
+    /// JF-894 verdict of the containment-tie arbitration: the multi-artist ask when
+    /// tied candidates must be user-arbitrated, or the dominant rival that clearly
+    /// beat the chain's winner (both null on a unique or redundant match: the winner
+    /// auto-plays unchanged).
+    /// </summary>
+    private readonly record struct ContainmentTieVerdict(SkillResponse? Ask, BaseItem? AutoSelected, int AutoSelectedScore);
+
+    /// <summary>
+    /// JF-894: the Latin-script containment-tie arbitration at the cross-media strict
+    /// acceptance point, the fair-comparison sibling of <see cref="ResolveKanaOriginTie"/>
+    /// (which owns the kana-origin ties). Live shape (corr 72eca45c, 2026-10-16): the
+    /// NLU degraded 'musica si nora jones' to mood='jones'; the strict bar accepted
+    /// the FIRST 90-scoring containment tie ('Danko Jones') and auto-played it while
+    /// 'Norah Jones' scored the same 90, so the pick was arbitrary
+    /// (<see cref="Util.ArtistSearch.ScoreBestWithCodes"/> early-exits at the first
+    /// <see cref="FuzzyMatcher.ContainmentScore"/> crossing; equal-score ties pick by
+    /// candidate order). This gate routes that decision through the JF-420 discipline
+    /// (<see cref="ArtistFairComparison"/>): every pool rival is scored (no early
+    /// exit, through the ONE shared per-candidate phonetic scorer so Double Metaphone
+    /// floor ties are visible) and fair-scaled by the bidirectional length fraction;
+    /// a rival that clearly dominates the winner auto-selects (the 'P!nk floyd' leg),
+    /// and any other qualifying rival within the JF-420 margin fires the JF-420.2
+    /// yes/no multi-artist ask instead of a silent arbitrary pick. Bypasses:
+    /// exact-name equality (JF-420.1: an exact request auto-plays), a unique match
+    /// (no qualifying rival keeps the existing FoundArtistInstead auto-play), and a
+    /// winner that beats every rival by more than the margin (the mirror dominance
+    /// leg). Rival candidates are deduplicated by NAME (the JF-416 precedent: two
+    /// library rows of one artist are one choice) and refused when
+    /// coincidental-containment-shaped (the JF-382 rule, so an auto-selected rival
+    /// always survives the downgrade the winner itself faced upstream). The gate runs
+    /// AFTER the caller's JF-382 downgrade, the PlayArtistSongs family order, and is
+    /// deliberately NOT gated on the JF-363 suggestion modes (the JF-652 kana sibling
+    /// asks regardless of the mode; an ask that names the tied candidates is the
+    /// no-silent-substitution outcome). Winners below the containment band that
+    /// are not string-containments never enter (a sub-90 strict winner is a plain
+    /// near-match with no tie evidence; the kana class is JF-652's).
+    /// <para>
+    /// The ask list keeps EVERY tied rival within the JF-420 margin of the winner's
+    /// fair score, ordered fair-DESCENDING so "yes" plays the strongest candidate
+    /// (the <see cref="Util.ArtistSearch.FindNearTiedRunnerUp"/> ordering precedent);
+    /// the spoken list is capped by <see cref="DisambiguationHelper.MultipleArtistsSpeakCap"/>
+    /// while the cycling state keeps them all reachable.
+    /// </para>
+    /// </summary>
+    /// <param name="winner">The strict-bar winner the chain picked.</param>
+    /// <param name="winnerScore">The winner's acceptance score.</param>
+    /// <param name="chainResults">The search chain's result list (the pool fallback).</param>
+    /// <param name="cleanedQuery">The stop-word-stripped, romanized query.</param>
+    /// <param name="preloadedPool">The caller's materialized scoped pool (JF-715).</param>
+    /// <param name="pinnedIndex">The pinned index view (query-side names).</param>
+    /// <param name="libraryManager">Library manager for the scoped pool fallback.</param>
+    /// <param name="user">The plugin user (library scope resolution).</param>
+    /// <param name="locale">The request locale (ask speech).</param>
+    /// <param name="logLabel">Log label.</param>
+    /// <param name="context">The Alexa context (the tappable disambiguation list).</param>
+    /// <returns>The verdict, or null when the gate does not apply.</returns>
+    private ContainmentTieVerdict? ResolveContainmentTie(
+        BaseItem winner,
+        int winnerScore,
+        IReadOnlyList<BaseItem> chainResults,
+        string cleanedQuery,
+        IReadOnlyList<BaseItem>? preloadedPool,
+        IArtistIndex? pinnedIndex,
+        ILibraryManager libraryManager,
+        Entities.User user,
+        string locale,
+        string logLabel,
+        Context? context = null)
+    {
+        string winnerReading = Util.ArtistSearch.QueryNameFor(pinnedIndex, winner);
+
+        // JF-420.1: exact-name equality bypasses the arbitration entirely; an exact
+        // request is the strongest possible signal and must auto-play.
+        if (Util.ArtistSearch.IsExactNameMatch(cleanedQuery, winnerReading))
+        {
+            return null;
+        }
+
+        // The containment shape this gate arbitrates: the query sits inside the
+        // winner's name ('jones' in 'Danko Jones', the live shape) or the score rides
+        // the containment band (the exemption's fixed score and the phonetic floor
+        // just above it).
+        bool containmentShaped =
+            winnerReading.Contains(cleanedQuery, StringComparison.OrdinalIgnoreCase)
+            || winnerScore >= FuzzyMatcher.ContainmentScore;
+        if (!containmentShaped)
+        {
+            return null;
+        }
+
+        // Pool sourcing (the ResolveKanaOriginTie contract, one home):
+        // <see cref="ResolveRivalPool"/>.
+        IReadOnlyList<BaseItem> pool = ResolveRivalPool(preloadedPool, pinnedIndex, chainResults, user, libraryManager);
+
+        double winnerFair = ArtistFairComparison.FairComparisonScore(winnerReading, cleanedQuery, winnerScore);
+
+        // The redundant-shorter-form skip's first conjunct is loop-invariant (the
+        // winner's words versus the query's); hoisting it skips the per-candidate
+        // subset recomputation in the common case where it is false.
+        bool winnerWordsInQuery = ArtistFairComparison.IsWordSubset(winnerReading, cleanedQuery);
+
+        // JF-420.3: score EVERY rival (the best-match early exit at the first
+        // ContainmentScore crossing is exactly the arbitrariness this gate removes)
+        // and rank by FAIR score. The scoring goes through the ONE shared
+        // per-candidate phonetic scorer (ScoreBestWithCodes over a single-element
+        // window, the like-for-like JF-755 doctrine: the winner was scored by the
+        // phonetic overload, so a rival tied through the Double Metaphone floor
+        // ('Koop'/'Koup', both code KP, floored at 91) must stay visible instead of
+        // plain-scoring below the bar and vanishing). Rivals are also deduplicated
+        // by NAME (case-insensitive, the JF-416 song-list precedent): two library
+        // rows of the same artist, and a rival named exactly like the winner, are
+        // indistinguishable choices and must not be spoken twice; and a
+        // coincidental-containment-shaped rival (the JF-382 rule) is refused so an
+        // auto-selected rival always survives the downgrade the winner itself faced.
+        List<(BaseItem Item, int Raw, double Fair)> rivals = new();
+        HashSet<Guid> seen = new() { winner.Id };
+        HashSet<string> seenNames = new(StringComparer.OrdinalIgnoreCase) { winner.Name ?? string.Empty };
+        BaseItem[] single = new BaseItem[1];
+        foreach (BaseItem candidate in pool)
+        {
+            if (!seen.Add(candidate.Id))
+            {
+                continue;
+            }
+
+            string reading = Util.ArtistSearch.QueryNameFor(pinnedIndex, candidate);
+            if (!seenNames.Add(candidate.Name ?? string.Empty))
+            {
+                continue;
+            }
+
+            if (winnerWordsInQuery && ArtistFairComparison.IsRedundantShorterForm(winnerReading, reading, cleanedQuery))
+            {
+                continue;
+            }
+
+            if (Util.ArtistSearch.IsCoincidentalContainmentMatch(cleanedQuery, reading, locale))
+            {
+                continue;
+            }
+
+            single[0] = candidate;
+            int raw = Util.ArtistSearch.ScoreBestWithCodes(cleanedQuery, single, pinnedIndex)?.Score ?? 0;
+            if (raw < ArtistFairComparison.AlternativeFullNameThreshold)
+            {
+                continue;
+            }
+
+            rivals.Add((candidate, raw, ArtistFairComparison.FairComparisonScore(reading, cleanedQuery, raw)));
+        }
+
+        if (rivals.Count == 0)
+        {
+            return null;
+        }
+
+        // OrderByDescending is stable, so equal-fair ties keep pool order (the same
+        // determinism-by-source-order the JF-427 notes document).
+        var ranked = rivals.OrderByDescending(r => r.Fair).ToList();
+        (BaseItem bestRivalItem, int bestRivalRaw, double bestRivalFair) = ranked[0];
+
+        if (bestRivalFair >= ArtistFairComparison.AlternativeFullNameThreshold
+            && bestRivalFair - winnerFair > ArtistFairComparison.ContainmentVsFullNameMargin)
+        {
+            _logger.LogInformation(
+                "{Label}: containment tie winner '{Winner}' (fair {WinnerFair:F0}) clearly beaten by '{Rival}' (fair {RivalFair:F0}) for query='{Query}', auto-selecting (JF-894/JF-420)",
+                logLabel, winner.Name, winnerFair, bestRivalItem.Name, bestRivalFair, cleanedQuery);
+            return new ContainmentTieVerdict(null, bestRivalItem, bestRivalRaw);
+        }
+
+        // The mirror leg: the winner beats every rival by more than the margin, the
+        // same clear-margin evidence the auto-select leg uses in the winner's favor.
+        // No artist sits within the JF-420 margin of the winner, so the task's tie
+        // condition is not met and the winner plays (this also keeps the ask list
+        // below from ever degenerating to a single entry).
+        if (winnerFair - bestRivalFair > ArtistFairComparison.ContainmentVsFullNameMargin)
+        {
+            _logger.LogDebug(
+                "{Label}: containment match '{Winner}' (fair {WinnerFair:F0}) clearly beats every rival (best '{Rival}' fair {RivalFair:F0}) for query='{Query}', keeping the auto-play (JF-894)",
+                logLabel, winner.Name, winnerFair, bestRivalItem.Name, bestRivalFair, cleanedQuery);
+            return null;
+        }
+
+        _logger.LogInformation(
+            "{Label}: containment tie for query='{Query}': winner '{Winner}' (fair {WinnerFair:F0}) vs {RivalCount} tied rival(s), best '{Rival}' (fair {RivalFair:F0}), disambiguating (JF-894/JF-420)",
+            logLabel, cleanedQuery, winner.Name, winnerFair, ranked.Count, bestRivalItem.Name, bestRivalFair);
+
+        // JF-420.2 ask: the winner plus every tied rival within the margin of the
+        // winner's fair score (a rival far below it is not part of the tie), ordered
+        // fair-descending so "yes" plays the strongest candidate.
+        List<(BaseItem Item, double Fair)> askRanked = ranked
+            .Where(r => winnerFair - r.Fair <= ArtistFairComparison.ContainmentVsFullNameMargin)
+            .Select(r => (r.Item, r.Fair))
+            .ToList();
+        askRanked.Add((winner, winnerFair));
+        List<DisambiguationHelper.MatchInfo> askList = askRanked
+            .OrderByDescending(t => t.Fair)
+            .Select(t => new DisambiguationHelper.MatchInfo { Id = t.Item.Id.ToString(), Name = t.Item.Name })
+            .ToList();
+        return new ContainmentTieVerdict(DisambiguationHelper.AskMultipleArtists(askList, locale, context), null, 0);
     }
 
     /// <summary>
