@@ -4,9 +4,10 @@ title: >-
   Rejected-climb fresh launches of Audio-typed remapped chapters still classify
   VideoAppAudio mid-play: the launch-verdict mint covers only accepted-climb
   arms
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-16 10:39'
+updated_date: '2026-10-16 14:22'
 labels: []
 dependencies: []
 priority: low
@@ -31,3 +32,15 @@ Residual from the JF-894 round (worker handback, 2026-10-16): the REJECTED-climb
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+MAINTAINER DECISION 2026-10-16 ~15:3x: option (a), record the book-intent route at the rejected-climb arm. Dispatched to the jf898 worker lane (worktree /tmp/wt-jf898). Device retests for the other rows deferred: the maintainer is out of the house.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+EXECUTED on branch jf898 (79557aa3), merged to main 2f57ac1f, pushed, DEPLOYED to minix via the LAN IP (the .lan resolver dropped mid-session; 192.168.20.201 verified by hostname), active-DLL md5-verified, config survived (1 user), probes green (play pipeline, jones ask byte-identical). THE CHANGE (maintainer decision option a, 2026-10-16): BuildVideoAppAudioResponse's single-item else arm (the rejected-climb fresh-launch serve, behind the isAudioBook || bookChapterLaunch discriminator) now mints LaunchRoute.VideoAppAudiobook via the singleItemBookServe = typeAgnosticClimb flag when bookFolder is null but the arm serves a book intent; the ALBUM-CONCAT arm keeps bare VideoApp (the flag excludes it; pinned by the code-review round's bare-route pin, the AudioBook-empty-ParentId corner). ClassifyLedgerItemKind untouched (the mint flows through the JF-894 route arm). The rejected arm's tracker-clear and flat-resume degradation untouched (by-name runs of the three JF-794/JF-798 pins passed; BuildAudiobookResumeResponse unchanged). Red proof both TFMs (the mint pin: VideoApp vs VideoAppAudiobook; the flow pin: music line over the book). Gates (in 79557aa3): 0-warning build both TFMs, 6036/6036 both TFMs, /simplify 4 agents (fixture hoist + stale doc line applied), code-review high 3 findings all applied. CLAUDE.md audiobook Resume section gained the JF-898 sentence (precision-fixed per review: the mint is gated on the discriminator, not the arm). Residuals: pre-upgrade entries self-heal on next launch (accepted no-migration stance); the RESUME path's rejected arm still records route Audio through the flat chokepoint (out of the fresh-launch decision's scope, noted). gate-exempt: gates ran in the dispatched worker's transcript; commit 79557aa3 carries the full Gates record.
+<!-- SECTION:FINAL_SUMMARY:END -->
