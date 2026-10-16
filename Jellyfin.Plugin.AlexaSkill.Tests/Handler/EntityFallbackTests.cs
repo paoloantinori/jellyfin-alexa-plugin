@@ -568,32 +568,28 @@ public class EntityFallbackTests : PluginTestBase
         // Ordering pin (the PlayArtistSongs family order): the JF-382
         // coincidental-containment downgrade outranks the tie arbitration. For
         // 'goldbug stories' the chain's first-90 winner 'Bug' is a coincidental
-        // containment; even though the exact-named 'Goldbug Stories' sits beside
-        // it in the results (a rival the gate would auto-select if it ran
-        // first), the JF-382 rule speaks: no offer machinery is wired on the
-        // mood path, so the clean NotFoundMood answers, byte-identical to
-        // pre-JF-894.
+        // containment; even though a plausible full-name rival ('Goldbug
+        // Story', fair ~80 vs the winner's fair 18) sits beside it in the
+        // results (a rival the gate would put to the user if it ran first),
+        // the JF-382 rule speaks: no offer machinery is wired on the mood
+        // path, so the clean NotFoundMood answers, byte-identical to
+        // pre-JF-894. JF-892 note: this pin originally carried the EXACT-named
+        // 'Goldbug Stories' row; exact-first ordering now hands that row the
+        // win before the downgrade can fire (its own test,
+        // JF892_ExactArtistShadowedByEarlierCoincidentalDbRow_PlaysExact), so
+        // the demoted corner is fixtured here with a NON-exact rival to keep
+        // pinning the downgrade-outranks-tie-gate order. KNOWN RESIDUAL, pinned
+        // green deliberately: JF-892 rescues only the EXACT subclass; a
+        // coincidental winner shadowing a better non-exact rival still lands
+        // the clean miss (the JF-776 refuse-and-continue walk would be the
+        // follow-up shape, unadopted).
         var bug = new MusicArtist { Name = "Bug", Id = Guid.NewGuid() };
-        var goldbug = new MusicArtist { Name = "Goldbug Stories", Id = Guid.NewGuid() };
+        var goldbug = new MusicArtist { Name = "Goldbug Story", Id = Guid.NewGuid() };
 
         _fx.SetupUserMock();
-        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
-            .Returns<InternalItemsQuery>(q =>
-            {
-                if (q.Genres != null && q.Genres.Count > 0)
-                {
-                    return new List<BaseItem>();
-                }
-
-                // Artist search via SearchTerm (the DB path): both rows, Bug
-                // first so the matcher's early exit makes it the winner.
-                if (q.SearchTerm != null && q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicArtist))
-                {
-                    return new List<BaseItem> { bug, goldbug };
-                }
-
-                return new List<BaseItem>();
-            });
+        // Songs never fetched (the downgrade answers before playback), so the
+        // never-matching songs id keeps the songs leg dead.
+        SetupGenreMissWithDbArtistRows(new BaseItem[] { bug, goldbug }, Guid.Empty, Array.Empty<Audio>());
 
         var handler = CreateHandler();
         var request = CreateMoodIntent("goldbug stories");
@@ -603,7 +599,108 @@ public class EntityFallbackTests : PluginTestBase
         SkillResponse response = await handler.HandleAsync(request, context, _fx.CreateUser(), session, CancellationToken.None);
 
         // The clean mood not-found (session-ending tell), not the multi-artist
-        // ask and not a silent 'Goldbug Stories' auto-select.
+        // ask and not a silent 'Goldbug Story' auto-select.
+        Assert.True(response.Response?.ShouldEndSession);
+        Assert.False(HasAudioPlayerDirective(response));
+        Assert.True(session.NowPlayingQueue == null || session.NowPlayingQueue.Count == 0);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("goldbug stories", speech, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // ====================================================================
+    // JF-892: the DB tier-1 SearchTerm rows are unordered, so a coincidental
+    // containment candidate listed before the exact-named artist could win
+    // the fallback's single-best collapse (the JF-776 B1 shadowing class).
+    // ====================================================================
+
+    /// <summary>
+    /// Configures the library mock for the JF-892 DB-path shape: every genre
+    /// search misses (triggering the entity fallback), the artist SearchTerm
+    /// query returns the given rows in the given order, and the artist-songs
+    /// fetch answers ONLY for <paramref name="songsArtistId"/> (a wrong pick
+    /// lands the NoSongsForArtist tell instead of playback, so the assertion
+    /// proves WHICH artist the gate selected).
+    /// </summary>
+    private void SetupGenreMissWithDbArtistRows(BaseItem[] artistRows, Guid songsArtistId, Audio[] songs)
+    {
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q =>
+            {
+                if (q.Genres != null && q.Genres.Count > 0)
+                {
+                    return new List<BaseItem>();
+                }
+
+                // Artist search via SearchTerm (the DB path), rows in the given
+                // order (GetItemList is unordered in production; the order is
+                // the load-bearing part of the shadow shape).
+                if (q.SearchTerm != null && q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicArtist))
+                {
+                    return new List<BaseItem>(artistRows);
+                }
+
+                if (q.ArtistIds != null && q.ArtistIds.Length > 0 && q.ArtistIds[0].Equals(songsArtistId))
+                {
+                    return new List<BaseItem>(songs);
+                }
+
+                return new List<BaseItem>();
+            });
+    }
+
+    [Fact]
+    public async Task JF892_ExactArtistShadowedByEarlierCoincidentalDbRow_PlaysExact()
+    {
+        // THE red test: rows [Bug, Goldbug Stories] for query 'goldbug
+        // stories'. The coincidental containment candidate is listed first, so
+        // the collapse's early exit fired on 'Bug' at the containment score
+        // and the exact-named artist was never scored; the JF-382 downgrade
+        // then demoted 'Bug' and the mood path answered the clean not-found.
+        // With exact-first ordering the exact artist is scored first (100) and
+        // plays: the JF-382 downgrade cannot demote an exact name and the
+        // JF-894 tie gate bypasses on exact-name equality (JF-420.1).
+        var bug = new MusicArtist { Name = "Bug", Id = Guid.NewGuid() };
+        var goldbug = new MusicArtist { Name = "Goldbug Stories", Id = Guid.NewGuid() };
+        var song = new Audio { Name = "The Goldbug Song", Id = Guid.NewGuid() };
+
+        _fx.SetupUserMock();
+        SetupGenreMissWithDbArtistRows(new BaseItem[] { bug, goldbug }, goldbug.Id, new[] { song });
+
+        var handler = CreateHandler();
+        var request = CreateMoodIntent("goldbug stories");
+        var context = _fx.CreateContext();
+        var session = _fx.CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, _fx.CreateUser(), session, CancellationToken.None);
+
+        Assert.True(HasAudioPlayerDirective(response));
+        Assert.NotNull(session.NowPlayingQueue);
+        Assert.Single(session.NowPlayingQueue);
+        Assert.Equal(song.Id, session.NowPlayingQueue![0].Id);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("Goldbug Stories", speech);
+    }
+
+    [Fact]
+    public async Task JF892_CoincidentalOnlyNoExactArtist_StillCleanNotFound()
+    {
+        // The no-false-positive side: the exact-named artist is NOT in the
+        // library (only the coincidental 'Bug' row), so the JF-382 downgrade
+        // keeps demoting the winner and the no-offer mood path answers the
+        // clean not-found, exactly as before JF-892.
+        var bug = new MusicArtist { Name = "Bug", Id = Guid.NewGuid() };
+        var song = new Audio { Name = "Bug Sound", Id = Guid.NewGuid() };
+
+        _fx.SetupUserMock();
+        SetupGenreMissWithDbArtistRows(new BaseItem[] { bug }, bug.Id, new[] { song });
+
+        var handler = CreateHandler();
+        var request = CreateMoodIntent("goldbug stories");
+        var context = _fx.CreateContext();
+        var session = _fx.CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, _fx.CreateUser(), session, CancellationToken.None);
+
         Assert.True(response.Response?.ShouldEndSession);
         Assert.False(HasAudioPlayerDirective(response));
         Assert.True(session.NowPlayingQueue == null || session.NowPlayingQueue.Count == 0);
