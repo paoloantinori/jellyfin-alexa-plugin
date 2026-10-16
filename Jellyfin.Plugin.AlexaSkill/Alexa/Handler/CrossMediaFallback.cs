@@ -1130,9 +1130,67 @@ public sealed class CrossMediaFallback
         // gates (the raw kana name against the romanized query is script-blind, so
         // the coincidental-containment downgrade would never fire for a kana-named
         // artist reached through its romaji key).
-        if (Util.ArtistSearch.IsCoincidentalContainmentMatch(
-                cleaned, Util.ArtistSearch.QueryNameFor(pinnedArtistIndex, bestItem!), locale))
+        string winnerReading = Util.ArtistSearch.QueryNameFor(pinnedArtistIndex, bestItem!);
+        if (Util.ArtistSearch.IsCoincidentalContainmentMatch(cleaned, winnerReading, locale))
         {
+            // JF-896 (the JF-776 refuse-and-continue walk, adopted): the JF-892
+            // exact-first reorder rescues only the EXACT subclass, so a coincidental
+            // winner can still be shadowing a plausible NON-exact rival sitting in
+            // the rival pool (live-shape arithmetic: rival raw ~92 / fair ~80 vs the
+            // winner's fair ~18, yet the pre-JF-896 landing buried it under the clean
+            // not-found). Before the downgrade lands, scan the pool through the ONE
+            // shared rival scanner (ResolveContainmentTie's, extracted verbatim: it
+            // refuses coincidental-shaped rivals, so the ask can never offer the very
+            // class being demoted) and, when a qualified rival exists, land the
+            // JF-420.2 multi-artist ask naming the rival(s) and the demoted winner.
+            // NEVER a silent auto-play of the rival (the JF-377 lesson:
+            // string-indistinguishable bug-vs-carrier-bleed cases cannot be
+            // auto-resolved; the ask is the only no-regression landing) and never the
+            // clean not-found that buries it. Deliberately NOT gated on the JF-363
+            // machinery or suggestion modes, the JF-894 sibling's shape: an ask that
+            // names the candidates is the no-silent-substitution outcome regardless
+            // of the caller's wiring. Kana queries keep the JF-382 landing below (the
+            // same !kana scope the JF-894 arbitration carries). An EXACT rival is not
+            // this walk's rescue class: the JF-892 reorder already promotes an
+            // exact-named chain candidate to the win upstream, so an exact name
+            // reaching the downgrade is a pool-only miss handled by today's landing
+            // (pinned byte-identical, JF892_CoincidentalOnlyNoExactArtist). A
+            // coincidental winner with NO qualified rival keeps the downgrade's own
+            // landing below, byte-identical (the no-false-positive pin,
+            // JF896_CoincidentalWinner_RivalUnqualified_StillCleanNotFound).
+            if (!kana)
+            {
+                IReadOnlyList<BaseItem> pool = ResolveRivalPool(scopedPool, pinnedArtistIndex, artists, user, libraryManager);
+                List<(BaseItem Item, string Reading, int Raw, double Fair)> qualifiedRivals = ScanQualifiedRivals(
+                        bestItem!, winnerReading,
+                        ArtistFairComparison.IsWordSubset(winnerReading, cleaned),
+                        cleaned, locale, pool, pinnedArtistIndex)
+                    .Where(r => !Util.ArtistSearch.IsExactNameMatch(cleaned, r.Reading))
+                    .ToList();
+                if (qualifiedRivals.Count > 0)
+                {
+                    var bestRival = qualifiedRivals.MaxBy(r => r.Fair);
+                    _logger.LogInformation(
+                        "{Label}: coincidental-containment winner '{ArtistName}' for query='{Query}' is shadowing {RivalCount} qualified rival(s), best '{RivalName}', asking instead of the clean miss (JF-896)",
+                        logLabel, bestItem!.Name, cleaned, qualifiedRivals.Count, bestRival.Item.Name);
+
+                    // NO JF-420 margin filter, deliberately (the JF-894 sibling's ask
+                    // filters rivals to the winner's fair margin): the winner here is
+                    // the coincidental match with fair ~18, so a margin filter would
+                    // drop every real rival and the winner from its OWN ask. The winner
+                    // enters at its FAIR score (the review catch: the raw bestScore is
+                    // the containment floor ~90 and would out-rank every rival in the
+                    // fair-descending sort, headlining the ask with the very match the
+                    // walk demotes), the JF-894 sibling's winnerFair shape.
+                    List<(BaseItem Item, double Fair)> askRanked = qualifiedRivals
+                        .OrderByDescending(r => r.Fair)
+                        .Select(r => (r.Item, r.Fair))
+                        .ToList();
+                    askRanked.Add((bestItem!, ArtistFairComparison.FairComparisonScore(winnerReading, cleaned, bestScore)));
+                    return AskRankedArtists(askRanked, locale, context);
+                }
+            }
+
             if (notFoundMediaType != null && GetCrossMediaArtistSuggestion(user) != CrossMediaArtistSuggestion.Off)
             {
                 _logger.LogInformation(
@@ -1606,55 +1664,8 @@ public sealed class CrossMediaFallback
         // subset recomputation in the common case where it is false.
         bool winnerWordsInQuery = ArtistFairComparison.IsWordSubset(winnerReading, cleanedQuery);
 
-        // JF-420.3: score EVERY rival (the best-match early exit at the first
-        // ContainmentScore crossing is exactly the arbitrariness this gate removes)
-        // and rank by FAIR score. The scoring goes through the ONE shared
-        // per-candidate phonetic scorer (ScoreBestWithCodes over a single-element
-        // window, the like-for-like JF-755 doctrine: the winner was scored by the
-        // phonetic overload, so a rival tied through the Double Metaphone floor
-        // ('Koop'/'Koup', both code KP, floored at 91) must stay visible instead of
-        // plain-scoring below the bar and vanishing). Rivals are also deduplicated
-        // by NAME (case-insensitive, the JF-416 song-list precedent): two library
-        // rows of the same artist, and a rival named exactly like the winner, are
-        // indistinguishable choices and must not be spoken twice; and a
-        // coincidental-containment-shaped rival (the JF-382 rule) is refused so an
-        // auto-selected rival always survives the downgrade the winner itself faced.
-        List<(BaseItem Item, int Raw, double Fair)> rivals = new();
-        HashSet<Guid> seen = new() { winner.Id };
-        HashSet<string> seenNames = new(StringComparer.OrdinalIgnoreCase) { winner.Name ?? string.Empty };
-        BaseItem[] single = new BaseItem[1];
-        foreach (BaseItem candidate in pool)
-        {
-            if (!seen.Add(candidate.Id))
-            {
-                continue;
-            }
-
-            string reading = Util.ArtistSearch.QueryNameFor(pinnedIndex, candidate);
-            if (!seenNames.Add(candidate.Name ?? string.Empty))
-            {
-                continue;
-            }
-
-            if (winnerWordsInQuery && ArtistFairComparison.IsRedundantShorterForm(winnerReading, reading, cleanedQuery))
-            {
-                continue;
-            }
-
-            if (Util.ArtistSearch.IsCoincidentalContainmentMatch(cleanedQuery, reading, locale))
-            {
-                continue;
-            }
-
-            single[0] = candidate;
-            int raw = Util.ArtistSearch.ScoreBestWithCodes(cleanedQuery, single, pinnedIndex)?.Score ?? 0;
-            if (raw < ArtistFairComparison.AlternativeFullNameThreshold)
-            {
-                continue;
-            }
-
-            rivals.Add((candidate, raw, ArtistFairComparison.FairComparisonScore(reading, cleanedQuery, raw)));
-        }
+        List<(BaseItem Item, string Reading, int Raw, double Fair)> rivals = ScanQualifiedRivals(
+            winner, winnerReading, winnerWordsInQuery, cleanedQuery, locale, pool, pinnedIndex);
 
         if (rivals.Count == 0)
         {
@@ -1664,7 +1675,7 @@ public sealed class CrossMediaFallback
         // OrderByDescending is stable, so equal-fair ties keep pool order (the same
         // determinism-by-source-order the JF-427 notes document).
         var ranked = rivals.OrderByDescending(r => r.Fair).ToList();
-        (BaseItem bestRivalItem, int bestRivalRaw, double bestRivalFair) = ranked[0];
+        (BaseItem bestRivalItem, _, int bestRivalRaw, double bestRivalFair) = ranked[0];
 
         if (bestRivalFair >= ArtistFairComparison.AlternativeFullNameThreshold
             && bestRivalFair - winnerFair > ArtistFairComparison.ContainmentVsFullNameMargin)
@@ -1700,11 +1711,95 @@ public sealed class CrossMediaFallback
             .Select(r => (r.Item, r.Fair))
             .ToList();
         askRanked.Add((winner, winnerFair));
-        List<DisambiguationHelper.MatchInfo> askList = askRanked
-            .OrderByDescending(t => t.Fair)
-            .Select(t => new DisambiguationHelper.MatchInfo { Id = t.Item.Id.ToString(), Name = t.Item.Name })
-            .ToList();
-        return new ContainmentTieVerdict(DisambiguationHelper.AskMultipleArtists(askList, locale, context), null, 0);
+        return new ContainmentTieVerdict(AskRankedArtists(askRanked, locale, context), null, 0);
+    }
+
+    /// <summary>
+    /// The ONE JF-420.2 multi-artist ask assembly (one home since JF-896, extracted
+    /// from the JF-894 round's inline copy so the two ask sites cannot fork the
+    /// composition): order fair-DESCENDING so "yes" plays the strongest candidate,
+    /// project to <see cref="DisambiguationHelper.MatchInfo"/>, hand to
+    /// <see cref="DisambiguationHelper.AskMultipleArtists"/>. The caller owns the
+    /// member list and its filters (JF-894 margin-filters to the tie; JF-896 takes
+    /// every qualified rival) and appends its winner to
+    /// <paramref name="rankedInclWinner"/> before calling.
+    /// </summary>
+    private static SkillResponse AskRankedArtists(
+        List<(BaseItem Item, double Fair)> rankedInclWinner, string locale, Context? context)
+        => DisambiguationHelper.AskMultipleArtists(
+            rankedInclWinner
+                .OrderByDescending(t => t.Fair)
+                .Select(t => new DisambiguationHelper.MatchInfo { Id = t.Item.Id.ToString(), Name = t.Item.Name })
+                .ToList(),
+            locale,
+            context);
+
+    /// <summary>
+    /// The ONE qualified-rival scanner over the resolved rival pool, shared by the
+    /// JF-894 containment-tie arbitration (<see cref="ResolveContainmentTie"/>) and
+    /// the JF-896 coincidental-downgrade walk (the JF-382 block). Extracted verbatim
+    /// from the JF-894 round so the two consumers cannot fork the walk (the
+    /// JF-420.3 lesson: a private copy of the fair machinery drifted by 30+ points).
+    /// The JF-420.3 rules, one home: score EVERY rival (no early exit) through the
+    /// ONE shared per-candidate phonetic scorer (the like-for-like JF-755 doctrine,
+    /// so a Double-Metaphone-floor rival stays visible), deduplicate by NAME
+    /// (case-insensitive, the JF-416 precedent: two library rows of one artist are
+    /// one choice), skip the redundant-shorter-form rival (the JF-420.3 skip), refuse
+    /// coincidental-containment-shaped rivals (the JF-382 rule: a rival an auto-play
+    /// gate would itself demote must never be surfaced), and keep only rivals whose
+    /// RAW score clears <see cref="ArtistFairComparison.AlternativeFullNameThreshold"/>
+    /// (the genuinely-plausible bar; the caller decides on the FAIR scores). Each
+    /// rival carries its RESOLVED READING so callers filtering on the name (the JF-896
+    /// exact-rival exclusion) never re-resolve it. The winner itself is excluded by
+    /// id and by name.
+    /// </summary>
+    private static List<(BaseItem Item, string Reading, int Raw, double Fair)> ScanQualifiedRivals(
+        BaseItem winner,
+        string winnerReading,
+        bool winnerWordsInQuery,
+        string cleanedQuery,
+        string locale,
+        IReadOnlyList<BaseItem> pool,
+        IArtistIndex? pinnedIndex)
+    {
+        List<(BaseItem Item, string Reading, int Raw, double Fair)> rivals = new();
+        HashSet<Guid> seen = new() { winner.Id };
+        HashSet<string> seenNames = new(StringComparer.OrdinalIgnoreCase) { winner.Name ?? string.Empty };
+        BaseItem[] single = new BaseItem[1];
+        foreach (BaseItem candidate in pool)
+        {
+            if (!seen.Add(candidate.Id))
+            {
+                continue;
+            }
+
+            string reading = Util.ArtistSearch.QueryNameFor(pinnedIndex, candidate);
+            if (!seenNames.Add(candidate.Name ?? string.Empty))
+            {
+                continue;
+            }
+
+            if (winnerWordsInQuery && ArtistFairComparison.IsRedundantShorterForm(winnerReading, reading, cleanedQuery))
+            {
+                continue;
+            }
+
+            if (Util.ArtistSearch.IsCoincidentalContainmentMatch(cleanedQuery, reading, locale))
+            {
+                continue;
+            }
+
+            single[0] = candidate;
+            int raw = Util.ArtistSearch.ScoreBestWithCodes(cleanedQuery, single, pinnedIndex)?.Score ?? 0;
+            if (raw < ArtistFairComparison.AlternativeFullNameThreshold)
+            {
+                continue;
+            }
+
+            rivals.Add((candidate, reading, raw, ArtistFairComparison.FairComparisonScore(reading, cleanedQuery, raw)));
+        }
+
+        return rivals;
     }
 
     /// <summary>

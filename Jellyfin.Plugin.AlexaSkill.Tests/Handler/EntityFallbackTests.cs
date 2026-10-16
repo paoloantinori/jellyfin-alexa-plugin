@@ -648,31 +648,28 @@ public class EntityFallbackTests : PluginTestBase
     }
 
     [Fact]
-    public async Task JF894_CoincidentalWinner_KeepsJf382Demotion_TieGateStandsDown()
+    public async Task JF896_CoincidentalWinner_ShadowingQualifiedNonExactRival_AsksWithBoth()
     {
-        // Ordering pin (the PlayArtistSongs family order): the JF-382
-        // coincidental-containment downgrade outranks the tie arbitration. For
+        // THE JF-896 pin (the JF-776 refuse-and-continue walk, adopted): for
         // 'goldbug stories' the chain's first-90 winner 'Bug' is a coincidental
-        // containment; even though a plausible full-name rival ('Goldbug
-        // Story', fair ~80 vs the winner's fair 18) sits beside it in the
-        // results (a rival the gate would put to the user if it ran first),
-        // the JF-382 rule speaks: no offer machinery is wired on the mood
-        // path, so the clean NotFoundMood answers, byte-identical to
-        // pre-JF-894. JF-892 note: this pin originally carried the EXACT-named
-        // 'Goldbug Stories' row; exact-first ordering now hands that row the
-        // win before the downgrade can fire (its own test,
-        // JF892_ExactArtistShadowedByEarlierCoincidentalDbRow_PlaysExact), so
-        // the demoted corner is fixtured here with a NON-exact rival to keep
-        // pinning the downgrade-outranks-tie-gate order. KNOWN RESIDUAL, pinned
-        // green deliberately: JF-892 rescues only the EXACT subclass; a
-        // coincidental winner shadowing a better non-exact rival still lands
-        // the clean miss (the JF-776 refuse-and-continue walk would be the
-        // follow-up shape, unadopted).
+        // containment, and a plausible NON-exact rival ('Goldbug Story', raw
+        // ~92 / fair ~80 vs the winner's fair 18) sits beside it in the
+        // results. JF-892's exact-first reorder rescues only the EXACT
+        // subclass, so before JF-896 this shape answered the clean not-found
+        // and buried the rival (the JF-894 residual, pinned green
+        // deliberately). The honest landing is the JF-420.2 multi-artist ask
+        // naming BOTH candidates: never a silent auto-play (the JF-377
+        // string-indistinguishable lesson: the ASK is the only no-regression
+        // landing) and never the clean not-found. History note: the old
+        // downgrade-outranks-tie-gate ORDER pin lived here; its mechanism
+        // survives unchanged (the JF-382 downgrade still owns the coincidental
+        // winner), only the LANDING upgrades when the rival pool holds a
+        // qualified candidate.
         var bug = new MusicArtist { Name = "Bug", Id = Guid.NewGuid() };
         var goldbug = new MusicArtist { Name = "Goldbug Story", Id = Guid.NewGuid() };
 
         _fx.SetupUserMock();
-        // Songs never fetched (the downgrade answers before playback), so the
+        // Songs never fetched (the ask answers before playback), so the
         // never-matching songs id keeps the songs leg dead.
         SetupGenreMissWithDbArtistRows(new BaseItem[] { bug, goldbug }, Guid.Empty, Array.Empty<Audio>());
 
@@ -683,8 +680,49 @@ public class EntityFallbackTests : PluginTestBase
 
         SkillResponse response = await handler.HandleAsync(request, context, _fx.CreateUser(), session, CancellationToken.None);
 
-        // The clean mood not-found (session-ending tell), not the multi-artist
-        // ask and not a silent 'Goldbug Story' auto-select.
+        // The JF-420.2 ask, not the clean mood not-found and not a silent
+        // 'Goldbug Story' auto-select.
+        Assert.False(response.Response?.ShouldEndSession);
+        Assert.False(HasAudioPlayerDirective(response));
+        Assert.True(session.NowPlayingQueue == null || session.NowPlayingQueue.Count == 0);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("Goldbug Story", speech);
+        Assert.Contains("Bug", speech);
+        // Fair-descending order (the JF-894 ask contract): the qualified rival
+        // headlines so "yes" plays the strongest candidate, never the coincidental
+        // winner the walk exists to demote (it enters at its FAIR score, ~18, not
+        // the raw containment floor).
+        Assert.True(
+            speech.IndexOf("Goldbug Story", StringComparison.Ordinal) < speech.IndexOf("Bug", StringComparison.Ordinal),
+            $"expected the rival to head the ask, got: {speech}");
+        string matchesAttr = response.SessionAttributes?[DisambiguationHelper.AttrMatches]?.ToString() ?? string.Empty;
+        Assert.True(
+            matchesAttr.IndexOf("Goldbug Story", StringComparison.Ordinal) < matchesAttr.IndexOf("Bug", StringComparison.Ordinal),
+            $"expected the rival to rank first in the cycling state, got: {matchesAttr}");
+        Assert.Equal(DisambiguationHelper.MediaTypeArtist, response.SessionAttributes?[DisambiguationHelper.AttrType]);
+    }
+
+    [Fact]
+    public async Task JF896_CoincidentalWinner_RivalUnqualified_StillCleanNotFound()
+    {
+        // The no-false-positive side: the coincidental winner is demoted and
+        // the rival pool holds NO candidate that clears the JF-420 alternative
+        // bar ('Radiohead' barely rates against 'goldbug stories'), so the
+        // JF-382 downgrade keeps its clean-miss landing, byte-identical to
+        // pre-JF-896. A weak rival must never buy an ask.
+        var bug = new MusicArtist { Name = "Bug", Id = Guid.NewGuid() };
+        var weak = new MusicArtist { Name = "Radiohead", Id = Guid.NewGuid() };
+
+        _fx.SetupUserMock();
+        SetupGenreMissWithDbArtistRows(new BaseItem[] { bug, weak }, Guid.Empty, Array.Empty<Audio>());
+
+        var handler = CreateHandler();
+        var request = CreateMoodIntent("goldbug stories");
+        var context = _fx.CreateContext();
+        var session = _fx.CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, _fx.CreateUser(), session, CancellationToken.None);
+
         Assert.True(response.Response?.ShouldEndSession);
         Assert.False(HasAudioPlayerDirective(response));
         Assert.True(session.NowPlayingQueue == null || session.NowPlayingQueue.Count == 0);
