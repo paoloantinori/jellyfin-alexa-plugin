@@ -627,7 +627,7 @@ public sealed class PlaybackLaunchBuilder
     /// one it cannot control with AudioPlayer directives).
     /// </summary>
     /// <param name="medium">The classified medium.</param>
-    /// <returns>True for Video, LiveTv and VideoAppAudiobook.</returns>
+    /// <returns>True for Video, LiveTv, VideoAppAudiobook and VideoAppAudio.</returns>
     internal static bool IsVideoAppMedium(PlayingMedium medium)
         => medium is PlayingMedium.Video or PlayingMedium.LiveTv or PlayingMedium.VideoAppAudiobook or PlayingMedium.VideoAppAudio;
 
