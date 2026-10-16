@@ -451,6 +451,63 @@ public class VideoAppGapHonestResponseTests : PluginTestBase, IDisposable
         TestHelpers.AssertBookStoppedTell(response);
     }
 
+    [Fact]
+    public async Task Pause_AfterRejectedClimbBookLaunch_RemappedAudioChapter_SpeaksBookStoppedLine_JF898()
+    {
+        // JF-898: the same Audio-typed remapped chapter through the BOOK
+        // composition, but with the verified climb REJECTED (the census shape
+        // as its Audio-typed remap, the ONE shared fixture: the row's ParentId
+        // is the shared library container while its file sits a directory
+        // deeper, so the launch fails closed to the leaf's own single-item
+        // stream). The launch still KNOWS the intent was a book (the
+        // single-item arm sits behind the book discriminator; music never
+        // reaches it), so the ledger must record the book-intent route:
+        // pre-fix it records the bare VideoApp route and the kind ladder reads
+        // the Audio row as seek-mode music (MusicStoppedByVoice over a book,
+        // the bug this pin goes red on). The launch drives the REAL builder
+        // (plugin ledger swapped to the test's) so the pin follows the
+        // production launch -> record -> classify -> pause flow end to end.
+        var (chapter, container, _) = TestHelpers.CreateCollapsedRemappedRowUnderContainer();
+        _fx.LibraryManager.Setup(x => x.GetItemById(container.Id)).Returns(container);
+        _fx.LibraryManager.Setup(x => x.GetItemById(chapter.Id)).Returns(chapter);
+
+        string deviceId = "jf898-pause-rejected-climb";
+        DeviceQueueManager ledger = TestHelpers.CreateDeviceQueueManager("jf898-ledger");
+        using (TestHelpers.SwapPluginQueueManager(ledger))
+        {
+            var builder = TestHelpers.CreateLocalhostLaunchBuilder();
+            SkillResponse launch = await builder.BuildAudiobookVideoAppLaunchResponseAsync(
+                chapter.Id.ToString(),
+                chapter,
+                announce: new PlainTextOutputSpeech("announce"),
+                TestHelpers.CreateTestUser(jellyfinToken: "tok"),
+                TestHelpers.CreateContextWithVideoApp(deviceId),
+                request: null,
+                _fx.LibraryManager.Object);
+
+            // The precondition the stopped-line question rides on: the climb
+            // failed CLOSED, so the launch took the leaf's own single-item
+            // stream (the JF-794 rejected arm), never a concat URL.
+            var launchDirective = Assert.Single(
+                launch.Response.Directives.OfType<Jellyfin.Plugin.AlexaSkill.Alexa.Directive.VideoAppLaunchDirective>());
+            Assert.Contains(
+                $"alexaskill/api/video-audio/{chapter.Id}/stream.m3u8",
+                launchDirective.VideoItem.Source,
+                StringComparison.Ordinal);
+            Assert.DoesNotContain("audiobook/", launchDirective.VideoItem.Source, StringComparison.Ordinal);
+        }
+
+        var handler = CreatePauseHandler(ledger);
+        var response = await handler.HandleAsync(
+            CreateIntent("AMAZON.PauseIntent"),
+            TestHelpers.CreateTestContext(deviceId),
+            TestHelpers.CreateTestUser(),
+            CreateSession(chapter),
+            CancellationToken.None);
+
+        TestHelpers.AssertBookStoppedTell(response);
+    }
+
     [Theory]
     [InlineData("AMAZON.PauseIntent", null)]
     [InlineData("AMAZON.CancelIntent", null)]

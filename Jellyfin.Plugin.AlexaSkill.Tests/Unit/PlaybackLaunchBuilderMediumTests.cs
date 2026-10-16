@@ -156,8 +156,9 @@ public class PlaybackLaunchBuilderMediumTests : PluginTestBase
 
     /// <summary>
     /// JF-894: the launch-time book verdict. A ledger entry recorded on the
-    /// JF-894 audiobook route (minted only when the launch's climb accepted a
-    /// book folder) classifies VideoAppAudiobook even though the chapter leaf is
+    /// JF-894 audiobook route (minted on the accepted book concat, and since
+    /// JF-898 on the book-vouched rejected-climb single-item arm) classifies
+    /// VideoAppAudiobook even though the chapter leaf is
     /// plain Audio-typed (the JF-784/JF-799 remapped shape): the kind ladder
     /// alone would have read it as seek-mode music. The transport refusal keeps
     /// the book arm's silent Empty.

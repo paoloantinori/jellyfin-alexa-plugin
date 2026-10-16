@@ -195,7 +195,10 @@ public sealed class DeviceQueueManager : IDisposable
 
         /// <summary>JF-894: a <c>VideoApp.Launch</c> directive launched a VERIFIED
         /// audiobook concat (the launch site's climb accepted a book folder, so the
-        /// launch site KNOWS the medium is a book). Recorded as its own route value
+        /// launch site KNOWS the medium is a book); since JF-898 the fresh launch's
+        /// rejected-climb single-item arm mints it too (a book-intent launch whose
+        /// climb failed closed, behind the book discriminator, so the intent is
+        /// known even when the folder is not). Recorded as its own route value
         /// because the launch-time knowledge cannot be re-derived safely at
         /// classification time: the ledger item is the chapter leaf, which for the
         /// remapped rows (JF-784/JF-799) is plain Audio-typed, indistinguishable from

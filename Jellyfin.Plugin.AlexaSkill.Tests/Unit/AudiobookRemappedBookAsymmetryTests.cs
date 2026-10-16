@@ -293,6 +293,45 @@ public class AudiobookRemappedBookAsymmetryTests
         Assert.Equal(DeviceQueueManager.LaunchRoute.VideoApp, route);
     }
 
+    [Fact]
+    public async Task FreshLaunch_BookComposition_RemappedAudioRow_RejectedClimb_RecordsBookRouteInLedger_JF898()
+    {
+        // JF-898: the rejected-climb fresh arm (the JF-794 census shape as its
+        // Audio-typed remap, the ONE shared fixture) still mints the
+        // book-intent route. The arm is reachable ONLY behind the book
+        // discriminator (the caller vouched book-chapter intent; music never
+        // reaches it), so the launch KNOWS the medium is a book even when the
+        // climb failed, and mid-play wording must say the book line; pre-fix
+        // the bare VideoApp route made the classifier read the Audio row as
+        // seek-mode music (the JF-898 bug).
+        var (remappedRow, _, library) = TestHelpers.CreateCollapsedRemappedRowUnderContainer();
+        var builder = CreatePlainBuilder();
+        var ledger = TestHelpers.CreateDeviceQueueManager("jf898-mint-rejected");
+        using var pluginLedger = TestHelpers.SwapPluginLedgerScope(
+            new PluginConfiguration(),
+            Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance,
+            ledger,
+            "jf898-mint-rejected");
+
+        SkillResponse response = await builder.BuildAudiobookVideoAppLaunchResponseAsync(
+            remappedRow.Id.ToString(),
+            remappedRow,
+            announce: new global::Alexa.NET.Response.PlainTextOutputSpeech("announce"),
+            TestHelpers.CreateTestUser(jellyfinToken: "tok"),
+            TestHelpers.CreateContextWithVideoApp(),
+            request: null,
+            library.Object);
+
+        // The arm precondition: the single-item stream (the climb failed
+        // closed), never a concat URL.
+        var directive = Assert.Single(response.Response.Directives.OfType<VideoAppLaunchDirective>());
+        Assert.Contains($"alexaskill/api/video-audio/{remappedRow.Id}/stream.m3u8", directive.VideoItem.Source, StringComparison.Ordinal);
+        Assert.DoesNotContain("audiobook/", directive.VideoItem.Source, StringComparison.Ordinal);
+        (string? itemId, DeviceQueueManager.LaunchRoute? route, _) = ledger.GetLastPlayedSnapshot("echo-show");
+        Assert.Equal(remappedRow.Id.ToString(), itemId);
+        Assert.Equal(DeviceQueueManager.LaunchRoute.VideoAppAudiobook, route);
+    }
+
     // ---------------- Key agreement: where the slice lands ----------------
 
     [Fact]

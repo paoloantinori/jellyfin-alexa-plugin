@@ -6,6 +6,7 @@ using global::Alexa.NET.Request;
 using global::Alexa.NET.Response;
 using global::Alexa.NET.Response.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Directive;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
@@ -228,10 +229,22 @@ public class PlaybackLaunchBuilderBookFolderDiscriminatorTests
         // Gate-marker finding 6: an AudioBook with an EMPTY ParentId riding an album
         // collection kept the album-concat arm pre-JF-794, and the restore keeps it
         // (the reroute is reserved for the rejected NON-EMPTY-ParentId climb).
-        var config = new PluginConfiguration { ServerAddress = "http://localhost:8096/" };
-        var builder = TestHelpers.CreateLaunchBuilder(config);
+        // JF-898 route pin: this is the ONE arm-reachable shape where the book
+        // discriminator is vouched (isAudioBook) yet the serve is NOT the
+        // rejected-climb single-item arm, so the ledger must keep the bare
+        // VideoApp route - collapsing the JF-898 mint condition to the bare
+        // discriminator (dropping the singleItemBookServe arm flag) would mint
+        // the book route here and flip every seek-mode album pause to the book
+        // line with no other red test.
         Guid albumId = Guid.NewGuid();
         var bookTrack = new AudioBook { Name = "Book Track", Id = Guid.NewGuid() };
+        var ledger = TestHelpers.CreateDeviceQueueManager("jf898-album-concat-route");
+        using var pluginLedger = TestHelpers.SwapPluginLedgerScope(
+            new PluginConfiguration(),
+            Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance,
+            ledger,
+            "jf898-album-concat-route");
+        var builder = TestHelpers.CreateLaunchBuilder(new PluginConfiguration { ServerAddress = "http://localhost:8096/" });
 
         SkillResponse response = builder.BuildVideoAppAudioResponse(
             bookTrack.Id.ToString(),
@@ -243,6 +256,9 @@ public class PlaybackLaunchBuilderBookFolderDiscriminatorTests
         var directive = Assert.Single(response.Response.Directives.OfType<VideoAppLaunchDirective>());
         Assert.Contains($"alexaskill/api/video-audio/audiobook/{albumId}/stream.m3u8", directive.VideoItem.Source, StringComparison.Ordinal);
         Assert.DoesNotContain($"video-audio/{bookTrack.Id}/", directive.VideoItem.Source, StringComparison.Ordinal);
+        (string? itemId, DeviceQueueManager.LaunchRoute? route, _) = ledger.GetLastPlayedSnapshot("echo-show");
+        Assert.Equal(bookTrack.Id.ToString(), itemId);
+        Assert.Equal(DeviceQueueManager.LaunchRoute.VideoApp, route);
     }
 
     [Fact]
