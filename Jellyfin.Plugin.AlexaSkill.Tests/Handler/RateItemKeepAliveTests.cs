@@ -80,6 +80,36 @@ public class RateItemKeepAliveTests : PluginTestBase
     }
 
     [Fact]
+    public async Task BookRouteVideoAppMedium_ConfirmationCarriesTheNowPlayingKeepAlive()
+    {
+        // JF-894: the audiobook ledger route arms the keep-alive arm too. A book
+        // concat dismisses on a plain Tell exactly as the seek-mode music does,
+        // and the JF-894 route mint must not silently drop the screen content
+        // the bare VideoApp route used to buy.
+        var queueManager = TestHelpers.CreateDeviceQueueManager("rate-keepalive-book");
+        var chapter = new Audio { Name="Remapped Book Chapter", Id = Guid.NewGuid(), Path = "/audiobooks/b/c.mp3" };
+        _fx.SetupUserMock();
+        var data = new UserItemData { Key = chapter.Id.ToString(), Rating = null };
+        _fx.UserDataManager.Setup(u => u.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), It.IsAny<BaseItem>())).Returns(data);
+        _fx.LibraryManager.Setup(l => l.GetItemById(chapter.Id)).Returns(chapter);
+        _fx.Config.SeekEnabled = true;
+        string deviceId = "rate-keepalive-book-device";
+        queueManager.RecordLastPlayed(deviceId, chapter.Id.ToString(), DeviceQueueManager.LaunchRoute.VideoAppAudiobook);
+        var handler = CreateHandler(queueManager);
+
+        global::Alexa.NET.Request.Context context = TestHelpers.CreateContextWithToken(chapter.Id.ToString(), deviceId);
+        context.System!.Device!.SupportedInterfaces =
+            new Dictionary<string, object> { ["Alexa.Presentation.APL"] = new { } };
+
+        var response = await handler.HandleAsync(
+            Request("5"), context,
+            TestHelpers.CreateTestUser(), null!, CancellationToken.None);
+
+        Assert.Contains("Remapped Book Chapter", TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+        Assert.NotEmpty(response.Response.Directives.OfType<AplRenderDocumentDirective>());
+    }
+
+    [Fact]
     public async Task PlainAudioMedium_ConfirmationStaysADirectiveFreeTell()
     {
         var queueManager = TestHelpers.CreateDeviceQueueManager("rate-plain");

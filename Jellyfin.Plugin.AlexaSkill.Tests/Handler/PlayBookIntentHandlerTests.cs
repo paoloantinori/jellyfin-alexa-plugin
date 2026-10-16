@@ -1938,7 +1938,9 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
         Assert.NotNull(response.Response.Directives?.FirstOrDefault(d => d.GetType().Name.Contains("VideoApp")));
         (string? itemId, DeviceQueueManager.LaunchRoute? route, _) = _queueManager.GetLastPlayedSnapshot(session.DeviceId);
         Assert.Equal(trackItem.Id.ToString(), itemId);
-        Assert.Equal(DeviceQueueManager.LaunchRoute.VideoApp, route);
+        // JF-894: the tracked resume always follows an accepted verified climb, so the
+        // surviving record now carries the book verdict route (was the bare VideoApp).
+        Assert.Equal(DeviceQueueManager.LaunchRoute.VideoAppAudiobook, route);
     }
 
     // JF-794 gate-marker BLOCKER 2 (the read side of the cross-book bleed): the

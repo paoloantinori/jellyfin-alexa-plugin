@@ -1095,7 +1095,11 @@ public sealed class PlaybackLaunchBuilder
         // the flag never sets for exactly these residual shapes.
         (string? lastPlayedId, DeviceQueueManager.LaunchRoute? recordedRoute, DateTime? writtenAt) =
             ReadLastPlayedSnapshot(context, queueManager);
-        if (recordedRoute != DeviceQueueManager.LaunchRoute.VideoApp
+        // JF-894: the belt question is "was this recorded by a VideoApp launch", and
+        // the JF-894 audiobook route IS one, so both VideoApp routes arm the belt
+        // (a same-item book shape with the token still naming the chapter must
+        // belt-correct to VideoAppAudiobook exactly as the music shape does).
+        if (!DeviceQueueManager.IsVideoAppRoute(recordedRoute)
             || !DeviceQueueManager.IsWithinLastPlayedRecencyWindow(writtenAt))
         {
             return medium;
@@ -1106,7 +1110,14 @@ public sealed class PlaybackLaunchBuilder
             : null;
         return ledgerItem != null
             ? ClassifyLedgerItemKind(ledgerItem, recordedRoute)
-            : PlayingMedium.Video;
+            // JF-894 code-review: an unresolvable item on the audiobook route keeps
+            // the route's own verdict (a deleted book chapter mid-play is still a
+            // book, and Video would flip the belt-consumer family); the bare
+            // VideoApp route keeps the historical Video default (the JF-632 hole-b
+            // closure, whose kind the route alone does not name).
+            : recordedRoute == DeviceQueueManager.LaunchRoute.VideoAppAudiobook
+                ? PlayingMedium.VideoAppAudiobook
+                : PlayingMedium.Video;
     }
 
     /// <summary>
@@ -1136,6 +1147,21 @@ public sealed class PlaybackLaunchBuilder
         }
 
         if (AudiobookItems.IsAudioBook(item))
+        {
+            return PlayingMedium.VideoAppAudiobook;
+        }
+
+        // JF-894: the launch-time medium verdict (the route's full story lives on the
+        // LaunchRoute.VideoAppAudiobook enum doc). The arm sits AFTER the two kind
+        // arms (which already classify those shapes correctly) and BEFORE the music
+        // arm, so the verdict settles ONLY the Audio-vs-book ambiguity the kind
+        // ladder cannot; deliberately not first, so a mis-minted video-kind entry
+        // keeps the kind answer. The classifier never re-derives book-ness by
+        // climbing (a parentage probe is not music-safe: a plain song sits directly
+        // inside its MusicAlbum, the same shape the verified climb accepts; the
+        // JF-799 caller-intent doctrine). Pre-JF-894 ledger entries (route string
+        // "VideoApp") keep the classification below; accepted residual, no migration.
+        if (recordedRoute == DeviceQueueManager.LaunchRoute.VideoAppAudiobook)
         {
             return PlayingMedium.VideoAppAudiobook;
         }
@@ -2063,7 +2089,11 @@ public sealed class PlaybackLaunchBuilder
         if (!string.IsNullOrEmpty(ledgerDeviceId))
         {
             DeviceQueueManager? ledger = Plugin.Instance?.DeviceQueueManager;
-            ledger?.RecordLastPlayed(ledgerDeviceId, ledgerItemId, DeviceQueueManager.LaunchRoute.VideoApp);
+            // JF-894: every record this builder writes follows the accepted verified
+            // climb above (the rejected shapes returned via BuildFlatChapterResume),
+            // so this launch is always a verified book concat and the ledger records
+            // the book verdict beside the chapter id.
+            ledger?.RecordLastPlayed(ledgerDeviceId, ledgerItemId, DeviceQueueManager.LaunchRoute.VideoAppAudiobook);
             // JF-858: the concat stream is served under the parent folder id while the
             // ledger records the CHAPTER leaf, so the segment-observed stamp refresh
             // needs the launch-time link (see BuildVideoAppAudioResponse's identical
@@ -2972,7 +3002,14 @@ public sealed class PlaybackLaunchBuilder
         if (!string.IsNullOrEmpty(ledgerDeviceId))
         {
             DeviceQueueManager? ledger = Plugin.Instance?.DeviceQueueManager;
-            ledger?.RecordLastPlayed(ledgerDeviceId, itemId, DeviceQueueManager.LaunchRoute.VideoApp);
+            // JF-894: the book-concat arm (bookFolder accepted) is a VERIFIED book
+            // launch, so the ledger records the book verdict beside the chapter id;
+            // every other arm (single-item leaf, album concat) keeps the bare
+            // VideoApp route the kind ladder classifies today.
+            DeviceQueueManager.LaunchRoute recordedRoute = bookFolder is not null
+                ? DeviceQueueManager.LaunchRoute.VideoAppAudiobook
+                : DeviceQueueManager.LaunchRoute.VideoApp;
+            ledger?.RecordLastPlayed(ledgerDeviceId, itemId, recordedRoute);
             // JF-858: link the stream key this launch minted to the ledger entry it
             // just recorded, so the segment-observed stamp refresh
             // (DeviceQueueManager.RefreshLastPlayedStampForStream) can keep the

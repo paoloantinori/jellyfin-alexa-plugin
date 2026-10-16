@@ -388,6 +388,69 @@ public class VideoAppGapHonestResponseTests : PluginTestBase, IDisposable
         TestHelpers.AssertBookStoppedTell(response);
     }
 
+    [Fact]
+    public async Task Pause_AfterBookCompositionLaunch_RemappedAudioChapter_SpeaksBookStoppedLine_JF894()
+    {
+        // JF-894: an Audio-typed remapped chapter (the JF-784/JF-799 shape: books
+        // rows re-typed after the library scan) launched through the BOOK
+        // composition, then paused. The launch walked the verified book folder
+        // to build the whole-book concat, so the playing medium is a book and
+        // the stopped line must name it; pre-fix the ledger records the bare
+        // VideoApp route and the kind ladder reads the Audio row as seek-mode
+        // music (MusicStoppedByVoice over a book, the bug this pin goes red
+        // on). The launch drives the REAL builder (plugin ledger swapped to
+        // the test's) so the pin follows the production
+        // launch -> record -> classify -> pause flow end to end.
+        Guid bookId = Guid.NewGuid();
+        const string bookPath = "/audiobooks/jf894/Mixed Rows Book";
+        var book = new Folder { Name = "Mixed Rows Book", Id = bookId, Path = bookPath };
+        var chapter = new Audio
+        {
+            Name = "Mixed Rows Book",
+            Id = Guid.NewGuid(),
+            ParentId = bookId,
+            Path = bookPath + "/Chapter.mp3",
+            RunTimeTicks = TimeSpan.FromSeconds(30).Ticks
+        };
+        _fx.LibraryManager.Setup(x => x.GetItemById(bookId)).Returns(book);
+        _fx.LibraryManager.Setup(x => x.GetItemById(chapter.Id)).Returns(chapter);
+
+        string deviceId = "jf894-pause-remapped-book";
+        DeviceQueueManager ledger = TestHelpers.CreateDeviceQueueManager("jf894-ledger");
+        using (TestHelpers.SwapPluginQueueManager(ledger))
+        {
+            var builder = TestHelpers.CreateLocalhostLaunchBuilder();
+            SkillResponse launch = await builder.BuildAudiobookVideoAppLaunchResponseAsync(
+                chapter.Id.ToString(),
+                chapter,
+                announce: new PlainTextOutputSpeech("announce"),
+                TestHelpers.CreateTestUser(jellyfinToken: "tok"),
+                TestHelpers.CreateContextWithVideoApp(deviceId),
+                request: null,
+                _fx.LibraryManager.Object);
+
+            // The precondition the stopped-line question rides on: the launch
+            // took the whole-book concat arm (the type-agnostic climb accepted
+            // the Audio-typed row, JF-799), not the single-item stream.
+            var launchDirective = Assert.Single(
+                launch.Response.Directives.OfType<Jellyfin.Plugin.AlexaSkill.Alexa.Directive.VideoAppLaunchDirective>());
+            Assert.Contains(
+                $"alexaskill/api/video-audio/audiobook/{bookId}/stream.m3u8",
+                launchDirective.VideoItem.Source,
+                StringComparison.Ordinal);
+        }
+
+        var handler = CreatePauseHandler(ledger);
+        var response = await handler.HandleAsync(
+            CreateIntent("AMAZON.PauseIntent"),
+            TestHelpers.CreateTestContext(deviceId),
+            TestHelpers.CreateTestUser(),
+            CreateSession(chapter),
+            CancellationToken.None);
+
+        TestHelpers.AssertBookStoppedTell(response);
+    }
+
     [Theory]
     [InlineData("AMAZON.PauseIntent", null)]
     [InlineData("AMAZON.CancelIntent", null)]

@@ -623,6 +623,9 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
             // JF-563 review: the VideoApp launch bypasses the AudioPlayer chokepoint, so
             // the builder must have recorded the device last-played ledger itself.
             Assert.Equal(chapter.Id.ToString(), ledger.GetLastPlayedItemId("test-device"));
+            // JF-894: the resume record follows the accepted verified climb, so it
+            // always mints the book verdict route.
+            Assert.Equal(DeviceQueueManager.LaunchRoute.VideoAppAudiobook, ledger.GetLastPlayedSnapshot("test-device").Route);
         }
         finally
         {
