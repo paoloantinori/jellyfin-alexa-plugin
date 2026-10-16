@@ -4,9 +4,10 @@ title: >-
   The containment-tie auto-select leg has no firing pin:
   JF894_DominantRivalAutoSelects_WhenExactArtistShadowsTheTie wins via the
   equality bypass, never the swap
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-16 10:02'
+updated_date: '2026-10-16 11:18'
 labels: []
 dependencies: []
 priority: low
@@ -31,3 +32,9 @@ From the JF-892 code-review round (worker handback, 2026-10-16): the pin JF894_D
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+EXECUTED on branch jf895 (4ebb83c2), merged to main f822cc8a, pushed. DELIVERABLE (A): the auto-select swap arm has a genuine firing pin. JF895_DominantRivalAutoSelects_NonExactWinner_SwapFires uses the rival-pool/chain-results asymmetry (tier-1 Contains filter vs the full scoped index fetch): query 'jones', chain [Danko Jones, Norah Jones] with Danko winning the collapse at fair 40.9 (non-exact, no bypass), while pool-only 'Jonas' clears both AlternativeFullNameThreshold (80) and the 20-point margin, so ResolveContainmentTie swaps and auto-plays Jonas (binary outcome via songs-fetch keyed to Jonas's id). TWIN JF895_Twin_WeakRivalBelowTheFairBar_FallsBackToTheAsk uses 'Jonasine' (8-char name caps fair at <=62.5, below the bar whatever the raw score) to prove the same machinery falls to the JF-420.2 ask: swap fires in one, ask answers in the other. The old JF-894 pin renamed to JF894_ExactNamedArtistWinsCollapse_PlaysThroughTheBypass with a corrected mechanism comment (JF-892's exact-first reorder wins the collapse; the JF-420.1 bypass answers, no swap). Test-only: EntityFallbackTests.cs, +90/-5, no production code. Gates (in 4ebb83c2): 0-warning build both TFMs, 6033/6033 both TFMs, /simplify 4 agents (4 comment findings applied), code-review high 6 findings (4 applied including the Jonasine speech assert that goes red on scorer drift; 2 dispositioned with reasons). Residuals noted in the pin's comment (the bypass mechanism is pinned indirectly; pool-only rivals surfacing in a future chain keeps observable behavior identical). gate-exempt: gates ran in the dispatched worker's transcript; commit 4ebb83c2 carries the full Gates record.
+<!-- SECTION:FINAL_SUMMARY:END -->
