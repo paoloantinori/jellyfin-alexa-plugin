@@ -3,9 +3,10 @@ id: JF-892
 title: >-
   Entity fallback: exact artist shadowed by a coincidental-containment candidate
   listed earlier (JF-776 B1 class at TryEntityFallbackAsync)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-16 08:18'
+updated_date: '2026-10-16 10:08'
 labels: []
 dependencies: []
 priority: low
@@ -30,3 +31,9 @@ Found during JF-894's code-review round (commit 119ecca6). SHAPE: on the DB path
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+EXECUTED on branch jf892 (1eddb605), merged to main afde1c90, pushed, DEPLOYED to minix (net10.0 Release into AlexaSkill_0.12.1.0, active-DLL md5-verified) and live-verified: the 'jones' containment-tie ask preserved byte-for-byte ('Ho trovato 10 artisti: ... Vuoi il primo?'), play pipeline green, config survived. THE FIX: direction (a), a pure stable exact-first reordering of the chain results at the TryEntityFallbackAsync acceptance point one line before the ScoreBestWithCodes collapse (OrderByDescending IsExactNameMatch), plus a branch-decision Information log when a reorder rescues a promoted row; ScoreBestWithCodes/FuzzyMatcher untouched so the shared early-exit semantics and all five callers are unchanged. The JF-894 pin's fixture reshaped to a NON-exact rival with every assertion byte-identical (the exact row moved to the new JF-892 red test; the pinned downgrade-outranks-tie-gate order unchanged, documented in the pin's comment). Red proof both TFMs (the new exact-shadow pin failed with the clean not-found pre-fix). Gates (in 1eddb605): 0-warning build both TFMs, 6012/6012 both TFMs run twice, /simplify 4 agents (applied + reasoned skips), /code-review high (1 applied log-line finding, 2 reasoned skips, 1 FILED = JF-895 the un-fired auto-select pin; residual filed = JF-896 the non-exact-rival subclass + idiom consolidation). NLU fixtures/model N/A (no model surface). gate-exempt: gates ran in the dispatched worker's transcript; commit 1eddb605 carries the full Gates record.
+<!-- SECTION:FINAL_SUMMARY:END -->
