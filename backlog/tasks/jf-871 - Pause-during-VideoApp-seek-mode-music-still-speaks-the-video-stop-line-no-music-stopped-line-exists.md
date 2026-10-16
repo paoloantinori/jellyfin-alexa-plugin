@@ -3,9 +3,10 @@ id: JF-871
 title: >-
   Pause during VideoApp seek-mode music still speaks the video stop line (no
   music stopped line exists)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-12 16:26'
+updated_date: '2026-10-16 09:31'
 labels:
   - wording
   - locales
@@ -32,3 +33,9 @@ From the JF-870 altitude review (2026-10-12): PauseIntentHandler's VideoApp-fami
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+EXECUTED on branch jf871 (46a93a4b), merged to main 676e3bc5, pushed, DEPLOYED to minix (net10.0 Release into AlexaSkill_0.12.1.0, active-DLL verified by md5 identity + the MusicStoppedByVoice literal and the embedded 'Ho fermato la musica.' both grepped from the RUNNING dll), config survived (1 user), live probes green (idle pause keeps the JF-482 shape; play pipeline healthy). The change: PauseIntentHandler's VideoApp-family line-key selection is now a three-way switch (VideoAppAudiobook -> BookStoppedByVoice, VideoAppAudio -> MusicStoppedByVoice, else VideoStoppedByVoice), key minted in all 17 locales (it-IT 'Ho fermato la musica.'), ledger row in ResponseStringsTests.AllExpectedKeys, 7-row activity-invariant theory + the folded live-TV pause/cancel pins in VideoAppGapHonestResponseTests, CLAUDE.md THE REFERENCE updated in place (JF-870 precedent). Gates (recorded in 46a93a4b): build 0 warnings both TFMs, suite 6018/6018 both TFMs, validate_locales PASS, red proof (2 new pins failed pre-fix with the video line), /simplify 4 agents (1 finding applied), /code-review high (4 findings: 2 applied, 2 filed as tasks/residuals). NLU fixtures N/A (no model surface); e2e N/A beyond probes (the seek-mode path is opt-in; unit pins cover the branch). Residuals filed: JF-894 (remapped Audio-typed chapters classify VideoAppAudio at the classifier, pre-existing, now audible), the IsVideoAppMedium doc fix applied separately (54fea00b), and the JF-858/JF-632 token-carrying shape documented as decided ground. NOTE for future searchers: this task's ID (JF-872) collides in prose with CLAUDE.md line 73's '(JF-872, maintainer call 2026-10-13)' PauseKeepsSession citation; disambiguate by context. gate-exempt: gates ran in the dispatched worker's transcript (dispatch, report, and verification all in this session); commit 46a93a4b carries the full Gates record.
+<!-- SECTION:FINAL_SUMMARY:END -->
