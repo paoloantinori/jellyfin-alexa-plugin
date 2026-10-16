@@ -358,12 +358,11 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
 # Per-test timeout for live SMAPI tests
 # ---------------------------------------------------------------------------
 
-class _TimeoutError(Exception):
-    """Raised when a test exceeds its SMAPI timeout."""
-
-
-def _timeout_handler(signum: int, frame: Any) -> None:  # noqa: ARG001
-    raise _TimeoutError("Test exceeded per-test SMAPI timeout")
+# JF-897: the exception class lives in the shared smapi_timeouts module so
+# conftest and test_e2e import the SAME object regardless of how pytest
+# resolves conftest's module identity (a rootdir/sys.path change would
+# otherwise make the except clause in test_e2e silently miss the alarm).
+from smapi_timeouts import _TimeoutError, _timeout_handler  # noqa: E402
 
 
 @pytest.fixture(autouse=True)

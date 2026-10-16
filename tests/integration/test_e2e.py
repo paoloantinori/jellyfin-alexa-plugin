@@ -20,7 +20,12 @@ import xml.etree.ElementTree as ET
 import pytest
 
 from smapi_client import SmapiClient, SmapiError, SmapiUnexpectedError
-from conftest import _TimeoutError
+# JF-897: import the alarm class from the shared module, NOT from conftest:
+# if pytest ever resolves conftest to a second module instance, a
+# from-conftest except clause would miss the alarm the installed handler
+# raised (a different module's class object) and every timeout would fail
+# raw instead of going through the JF-893 skip decision.
+from smapi_timeouts import _TimeoutError
 
 logger = logging.getLogger("e2e.test")
 
@@ -687,6 +692,12 @@ def reliability_session_reset(skill_id, smapi_delay):
     def reset() -> None:
         try:
             reset_client.simulate("stop")
+        except _TimeoutError:
+            # JF-897: the per-test SIGALRM may land here (the reset is a full
+            # simulate call in a non-simulate phase). Swallowing it would eat
+            # the one-shot alarm and leave the rest of the test unprotected;
+            # let it propagate to the test's timeout handlers.
+            raise
         except Exception as exc:  # noqa: BLE001 - reset is best effort
             logger.debug("Reliability inter-iteration reset failed: %s", exc)
 
@@ -724,6 +735,82 @@ def resolve_reliability_timeout_outcome(
     return None
 
 
+def decide_reliability_timeout_exit(
+    correctly_resolved: int, iterations: int, utterance: str,
+    recorded_failures: list[str] | None = None,
+) -> tuple[str, str | None]:
+    """Map a reliability-test timeout to its exit verdict (JF-897).
+
+    Wraps resolve_reliability_timeout_outcome with the failure-carrying
+    arms, so BOTH alarm landing sites (the per-iteration simulate call,
+    JF-893, and the loop's non-simulate phases: the inter-iteration
+    reset/stop calls and the summary, JF-897) take the same decision.
+    Returns (verdict, skip_reason):
+    - ("skip", reason): routing proven, ambient noise -> skip with reason.
+    - ("fail", None): recorded failures must surface carrying the evidence.
+    - ("reraise", None): zero correct iterations, no failures; the conftest
+      fixture's raw FAIL message is the most informative exit.
+    """
+    skip_reason = resolve_reliability_timeout_outcome(
+        correctly_resolved, iterations, utterance, recorded_failures,
+    )
+    if skip_reason is not None:
+        return ("skip", skip_reason)
+    if recorded_failures:
+        return ("fail", None)
+    return ("reraise", None)
+
+
+class _ReliabilityAlarmDecided(_TimeoutError):
+    """Marker: an alarm landing site already ran the exit decision.
+
+    Raised on the reraise verdict so the test's outer except handler does
+    not run the same decision a second time under a misleading post-loop
+    label; the conftest fixture still catches it as a _TimeoutError and
+    FAILs with its own message.
+    """
+
+
+def _exit_reliability_on_timeout(
+    verdict: str, skip_reason: str | None, label: str, utterance: str,
+    locale: str, failures: list[str], jellyfin_client, reset,
+) -> None:
+    """Act on a decide_reliability_timeout_exit verdict.
+
+    Raises pytest.skip / pytest.fail; returns only on "reraise" so the
+    caller re-raises the original _TimeoutError. The best-effort cleanup
+    (playback stop + session reset) runs before a skip since the post-loop
+    stop/reset never runs once pytest.skip raises.
+    """
+    if verdict == "skip":
+        logger.warning("  %s TIMEOUT -> SKIP: %s", label, skip_reason)
+        # JF-897 dilution visibility: a skip means the battery shrank below
+        # its planned size (the skip reason carries the correct/total count,
+        # but a warning line alone does not read as a summary). Print the
+        # same RELIABILITY SUMMARY shape the completed test prints so a
+        # diluted run is visible in the session summary at a glance.
+        logger.warning(
+            "RELIABILITY SUMMARY [%s] (%s): DILUTED by timeout, %s",
+            label, locale, skip_reason,
+        )
+        if jellyfin_client is not None:
+            try:
+                jellyfin_client.stop_playback()
+            except _TimeoutError:
+                raise
+            except Exception:  # noqa: BLE001
+                pass
+        reset()
+        pytest.skip(skip_reason)
+    if verdict == "fail":
+        pytest.fail(
+            f"Reliability failures for '{utterance}' ({locale}) "
+            f"before the per-test timeout:\n"
+            + "\n".join(f"  - {f}" for f in failures)
+        )
+    # "reraise": caller re-raises the _TimeoutError.
+
+
 @pytest.mark.e2e
 def test_e2e_reliability(
     dry_run, reliability_fixture, reliability_smapi_client,
@@ -755,102 +842,118 @@ def test_e2e_reliability(
     failures: list[str] = []
     correctly_resolved = 0
 
-    for i in range(iterations):
-        label = f"iter {i + 1}/{iterations}"
-        start = time.monotonic()
+    try:
+        for i in range(iterations):
+            label = f"iter {i + 1}/{iterations}"
+            start = time.monotonic()
 
-        try:
-            response = reliability_smapi_client.simulate(utterance)
-        except _TimeoutError:
-            # JF-893: catch the per-test SIGALRM HERE, inside the loop, so a
-            # merely slow simulate service after a proven-correct iteration
-            # skips instead of failing. Any recorded failure (or zero correct
-            # iterations) surfaces as a FAIL instead: a skip must never wipe
-            # mismatch evidence.
-            skip_reason = resolve_reliability_timeout_outcome(
-                correctly_resolved, iterations, utterance, failures,
-            )
-            if skip_reason is not None:
-                logger.warning("  %s TIMEOUT -> SKIP: %s", label, skip_reason)
-                # Best-effort cleanup before skipping: the post-loop
-                # stop/reset never runs once pytest.skip raises.
-                if jellyfin_client is not None:
-                    try:
-                        jellyfin_client.stop_playback()
-                    except Exception:  # noqa: BLE001
-                        pass
-                reliability_session_reset()
-                pytest.skip(skip_reason)
-            if failures:
-                pytest.fail(
-                    f"Reliability failures for '{utterance}' ({locale}) "
-                    f"before the per-test timeout:\n"
-                    + "\n".join(f"  - {f}" for f in failures)
-                )
-            raise
-        except SmapiError as exc:
-            elapsed = time.monotonic() - start
-            failures.append(f"{label}: SMAPI error after {elapsed:.1f}s — {exc}")
-            logger.error("  %s FAILED: %s", label, exc)
-            continue
-
-        elapsed = time.monotonic() - start
-        timings.append(elapsed)
-
-        # Parse NLU result
-        result = SmapiClient.parse_nlu_result(response)
-        resolved_intent = result["intent"]
-
-        if resolved_intent != expected_intent:
-            failures.append(
-                f"{label}: intent mismatch (expected {expected_intent}, got {resolved_intent})"
-            )
-            logger.error(
-                "  %s INTENT MISMATCH: expected=%s got=%s (%.1fs)",
-                label, expected_intent, resolved_intent, elapsed,
-            )
-        elif elapsed > _MAX_PER_ITERATION_S:
-            # Correct intent but slow: still counts as correctly resolved
-            # for the JF-893 timeout decision.
-            correctly_resolved += 1
-            failures.append(f"{label}: slow response ({elapsed:.1f}s > {_MAX_PER_ITERATION_S}s)")
-            logger.warning("  %s SLOW: %.1fs", label, elapsed)
-        else:
-            correctly_resolved += 1
-            logger.info("  %s OK (%.1fs) -> %s", label, elapsed, resolved_intent)
-
-        # Stop playback between iterations to avoid state leakage
-        if jellyfin_client is not None:
             try:
-                jellyfin_client.stop_playback()
-            except Exception:  # noqa: BLE001
-                pass
+                response = reliability_smapi_client.simulate(utterance)
+            except _TimeoutError as exc:
+                # JF-893: catch the per-test SIGALRM HERE, inside the loop, so
+                # a merely slow simulate service after a proven-correct
+                # iteration skips instead of failing. Any recorded failure
+                # (or zero correct iterations) surfaces as a FAIL instead: a
+                # skip must never wipe mismatch evidence.
+                verdict, skip_reason = decide_reliability_timeout_exit(
+                    correctly_resolved, iterations, utterance, failures,
+                )
+                _exit_reliability_on_timeout(
+                    verdict, skip_reason, label, utterance, locale, failures,
+                    jellyfin_client, reliability_session_reset,
+                )
+                raise _ReliabilityAlarmDecided(str(exc)) from exc
+            except SmapiError as exc:
+                elapsed = time.monotonic() - start
+                failures.append(f"{label}: SMAPI error after {elapsed:.1f}s — {exc}")
+                logger.error("  %s FAILED: %s", label, exc)
+                continue
 
-        # Close any session the response left open (JF-488 pause keeps it
-        # open) so the next iteration is a clean one-shot, not a polluted
-        # in-session capture (see reliability_session_reset docstring).
-        # CONDITIONAL: each reset costs a full SMAPI simulation (~10s), and
-        # resetting unconditionally pushed the 5-iteration tests past the
-        # per-test timeout alarm (live 2026-09-07: 'riproduci i miei
-        # preferiti' hit _TimeoutError at 120s). Play responses end the
-        # session themselves, so only an actually-open session pays the reset.
-        if i < iterations - 1:
-            body = _extract_response_body(_extract_skill_response(response))
-            if body.get("shouldEndSession") is not True:
-                reliability_session_reset()
+            elapsed = time.monotonic() - start
+            timings.append(elapsed)
 
-    # --- Summary ---
-    avg_time = sum(timings) / len(timings) if timings else 0.0
-    max_time = max(timings) if timings else 0.0
-    logger.info(
-        "RELIABILITY SUMMARY [%s]: %d/%d passed, avg=%.1fs, max=%.1fs",
-        utterance, iterations - len(failures), iterations, avg_time, max_time,
-    )
+            # Parse NLU result
+            result = SmapiClient.parse_nlu_result(response)
+            resolved_intent = result["intent"]
 
-    assert not failures, (
-        f"Reliability failures for '{utterance}' ({locale}) over {iterations} iterations:\n"
-        + "\n".join(f"  - {f}" for f in failures)
-    )
+            if resolved_intent != expected_intent:
+                failures.append(
+                    f"{label}: intent mismatch (expected {expected_intent}, got {resolved_intent})"
+                )
+                logger.error(
+                    "  %s INTENT MISMATCH: expected=%s got=%s (%.1fs)",
+                    label, expected_intent, resolved_intent, elapsed,
+                )
+            elif elapsed > _MAX_PER_ITERATION_S:
+                # Correct intent but slow: still counts as correctly resolved
+                # for the JF-893 timeout decision.
+                correctly_resolved += 1
+                failures.append(f"{label}: slow response ({elapsed:.1f}s > {_MAX_PER_ITERATION_S}s)")
+                logger.warning("  %s SLOW: %.1fs", label, elapsed)
+            else:
+                correctly_resolved += 1
+                logger.info("  %s OK (%.1fs) -> %s", label, elapsed, resolved_intent)
+
+            # Stop playback between iterations to avoid state leakage
+            if jellyfin_client is not None:
+                try:
+                    jellyfin_client.stop_playback()
+                except _TimeoutError:
+                    # JF-897: an alarm landing here must not be swallowed by
+                    # the broad handler below; the one-shot alarm would be
+                    # gone and the remaining iterations run unprotected.
+                    raise
+                except Exception:  # noqa: BLE001
+                    pass
+
+            # Close any session the response left open (JF-488 pause keeps it
+            # open) so the next iteration is a clean one-shot, not a polluted
+            # in-session capture (see reliability_session_reset docstring).
+            # CONDITIONAL: each reset costs a full SMAPI simulation (~10s), and
+            # resetting unconditionally pushed the 5-iteration tests past the
+            # per-test timeout alarm (live 2026-09-07: 'riproduci i miei
+            # preferiti' hit _TimeoutError at 120s). Play responses end the
+            # session themselves, so only an actually-open session pays the reset.
+            if i < iterations - 1:
+                body = _extract_response_body(_extract_skill_response(response))
+                if body.get("shouldEndSession") is not True:
+                    reliability_session_reset()
+
+        # --- Summary ---
+        avg_time = sum(timings) / len(timings) if timings else 0.0
+        max_time = max(timings) if timings else 0.0
+        logger.info(
+            "RELIABILITY SUMMARY [%s]: %d/%d passed (%d resolved correctly), "
+            "avg=%.1fs, max=%.1fs",
+            utterance, iterations - len(failures), iterations,
+            correctly_resolved, avg_time, max_time,
+        )
+
+        assert not failures, (
+            f"Reliability failures for '{utterance}' ({locale}) over {iterations} iterations:\n"
+            + "\n".join(f"  - {f}" for f in failures)
+        )
+    except _TimeoutError as exc:
+        # The inner simulate-call site marks its reraise verdict; do not
+        # re-decide (and mislabel) an already-handled alarm.
+        if isinstance(exc, _ReliabilityAlarmDecided):
+            raise
+        # JF-897: the alarm's scope is the WHOLE test, so it can also fire in
+        # the non-simulate phases: the inter-iteration stop/reset calls, the
+        # SMAPI_DELAY sleep inside a reset, or the summary itself. A fire
+        # there after a proven-correct iteration is the same ambient noise
+        # the JF-893 inner catch already routes to a skip, so the SAME
+        # decision applies here. Zero correct iterations, or any recorded
+        # failure, still fails: "reraise" hands the alarm back to the
+        # conftest fixture's raw FAIL.
+        verdict, skip_reason = decide_reliability_timeout_exit(
+            correctly_resolved, iterations, utterance, failures,
+        )
+        _exit_reliability_on_timeout(
+            verdict, skip_reason, "post-loop", utterance, locale, failures,
+            jellyfin_client, reliability_session_reset,
+        )
+        raise
 
 
 # ---------------------------------------------------------------------------
