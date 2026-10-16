@@ -21,6 +21,7 @@
   "CannotPauseVideoByVoice": "عذراً، لا يمكن إيقاف الفيديو مؤقتاً بالصوت. استخدم شاشة اللمس أو زر الرجوع للخروج.",
   "VideoStoppedByVoice": "أوقفت الفيديو.",
   "BookStoppedByVoice": "أوقفت الكتاب.",
+  "MusicStoppedByVoice": "أوقفت الموسيقى.",
   "CannotSetSleepTimerOverVideo": "عذرًا، لا يمكنني ضبط مؤقت النوم أثناء تشغيل فيديو أو تلفاز مباشر أو كتاب.",
   "CannotSetSleepTimerInSeekMode": "عذرًا، لا يمكنني ضبط مؤقت الإيقاف أثناء تشغيل الموسيقى مع شريط التقدم.",
   "PlaybackFailed": "حدث خطأ أثناء تشغيل الوسائط. يرجى المحاولة مرة أخرى.",

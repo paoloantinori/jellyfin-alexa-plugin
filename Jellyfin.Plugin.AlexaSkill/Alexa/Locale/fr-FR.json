@@ -27,6 +27,7 @@
   "CannotPauseVideoByVoice": "Désolé, on ne peut pas mettre la vidéo en pause à la voix. Utilisez l'écran tactile ou le bouton retour pour quitter.",
   "VideoStoppedByVoice": "J'ai arrêté la vidéo.",
   "BookStoppedByVoice": "J'ai arrêté le livre.",
+  "MusicStoppedByVoice": "J'ai arrêté la musique.",
   "CannotSetSleepTimerOverVideo": "Désolé, je ne peux pas définir de minuteur d'arrêt pendant la lecture d'une vidéo, de la TV en direct ou d'un livre.",
   "CannotSetSleepTimerInSeekMode": "Désolé, je ne peux pas définir de minuterie d'extinction pendant la lecture de musique avec la barre de progression.",
   "PlaybackFailed": "Un problème est survenu lors de la lecture. Veuillez réessayer.",

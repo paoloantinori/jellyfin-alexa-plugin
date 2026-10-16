@@ -38,9 +38,10 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// reports a bare STOPPED with no token while the video actively plays, yet the
 /// AudioPlayer.Stop directive DOES stop it. The former state-aware branch spoke
 /// "cannot pause" while the video stopped, contradicting the behavior; the
-/// playerActivity is now logged for triage only. JF-870: the Tell names the
-/// medium, VideoStoppedByVoice everywhere except the audiobook branch, which
-/// speaks BookStoppedByVoice. The platform model lives in the
+/// playerActivity is now logged for triage only. JF-870/JF-871/JF-872: the
+/// Tell names the medium: the audiobook branch speaks BookStoppedByVoice,
+/// seek-mode music MusicStoppedByVoice, and every other VideoApp medium
+/// (video, live TV) VideoStoppedByVoice. The platform model lives in the
 /// repo-root CLAUDE.md Stop/Session Routing reference.
 /// </summary>
 public class PauseIntentHandler : BaseHandler
@@ -135,14 +136,18 @@ public class PauseIntentHandler : BaseHandler
         PlaybackLaunchBuilder.PlayingMedium medium = Launch.ResolvePlayingMediumForFlatTransportGate(context, session, _libraryManager, _queueManager);
         if (PlaybackLaunchBuilder.IsVideoAppMedium(medium))
         {
-            // JF-870: the stopped line names the medium. The audiobook branch
-            // speaks the book line (a stopped book is not a stopped video, the
-            // 2026-10-12 device round's "fermato il video" over an audiobook);
-            // every other VideoApp medium (video, live TV, seek-mode music)
-            // keeps the video line.
-            string lineKey = medium == PlaybackLaunchBuilder.PlayingMedium.VideoAppAudiobook
-                ? "BookStoppedByVoice"
-                : "VideoStoppedByVoice";
+            // JF-870/JF-871/JF-872: the stopped line names the medium. The
+            // audiobook branch speaks the book line (a stopped book is not a
+            // stopped video, the 2026-10-12 device round's "fermato il video"
+            // over an audiobook) and the seek-mode music branch (the JF-625
+            // VideoApp launch of a song or album concat) the music line; the
+            // remaining VideoApp mediums (video, live TV) keep the video line.
+            string lineKey = medium switch
+            {
+                PlaybackLaunchBuilder.PlayingMedium.VideoAppAudiobook => "BookStoppedByVoice",
+                PlaybackLaunchBuilder.PlayingMedium.VideoAppAudio => "MusicStoppedByVoice",
+                _ => "VideoStoppedByVoice",
+            };
             Logger.LogDebug(
                 "PauseIntent: {Medium} playing, activity {Activity}, speaking {LineKey}",
                 medium, context.AudioPlayer?.PlayerActivity, lineKey);

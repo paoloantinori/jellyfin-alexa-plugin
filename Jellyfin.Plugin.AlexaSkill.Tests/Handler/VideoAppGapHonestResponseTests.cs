@@ -36,8 +36,9 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 /// ab55dc39, de7f892a): the common VideoApp shape is a bare STOPPED context
 /// during active playback, the AudioPlayer.Stop directive DOES stop the video,
 /// so the former cannot-pause line contradicted the behavior. JF-870 refines
-/// the WORDING only: the audiobook branch speaks the book line, every other
-/// VideoApp medium keeps the video line.
+/// the WORDING only: the audiobook branch speaks the book line. JF-871/JF-872
+/// add the seek-mode music branch (its own music line); video and live TV
+/// keep the video line.
 /// </summary>
 [Collection("Plugin")]
 public class VideoAppGapHonestResponseTests : PluginTestBase, IDisposable
@@ -336,17 +337,23 @@ public class VideoAppGapHonestResponseTests : PluginTestBase, IDisposable
         TestHelpers.AssertVideoStoppedTell(response);
     }
 
-    [Fact]
-    public async Task Pause_DuringLiveTv_SpeaksStoppedLine()
+    [Theory]
+    [InlineData("AMAZON.PauseIntent")]
+    [InlineData("AMAZON.CancelIntent")]
+    public async Task PauseAndCancel_DuringLiveTv_SpeaksStoppedLine(string intentName)
     {
+        // Live TV KEEPS the video line under the JF-871/JF-872 three-way
+        // selection (the default arm; a channel stream is canonical video, so
+        // only the VideoAppAudio and VideoAppAudiobook mediums get their own
+        // wording). Cancel shares the branch, so it shares the video line.
         var channel = Channel("CNN");
 
-        string deviceId = "jf564-pause-livetv";
+        string deviceId = "jf564-pause-livetv-" + intentName;
         DeviceQueueManager ledger = CreateLedger(deviceId, channel);
         var handler = CreatePauseHandler(ledger);
 
         var response = await handler.HandleAsync(
-            CreateIntent("AMAZON.PauseIntent"),
+            CreateIntent(intentName),
             TestHelpers.CreateTestContext(deviceId),
             TestHelpers.CreateTestUser(),
             CreateSession(channel),
@@ -379,6 +386,45 @@ public class VideoAppGapHonestResponseTests : PluginTestBase, IDisposable
             CancellationToken.None);
 
         TestHelpers.AssertBookStoppedTell(response);
+    }
+
+    [Theory]
+    [InlineData("AMAZON.PauseIntent", null)]
+    [InlineData("AMAZON.CancelIntent", null)]
+    [InlineData("AMAZON.PauseIntent", "PLAYING")]
+    [InlineData("AMAZON.PauseIntent", "STOPPED")]
+    [InlineData("AMAZON.PauseIntent", "BUFFER_UNDERRUN")]
+    [InlineData("AMAZON.PauseIntent", "IDLE")]
+    [InlineData("AMAZON.CancelIntent", "STOPPED")]
+    public async Task PauseAndCancel_DuringVideoAppAudio_AnyPlayerActivity_SpeakMusicStoppedLine(string intentName, string? activity)
+    {
+        // JF-871/JF-872: seek-mode music (the JF-625 NativeControlsForAudio launch:
+        // a song or the album concat riding the VideoApp HLS path) is a
+        // VideoApp-family medium, so the JF-868/JF-870 arm answered it with the
+        // VIDEO stopped line ("ho fermato il video" over music). The line now
+        // names the medium, on every context playerActivity (the JF-868 doctrine:
+        // the common live shape is a bare STOPPED). The response SHAPE is
+        // untouched (the platform invariant): the AudioPlayer.Stop directive
+        // stays and the session ends as a Tell, both asserted by
+        // AssertMusicStoppedTell. Cancel shares the branch, so it shares the
+        // music line.
+        var song = Song("Seek Mode Track");
+
+        string deviceId = "jf871-pause-music-" + intentName + "-" + (activity ?? "no-activity");
+        DeviceQueueManager ledger = CreateLedger(deviceId, song);
+        var handler = CreatePauseHandler(ledger);
+
+        var context = activity is null
+            ? TestHelpers.CreateTestContext(deviceId)
+            : TestHelpers.CreateContextWithToken(null, deviceId, activity);
+        var response = await handler.HandleAsync(
+            CreateIntent(intentName),
+            context,
+            TestHelpers.CreateTestUser(),
+            CreateSession(song),
+            CancellationToken.None);
+
+        TestHelpers.AssertMusicStoppedTell(response);
     }
 
     [Fact]

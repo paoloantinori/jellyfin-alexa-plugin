@@ -21,6 +21,7 @@
   "CannotPauseVideoByVoice": "Mi dispiace, non puoi mettere in pausa il video a voce. Usa lo schermo touch oppure il pulsante indietro per uscire.",
   "VideoStoppedByVoice": "Ho fermato il video.",
   "BookStoppedByVoice": "Ho fermato il libro.",
+  "MusicStoppedByVoice": "Ho fermato la musica.",
   "CannotSetSleepTimerOverVideo": "Mi dispiace, non posso impostare un timer di spegnimento mentre sono in riproduzione un video, la TV dal vivo o un libro.",
   "CannotSetSleepTimerInSeekMode": "Mi dispiace, non posso impostare il timer di spegnimento durante la riproduzione con la barra.",
   "PlaybackFailed": "Qualcosa è andato storto durante la riproduzione. Per favore riprova.",
