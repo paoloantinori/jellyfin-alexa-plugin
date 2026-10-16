@@ -465,12 +465,17 @@ public class EntityFallbackTests : PluginTestBase
     }
 
     [Fact]
-    public async Task JF894_DominantRivalAutoSelects_WhenExactArtistShadowsTheTie()
+    public async Task JF894_ExactNamedArtistWinsCollapse_PlaysThroughTheBypass()
     {
-        // The auto-select leg: the arbitrary first-90 winner (Danko Jones, pool
-        // order) is clearly beaten on the fair scale by the exact-named 'Jones'
-        // (fair 100 vs 40.9), so the gate swaps the selection and plays Jones,
-        // the 'P!nk floyd' discipline transplanted to the fallback.
+        // JF-895 correction of this pin's history: the exact-named 'Jones' wins the
+        // single-best collapse OUTRIGHT (the JF-892 exact-first reorder puts it ahead
+        // of the containment rivals, and the collapse returns it at 100), so the gate
+        // returns null at the JF-420.1 equality bypass and Jones plays. The
+        // auto-select swap arm is NOT what fires here; the genuine firing fixture is
+        // JF895_DominantRivalAutoSelects_NonExactWinner_SwapFires below. This pin
+        // locks the bypass OUTCOME (exact winner plays, no ask) on the same shape;
+        // the mirror-dominance leg returns the same null for it, so the bypass
+        // MECHANISM is only pinned indirectly.
         var danko = new MusicArtist { Name = "Danko Jones", Id = Guid.NewGuid() };
         var norah = new MusicArtist { Name = "Norah Jones", Id = Guid.NewGuid() };
         var jones = new MusicArtist { Name = "Jones", Id = Guid.NewGuid() };
@@ -498,6 +503,86 @@ public class EntityFallbackTests : PluginTestBase
         Assert.Equal(songForJones.Id, session.NowPlayingQueue![0].Id);
         string speech = TestHelpers.GetSpeechText(response);
         Assert.Contains("Jones", speech);
+    }
+
+    [Fact]
+    public async Task JF895_DominantRivalAutoSelects_NonExactWinner_SwapFires()
+    {
+        // THE genuine auto-select-swap fixture (JF-895): the collapse winner must be
+        // NON-exact, so the JF-420.1 bypass cannot answer first. 'Jonas' never enters
+        // the chain results (the tier-1 Contains filter for 'jones' skips it) but IS
+        // in the tie gate's rival pool (the full scoped index fetch), where the
+        // phonetic scorer rates it far above the winner's containment fair score
+        // (90*5/11 = 40.9), clearing both AlternativeFullNameThreshold and the JF-420
+        // margin: ResolveContainmentTie's swap arm runs and the selection moves to
+        // Jonas before playback.
+        var danko = new MusicArtist { Name = "Danko Jones", Id = Guid.NewGuid() };
+        var norah = new MusicArtist { Name = "Norah Jones", Id = Guid.NewGuid() };
+        var jonas = new MusicArtist { Name = "Jonas", Id = Guid.NewGuid() };
+        var songForJonas = new Audio { Name = "Molo", Id = Guid.NewGuid() };
+
+        _fx.SetupUserMock();
+        // The songs fetch answers ONLY for Jonas, so a failure to swap lands the
+        // NoSongsForArtist tell (no directives) instead of playback.
+        SetupGenreMissWithArtistSongs(new[] { songForJonas }, restrictSongsToArtist: jonas.Id);
+
+        var index = new FakeArtistIndex(new[] { danko, norah, jonas });
+
+        var handler = CreateHandler(index);
+        var request = CreateMoodIntent("jones");
+        var context = _fx.CreateContext();
+        var session = _fx.CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, _fx.CreateUser(), session, CancellationToken.None);
+
+        Assert.True(HasAudioPlayerDirective(response));
+        Assert.NotNull(session.NowPlayingQueue);
+        Assert.Single(session.NowPlayingQueue);
+        Assert.Equal(songForJonas.Id, session.NowPlayingQueue![0].Id);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("Jonas", speech);
+    }
+
+    [Fact]
+    public async Task JF895_Twin_WeakRivalBelowTheFairBar_FallsBackToTheAsk()
+    {
+        // The twin that proves the swap above is the MARGIN machinery firing, not
+        // merely a rival's presence: 'Jonasine' is the same phonetic rival shape
+        // (JNS collision, absent from the chain's Contains results, present in the
+        // pool), but its 8-character name caps the fair score at raw*5/8 <= 62.5,
+        // below AlternativeFullNameThreshold (80) no matter how the phonetic scorer
+        // rates it. With no eligible dominant rival the gate falls through to the
+        // JF-420.2 ask among the tied candidates (Jonasine stays in the ask list, its
+        // sub-bar fair score is no ask filter), never an auto-play of any of them.
+        // The Jonasine speech assert below also fails loud if a scorer-calibration
+        // change drops it below the rival bar, so this pin cannot silently degrade
+        // into a duplicate of JF894_TiedContainmentMatch.
+        var danko = new MusicArtist { Name = "Danko Jones", Id = Guid.NewGuid() };
+        var norah = new MusicArtist { Name = "Norah Jones", Id = Guid.NewGuid() };
+        var jonasine = new MusicArtist { Name = "Jonasine", Id = Guid.NewGuid() };
+        var song = new Audio { Name = "Her Name Is Jonasine", Id = Guid.NewGuid() };
+
+        _fx.SetupUserMock();
+        // Symmetric with the swap fixture: the songs fetch answers ONLY for
+        // Jonasine, so an erroneous auto-play of ANY of the three artists fails.
+        SetupGenreMissWithArtistSongs(new[] { song }, restrictSongsToArtist: jonasine.Id);
+
+        var index = new FakeArtistIndex(new[] { danko, norah, jonasine });
+
+        var handler = CreateHandler(index);
+        var request = CreateMoodIntent("jones");
+        var context = _fx.CreateContext();
+        var session = _fx.CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, _fx.CreateUser(), session, CancellationToken.None);
+
+        Assert.False(HasAudioPlayerDirective(response));
+        Assert.True(session.NowPlayingQueue == null || session.NowPlayingQueue.Count == 0);
+        Assert.Equal(DisambiguationHelper.MediaTypeArtist, response.SessionAttributes?[DisambiguationHelper.AttrType]);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("Danko Jones", speech);
+        Assert.Contains("Norah Jones", speech);
+        Assert.Contains("Jonasine", speech);
     }
 
     [Fact]
