@@ -2934,12 +2934,19 @@ public sealed class PlaybackLaunchBuilder
             // reach this guard with a null item (the pairing belt admits the
             // deliberate null shape).
             _logger.LogInformation(
-                "BuildVideoAppAudioResponse: book item {ItemId} ('{Title}') has no verified book folder (shared container, unresolvable ParentId, or no library manager threaded); playing as its own single-item stream (JF-794)",
+                "BuildVideoAppAudioResponse: book item {ItemId} ('{Title}') has no verified book folder (shared container, unresolvable ParentId, or no library manager threaded); serving outside the book concat machinery (its own single-item stream, or the album collection for the empty-ParentId corner; JF-794)",
                 itemId, item?.Name);
         }
 
         string videoAudioUrl;
         string streamKey;
+        // JF-898: set only on the single-item arm below, and only when the book
+        // discriminator vouched the launch (typeAgnosticClimb): the arm is then the
+        // REJECTED-CLIMB book shape (the climb failed closed to the leaf's own
+        // stream), unreachable for music, so the ledger record below still mints the
+        // book-intent route exactly as the accepted arms do. The album-concat arm
+        // keeps the bare VideoApp route (the JF-625 music machinery).
+        bool singleItemBookServe = false;
         if (bookFolder is not null)
         {
             // Multi-chapter audiobook: use concat HLS endpoint keyed by parent book ID.
@@ -2973,6 +2980,7 @@ public sealed class PlaybackLaunchBuilder
         }
         else
         {
+            singleItemBookServe = typeAgnosticClimb;
             streamKey = itemId;
             videoAudioUrl = GetVideoAudioUrl(itemId);
             // JF-580: the URL carries the signed JF-309 stream token; log it masked.
@@ -3003,10 +3011,12 @@ public sealed class PlaybackLaunchBuilder
         {
             DeviceQueueManager? ledger = Plugin.Instance?.DeviceQueueManager;
             // JF-894: the book-concat arm (bookFolder accepted) is a VERIFIED book
-            // launch, so the ledger records the book verdict beside the chapter id;
-            // every other arm (single-item leaf, album concat) keeps the bare
-            // VideoApp route the kind ladder classifies today.
-            DeviceQueueManager.LaunchRoute recordedRoute = bookFolder is not null
+            // launch, so the ledger records the book verdict beside the chapter id.
+            // JF-898 extends the verdict to the rejected-climb single-item arm
+            // (singleItemBookServe above: a book-intent launch whose climb failed
+            // closed); every other arm (album concat, music single-item) keeps the
+            // bare VideoApp route the kind ladder classifies today.
+            DeviceQueueManager.LaunchRoute recordedRoute = bookFolder is not null || singleItemBookServe
                 ? DeviceQueueManager.LaunchRoute.VideoAppAudiobook
                 : DeviceQueueManager.LaunchRoute.VideoApp;
             ledger?.RecordLastPlayed(ledgerDeviceId, itemId, recordedRoute);

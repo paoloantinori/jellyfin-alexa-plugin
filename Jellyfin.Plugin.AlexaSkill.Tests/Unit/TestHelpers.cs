@@ -275,6 +275,33 @@ internal static class TestHelpers
     }
 
     /// <summary>
+    /// The Audio-typed remap twin of <see cref="CreateCollapsedBookUnderContainer"/>
+    /// (the JF-799 remap doctrine: the same census shape with the row re-typed after
+    /// the scan, a metadata state the books-library scanner cannot produce): the
+    /// collapsed row's ParentId is the SHARED container while its file sits inside
+    /// its own subfolder below it, so the verified climb rejects and a book-intent
+    /// launch of the leaf plays it as its own single-item stream (the JF-898
+    /// rejected-climb arm; the Audio typing is what makes the kind ladder
+    /// misclassify the bare-VideoApp-routed entry as seek-mode music).
+    /// </summary>
+    internal static (Audio RemappedRow, Folder Container, Mock<ILibraryManager> Library) CreateCollapsedRemappedRowUnderContainer()
+    {
+        Guid containerId = Guid.NewGuid();
+        var remappedRow = new Audio
+        {
+            Name = "Managing Humans",
+            Id = Guid.NewGuid(),
+            ParentId = containerId,
+            RunTimeTicks = TimeSpan.FromMinutes(20).Ticks,
+            Path = "/audiobooks/Managing Humans/Managing Humans.mp3"
+        };
+        var container = new Folder { Name = "Audiobooks", Id = containerId, Path = "/audiobooks" };
+        var library = new Mock<ILibraryManager>();
+        library.Setup(l => l.GetItemById(containerId)).Returns(container);
+        return (remappedRow, container, library);
+    }
+
+    /// <summary>
     /// The ONE interaction-model type-node extractor for the catalog suites'
     /// PUT-body assertions (JF-717 hoist of LegIsolationTests' GetTypeNode,
     /// the CreateSyncUser convention on the third private copy): parses a raw
