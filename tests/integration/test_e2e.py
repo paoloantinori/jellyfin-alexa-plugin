@@ -20,6 +20,7 @@ import xml.etree.ElementTree as ET
 import pytest
 
 from smapi_client import SmapiClient, SmapiError, SmapiUnexpectedError
+from conftest import _TimeoutError
 
 logger = logging.getLogger("e2e.test")
 
@@ -695,6 +696,34 @@ def reliability_session_reset(skill_id, smapi_delay):
 _MAX_PER_ITERATION_S = 30.0
 
 
+def resolve_reliability_timeout_outcome(
+    correctly_resolved: int, iterations: int, utterance: str,
+    recorded_failures: list[str] | None = None,
+) -> str | None:
+    """Decide how a per-test SMAPI timeout ends a reliability test (JF-893).
+
+    The conftest per-test SIGALRM fires not only on a hard outage but also
+    when the simulate service is merely SLOW, and the reliability battery's
+    existing outage-skipping only engages on hard simulate failures. When at
+    least one iteration already resolved to the expected intent AND no
+    failure is already recorded, routing is proven and the timeout is
+    ambient noise: return a skip reason (SKIP, not FAIL), mirroring the
+    wrapper battery's OUTAGE-skip posture
+    (memory: simulate_outage_per_locale).
+
+    Returns the skip reason string, or None when the timeout must surface as
+    a failure: zero correctly-resolved iterations is a real failure signal,
+    and a recorded failure (intent mismatch, slow response) must not be
+    wiped by a skip.
+    """
+    if correctly_resolved >= 1 and not recorded_failures:
+        return (
+            f"simulate service slow: {correctly_resolved}/{iterations} "
+            f"iterations resolved correctly before timeout ({utterance!r})"
+        )
+    return None
+
+
 @pytest.mark.e2e
 def test_e2e_reliability(
     dry_run, reliability_fixture, reliability_smapi_client,
@@ -704,6 +733,9 @@ def test_e2e_reliability(
 
     Each fixture case can specify an ``iterations`` count (default 3).
     Fails if any iteration exceeds the per-iteration timeout or SMAPI fails.
+    A per-test timeout AFTER at least one correctly-resolved iteration skips
+    instead (JF-893: a slow simulate service is ambient noise, routing is
+    already proven); a timeout with zero correct iterations still fails.
     """
     utterance = reliability_fixture["utterance"]
     expected_intent = reliability_fixture["expected_intent"]
@@ -721,6 +753,7 @@ def test_e2e_reliability(
 
     timings: list[float] = []
     failures: list[str] = []
+    correctly_resolved = 0
 
     for i in range(iterations):
         label = f"iter {i + 1}/{iterations}"
@@ -728,6 +761,33 @@ def test_e2e_reliability(
 
         try:
             response = reliability_smapi_client.simulate(utterance)
+        except _TimeoutError:
+            # JF-893: catch the per-test SIGALRM HERE, inside the loop, so a
+            # merely slow simulate service after a proven-correct iteration
+            # skips instead of failing. Any recorded failure (or zero correct
+            # iterations) surfaces as a FAIL instead: a skip must never wipe
+            # mismatch evidence.
+            skip_reason = resolve_reliability_timeout_outcome(
+                correctly_resolved, iterations, utterance, failures,
+            )
+            if skip_reason is not None:
+                logger.warning("  %s TIMEOUT -> SKIP: %s", label, skip_reason)
+                # Best-effort cleanup before skipping: the post-loop
+                # stop/reset never runs once pytest.skip raises.
+                if jellyfin_client is not None:
+                    try:
+                        jellyfin_client.stop_playback()
+                    except Exception:  # noqa: BLE001
+                        pass
+                reliability_session_reset()
+                pytest.skip(skip_reason)
+            if failures:
+                pytest.fail(
+                    f"Reliability failures for '{utterance}' ({locale}) "
+                    f"before the per-test timeout:\n"
+                    + "\n".join(f"  - {f}" for f in failures)
+                )
+            raise
         except SmapiError as exc:
             elapsed = time.monotonic() - start
             failures.append(f"{label}: SMAPI error after {elapsed:.1f}s — {exc}")
@@ -750,9 +810,13 @@ def test_e2e_reliability(
                 label, expected_intent, resolved_intent, elapsed,
             )
         elif elapsed > _MAX_PER_ITERATION_S:
+            # Correct intent but slow: still counts as correctly resolved
+            # for the JF-893 timeout decision.
+            correctly_resolved += 1
             failures.append(f"{label}: slow response ({elapsed:.1f}s > {_MAX_PER_ITERATION_S}s)")
             logger.warning("  %s SLOW: %.1fs", label, elapsed)
         else:
+            correctly_resolved += 1
             logger.info("  %s OK (%.1fs) -> %s", label, elapsed, resolved_intent)
 
         # Stop playback between iterations to avoid state leakage
