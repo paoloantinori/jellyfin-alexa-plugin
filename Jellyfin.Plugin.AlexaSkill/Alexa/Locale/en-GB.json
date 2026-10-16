@@ -126,6 +126,7 @@
   "CannotPauseVideoByVoice": "Sorry, I can't pause video by voice. Use the touchscreen or the back button to exit.",
   "VideoStoppedByVoice": "I've stopped the video.",
   "BookStoppedByVoice": "I've stopped the book.",
+  "MusicStoppedByVoice": "I've stopped the music.",
   "CannotSetSleepTimerOverVideo": "Sorry, I can't set a sleep timer while a video, live TV, or a book is playing.",
   "CannotSetSleepTimerInSeekMode": "Sorry, I can't set a sleep timer while music plays with the progress bar.",
   "NoMoreMatches": "Sorry, there are no more matches.",

@@ -660,6 +660,14 @@ internal static class TestHelpers
         => AssertStoppedByVoiceTell(response, "BookStoppedByVoice", "VideoStoppedByVoice");
 
     /// <summary>
+    /// The seek-mode music branch of the VideoApp pause/cancel Tell (JF-871/JF-872):
+    /// the music-stopped line is spoken, the video line is NOT, and the rest of the
+    /// <see cref="AssertVideoStoppedTell"/> invariants hold unchanged.
+    /// </summary>
+    internal static void AssertMusicStoppedTell(SkillResponse response)
+        => AssertStoppedByVoiceTell(response, "MusicStoppedByVoice", "VideoStoppedByVoice");
+
+    /// <summary>
     /// The shared core of the per-medium stopped-Tell entry points above (the
     /// JF-870 parameterization, so the response-shape invariants live once and
     /// a future shape change does not re-edit them per medium): the medium's

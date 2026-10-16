@@ -21,6 +21,7 @@
   "CannotPauseVideoByVoice": "Sorry, je kunt video niet met je stem pauzeren. Gebruik het aanraakscherm of de terugknop om af te sluiten.",
   "VideoStoppedByVoice": "Ik heb de video gestopt.",
   "BookStoppedByVoice": "Ik heb het luisterboek gestopt.",
+  "MusicStoppedByVoice": "Ik heb de muziek gestopt.",
   "CannotSetSleepTimerOverVideo": "Sorry, ik kan geen slaaptimer instellen terwijl een video, live tv of een boek wordt afgespeeld.",
   "CannotSetSleepTimerInSeekMode": "Sorry, ik kan geen slaaptimer instellen terwijl muziek afspeelt met de voortgangsbalk.",
   "PlaybackFailed": "Er is iets misgegaan bij het afspelen van je media. Probeer het opnieuw.",
