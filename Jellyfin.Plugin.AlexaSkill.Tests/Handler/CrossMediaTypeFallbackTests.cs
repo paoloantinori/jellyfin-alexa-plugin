@@ -280,6 +280,55 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
     }
 
     [Fact]
+    public async Task PlaySong_NoSongs_TiedContainmentArtists_JF894_SharedGateAsks()
+    {
+        // JF-894 second-site pin (the PlaySong miss cascade routes the SAME shared
+        // entity-fallback gate, here on the cold/DB path where the chain's tier-1
+        // list is the rival pool): 'jones' ties Norah Jones and Danko Jones at the
+        // containment score 90. The old gate auto-played whichever artist the
+        // SearchTerm query listed first; the JF-420 discipline asks instead.
+        var danko = new MusicArtist { Name = "Danko Jones", Id = Guid.NewGuid() };
+        var norah = new MusicArtist { Name = "Norah Jones", Id = Guid.NewGuid() };
+
+        _fx.SetupUserMock();
+
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q =>
+            {
+                // Song search: empty (no song titled "jones")
+                if (q.SearchTerm != null && q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Audio))
+                    return new List<BaseItem>();
+
+                // Artist search: the two tied containment artists, Danko first (the
+                // arbitrary early-exit winner of the live incident's shape)
+                if (q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicArtist))
+                    return new List<BaseItem> { danko, norah };
+
+                return new List<BaseItem>();
+            });
+
+        var handler = CreateSongHandler();
+        var request = CreateSongIntent("jones"); // single word, no musician slot
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        // The multi-artist ask fires: no auto-pick, session open for the yes/no.
+        Assert.True(response.Response?.ShouldEndSession != true);
+        Assert.Null(TestHelpers.GetPlayDirective(response));
+        Assert.True(session.NowPlayingQueue == null || session.NowPlayingQueue.Count == 0);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("Danko Jones", speech);
+        Assert.Contains("Norah Jones", speech);
+        Assert.Equal(DisambiguationHelper.MediaTypeArtist, response.SessionAttributes?[DisambiguationHelper.AttrType]);
+        string matches = response.SessionAttributes?[DisambiguationHelper.AttrMatches]?.ToString() ?? string.Empty;
+        Assert.Contains("Danko Jones", matches);
+        Assert.Contains("Norah Jones", matches);
+    }
+
+    [Fact]
     public async Task PlaySong_SongsFound_NoFallbackTriggered()
     {
         var songId = Guid.NewGuid();

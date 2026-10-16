@@ -27,8 +27,9 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 /// <see cref="Handler.BaseHandler.HandleFuzzyMiss"/> (the big multi-turn
 /// disambiguation/auto-play decision block, with the JF-508/JF-526 full-keyword
 /// coverage auto-accept predicate) deliberately REMAINED on BaseHandler, and the
-/// JF-420-family gates (FairComparisonScore, AlternativeFullNameThreshold, the
-/// JF-377 downgrade) remain on the handlers that own those decisions. This class
+/// JF-420-family gates (whose shared fair-comparison core lives in
+/// Handler.ArtistFairComparison since JF-894) remain on the handlers that own
+/// those decisions. This class
 /// must never grow an auto-play judgment; it returns candidates, the decision
 /// points judge. (The rule bars NEW judgments: SearchItemsFuzzyAsync's JF-508/JF-526
 /// coverage gate arrived here verbatim inside its moved body, a pre-existing decision

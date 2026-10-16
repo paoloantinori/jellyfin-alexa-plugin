@@ -349,9 +349,10 @@ internal static class DisambiguationHelper
     /// construction for every site that fires the multi-artist prompt: the JF-420
     /// containment-vs-alternative gate (the extraction SOURCE), the JF-652 kana
     /// near-tie block in PlayArtistSongsIntentHandler, the JF-652 kana near-tie
-    /// wrapper in CrossMediaFallback.ResolveKanaOriginTie, and the JF-690
+    /// wrapper in CrossMediaFallback.ResolveKanaOriginTie, the JF-690
     /// multi-value ER gate in MultiValueErDisambiguation (the only caller whose
-    /// list is unbounded). The spoken list is capped at
+    /// list is unbounded), and the JF-894 containment-tie arbitration in
+    /// CrossMediaFallback.ResolveContainmentTie. The spoken list is capped at
     /// <see cref="MultipleArtistsSpeakCap"/> (JF-707); the session state keeps
     /// the FULL resolved list so no artist the gate resolved becomes unaskable.
     /// The first match is the one "yes" plays. The TOTAL candidate count leads

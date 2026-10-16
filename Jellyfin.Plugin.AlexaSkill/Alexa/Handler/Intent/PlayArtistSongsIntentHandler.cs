@@ -29,68 +29,11 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// </summary>
 public class PlayArtistSongsIntentHandler : BaseHandler
 {
-    /// <summary>
-    /// JF-420: minimum fair-score margin for auto-selecting the full-name alternative
-    /// over a containment match. Below this margin, the handler disambiguates instead.
-    /// Derived from the P!nk floyd case: penalized containment 36 vs genuine 90 = 54
-    /// margin (auto-select); a tribute band at ~65 vs penalized 37 = 28 margin (also
-    /// auto-select); a genuinely close case would be under 20 (disambiguate).
-    /// JF-885: internal because the ER gate
-    /// (<see cref="MultiValueErDisambiguation"/>) references this SAME bar for its
-    /// rank-1 dominance leg instead of re-inventing the constant; the two decisions
-    /// share one calibration.
-    /// </summary>
-    internal const double ContainmentVsFullNameMargin = 20.0;
-
-    /// <summary>
-    /// JF-420/JF-420.3: the bar for an alternative to be "genuinely plausible",
-    /// checked on the RAW score (worth comparing at all: below this the match just
-    /// auto-plays) and on the FAIR score (eligible to WIN the comparison: an
-    /// exemption-only partial-word hit cannot clear it). One bar, two checkpoints.
-    /// </summary>
-    private const int AlternativeFullNameThreshold = 80;
-
-    /// <summary>
-    /// Whether every word of <paramref name="shorterName"/> also appears as a word of
-    /// <paramref name="longerName"/>.
-    /// </summary>
-    private static bool IsWordSubset(string shorterName, string longerName)
-    {
-        var longerWords = new HashSet<string>(
-            longerName.Split(' ', StringSplitOptions.RemoveEmptyEntries),
-            StringComparer.OrdinalIgnoreCase);
-        return shorterName
-            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
-            .All(longerWords.Contains);
-    }
-
-    /// <summary>
-    /// JF-420.3: the alternative is just a shorter form of the containment match
-    /// ("Miles" vs "Miles Davis" for "miles davis live") and adds nothing the user
-    /// could have meant, so the comparison is skipped entirely. Guarded on the
-    /// match's words appearing in the query (the gate's own substring shape) so a
-    /// SUPERSTRING tier-1 match (a tribute act matching "the beatles" by
-    /// name-contains-query) never skips.
-    /// </summary>
-    private static bool IsRedundantShorterForm(string matchName, string alternativeName, string query)
-        => IsWordSubset(matchName, query) && IsWordSubset(alternativeName, matchName);
-
-    /// <summary>
-    /// JF-420.3 comparison score: the candidate's score scaled by the length-match
-    /// fraction in BOTH directions (min(nameLen/queryLen, queryLen/nameLen)).
-    /// Deliberately NOT <see cref="FuzzyMatcher.ApplyFairLengthPenalty"/>: the
-    /// matcher's 0.5 floor is a RECALL device (keep half-coverage candidates
-    /// reachable in general matching), but in this DECISION it manufactured phantom
-    /// margins in both directions (review round 2): a containment-exempt
-    /// half-query alternative kept 90 ("Floyd" in "p!nk floyd") while a superstring
-    /// tribute also kept 90 against a floor-protected match. Decision fairness
-    /// wants the honest length fraction on both sides, symmetrically.
-    /// </summary>
-    private static double FairComparisonScore(string name, string query, int score)
-    {
-        double ratio = Math.Min((double)name.Length / query.Length, (double)query.Length / name.Length);
-        return score * ratio;
-    }
+    // The JF-420.3 fair-comparison core (ContainmentVsFullNameMargin,
+    // AlternativeFullNameThreshold, IsRedundantShorterForm, FairComparisonScore)
+    // lives in ArtistFairComparison since JF-894 (one home, shared with the
+    // CrossMediaFallback containment-tie arbitration and the JF-885 ER dominance
+    // leg); do not fork it back here.
 
     // The JF-381 tier-1 containment band (maximum extra characters a containment
     // candidate may have beyond the query, so "cup" in "Porcupine Tree" cannot short-
@@ -402,12 +345,12 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                     // the romanized query).
                     string candidateName = Util.ArtistSearch.QueryNameFor(pinnedIndex, candidate);
                     int raw = FuzzyMatcher.Score(matchedQuery, candidateName);
-                    if (raw < AlternativeFullNameThreshold)
+                    if (raw < ArtistFairComparison.AlternativeFullNameThreshold)
                     {
                         continue;
                     }
 
-                    double fair = FairComparisonScore(candidateName, matchedQuery, raw);
+                    double fair = ArtistFairComparison.FairComparisonScore(candidateName, matchedQuery, raw);
                     if (fair > bestAlternativeFair)
                     {
                         bestAlternativeFair = fair;
@@ -416,7 +359,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                 }
 
                 if (bestAlternative != null
-                    && !IsRedundantShorterForm(
+                    && !ArtistFairComparison.IsRedundantShorterForm(
                         Util.ArtistSearch.QueryNameFor(pinnedIndex, artists[0]),
                         Util.ArtistSearch.QueryNameFor(pinnedIndex, bestAlternative),
                         matchedQuery))
@@ -428,10 +371,10 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                     // like "Miles" inside "miles davis live") cannot outrank a better
                     // full match. If the alternative wins by a clear margin, auto-select
                     // it ("P!nk floyd" means Pink Floyd, not P!nk); otherwise offer both.
-                    double containmentFair = FairComparisonScore(
+                    double containmentFair = ArtistFairComparison.FairComparisonScore(
                         Util.ArtistSearch.QueryNameFor(pinnedIndex, artists[0]), matchedQuery, FuzzyMatcher.ContainmentScore);
 
-                    if (bestAlternativeFair >= AlternativeFullNameThreshold && bestAlternativeFair - containmentFair > ContainmentVsFullNameMargin)
+                    if (bestAlternativeFair >= ArtistFairComparison.AlternativeFullNameThreshold && bestAlternativeFair - containmentFair > ArtistFairComparison.ContainmentVsFullNameMargin)
                     {
                         Logger.LogInformation(
                             "PlayArtistSongs: containment match '{Containment}' (fair {ContainmentFair:F0}) clearly beaten by full-name alternative '{Alternative}' (fair {AlternativeFair:F0}), auto-selecting (JF-420)",

@@ -33,7 +33,7 @@ public class EntityFallbackTests : PluginTestBase
 {
     private readonly HandlerTestFixture _fx = new HandlerTestFixture();
 
-    private PlayMoodMusicIntentHandler CreateHandler()
+    private PlayMoodMusicIntentHandler CreateHandler(IArtistIndex? artistIndex = null)
     {
         return new PlayMoodMusicIntentHandler(
             _fx.SessionManager.Object,
@@ -41,7 +41,8 @@ public class EntityFallbackTests : PluginTestBase
             _fx.LibraryManager.Object,
             _fx.UserManager.Object,
             _fx.UserDataManager.Object,
-            _fx.LoggerFactory);
+            _fx.LoggerFactory,
+            artistIndex: artistIndex);
     }
 
     private static IntentRequest CreateMoodIntent(string mood, string locale = "en-US")
@@ -259,5 +260,354 @@ public class EntityFallbackTests : PluginTestBase
 
         // No AudioPlayer.Play — the guard prevented the artist fallback despite the artist being available.
         Assert.True(response.Response?.Directives == null || response.Response.Directives.Count == 0);
+    }
+
+    // ====================================================================
+    // JF-894: containment-tie arbitration in the shared entity-fallback gate.
+    // Live incident (corr 72eca45c, 2026-10-16): 'musica si nora jones' degraded
+    // by the NLU to mood='jones'; the strict bar accepted the FIRST 90-scoring
+    // containment tie (Danko Jones) and auto-played it while Norah Jones scored
+    // the same 90. The JF-420 discipline (fair scores over every rival) must ask.
+    // ====================================================================
+
+    /// <summary>
+    /// Configures the library mock for the index-backed pins: every genre search
+    /// misses (triggering the entity fallback) and the artist-songs fetch returns
+    /// the given songs. The artist search itself runs in memory over the
+    /// <see cref="FakeArtistIndex"/> the handler was built with. Pass
+    /// <paramref name="restrictSongsToArtist"/> to answer the songs fetch ONLY for
+    /// that artist id, so a pin can prove WHICH artist the gate selected (a wrong
+    /// pick lands the NoSongsForArtist tell instead of playback).
+    /// </summary>
+    private void SetupGenreMissWithArtistSongs(Audio[] songs, Guid? restrictSongsToArtist = null)
+    {
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q =>
+            {
+                if (q.Genres != null && q.Genres.Count > 0)
+                {
+                    return new List<BaseItem>();
+                }
+
+                if (q.ArtistIds != null && q.ArtistIds.Length > 0
+                    && (restrictSongsToArtist == null || q.ArtistIds[0].Equals(restrictSongsToArtist)))
+                {
+                    return new List<BaseItem>(songs);
+                }
+
+                return new List<BaseItem>();
+            });
+    }
+
+    private static bool HasAudioPlayerDirective(SkillResponse response)
+        => TestHelpers.GetPlayDirective(response) != null;
+
+    [Fact]
+    public async Task JF894_TiedContainmentMatch_AsksWithBothCandidates_NeverAutoPicks()
+    {
+        // THE regression pin. The pool order puts Danko Jones FIRST so the
+        // best-match early exit picks it as the winner (the live incident's
+        // arbitrary pick); Norah Jones ties at the same containment score.
+        var danko = new MusicArtist { Name = "Danko Jones", Id = Guid.NewGuid() };
+        var norah = new MusicArtist { Name = "Norah Jones", Id = Guid.NewGuid() };
+        var control = new MusicArtist { Name = "Radiohead", Id = Guid.NewGuid() };
+        var song = new Audio { Name = "Come Away with Me", Id = Guid.NewGuid() };
+
+        _fx.SetupUserMock();
+        SetupGenreMissWithArtistSongs(new[] { song });
+        var index = new FakeArtistIndex(new[] { danko, norah, control });
+
+        var handler = CreateHandler(index);
+        var request = CreateMoodIntent("jones");
+        var context = _fx.CreateContext();
+        var session = _fx.CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, _fx.CreateUser(), session, CancellationToken.None);
+
+        // The ask fires: never an arbitrary auto-pick of either tied artist.
+        Assert.False(HasAudioPlayerDirective(response));
+        Assert.True(session.NowPlayingQueue == null || session.NowPlayingQueue.Count == 0);
+        Assert.False(response.Response.ShouldEndSession);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("Danko Jones", speech);
+        Assert.Contains("Norah Jones", speech);
+        // The JF-420.2 disambiguation state: "yes" plays the strongest candidate.
+        Assert.Equal(DisambiguationHelper.MediaTypeArtist, response.SessionAttributes?[DisambiguationHelper.AttrType]);
+        string matches = response.SessionAttributes?[DisambiguationHelper.AttrMatches]?.ToString() ?? string.Empty;
+        Assert.Contains("Danko Jones", matches);
+        Assert.Contains("Norah Jones", matches);
+    }
+
+    [Fact]
+    public async Task JF894_UniqueContainmentMatch_StillAutoPlaysWithFoundArtistInstead()
+    {
+        // 'danko' matches only Danko Jones at the containment bar: a unique
+        // match at >= threshold keeps the existing auto-play (no ask).
+        var danko = new MusicArtist { Name = "Danko Jones", Id = Guid.NewGuid() };
+        var norah = new MusicArtist { Name = "Norah Jones", Id = Guid.NewGuid() };
+        var control = new MusicArtist { Name = "Radiohead", Id = Guid.NewGuid() };
+        var song = new Audio { Name = "Had Enough", Id = Guid.NewGuid() };
+
+        _fx.SetupUserMock();
+        SetupGenreMissWithArtistSongs(new[] { song });
+        var index = new FakeArtistIndex(new[] { danko, norah, control });
+
+        var handler = CreateHandler(index);
+        var request = CreateMoodIntent("danko");
+        var context = _fx.CreateContext();
+        var session = _fx.CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, _fx.CreateUser(), session, CancellationToken.None);
+
+        Assert.True(HasAudioPlayerDirective(response));
+        Assert.NotNull(session.NowPlayingQueue);
+        Assert.Single(session.NowPlayingQueue);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("Danko Jones", speech);
+    }
+
+    [Fact]
+    public async Task JF894_ExactFullName_PlaysDirectly()
+    {
+        // JF-420.1: the full spoken name exact-matches one artist; the
+        // arbitration is bypassed and the artist plays.
+        var danko = new MusicArtist { Name = "Danko Jones", Id = Guid.NewGuid() };
+        var norah = new MusicArtist { Name = "Norah Jones", Id = Guid.NewGuid() };
+        var control = new MusicArtist { Name = "Radiohead", Id = Guid.NewGuid() };
+        var song = new Audio { Name = "Don't Know Why", Id = Guid.NewGuid() };
+
+        _fx.SetupUserMock();
+        SetupGenreMissWithArtistSongs(new[] { song });
+        var index = new FakeArtistIndex(new[] { norah, danko, control });
+
+        var handler = CreateHandler(index);
+        var request = CreateMoodIntent("norah jones");
+        var context = _fx.CreateContext();
+        var session = _fx.CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, _fx.CreateUser(), session, CancellationToken.None);
+
+        Assert.True(HasAudioPlayerDirective(response));
+        Assert.NotNull(session.NowPlayingQueue);
+        Assert.Single(session.NowPlayingQueue);
+        Assert.Equal(song.Id, session.NowPlayingQueue![0].Id);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("Norah Jones", speech);
+        Assert.DoesNotContain("Danko Jones", speech);
+    }
+
+    [Fact]
+    public async Task JF894_FourWayTie_KeepsEveryTiedRivalReachable_SpeaksCapped()
+    {
+        // The library carries four Jones artists: the ask's cycling STATE keeps
+        // all of them (DisambiguateNext reaches rank 4) while the spoken list is
+        // capped at MultipleArtistsSpeakCap (3) with the total leading the
+        // sentence (JF-880).
+        var danko = new MusicArtist { Name = "Danko Jones", Id = Guid.NewGuid() };
+        var norah = new MusicArtist { Name = "Norah Jones", Id = Guid.NewGuid() };
+        var tom = new MusicArtist { Name = "Tom Jones", Id = Guid.NewGuid() };
+        var quincy = new MusicArtist { Name = "Quincy Jones", Id = Guid.NewGuid() };
+        var control = new MusicArtist { Name = "Radiohead", Id = Guid.NewGuid() };
+        var song = new Audio { Name = "It's Not Unusual", Id = Guid.NewGuid() };
+
+        _fx.SetupUserMock();
+        SetupGenreMissWithArtistSongs(new[] { song });
+        var index = new FakeArtistIndex(new[] { danko, norah, tom, quincy, control });
+
+        var handler = CreateHandler(index);
+        var request = CreateMoodIntent("jones");
+        var context = _fx.CreateContext();
+        var session = _fx.CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, _fx.CreateUser(), session, CancellationToken.None);
+
+        Assert.False(HasAudioPlayerDirective(response));
+        string speech = TestHelpers.GetSpeechText(response);
+        // The three strongest fair scores are spoken; the fourth stays reachable
+        // only through the yes/no cycling state.
+        Assert.Contains("Tom Jones", speech);
+        Assert.Contains("Norah Jones", speech);
+        Assert.Contains("Danko Jones", speech);
+        Assert.DoesNotContain("Quincy Jones", speech);
+        string matches = response.SessionAttributes?[DisambiguationHelper.AttrMatches]?.ToString() ?? string.Empty;
+        Assert.Contains("Quincy Jones", matches);
+        Assert.Equal(DisambiguationHelper.MediaTypeArtist, response.SessionAttributes?[DisambiguationHelper.AttrType]);
+    }
+
+    [Fact]
+    public async Task JF894_ClearFairWinner_PlaysWithoutAsking()
+    {
+        // The mirror dominance leg: 'Jonesy' is within one character of the
+        // query's length while 'Danko Jones' is a distant containment, so the
+        // fair comparison says the winner beats every rival by more than the
+        // JF-420 margin. No artist sits within the margin: no tie, no ask, the
+        // winner plays.
+        var jonesy = new MusicArtist { Name = "Jonesy", Id = Guid.NewGuid() };
+        var danko = new MusicArtist { Name = "Danko Jones", Id = Guid.NewGuid() };
+        var song = new Audio { Name = "Hey Jonesy", Id = Guid.NewGuid() };
+
+        _fx.SetupUserMock();
+        SetupGenreMissWithArtistSongs(new[] { song });
+        var index = new FakeArtistIndex(new[] { jonesy, danko });
+
+        var handler = CreateHandler(index);
+        var request = CreateMoodIntent("jones");
+        var context = _fx.CreateContext();
+        var session = _fx.CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, _fx.CreateUser(), session, CancellationToken.None);
+
+        Assert.True(HasAudioPlayerDirective(response));
+        Assert.NotNull(session.NowPlayingQueue);
+        Assert.Single(session.NowPlayingQueue);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("Jonesy", speech);
+    }
+
+    [Fact]
+    public async Task JF894_DominantRivalAutoSelects_WhenExactArtistShadowsTheTie()
+    {
+        // The auto-select leg: the arbitrary first-90 winner (Danko Jones, pool
+        // order) is clearly beaten on the fair scale by the exact-named 'Jones'
+        // (fair 100 vs 40.9), so the gate swaps the selection and plays Jones,
+        // the 'P!nk floyd' discipline transplanted to the fallback.
+        var danko = new MusicArtist { Name = "Danko Jones", Id = Guid.NewGuid() };
+        var norah = new MusicArtist { Name = "Norah Jones", Id = Guid.NewGuid() };
+        var jones = new MusicArtist { Name = "Jones", Id = Guid.NewGuid() };
+        var songForJones = new Audio { Name = "The Jones Song", Id = Guid.NewGuid() };
+
+        _fx.SetupUserMock();
+
+        // The artist-songs fetch answers ONLY for the exact-named artist, so a
+        // failure to swap the selection lands the NoSongsForArtist tell (no
+        // directives) instead of playback.
+        SetupGenreMissWithArtistSongs(new[] { songForJones }, restrictSongsToArtist: jones.Id);
+
+        var index = new FakeArtistIndex(new[] { danko, norah, jones });
+
+        var handler = CreateHandler(index);
+        var request = CreateMoodIntent("jones");
+        var context = _fx.CreateContext();
+        var session = _fx.CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, _fx.CreateUser(), session, CancellationToken.None);
+
+        Assert.True(HasAudioPlayerDirective(response));
+        Assert.NotNull(session.NowPlayingQueue);
+        Assert.Single(session.NowPlayingQueue);
+        Assert.Equal(songForJones.Id, session.NowPlayingQueue![0].Id);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("Jones", speech);
+    }
+
+    [Fact]
+    public async Task JF894_PhoneticFloorTie_BothRivalsVisible_Asks()
+    {
+        // The rival scan scores through the shared PHONETIC scorer: 'Koop' and
+        // 'Koup' both Double-Metaphone KP and both floor at 91 for the heard
+        // 'cup', but plain scoring leaves 'Koup' at ~66 (below the bar) where
+        // the arbitrary pick the gate exists to remove would survive.
+        var koop = new MusicArtist { Name = "Koop", Id = Guid.NewGuid() };
+        var koup = new MusicArtist { Name = "Koup", Id = Guid.NewGuid() };
+        var song = new Audio { Name = "Waltz for Koop", Id = Guid.NewGuid() };
+
+        _fx.SetupUserMock();
+        SetupGenreMissWithArtistSongs(new[] { song });
+        var index = new FakeArtistIndex(
+            new[] { koop, koup },
+            FakeArtistIndex.CodesFromArtistNames(koop, koup));
+
+        var handler = CreateHandler(index);
+        var request = CreateMoodIntent("cup");
+        var context = _fx.CreateContext();
+        var session = _fx.CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, _fx.CreateUser(), session, CancellationToken.None);
+
+        Assert.False(HasAudioPlayerDirective(response));
+        Assert.True(session.NowPlayingQueue == null || session.NowPlayingQueue.Count == 0);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("Koop", speech);
+        Assert.Contains("Koup", speech);
+        Assert.Equal(DisambiguationHelper.MediaTypeArtist, response.SessionAttributes?[DisambiguationHelper.AttrType]);
+    }
+
+    [Fact]
+    public async Task JF894_DuplicateLibraryRowsOfOneArtist_PlayWithoutAsking()
+    {
+        // Two library rows of the same artist (the same name in two libraries)
+        // are one choice for the user: the name dedup (the JF-416 precedent)
+        // keeps them out of the ask, so the winner plays instead of cycling
+        // through indistinguishable entries.
+        var beatlesA = new MusicArtist { Name = "The Beatles", Id = Guid.NewGuid() };
+        var beatlesB = new MusicArtist { Name = "The Beatles", Id = Guid.NewGuid() };
+        var control = new MusicArtist { Name = "Radiohead", Id = Guid.NewGuid() };
+        var song = new Audio { Name = "Abbey Road Medley", Id = Guid.NewGuid() };
+
+        _fx.SetupUserMock();
+        SetupGenreMissWithArtistSongs(new[] { song });
+        var index = new FakeArtistIndex(new[] { beatlesA, beatlesB, control });
+
+        var handler = CreateHandler(index);
+        var request = CreateMoodIntent("beatles");
+        var context = _fx.CreateContext();
+        var session = _fx.CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, _fx.CreateUser(), session, CancellationToken.None);
+
+        Assert.True(HasAudioPlayerDirective(response));
+        Assert.NotNull(session.NowPlayingQueue);
+        Assert.Single(session.NowPlayingQueue);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("The Beatles", speech);
+    }
+
+    [Fact]
+    public async Task JF894_CoincidentalWinner_KeepsJf382Demotion_TieGateStandsDown()
+    {
+        // Ordering pin (the PlayArtistSongs family order): the JF-382
+        // coincidental-containment downgrade outranks the tie arbitration. For
+        // 'goldbug stories' the chain's first-90 winner 'Bug' is a coincidental
+        // containment; even though the exact-named 'Goldbug Stories' sits beside
+        // it in the results (a rival the gate would auto-select if it ran
+        // first), the JF-382 rule speaks: no offer machinery is wired on the
+        // mood path, so the clean NotFoundMood answers, byte-identical to
+        // pre-JF-894.
+        var bug = new MusicArtist { Name = "Bug", Id = Guid.NewGuid() };
+        var goldbug = new MusicArtist { Name = "Goldbug Stories", Id = Guid.NewGuid() };
+
+        _fx.SetupUserMock();
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q =>
+            {
+                if (q.Genres != null && q.Genres.Count > 0)
+                {
+                    return new List<BaseItem>();
+                }
+
+                // Artist search via SearchTerm (the DB path): both rows, Bug
+                // first so the matcher's early exit makes it the winner.
+                if (q.SearchTerm != null && q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicArtist))
+                {
+                    return new List<BaseItem> { bug, goldbug };
+                }
+
+                return new List<BaseItem>();
+            });
+
+        var handler = CreateHandler();
+        var request = CreateMoodIntent("goldbug stories");
+        var context = _fx.CreateContext();
+        var session = _fx.CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, _fx.CreateUser(), session, CancellationToken.None);
+
+        // The clean mood not-found (session-ending tell), not the multi-artist
+        // ask and not a silent 'Goldbug Stories' auto-select.
+        Assert.True(response.Response?.ShouldEndSession);
+        Assert.False(HasAudioPlayerDirective(response));
+        Assert.True(session.NowPlayingQueue == null || session.NowPlayingQueue.Count == 0);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("goldbug stories", speech, StringComparison.OrdinalIgnoreCase);
     }
 }
