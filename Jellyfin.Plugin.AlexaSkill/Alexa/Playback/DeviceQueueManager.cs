@@ -191,8 +191,32 @@ public sealed class DeviceQueueManager : IDisposable
         Audio,
 
         /// <summary>A <c>VideoApp.Launch</c> directive launched the stream.</summary>
-        VideoApp
+        VideoApp,
+
+        /// <summary>JF-894: a <c>VideoApp.Launch</c> directive launched a VERIFIED
+        /// audiobook concat (the launch site's climb accepted a book folder, so the
+        /// launch site KNOWS the medium is a book). Recorded as its own route value
+        /// because the launch-time knowledge cannot be re-derived safely at
+        /// classification time: the ledger item is the chapter leaf, which for the
+        /// remapped rows (JF-784/JF-799) is plain Audio-typed, indistinguishable from
+        /// seek-mode music by kind (a song sits directly inside its MusicAlbum, the
+        /// same shape the verified climb accepts). The classification kernel answers
+        /// <c>PlayingMedium.VideoAppAudiobook</c> for this route. Legacy entries
+        /// persisted with the bare <see cref="VideoApp"/> name keep the pre-JF-894
+        /// kind-ladder classification (no migration); an old plugin build reading a
+        /// new file fails the route parse to null (the legacy tie) and degrades to
+        /// the kind ladder the same way.</summary>
+        VideoAppAudiobook
     }
+
+    /// <summary>
+    /// JF-894: the ONE "was this recorded by a VideoApp launch" route predicate
+    /// (the enum is the single source of the family membership), consumed by the
+    /// screen-owner belt and the RateItem keep-alive arm. A new VideoApp-family
+    /// route value must be added HERE, not re-spelled at each reader.
+    /// </summary>
+    internal static bool IsVideoAppRoute(LaunchRoute? route)
+        => route is LaunchRoute.VideoApp or LaunchRoute.VideoAppAudiobook;
 
     /// <summary>
     /// Records the last user-initiated play on a device. Called from the
@@ -589,8 +613,9 @@ public sealed class DeviceQueueManager : IDisposable
     /// have wrongly released.
     /// One further route-only reader stays deliberately unbounded (JF-789
     /// review): RateItem's keep-alive check
-    /// (<c>RateItemIntentHandler.PlayingMediumIsVideoAppAudio</c>, route ==
-    /// VideoApp attaches the NowPlaying keep-alive). Its failure asymmetry is
+    /// (<c>RateItemIntentHandler.PlayingMediumIsVideoAppAudio</c>,
+    /// <see cref="IsVideoAppRoute"/> true attaches the NowPlaying keep-alive,
+    /// both VideoApp routes since JF-894). Its failure asymmetry is
     /// the opposite of the gates: attaching on an aged entry only renders an
     /// extra document, while refusing on a live one dismisses a playing player
     /// (the JF-635 bug the keep-alive exists to prevent), so the conservative

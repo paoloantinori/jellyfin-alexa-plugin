@@ -155,6 +155,64 @@ public class PlaybackLaunchBuilderMediumTests : PluginTestBase
     }
 
     /// <summary>
+    /// JF-894: the launch-time book verdict. A ledger entry recorded on the
+    /// JF-894 audiobook route (minted only when the launch's climb accepted a
+    /// book folder) classifies VideoAppAudiobook even though the chapter leaf is
+    /// plain Audio-typed (the JF-784/JF-799 remapped shape): the kind ladder
+    /// alone would have read it as seek-mode music. The transport refusal keeps
+    /// the book arm's silent Empty.
+    /// </summary>
+    [Fact]
+    public void Medium_LedgerAudioRoute_VideoAppAudiobookEntry_YieldsVideoAppAudiobook_JF894()
+    {
+        var remappedChapter = new Audio { Name = "Remapped Book", Id = Guid.NewGuid() };
+        var (library, queue) = LedgerWith(remappedChapter, route: DeviceQueueManager.LaunchRoute.VideoAppAudiobook);
+
+        var medium = _builder.ResolvePlayingMedium(TestHelpers.CreateTestContext(), library.Object, queue);
+        Assert.Equal("VideoAppAudiobook", medium.ToString());
+
+        SkillResponse? refusal = PlaybackLaunchBuilder.BuildVideoAppTransportRefusal(medium, "en-US");
+        Assert.NotNull(refusal);
+        Assert.Null(refusal.Response.OutputSpeech);
+        Assert.True(refusal.Response.Directives is not { Count: > 0 });
+    }
+
+    /// <summary>
+    /// JF-894 ordering pin (code-review): the verdict arm sits AFTER the kind arms,
+    /// so a video-kind entry recorded on the audiobook route (a shape no production
+    /// site mints; the pin locks the arm ORDER, not a reachable shape) keeps the
+    /// kind answer Video instead of the route verdict. A refactor moving the route
+    /// arm above <see cref="PlaybackLaunchBuilder.IsVideoAppLaunchItem"/> goes red here.
+    /// </summary>
+    [Fact]
+    public void Medium_LedgerMovieVideoAppAudiobookRoute_KeepsKindAnswerVideo_JF894()
+    {
+        var movie = new Movie { Name = "The Matrix", Id = Guid.NewGuid() };
+        var (library, queue) = LedgerWith(movie, route: DeviceQueueManager.LaunchRoute.VideoAppAudiobook);
+
+        Assert.Equal("Video", _builder.ResolvePlayingMedium(TestHelpers.CreateTestContext(), library.Object, queue).ToString());
+    }
+
+    /// <summary>
+    /// JF-894 music-safety pin: the book verdict is route-bound, never a kind
+    /// inference. A plain Audio row on the bare VideoApp route (the seek-mode
+    /// music shape, INCLUDING a song sitting directly inside its MusicAlbum,
+    /// which no production site ever records on the audiobook route) keeps
+    /// VideoAppAudio. The pre-JF-894 routes are unchanged by the new arm.
+    /// </summary>
+    [Fact]
+    public void Medium_LedgerPlainAudioVideoAppRoute_StaysVideoAppAudio_JF894()
+    {
+        Guid albumId = Guid.NewGuid();
+        var album = new MediaBrowser.Controller.Entities.Audio.MusicAlbum { Name = "Greatest Hits", Id = albumId, Path = "/music/greatest-hits" };
+        var song = new Audio { Name = "Song", Id = Guid.NewGuid(), ParentId = albumId, Path = "/music/greatest-hits/song.mp3" };
+        var (library, queue) = LedgerWith(song);
+        library.Setup(l => l.GetItemById(albumId)).Returns(album);
+
+        Assert.Equal("VideoAppAudio", _builder.ResolvePlayingMedium(TestHelpers.CreateTestContext(), library.Object, queue).ToString());
+    }
+
+    /// <summary>
     /// The token-ownership arm runs BEFORE the item resolve: when the AudioPlayer
     /// token names the ledger item, the answer is Audio whatever the kind (a movie
     /// can ride the audio-only transcode, where transport directives work).
@@ -515,6 +573,8 @@ public class PlaybackLaunchBuilderMediumTests : PluginTestBase
     [InlineData(typeof(Audio), "VideoApp")]
     [InlineData(typeof(Audio), "Audio")]
     [InlineData(typeof(Audio), "Legacy")]
+    [InlineData(typeof(Audio), "VideoAppAudiobook")]
+    [InlineData(typeof(MediaBrowser.Controller.Entities.AudioBook), "VideoAppAudiobook")]
     public void Lockstep_DisplacementDecision_EqualsClassifierNonAudioClassification(Type ledgerKind, string routeName)
     {
         var ledgerItem = (BaseItem)Activator.CreateInstance(ledgerKind)!;
@@ -640,6 +700,25 @@ public class PlaybackLaunchBuilderMediumTests : PluginTestBase
     }
 
     /// <summary>
+    /// JF-894 belt pin (code-review): an unresolvable ledger item on the
+    /// audiobook route keeps the route's own verdict (a deleted chapter
+    /// mid-play is still a book), not the bare-VideoApp route's Video default
+    /// the sibling pin above locks.
+    /// </summary>
+    [Fact]
+    public void ScreenOwner_FreshUnresolvableVideoAppAudiobookEntry_StillVideoAppAudiobook_JF894()
+    {
+        Guid deletedId = Guid.NewGuid();
+        using DeviceQueueManager queue = TestHelpers.CreateDeviceQueueManager("medium-probe");
+        queue.RecordLastPlayed("belt-fresh-unresolvable-book", deletedId.ToString(), DeviceQueueManager.LaunchRoute.VideoAppAudiobook);
+        var library = new Mock<ILibraryManager>();
+        library.Setup(l => l.GetItemById(deletedId)).Returns((BaseItem?)null);
+
+        Assert.Equal("VideoAppAudiobook", _builder.ResolveScreenOwningMedium(
+            TestHelpers.CreateTestContext("belt-fresh-unresolvable-book"), library.Object, queue).ToString());
+    }
+
+    /// <summary>
     /// JF-789 step 4 green pin: within the recency window the belt's same-item
     /// arm still closes the JF-632 hole (a): the seek-mode shape (token names
     /// the VideoApp-routed ledger item) classifies VideoAppAudio, so the
@@ -654,6 +733,25 @@ public class PlaybackLaunchBuilderMediumTests : PluginTestBase
         Context tokenNamingLedgerItem = TestHelpers.CreateContextWithToken(seekSong.Id.ToString(), "belt-fresh-sameitem");
 
         Assert.Equal("VideoAppAudio", _builder.ResolveScreenOwningMedium(
+            tokenNamingLedgerItem, library.Object, queue).ToString());
+    }
+
+    /// <summary>
+    /// JF-894 belt pin: the audiobook route arms the belt too, so the same-item
+    /// BOOK shape (the AudioPlayer token still naming the chapter after a book
+    /// launch re-recorded it on the JF-894 audiobook route, fresh stamp) belt
+    /// corrects to VideoAppAudiobook instead of keeping the classifier's Audio.
+    /// The belt's re-classification resolves the entry through the ONE kind
+    /// kernel, whose JF-894 verdict arm answers the book medium.
+    /// </summary>
+    [Fact]
+    public void ScreenOwner_FreshSameItemVideoAppAudiobookEntry_StillVideoAppAudiobook_JF894()
+    {
+        var bookChapter = new Audio { Name = "Same Item Book Chapter", Id = Guid.NewGuid() };
+        var (library, queue) = LedgerWith(bookChapter, "belt-fresh-sameitem-book", DeviceQueueManager.LaunchRoute.VideoAppAudiobook);
+        Context tokenNamingLedgerItem = TestHelpers.CreateContextWithToken(bookChapter.Id.ToString(), "belt-fresh-sameitem-book");
+
+        Assert.Equal("VideoAppAudiobook", _builder.ResolveScreenOwningMedium(
             tokenNamingLedgerItem, library.Object, queue).ToString());
     }
 

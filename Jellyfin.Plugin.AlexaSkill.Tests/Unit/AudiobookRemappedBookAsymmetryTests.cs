@@ -3,6 +3,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using global::Alexa.NET.Response;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Directive;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Entities;
@@ -209,6 +210,87 @@ public class AudiobookRemappedBookAsymmetryTests
         var directive = Assert.Single(response.Response.Directives.OfType<VideoAppLaunchDirective>());
         Assert.Contains($"alexaskill/api/video-audio/{song.Id}/stream.m3u8", directive.VideoItem.Source, StringComparison.Ordinal);
         Assert.DoesNotContain("audiobook/", directive.VideoItem.Source, StringComparison.Ordinal);
+    }
+
+    // ---------------- The ledger verdict (JF-894) ----------------
+
+    [Fact]
+    public async Task FreshLaunch_BookComposition_RemappedAudioRow_RecordsBookRouteInLedger_JF894()
+    {
+        // The launch site KNOWS the launch is a book (it walked the verified
+        // book folder to build the concat), so the ledger records the book
+        // verdict beside the chapter id. The bare VideoApp route could not carry
+        // this: the remapped row's kind is seek-mode-music-shaped, so the
+        // classification kernel read the entry as VideoAppAudio and voice pause
+        // over the book spoke the music stopped line (the JF-894 bug).
+        var (_, remappedRow, book, library) = MixedRowsBookShape();
+        var builder = CreatePlainBuilder();
+        var ledger = TestHelpers.CreateDeviceQueueManager("jf894-mint-book");
+        using var pluginLedger = TestHelpers.SwapPluginLedgerScope(
+            new PluginConfiguration(),
+            Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance,
+            ledger,
+            "jf894-mint-book");
+
+        SkillResponse response = await builder.BuildAudiobookVideoAppLaunchResponseAsync(
+            remappedRow.Id.ToString(),
+            remappedRow,
+            announce: new global::Alexa.NET.Response.PlainTextOutputSpeech("announce"),
+            TestHelpers.CreateTestUser(jellyfinToken: "tok"),
+            TestHelpers.CreateContextWithVideoApp(),
+            request: null,
+            library.Object);
+
+        var directive = Assert.Single(response.Response.Directives.OfType<VideoAppLaunchDirective>());
+        Assert.Contains($"alexaskill/api/video-audio/audiobook/{book.Id}/stream.m3u8", directive.VideoItem.Source, StringComparison.Ordinal);
+        (string? itemId, DeviceQueueManager.LaunchRoute? route, _) = ledger.GetLastPlayedSnapshot("echo-show");
+        Assert.Equal(remappedRow.Id.ToString(), itemId);
+        Assert.Equal(DeviceQueueManager.LaunchRoute.VideoAppAudiobook, route);
+    }
+
+    [Fact]
+    public void FreshLaunch_DefaultArm_PlainSongInsideMusicAlbum_KeepsBareVideoAppRoute_JF894()
+    {
+        // The music-safety twin of the mint pin: a default-arm song launch (the
+        // chokepoint's GetVideoAppForAudio delegation shape, including a song
+        // sitting directly inside its MusicAlbum, which the climb would accept
+        // but the music-safe gate refuses) records the bare VideoApp route, so
+        // the classification kernel keeps answering VideoAppAudio for music
+        // exactly as today. Only the verified book-concat arm mints the verdict.
+        Guid albumId = Guid.NewGuid();
+        var album = new MusicAlbum { Name = "Greatest Hits", Id = albumId, Path = "/music/greatest-hits" };
+        var song = new Audio
+        {
+            Name = "Song",
+            Id = Guid.NewGuid(),
+            ParentId = albumId,
+            Path = "/music/greatest-hits/song.mp3",
+            RunTimeTicks = TimeSpan.FromMinutes(3).Ticks
+        };
+        var library = new Mock<ILibraryManager>();
+        // No parentage mock: the classifier deliberately never climbs (the route
+        // literal answers first), so the MusicAlbum parent here is documentation of
+        // the music shape, not a consulted dependency.
+        var builder = CreatePlainBuilder();
+        var ledger = TestHelpers.CreateDeviceQueueManager("jf894-mint-song");
+        using var pluginLedger = TestHelpers.SwapPluginLedgerScope(
+            new PluginConfiguration(),
+            Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance,
+            ledger,
+            "jf894-mint-song");
+
+        SkillResponse response = builder.BuildVideoAppAudioResponse(
+            song.Id.ToString(),
+            song,
+            TestHelpers.CreateTestUser(jellyfinToken: "tok"),
+            context: TestHelpers.CreateContextWithVideoApp(),
+            libraryManager: library.Object);
+
+        var directive = Assert.Single(response.Response.Directives.OfType<VideoAppLaunchDirective>());
+        Assert.Contains($"alexaskill/api/video-audio/{song.Id}/stream.m3u8", directive.VideoItem.Source, StringComparison.Ordinal);
+        (string? itemId, DeviceQueueManager.LaunchRoute? route, _) = ledger.GetLastPlayedSnapshot("echo-show");
+        Assert.Equal(song.Id.ToString(), itemId);
+        Assert.Equal(DeviceQueueManager.LaunchRoute.VideoApp, route);
     }
 
     // ---------------- Key agreement: where the slice lands ----------------

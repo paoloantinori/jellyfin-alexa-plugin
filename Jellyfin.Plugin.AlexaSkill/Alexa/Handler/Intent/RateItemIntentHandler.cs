@@ -150,7 +150,7 @@ public class RateItemIntentHandler : BaseHandler
         // JF-635: a plain Tell with no screen content dismisses the seek-mode player
         // (live evidence: this very confirmation closed the album). Attach the
         // NowPlaying doc as the keep-alive when a VideoApp-routed stream owns the screen.
-        if (PlayingMediumIsVideoAppAudio(context))
+        if (LedgerRouteIsVideoAppFamily(context))
         {
             Launch.AttachNowPlayingKeepAlive(confirmation, item, item.Id.ToString(), user, context);
         }
@@ -159,13 +159,17 @@ public class RateItemIntentHandler : BaseHandler
     }
 
     /// <summary>
-    /// True when a VideoApp-routed ledger entry says a video-audio stream owns the
-    /// screen (the JF-632/JF-635 evidence class; no item resolution needed). Reads
+    /// True when a VideoApp-FAMILY-routed ledger entry says a VideoApp stream owns
+    /// the screen (the JF-632/JF-635 evidence class; no item resolution needed;
+    /// both VideoApp routes since JF-894). Reads
     /// through the ONE ledger read (<see cref="PlaybackLaunchBuilder.ReadLastPlayedSnapshot"/>,
     /// rewired JF-627), so a null manager falls back to <c>Plugin.Instance</c>'s
     /// exactly like the resolver call above it instead of silently skipping the
     /// keep-alive.
     /// </summary>
-    private bool PlayingMediumIsVideoAppAudio(Context? context)
-        => Launch.ReadLastPlayedSnapshot(context, _queueManager).Route == DeviceQueueManager.LaunchRoute.VideoApp;
+    private bool LedgerRouteIsVideoAppFamily(Context? context)
+        // JF-894: both VideoApp routes own the screen (the audiobook route included:
+        // a book concat dismisses on a plain Tell exactly as the music shape does),
+        // so the keep-alive arm fires for either.
+        => DeviceQueueManager.IsVideoAppRoute(Launch.ReadLastPlayedSnapshot(context, _queueManager).Route);
 }
