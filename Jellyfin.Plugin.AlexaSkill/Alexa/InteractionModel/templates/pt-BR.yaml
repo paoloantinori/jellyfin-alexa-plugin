@@ -19,7 +19,10 @@
 # Invariants carried by this file:
 # - The loop shape follows the en/es families (bare
 #   AMAZON.LoopOnIntent / AMAZON.LoopOffIntent + LoopSongOnIntent
-#   early), NOT the de/fr custom LoopAllOff/On/RepeatSingleOn trio.
+#   early; since JF-904 the queue-loop carrier LoopAllOnIntent sits
+#   right after LoopSongOn in the 13 built-in-only locales; the
+#   de/fr/it trio keeps its own order), while the de/fr/it
+#   LoopAllOff/RepeatSingleOn customs stay absent here.
 # - The intent ORDER diverges from es-ES in three moves:
 #   PlayByDecade sits EARLY (right after PlayByGenre, before
 #   ContinueWatching), PlayPodcast sits after PlayNextEpisode (before
@@ -107,6 +110,15 @@ intents:
       - repetir a música
       - repetir essa música para sempre
       - loop nesta música
+  - name: LoopAllOnIntent
+    samples:
+      # JF-904 queue-scoped repeat-ALL carriers (rationale: the loop
+      # constants in IntentNames). The infinitive-as-imperative rows
+      # double as any one-shot wrapper payload, so no separate twin
+      # exists.
+      - repetir a fila
+      - repetir toda a fila
+      - colocar a fila em loop
   - AMAZON.ShuffleOnIntent
   - AMAZON.ShuffleOffIntent
   - AMAZON.StartOverIntent

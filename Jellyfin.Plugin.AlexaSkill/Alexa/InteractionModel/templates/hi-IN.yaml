@@ -33,8 +33,11 @@
 #   PlayNextEpisode (before BrowseLibrary), SearchMedia after
 #   QueryArtistLibrary (before PlayBook). The loop shape follows the
 #   en/es families (bare AMAZON.LoopOnIntent / AMAZON.LoopOffIntent +
-#   LoopSongOnIntent right after them), NOT the de/fr custom
-#   LoopAllOff/On/RepeatSingleOn trio.
+#   LoopSongOnIntent right after them; since JF-904 the queue-loop
+#   carrier LoopAllOnIntent sits right after LoopSongOn in the 13
+#   built-in-only locales; the de/fr/it trio keeps its own order),
+#   while the de/fr/it LoopAllOff/RepeatSingleOn customs stay absent
+#   here.
 # - Script reality, preserved code point for code point (any
 #   normalization is a byte-diff; the regen check will catch it):
 #   Devanagari throughout with combining matras (Mn) and vowel signs
@@ -125,6 +128,15 @@ intents:
       - गाना दोहराओ
       - इस गाने को दोहराओ
       - इस गाने को हमेशा दोहराओ
+  - name: LoopAllOnIntent
+    samples:
+      # JF-904 queue-scoped repeat-ALL carriers (rationale: the loop
+      # constants in IntentNames). This locale carries no one-shot
+      # wrapper compositions (the JF-844 family), so there is no
+      # wrapper twin.
+      - कतार दोहराओ
+      - पूरी कतार दोहराओ
+      - कतार लूप करो
   - AMAZON.ShuffleOnIntent
   - AMAZON.ShuffleOffIntent
   - AMAZON.StartOverIntent

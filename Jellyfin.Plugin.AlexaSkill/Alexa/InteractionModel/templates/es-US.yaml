@@ -102,6 +102,17 @@ intents:
       - Repetir la canción
       - Repetir esta canción
       - Repetir esta canción siempre
+  - name: LoopAllOnIntent
+    samples:
+      # JF-904 queue-scoped repeat-ALL carriers (rationale: the loop
+      # constants in IntentNames); 'repita la cola' is the JF-551
+      # subjunctive wrapper payload. The 'que' residue twin stays
+      # es-ES-only per the JF-844 holding pattern (the PlayEpisode
+      # mirror exclude).
+      - Repite la cola
+      - Repetir la cola
+      - Repite toda la cola
+      - repita la cola
   - AMAZON.ShuffleOnIntent
   - AMAZON.ShuffleOffIntent
   - AMAZON.StartOverIntent

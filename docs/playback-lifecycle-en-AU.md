@@ -48,6 +48,7 @@ graph TD
 
     Playing -->|"Repeat the song"| LoopSong["LoopSongOnIntent"]
     Playing -->|"loop on"| LoopOn["AMAZON.LoopOnIntent"]
+    Playing -->|"repeat the queue"| LoopAll["LoopAllOnIntent"]
     Playing -->|"loop off"| LoopOff["AMAZON.LoopOffIntent"]
 
     Playing -->|"next"| Next["AMAZON.NextIntent"]

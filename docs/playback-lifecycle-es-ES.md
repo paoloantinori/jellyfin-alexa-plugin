@@ -47,6 +47,7 @@ graph TD
 
     Playing -->|"Repite esta cancion"| LoopSong["LoopSongOnIntent"]
     Playing -->|"repetir activado"| LoopOn["AMAZON.LoopOnIntent"]
+    Playing -->|"Repite la cola"| LoopAll["LoopAllOnIntent"]
     Playing -->|"repetir desactivado"| LoopOff["AMAZON.LoopOffIntent"]
 
     Playing -->|"siguiente"| Next["AMAZON.NextIntent"]

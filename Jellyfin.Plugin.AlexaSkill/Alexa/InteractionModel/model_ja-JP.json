@@ -68,6 +68,14 @@
         ]
       },
       {
+        "name": "LoopAllOnIntent",
+        "samples": [
+          "キューをリピートして",
+          "キュー全体をリピートして",
+          "キューをループして"
+        ]
+      },
+      {
         "name": "AMAZON.ShuffleOnIntent"
       },
       {

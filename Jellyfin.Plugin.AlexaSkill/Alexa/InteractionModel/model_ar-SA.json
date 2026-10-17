@@ -70,6 +70,14 @@
         ]
       },
       {
+        "name": "LoopAllOnIntent",
+        "samples": [
+          "كرر قائمة الانتظار",
+          "أعد قائمة الانتظار",
+          "كرر قائمة الانتظار بالكامل"
+        ]
+      },
+      {
         "name": "AMAZON.ShuffleOnIntent"
       },
       {

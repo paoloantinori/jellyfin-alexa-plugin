@@ -73,6 +73,15 @@
         ]
       },
       {
+        "name": "LoopAllOnIntent",
+        "samples": [
+          "repeat the queue",
+          "repeat the whole queue",
+          "loop the queue",
+          "to repeat the queue"
+        ]
+      },
+      {
         "name": "AMAZON.ShuffleOnIntent"
       },
       {

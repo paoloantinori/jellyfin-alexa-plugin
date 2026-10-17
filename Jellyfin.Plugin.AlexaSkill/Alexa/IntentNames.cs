@@ -76,10 +76,15 @@ internal static class IntentNames
     // "Répète la file d'attente"), so no utterance maps to both modes anymore
     // (the rows were moved, not dropped: without exact rows the phrases stole
     // live; see the template comments).
-    // REMAINING GAP (JF-904): LoopAllOnIntent is still declared in only those
-    // four locales, so the other 13 have NO voice path to repeat-all at all
-    // (the bare built-in is repeat-one now); restoring a queue-loop carrier
-    // family across the 13 built-in-only locales is its own tracked task.
+    // GAP CLOSED (JF-904): LoopAllOnIntent is now declared in ALL 17 locales
+    // with the same queue-scoped carrier shape ("repeat the queue" /
+    // "Repite la cola" / "キューをリピートして" / ...; wrapper twins only in
+    // the locales that carry one-shot wrapper compositions), so repeat-all is
+    // voice-reachable everywhere. LoopAllOffIntent deliberately stays 4-locale:
+    // repeat-off is already voice-reachable via the declared AMAZON.LoopOffIntent
+    // built-in in all 13 others (dual-accepted by LoopOffIntentHandler), and a
+    // second same-mode intent there would only add trainer competition in the
+    // loop-off region where a single owner exists today.
     public const string LoopSongOn = "LoopSongOnIntent";
     public const string RepeatSingleOn = "RepeatSingleOnIntent";
     public const string LoopAllOn = "LoopAllOnIntent";

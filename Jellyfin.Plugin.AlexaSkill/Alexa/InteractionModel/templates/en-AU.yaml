@@ -93,6 +93,15 @@ intents:
       - Repeat this song forever
       - repeat the song
       - repeat this song
+  - name: LoopAllOnIntent
+    samples:
+      # JF-904 queue-scoped repeat-ALL carriers (rationale: the loop
+      # constants in IntentNames). 'to repeat the queue' is the JF-844
+      # wrapper twin (the 'to play the movie' family).
+      - repeat the queue
+      - repeat the whole queue
+      - loop the queue
+      - to repeat the queue
   - AMAZON.ShuffleOnIntent
   - AMAZON.ShuffleOffIntent
   - AMAZON.StartOverIntent

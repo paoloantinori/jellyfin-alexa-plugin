@@ -50,8 +50,12 @@ tests:
     expected_intent: QueryRecentlyAddedIntent
     expected_slots: {}
 
+  # JF-904: widened to the A|B alternation (the JF-902 convention):
+  # LoopAllOnIntent now competes in this locale's loop region, so
+  # either repeat-one delivery is correct and a LoopAllOnIntent
+  # delivery must fail the pin.
   - utterance: "この曲をループして"
-    expected_intent: LoopSongOnIntent
+    expected_intent: LoopSongOnIntent|AMAZON.LoopOnIntent
     expected_slots: {}
 
   - utterance: "今何が再生中"
@@ -173,3 +177,16 @@ tests:
       seek_amount: {}
       seek_unit: {}
 
+  # -----------------------------------------------------------------------
+  # LoopAllOnIntent (no slots) - JF-904 queue-scoped carriers
+  # (rationale: the loop constants in IntentNames). RED-UNTIL-DEPLOY
+  # until the 13-locale model rebuild (the JF-766 convention).
+  # -----------------------------------------------------------------------
+
+  - utterance: "キューをリピートして"
+    expected_intent: LoopAllOnIntent
+    expected_slots: {}
+
+  - utterance: "キューをループして"
+    expected_intent: LoopAllOnIntent
+    expected_slots: {}

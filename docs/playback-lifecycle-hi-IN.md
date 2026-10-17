@@ -47,6 +47,7 @@ graph TD
 
     Playing -->|"इस गाने को लूप करो"| LoopSong["LoopSongOnIntent"]
     Playing -->|"लूप चालू करो"| LoopOn["AMAZON.LoopOnIntent"]
+    Playing -->|"कतार दोहराओ"| LoopAll["LoopAllOnIntent"]
     Playing -->|"लूप बंद करो"| LoopOff["AMAZON.LoopOffIntent"]
 
     Playing -->|"अगला"| Next["AMAZON.NextIntent"]

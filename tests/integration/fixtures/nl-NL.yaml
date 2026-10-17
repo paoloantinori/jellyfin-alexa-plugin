@@ -100,3 +100,32 @@ tests:
   - utterance: "volgende nummer"
     expected_intent: ShowMoreIntent
     expected_slots: {}
+
+  # -----------------------------------------------------------------------
+  # LoopAllOnIntent (no slots) - JF-904 queue-scoped carriers
+  # (rationale: the loop constants in IntentNames). RED-UNTIL-DEPLOY
+  # until the 13-locale model rebuild (the JF-766 convention).
+  # -----------------------------------------------------------------------
+
+  # The loop-region boundary pin (A|B alternation, the JF-902
+  # convention): LoopAllOnIntent now competes in this locale's
+  # loop region, so either repeat-one delivery is correct and a
+  # LoopAllOnIntent delivery must fail the pin.
+  - utterance: "loop dit nummer"
+    expected_intent: LoopSongOnIntent|AMAZON.LoopOnIntent
+    expected_slots: {}
+
+  - utterance: "herhaal de wachtrij"
+    expected_intent: LoopAllOnIntent
+    expected_slots: {}
+
+  - utterance: "zet de wachtrij op repeat"
+    expected_intent: LoopAllOnIntent
+    expected_slots: {}
+
+  # The wrapper twin pin (the JF-902 it-IT/de-DE precedent pins this
+  # steal-prone class; without the exact row the one-shot tail
+  # generalizes into the repeat-one region).
+  - utterance: "om de wachtrij te herhalen"
+    expected_intent: LoopAllOnIntent
+    expected_slots: {}

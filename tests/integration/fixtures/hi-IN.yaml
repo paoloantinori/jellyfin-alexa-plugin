@@ -192,3 +192,25 @@ tests:
   - utterance: "अगला गाना"
     expected_intent: AMAZON.NextIntent
     expected_slots: {}
+
+  # -----------------------------------------------------------------------
+  # LoopAllOnIntent (no slots) - JF-904 queue-scoped carriers
+  # (rationale: the loop constants in IntentNames). RED-UNTIL-DEPLOY
+  # until the 13-locale model rebuild (the JF-766 convention).
+  # -----------------------------------------------------------------------
+
+  # The loop-region boundary pin (A|B alternation, the JF-902
+  # convention): LoopAllOnIntent now competes in this locale's
+  # loop region, so either repeat-one delivery is correct and a
+  # LoopAllOnIntent delivery must fail the pin.
+  - utterance: "इस गाने को लूप करो"
+    expected_intent: LoopSongOnIntent|AMAZON.LoopOnIntent
+    expected_slots: {}
+
+  - utterance: "कतार दोहराओ"
+    expected_intent: LoopAllOnIntent
+    expected_slots: {}
+
+  - utterance: "कतार लूप करो"
+    expected_intent: LoopAllOnIntent
+    expected_slots: {}

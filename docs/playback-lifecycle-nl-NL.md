@@ -47,6 +47,7 @@ graph TD
 
     Playing -->|"herhaal dit nummer"| LoopSong["LoopSongOnIntent"]
     Playing -->|"loop aan"| LoopOn["AMAZON.LoopOnIntent"]
+    Playing -->|"herhaal de wachtrij"| LoopAll["LoopAllOnIntent"]
     Playing -->|"loop uit"| LoopOff["AMAZON.LoopOffIntent"]
 
     Playing -->|"volgende"| Next["AMAZON.NextIntent"]

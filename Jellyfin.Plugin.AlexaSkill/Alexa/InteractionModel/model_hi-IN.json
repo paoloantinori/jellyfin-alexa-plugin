@@ -69,6 +69,14 @@
         ]
       },
       {
+        "name": "LoopAllOnIntent",
+        "samples": [
+          "कतार दोहराओ",
+          "पूरी कतार दोहराओ",
+          "कतार लूप करो"
+        ]
+      },
+      {
         "name": "AMAZON.ShuffleOnIntent"
       },
       {

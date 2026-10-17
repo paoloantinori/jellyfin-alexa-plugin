@@ -73,7 +73,7 @@ Placeholder legend:
 | `<كلمات من عنوان الأغنية>` | `{titleKeywords}` |
 | `<اسم المستخدم>` | `{username}` |
 
-Complete phrase list (349 phrases across 68 commands):
+Complete phrase list (352 phrases across 69 commands):
 
 #### Play music
 
@@ -409,6 +409,12 @@ Complete phrase list (349 phrases across 68 commands):
 - `أعد هذه الأغنية`
 - `أعد هذه الأغنية دائماً`
 
+**Repeat all**
+
+- `كرر قائمة الانتظار`
+- `أعد قائمة الانتظار`
+- `كرر قائمة الانتظار بالكامل`
+
 #### Favorites
 
 **Play favorites**
@@ -668,7 +674,7 @@ Placeholder legend:
 | `<woorden uit de songtitel>` | `{titleKeywords}` |
 | `<gebruikersnaam>` | `{username}` |
 
-Complete phrase list (406 phrases across 68 commands):
+Complete phrase list (410 phrases across 69 commands):
 
 #### Play music
 
@@ -1044,6 +1050,13 @@ Complete phrase list (406 phrases across 68 commands):
 - `zet dit nummer op repeat`
 - `blijf dit nummer herhalen`
 
+**Repeat all**
+
+- `herhaal de wachtrij`
+- `herhaal de hele wachtrij`
+- `zet de wachtrij op repeat`
+- `om de wachtrij te herhalen`
+
 #### Favorites
 
 **Play favorites**
@@ -1319,7 +1332,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (509 phrases across 68 commands):
+Complete phrase list (513 phrases across 69 commands):
 
 #### Play music
 
@@ -1762,6 +1775,13 @@ Complete phrase list (509 phrases across 68 commands):
 - `repeat the song`
 - `repeat this song`
 
+**Repeat all**
+
+- `repeat the queue`
+- `repeat the whole queue`
+- `loop the queue`
+- `to repeat the queue`
+
 #### Favorites
 
 **Play favorites**
@@ -2073,7 +2093,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (511 phrases across 68 commands):
+Complete phrase list (515 phrases across 69 commands):
 
 #### Play music
 
@@ -2522,6 +2542,13 @@ Complete phrase list (511 phrases across 68 commands):
 - `repeat the song`
 - `repeat this song`
 
+**Repeat all**
+
+- `repeat the queue`
+- `repeat the whole queue`
+- `loop the queue`
+- `to repeat the queue`
+
 #### Favorites
 
 **Play favorites**
@@ -2829,7 +2856,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (598 phrases across 68 commands):
+Complete phrase list (602 phrases across 69 commands):
 
 #### Play music
 
@@ -3346,6 +3373,13 @@ Complete phrase list (598 phrases across 68 commands):
 - `repeat the song`
 - `repeat this song`
 
+**Repeat all**
+
+- `repeat the queue`
+- `repeat the whole queue`
+- `loop the queue`
+- `to repeat the queue`
+
 #### Favorites
 
 **Play favorites**
@@ -3672,7 +3706,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (513 phrases across 68 commands):
+Complete phrase list (517 phrases across 69 commands):
 
 #### Play music
 
@@ -4121,6 +4155,13 @@ Complete phrase list (513 phrases across 68 commands):
 - `repeat the song`
 - `repeat this song`
 
+**Repeat all**
+
+- `repeat the queue`
+- `repeat the whole queue`
+- `loop the queue`
+- `to repeat the queue`
+
 #### Favorites
 
 **Play favorites**
@@ -4434,7 +4475,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (770 phrases across 69 commands):
+Complete phrase list (774 phrases across 70 commands):
 
 #### Play music
 
@@ -5111,6 +5152,13 @@ Complete phrase list (770 phrases across 69 commands):
 - `Repeat this song forever`
 - `repeat the song`
 - `repeat this song`
+
+**Repeat all**
+
+- `repeat the queue`
+- `repeat the whole queue`
+- `loop the queue`
+- `to repeat the queue`
 
 #### Favorites
 
@@ -7680,7 +7728,7 @@ Placeholder legend:
 | `<गाने के नाम के शब्द>` | `{titleKeywords}` |
 | `<उपयोगकर्ता का नाम>` | `{username}` |
 
-Complete phrase list (381 phrases across 68 commands):
+Complete phrase list (384 phrases across 69 commands):
 
 #### Play music
 
@@ -8036,6 +8084,12 @@ Complete phrase list (381 phrases across 68 commands):
 - `गाना दोहराओ`
 - `इस गाने को दोहराओ`
 - `इस गाने को हमेशा दोहराओ`
+
+**Repeat all**
+
+- `कतार दोहराओ`
+- `पूरी कतार दोहराओ`
+- `कतार लूप करो`
 
 #### Favorites
 
@@ -10244,7 +10298,7 @@ Placeholder legend:
 | `<曲名のキーワード>` | `{titleKeywords}` |
 | `<ユーザー名>` | `{username}` |
 
-Complete phrase list (343 phrases across 68 commands):
+Complete phrase list (346 phrases across 69 commands):
 
 #### Play music
 
@@ -10568,6 +10622,12 @@ Complete phrase list (343 phrases across 68 commands):
 - `曲をリピートして`
 - `この曲をリピートして`
 
+**Repeat all**
+
+- `キューをリピートして`
+- `キュー全体をリピートして`
+- `キューをループして`
+
 #### Favorites
 
 **Play favorites**
@@ -10833,7 +10893,7 @@ Placeholder legend:
 | `<palavras do título da música>` | `{titleKeywords}` |
 | `<nome do usuário>` | `{username}` |
 
-Complete phrase list (419 phrases across 68 commands):
+Complete phrase list (422 phrases across 69 commands):
 
 #### Play music
 
@@ -11220,6 +11280,12 @@ Complete phrase list (419 phrases across 68 commands):
 - `repetir essa música para sempre`
 - `loop nesta música`
 
+**Repeat all**
+
+- `repetir a fila`
+- `repetir toda a fila`
+- `colocar a fila em loop`
+
 #### Favorites
 
 **Play favorites**
@@ -11497,7 +11563,7 @@ Placeholder legend:
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (472 phrases across 68 commands):
+Complete phrase list (477 phrases across 69 commands):
 
 #### Play music
 
@@ -11923,6 +11989,14 @@ Complete phrase list (472 phrases across 68 commands):
 - `Repetir esta canción`
 - `Repetir esta canción siempre`
 
+**Repeat all**
+
+- `Repite la cola`
+- `Repetir la cola`
+- `Repite toda la cola`
+- `repita la cola`
+- `que repita la cola`
+
 #### Favorites
 
 **Play favorites**
@@ -12214,7 +12288,7 @@ Placeholder legend:
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (469 phrases across 68 commands):
+Complete phrase list (473 phrases across 69 commands):
 
 #### Play music
 
@@ -12639,6 +12713,13 @@ Complete phrase list (469 phrases across 68 commands):
 - `Repetir esta canción`
 - `Repetir esta canción siempre`
 
+**Repeat all**
+
+- `Repite la cola`
+- `Repetir la cola`
+- `Repite toda la cola`
+- `repita la cola`
+
 #### Favorites
 
 **Play favorites**
@@ -12928,7 +13009,7 @@ Placeholder legend:
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (459 phrases across 68 commands):
+Complete phrase list (463 phrases across 69 commands):
 
 #### Play music
 
@@ -13345,6 +13426,13 @@ Complete phrase list (459 phrases across 68 commands):
 - `Repetir la canción`
 - `Repetir esta canción`
 - `Repetir esta canción siempre`
+
+**Repeat all**
+
+- `Repite la cola`
+- `Repetir la cola`
+- `Repite toda la cola`
+- `repita la cola`
 
 #### Favorites
 

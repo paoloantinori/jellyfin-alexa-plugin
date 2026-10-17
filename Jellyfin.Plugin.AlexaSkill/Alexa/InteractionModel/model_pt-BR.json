@@ -70,6 +70,14 @@
         ]
       },
       {
+        "name": "LoopAllOnIntent",
+        "samples": [
+          "repetir a fila",
+          "repetir toda a fila",
+          "colocar a fila em loop"
+        ]
+      },
+      {
         "name": "AMAZON.ShuffleOnIntent"
       },
       {

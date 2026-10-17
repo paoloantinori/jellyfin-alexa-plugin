@@ -37,11 +37,14 @@ graph TD
     LoopOps -->|"herhaal dit nummer"| LoopSong["LoopSongOnIntent<br/>Huidige nummer herhalen"]
     LoopOps -->|"loop aan"| LoopOn["AMAZON.LoopOnIntent<br/>Huidige track herhalen"]
     LoopOps -->|"loop uit"| LoopOff["AMAZON.LoopOffIntent<br/>Herhaling uitschakelen"]
+    LoopOps -->|"herhaal de wachtrij"| LoopAll["LoopAllOnIntent<br/>Hele wachtrij herhalen"]
 
     LoopSong --> SongLooping["Enkel nummer herhalen"]
     LoopOn --> SongLooping
+    LoopAll --> AllLooping["Wachtrij herhalen"]
     LoopOff --> Playing
     SongLooping --> Playing
+    AllLooping --> Playing
 
     Playing -->|"speel kanaal {channel}"| Channel["PlayChannelIntent<br/>Internetradiokanaal afspelen"]
     Channel --> Playing
@@ -53,5 +56,6 @@ graph TD
     style RadioActive fill:#9C27B0,color:#fff
     style Shuffled fill:#FF9800,color:#fff
     style SongLooping fill:#2196F3,color:#fff
+    style AllLooping fill:#2196F3,color:#fff
     style AutoPlay fill:#00BCD4,color:#fff
 ```
