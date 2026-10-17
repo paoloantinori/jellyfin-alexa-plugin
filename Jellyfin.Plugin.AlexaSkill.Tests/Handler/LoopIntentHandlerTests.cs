@@ -28,11 +28,15 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 /// JF-450: de-DE, fr-FR, fr-CA and it-IT declare the custom loop vocabulary
 /// (LoopAllOnIntent / LoopAllOffIntent / RepeatSingleOnIntent) instead of the
 /// AMAZON.LoopOn/LoopOff built-ins used by the other 13 locales. These tests pin
-/// that both names route to the same handlers and set the matching repeat mode.
+/// that the OFF names route to the same handler and that every loop-family name
+/// sets the matching repeat mode.
 /// JF-635 item 2 added the migration shapes mirroring RateItemIntentHandlerTests:
 /// the token leg surviving a cleared session (PlaybackStopped), the JF-629 idle
 /// guard, the JF-632 VideoApp displacement refusal, and the live one-shot
 /// seek-mode refusal (2026-09-25 17:12, "saltare la canzone" -> RepeatSingleOn).
+/// JF-901 split the built-in from the custom intent: the bare
+/// AMAZON.LoopOnIntent ("attiva il loop" on device, Amazon's loop-THIS-track
+/// convention) moved to the repeat-one owner; LoopAllOnIntent keeps repeat-all.
 /// </summary>
 [Collection("Plugin")]
 public class LoopIntentHandlerTests : PluginTestBase
@@ -77,25 +81,32 @@ public class LoopIntentHandlerTests : PluginTestBase
     private static Audio Song(string name) => TestHelpers.CreateSong(name);
 
     /// <summary>The progress report the handler fired, if any (the suite's
-    /// invocations-scan idiom, one copy for this file's three asserter sites).</summary>
-    private PlaybackProgressInfo? AppliedProgressInfo()
-        => _sessionManagerMock
+    /// invocations-scan idiom, one copy for this file's asserter sites; the mock
+    /// is a parameter because the dispatch test reads the harness's instance).</summary>
+    private static PlaybackProgressInfo? AppliedProgressInfo(Mock<ISessionManager> sessionManager)
+        => sessionManager
             .Invocations
             .Select(i => i.Arguments.OfType<PlaybackProgressInfo>().FirstOrDefault())
             .FirstOrDefault(i => i != null);
 
-    // The owning handler for each custom locale intent name (the built-in twin of the
-    // same row is claimed by the same instance).
-    private BaseHandler CreateOwner(string customIntentName, DeviceQueueManager? queueManager = null) => customIntentName switch
+    private PlaybackProgressInfo? AppliedProgressInfo() => AppliedProgressInfo(_sessionManagerMock);
+
+    // The owning handler for each loop-family intent name. JF-901: the bare
+    // built-in loop lives with the repeat-one owner; the repeat-all custom
+    // LoopAllOn keeps its own handler.
+    private BaseHandler CreateOwner(string intentName, DeviceQueueManager? queueManager = null) => intentName switch
     {
         IntentNames.LoopAllOn => new LoopOnIntentHandler(_sessionManagerMock.Object, _config, _libraryManager.Object, _loggerFactory, queueManager),
         IntentNames.LoopAllOff => new LoopOffIntentHandler(_sessionManagerMock.Object, _config, _libraryManager.Object, _loggerFactory, queueManager),
+        // LoopSongOn, RepeatSingleOn, and (JF-901) the bare AMAZON.LoopOn built-in.
         _ => new LoopSongOnIntentHandler(_sessionManagerMock.Object, _config, _libraryManager.Object, _loggerFactory, queueManager),
     };
 
     public static TheoryData<string, string> HandledIntentNames => new()
     {
-        { "AMAZON.LoopOnIntent", IntentNames.LoopAllOn },
+        // JF-901: the bare built-in loop now pairs with the repeat-one owner's
+        // names, not the repeat-all custom.
+        { "AMAZON.LoopOnIntent", IntentNames.RepeatSingleOn },
         { "AMAZON.LoopOffIntent", IntentNames.LoopAllOff },
         { IntentNames.LoopSongOn, IntentNames.RepeatSingleOn },
     };
@@ -111,8 +122,24 @@ public class LoopIntentHandlerTests : PluginTestBase
         Assert.False(handler.CanHandle(IntentRequestFor("PlaySongIntent")));
     }
 
+    /// <summary>
+    /// The JF-901 split, negative side: the repeat-all owner must NOT claim the
+    /// bare built-in loop. The positive half (the repeat-one owner claims it) is
+    /// the first HandledIntentNames row; the family-wide cardinality guard is
+    /// DispatchRoutingTests.EveryNamedIntent_HasExactlyOneOwner_AndHarnessSelectsIt.
+    /// </summary>
+    [Fact]
+    public void CanHandle_Jf901_QueueLoopOwnerDoesNotClaimBareBuiltInLoop()
+    {
+        BaseHandler queueOwner = CreateOwner(IntentNames.LoopAllOn);
+
+        Assert.False(queueOwner.CanHandle(IntentRequestFor(IntentNames.AmazonLoopOn)));
+    }
+
     public static TheoryData<string, RepeatMode> IntentToRepeatMode => new()
     {
+        // JF-901: the bare built-in applies repeat-one (loop THIS track).
+        { IntentNames.AmazonLoopOn, RepeatMode.RepeatOne },
         { IntentNames.LoopAllOn, RepeatMode.RepeatAll },
         { IntentNames.LoopAllOff, RepeatMode.RepeatNone },
         { IntentNames.RepeatSingleOn, RepeatMode.RepeatOne },
@@ -147,6 +174,77 @@ public class LoopIntentHandlerTests : PluginTestBase
             _ => "RepeatDisabled",
         };
         Assert.Contains(ResponseStrings.Get(expectedConfirm, "en-US"), TestHelpers.GetSpeechText(response), StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// THE JF-901 pin, through the production selection path: a bare built-in
+    /// AMAZON.LoopOnIntent ("attiva il loop" on device, corr 6883f581) must
+    /// dispatch to the repeat-ONE owner and answer the song-loop line, never the
+    /// queue-repeat application that advanced the album at track end (corr
+    /// 4e6ce000). RED on the pre-JF-901 tree: selection picked
+    /// LoopOnIntentHandler, the report carried RepeatAll, and the speech was
+    /// RepeatAllEnabled.
+    /// </summary>
+    [Fact]
+    public async Task AmazonLoopOnDispatch_AppliesRepeatOneAndSpeaksSongLoop_Jf901()
+    {
+        using var harness = new DispatchHarness();
+        Audio song = Song("Bare Loop Song");
+        TestHelpers.SetupLibraryResolves(_libraryManager, song);
+        harness.OverrideDependency(_libraryManager.Object);
+        Entities.User user = harness.EnableExecution();
+
+        Context context = DispatchHarness.CreateExecutionContext(user);
+        context.AudioPlayer = new PlaybackState
+        {
+            Token = song.Id.ToString(),
+            OffsetInMilliseconds = 30_000,
+            PlayerActivity = "PLAYING"
+        };
+
+        RoutingDecision decision = await harness.DispatchAsync(
+            DispatchHarness.CreateSkillRequest(IntentRequestFor(IntentNames.AmazonLoopOn), context: context));
+
+        Assert.IsType<LoopSongOnIntentHandler>(decision.Handler);
+        Assert.NotNull(decision.Response);
+        Assert.Contains(
+            ResponseStrings.Get("RepeatSongEnabled", "en-US"),
+            TestHelpers.GetSpeechText(decision.Response!), StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(
+            ResponseStrings.Get("RepeatAllEnabled", "en-US"),
+            TestHelpers.GetSpeechText(decision.Response!), StringComparison.OrdinalIgnoreCase);
+
+        PlaybackProgressInfo? info = AppliedProgressInfo(harness.SessionManager);
+        Assert.NotNull(info);
+        Assert.Equal(RepeatMode.RepeatOne, info!.RepeatMode);
+        Assert.Equal(song.Id, info.ItemId);
+    }
+
+    /// <summary>
+    /// JF-901: LoopOff must clear a repeat-one set through the BUILT-IN pair. The
+    /// built-in loop-on now applies RepeatOne, so the matching built-in loop-off
+    /// must return the device to RepeatNone.
+    /// </summary>
+    [Fact]
+    public async Task BuiltInLoopOff_ClearsRepeatOneSetByBuiltInLoopOn_Jf901()
+    {
+        Audio song = Song("Clear Me");
+        TestHelpers.SetupLibraryResolves(_libraryManager, song);
+        Context context = ContextWithPlayingToken(song.Id.ToString());
+        SessionInfo session = CreateSession();
+
+        BaseHandler loopOn = CreateOwner(IntentNames.AmazonLoopOn);
+        await loopOn.HandleAsync(IntentRequestFor(IntentNames.AmazonLoopOn), context, CreateUser(), session, CancellationToken.None);
+        Assert.Equal(RepeatMode.RepeatOne, session.PlayState!.RepeatMode);
+
+        BaseHandler loopOff = CreateOwner(IntentNames.LoopAllOff);
+        SkillResponse offResponse = await loopOff.HandleAsync(
+            IntentRequestFor(IntentNames.AmazonLoopOff), context, CreateUser(), session, CancellationToken.None);
+
+        Assert.Equal(RepeatMode.RepeatNone, session.PlayState!.RepeatMode);
+        Assert.Contains(
+            ResponseStrings.Get("RepeatDisabled", "en-US"),
+            TestHelpers.GetSpeechText(offResponse), StringComparison.OrdinalIgnoreCase);
     }
 
     [Theory]

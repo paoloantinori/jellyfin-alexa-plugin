@@ -42,16 +42,21 @@ public class LoopSongOnIntentHandler : BaseHandler
     public override bool CanHandle(Request request)
     {
         // Locale aliases (RepeatSingleOn, the repeat-one sibling): see the comment
-        // on the loop intent constants in IntentNames.
+        // on the loop intent constants in IntentNames. JF-901: the bare built-in
+        // AMAZON.LoopOnIntent ("loop", "attiva il loop") also lands here as
+        // repeat-one (rationale, device evidence, and the model-side follow-up
+        // JF-902 live on that comment).
         IntentRequest? intentRequest = request as IntentRequest;
         return intentRequest != null
-            && (string.Equals(intentRequest.Intent.Name, IntentNames.LoopSongOn, StringComparison.Ordinal)
+            && (string.Equals(intentRequest.Intent.Name, IntentNames.AmazonLoopOn, StringComparison.Ordinal)
+                || string.Equals(intentRequest.Intent.Name, IntentNames.LoopSongOn, StringComparison.Ordinal)
                 || string.Equals(intentRequest.Intent.Name, IntentNames.RepeatSingleOn, StringComparison.Ordinal));
     }
 
     /// <summary>
-    /// Applies repeat-one to the currently playing item; shared body in
-    /// <see cref="ProgressReporter.ApplyRepeatModeAsync"/>.
+    /// Applies repeat-one to the currently playing item (the custom song-loop
+    /// intents and, since JF-901, the bare built-in AMAZON.LoopOnIntent); shared
+    /// body in <see cref="ProgressReporter.ApplyRepeatModeAsync"/>.
     /// </summary>
     /// <param name="request">The skill request which should be handled.</param>
     /// <param name="context">The context of the skill intent request.</param>
