@@ -3,14 +3,15 @@ id: JF-844
 title: >-
   Post-roll NLU residuals: star-wars pair, murderbot digit season, canzone
   steal, es-ES subjunctive fallback - one roll-discrimination protocol
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-09 01:57'
+updated_date: '2026-10-17 20:36'
 labels:
   - nlu
   - diagnostics
   - follow-up
-  - gate:maintainer-call
+  - 'gate:maintainer-call'
 milestone: m-18
 dependencies: []
 priority: medium
@@ -321,3 +322,9 @@ the parked reproduce/pon series-first steals are still stolen on today's roll
 'pon ...' -> PlaySongIntent song='breaking bad temporada 1' 3/3; the JF-865
 open question owns that surface).
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+EXECUTED on branch jf844 (262cb85c), merged to main e3eca0e3, pushed, DEPLOYED and ACCEPTED: DLL to minix (md5 c4ebfe2d active), es-MX + es-US rebuilds SUCCEEDED, acceptance probes green (both connector forms -> PlayEpisodeIntent; the es-MX red-until-roll pin goes green), and the canzone response-level check via simulate-skill: SUCCESSFUL auto-play 'Comfortably Numb' with AudioPlayer.Play + APL (the JF-885 arbitration auto-plays the tie cleanly; the e2e expectation stands unchanged). PER-RESIDUAL VERDICTS (profile-nlu 3x each on the same-day rolls): (1) star-wars SPLIT: 'riproduci il film star wars' green since 10-09; 'suona il film star wars' now PlayMovieIntent (the JF-874 MovieTitle family owns the film noun; destination semantically right), fixture re-pinned with boundary evidence; (2) murderbot digit season RECOVERED 3/3 both forms (attribution caveat: roll vs neighboring-family shift not separable from probes); (3) canzone NOT A STEAL per the JF-510 pin (PlayArtistSongsIntent is the pinned expectation; response-level now verified green); (4) es-ES subjunctive GREEN 3/3 all slots, no fix needed. THE MIRROR ROUND executed: the three 'que reproduzca' connector rows flow to es-MX/es-US (exclude lists deleted, +3 samples each), pins added both sides, mirror-contract test extended. Gates (in 262cb85c): 0-warning build both TFMs, 6041/6041 per TFM twice, tests/scripts 86/86, validators at the 275 baseline, dry-run 43, /simplify pass, code-review high 4/4 applied. Residuals parked elsewhere: the es-ES bare 'reproduce breaking bad...' steal stays red under JF-865 (tracker); the 'que repita la cola' row stays es-ES-only per its holding pattern. gate-exempt: gates ran in the dispatched worker's transcript; commit 262cb85c carries the full Gates record.
+<!-- SECTION:FINAL_SUMMARY:END -->

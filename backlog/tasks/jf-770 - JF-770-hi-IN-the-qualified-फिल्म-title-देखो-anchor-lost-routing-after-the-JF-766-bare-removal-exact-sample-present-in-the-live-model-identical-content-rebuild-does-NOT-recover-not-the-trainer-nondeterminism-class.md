@@ -7,13 +7,13 @@ title: >-
 status: In Progress
 assignee: []
 created_date: '2026-10-05'
-updated_date: '2026-10-17 22:09'
+updated_date: '2026-10-17 20:36'
 labels:
   - interaction-model
   - nlu
   - hi-IN
   - regression
-  - gate:trainer-anomaly
+  - 'gate:trainer-anomaly'
 dependencies:
   - JF-766
 references:
@@ -258,6 +258,7 @@ NFC-normalized: a benign SMAPI composition fold would return फ़िल्म 
 precomposed U+095E, byte-mismatching the file's decomposed U+092B U+093C
 with no row dropped.
 
+ROUND 2 EXECUTED + ACCEPTED 2026-10-17 ~22:4x: branch jf770 (45002877), merged 56c00771, DLL deployed (md5 1e515b73), hi-IN rebuild SUCCEEDED, acceptance matrix run: anchor/nukta/postpos ALL still Fallback (the film-initial anomaly survives even NEW rows; the worker's predicted split confirmed) BUT 'वीडियो इंसेप्शन दिखाओ' -> PlayVideoIntent title filled = the strong-carrier qualified video-watch form WORKS, hi-IN has a working watch entry again. Nukta row verified SURVIVED in the live model (benign composition fold, precomposed return). TERMINAL CONDITION MET: two failed fixes, no third template patch per the armed rule; the anchor pin stays red as the tracker and the task PARKS on Paolo's device round (verify whether the film-initial Fallback reproduces on a real device or is simulator-trainer-only; JF-769 ja precedent).
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
