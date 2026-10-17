@@ -4,10 +4,10 @@ title: >-
   JF-889: the loop vocabulary holes - bare 'loop' stolen by ShowMore
   ('continua/ancora'), 'attivare il loop' uncovered, 'attiva il ripetizione'
   shuffle-steals
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-14 16:09'
-updated_date: '2026-10-14 17:18'
+updated_date: '2026-10-17 14:43'
 labels: []
 dependencies: []
 priority: medium
@@ -36,5 +36,5 @@ From Paolo's 2026-10-14 17:16 device round: a loop command landed on ShowMoreInt
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-EXECUTED on branch jf889 (600325d0), merged to main 18edf72e, pushed, DEPLOYED (DLL + it-IT rebuild SUCCEEDED) and LIVE-VERIFIED post-deploy (all 10 probes green): the four steals fixed ('attiva il loop' -> LoopAllOn, 'disattiva il loop'/'disattiva la ripetizione' -> LoopAllOff, 'attiva il ripetizione' -> LoopAllOn); the DECISION row WON: bare 'loop' -> LoopAllOnIntent (ShowMore released it; the row stays); pagination controls intact ('mostra di più'/'continua'/'ancora' -> ShowMore); shuffle boundary intact ('attiva/disattiva il mescolamento' -> ShuffleAllOn/Off). The worker's live probe map found FOUR steals beyond the task's three (the article-less JF-887 rows already carried 'attivare il loop' by generalization). 21 template rows (full article sub-family incl. the gender-confused 'il ripetizione' twins completed in one pass), 16 fixture pins, 2 battery wrapper rows, mirrors regenerated. Gates: /simplify (4 agents) + /code-review high (5 findings, all 5 applied and live-verified). Suite 5958/5958 BOTH TFMs; validators PASS at the 275 baseline. RESIDUALS: the task stays open for the device retest once Paolo reads the Alexa app voice history (the exact 17:16 utterance is still unknown; the fixed family covers every probed shape). Out-of-scope filed: two pre-existing cross-intent duplicate samples at HEAD ('riprendi a guardare', 'attiva la radio', simplify-agent find, predates this change) noted for a future cleanup; the 15/17 battery residue (fermare-dopo-un-minuto, podcast) reclassified as simulate-layer drift (bare tails route correctly on profile-nlu).
+CLOSED by transcription evidence 2026-10-17 (the hassio agent's RVH read, Echo cucina G0911B059457150L): the 2026-10-14 17:16:06 utterance was 'chiedi a mia collezione di attivare' - NO loop word at all; the ASR cut the tail (likely 'di attivare il loop' truncated) and the bare infinitive routed to ShowMoreIntent via the bridge. The JF-889 loop-vocabulary fixes remain valid and live-verified on their own merits (the probed shapes 'attiva il loop' family all route correctly post-deploy, battery 10/10); the original incident was a DIFFERENT shape. The bare truncated infinitive 'attivare' landing on ShowMore is filed as its own row (the truncated-tail class). gate-exempt: doc-only closure on transcription evidence; no code this task.
 <!-- SECTION:FINAL_SUMMARY:END -->
