@@ -39,6 +39,22 @@ class SmapiUnexpectedError(SmapiError):
     """
 
 
+class SmapiSelectionLostError(SmapiError):
+    """A simulation resolved FAILED with the skill-selection loss class.
+
+    "This utterance did not resolve to any intent in your skill" (with
+    consideredIntents [<IntentForDifferentSkill>...]): the simulated
+    device's skill router considered the utterance and picked ANOTHER
+    skill. Unlike the chronic outage class this one is intermittent PER
+    CALL: the same (locale, utterance) went FAILED then SUCCESSFUL within
+    15 minutes on the same token and pipeline (research 2026-10-17,
+    claudedocs/research_simulate-routing_2026-10-17.md). Plain SmapiError
+    to every other handler, so in-session command steps keep hard-failing
+    on it; the e2e smoke harness catches the type on the OPEN step only,
+    to fall back to a one-shot instead of failing the row (JF-899).
+    """
+
+
 # Status phrases and codes SMAPI/ASK CLI surfaces for transient 5xx
 # failures.  Matched against stderr; phrases over bare codes because a
 # bare "500" can appear in unrelated error bodies.
@@ -57,6 +73,11 @@ _SERVER_ERROR_MARKERS = (
 
 # The platform's generic cause text for a FAILED simulation (JF-656).
 _OUTAGE_ERROR_MARKER = "an unexpected error occurred"
+
+# The platform's selection-loss cause text for a FAILED simulation
+# (JF-899).  Kept to the stable shared prefix: the 2026-09-22 probe
+# recorded the message truncated one word earlier.
+_SELECTION_LOST_ERROR_MARKER = "did not resolve to any intent"
 
 
 # Module-level rate-limit state shared across all SmapiClient instances
@@ -213,16 +234,22 @@ class SmapiClient:
     def _failed_simulation_error(
         error_msg: str, utterance: str, locale: str, detail: str
     ) -> SmapiError:
-        """The error for a FAILED simulation, typed for the outage class.
+        """The error for a FAILED simulation, typed for the failure classes.
 
-        The marker is checked against error_msg alone (the platform's cause
-        field): the composed message embeds the utterance, whose text must
-        never trigger the classification.
+        The markers are checked against error_msg alone (the platform's
+        cause field): the composed message embeds the utterance, whose
+        text must never trigger a classification.  The selection-loss
+        marker is checked BEFORE the generic outage marker: whenever the
+        more specific diagnosis is present it wins (a cause text carrying
+        both must not land the locale in the run-long outage flag).
         """
         message = (
             f"Simulation failed {detail}for '{utterance}' ({locale}): {error_msg}"
         )
-        if _OUTAGE_ERROR_MARKER in error_msg.lower():
+        error_lower = error_msg.lower()
+        if _SELECTION_LOST_ERROR_MARKER in error_lower:
+            return SmapiSelectionLostError(message)
+        if _OUTAGE_ERROR_MARKER in error_lower:
             return SmapiUnexpectedError(message)
         return SmapiError(message)
 
