@@ -47,6 +47,7 @@ graph TD
 
     Playing -->|"この曲をループして"| LoopSong["LoopSongOnIntent"]
     Playing -->|"ループオン"| LoopOn["AMAZON.LoopOnIntent"]
+    Playing -->|"キューをリピートして"| LoopAll["LoopAllOnIntent"]
     Playing -->|"ループオフ"| LoopOff["AMAZON.LoopOffIntent"]
 
     Playing -->|"次へ"| Next["AMAZON.NextIntent"]

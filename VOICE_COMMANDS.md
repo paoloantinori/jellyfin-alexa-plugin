@@ -37,6 +37,7 @@ Invocation name: **"jellyfin player"**
 | In Progress Media List | `ماذا كنت أستمع` · `ماذا كنت أشاهد` · `ما الذي قيد التقدم` · `أظهر تقدمي` · `ما كنت ألعب` · `ما الذي بدأته` |
 | Learn My Voice | `تعلم صوتي` · `تذكر صوتي` · `تعرف علي` · `اربط صوتي` · `هذا صوتي` · `اضبط ملفي الصوتي` |
 | List Queue | `ماذا في قائمة الانتظار` · `ماذا يأتي بعد ذلك` · `أظهر قائمة الانتظار` · `ماذا سيشغل بعد ذلك` |
+| Loop All On | `كرر قائمة الانتظار` · `أعد قائمة الانتظار` · `كرر قائمة الانتظار بالكامل` |
 | Loop Song On | `كرر هذه الأغنية` · `كرر هذه الأغنية دائماً` · `أعد الأغنية` · `أعد هذه الأغنية` · `أعد هذه الأغنية دائماً` |
 | Mark Favorite | `أعجبني هذا` · `أعجبني الفيديو` · `أعجبني الأغنية` · `أعجبني الموسيقى` · `أضف الفيديو إلى المفضلة` · `أضف الأغنية إلى المفضلة` |
 | Media Info | `ما اسم الأغنية` · `ما {media_info_type} هذا` · `ما اسم الفيديو` · `ما الذي يشغل الآن` · `أخبرني عن {media_info_type}` · `من يغني هذا` |
@@ -160,6 +161,7 @@ Invocation name: **"jellyfin player"**
 | In Progress Media List | `what am i listening to` · `what am i watching` · `what's in progress` · `what is in progress` · `show my progress` · `what was i playing` |
 | Learn My Voice | `learn my voice` · `remember my voice` · `recognize me` · `link my voice` · `this is my voice` · `set up my voice profile` |
 | List Queue | `what's in my queue` · `what's in the queue` · `what's coming up` · `what's up next` · `show my queue` · `list my queue` |
+| Loop All On | `repeat the queue` · `repeat the whole queue` · `loop the queue` · `to repeat the queue` |
 | Loop Song On | `loop this song` · `loop this song forever` · `Repeat this song forever` · `repeat the song` · `repeat this song` |
 | Mark Favorite | `I like that` · `I like the video` · `I like the song` · `I like the music` · `Add the video to my favorites` · `Add the song to my favorites` |
 | Media Info | `What is the name of the song` · `What {media_info_type} is this` · `What is the name of the video` · `What is the name of the music` · `What is the title of the song` · `What is the title of the video` |
@@ -219,6 +221,7 @@ Invocation name: **"jellyfin player"**
 | In Progress Media List | `what am i listening to` · `what am i watching` · `what's in progress` · `what is in progress` · `show my progress` · `what was i playing` |
 | Learn My Voice | `learn my voice` · `remember my voice` · `recognize me` · `link my voice` · `this is my voice` · `set up my voice profile` |
 | List Queue | `what's in my queue` · `what's in the queue` · `what's coming up` · `what's up next` · `show my queue` · `list my queue` |
+| Loop All On | `repeat the queue` · `repeat the whole queue` · `loop the queue` · `to repeat the queue` |
 | Loop Song On | `loop this song` · `loop this song forever` · `Repeat this song forever` · `repeat the song` · `repeat this song` |
 | Mark Favorite | `I like that` · `I like the video` · `I like the song` · `I like the music` · `Add the video to my favorites` · `Add the song to my favorites` |
 | Media Info | `What is the name of the song` · `What {media_info_type} is this` · `What is the name of the video` · `What is the name of the music` · `What is the title of the song` · `What is the title of the video` |
@@ -278,6 +281,7 @@ Invocation name: **"jellyfin player"**
 | In Progress Media List | `what am i listening to` · `what am i watching` · `what's in progress` · `what is in progress` · `show my progress` · `what was i playing` |
 | Learn My Voice | `learn my voice` · `remember my voice` · `recognize me` · `link my voice` · `this is my voice` · `set up my voice profile` |
 | List Queue | `what's in my queue` · `what's in the queue` · `what's coming up` · `what's up next` · `show my queue` · `list my queue` |
+| Loop All On | `repeat the queue` · `repeat the whole queue` · `loop the queue` · `to repeat the queue` |
 | Loop Song On | `loop this song` · `loop this song forever` · `Repeat this song forever` · `repeat the song` · `repeat this song` |
 | Mark Favorite | `I like that` · `I like the video` · `I like the song` · `I like the music` · `Add the video to my favorites` · `Add the song to my favorites` |
 | Media Info | `What is the name of the song` · `What {media_info_type} is this` · `What is the name of the video` · `What is the name of the music` · `What is the title of the song` · `What is the title of the video` |
@@ -337,6 +341,7 @@ Invocation name: **"jellyfin player"**
 | In Progress Media List | `what am i listening to` · `what am i watching` · `what's in progress` · `what is in progress` · `show my progress` · `what was i playing` |
 | Learn My Voice | `learn my voice` · `remember my voice` · `recognize me` · `link my voice` · `this is my voice` · `set up my voice profile` |
 | List Queue | `what's in my queue` · `what's in the queue` · `what's coming up` · `what's up next` · `show my queue` · `list my queue` |
+| Loop All On | `repeat the queue` · `repeat the whole queue` · `loop the queue` · `to repeat the queue` |
 | Loop Song On | `loop this song` · `loop this song forever` · `Repeat this song forever` · `repeat the song` · `repeat this song` |
 | Mark Favorite | `I like that` · `I like the video` · `I like the song` · `I like the music` · `Add the video to my favorites` · `Add the song to my favorites` |
 | Media Info | `What is the name of the song` · `What {media_info_type} is this` · `What is the name of the video` · `What is the name of the music` · `What is the title of the song` · `What is the title of the video` |
@@ -397,6 +402,7 @@ Invocation name: **"jellyfin player"**
 | Jump To Position | `jump to {position_hours} hour {position_minutes} minutes` · `jump to {position_minutes} minutes` · `skip to {position_hours} hours` · `jump to {position_hours} hours {position_minutes} minutes {position_seconds} seconds` · `jump to {position_minutes} minutes {position_seconds} seconds` · `go to {position_hours} hour {position_minutes} minutes` |
 | Learn My Voice | `learn my voice` · `remember my voice` · `recognize me` · `link my voice` · `this is my voice` · `set up my voice profile` |
 | List Queue | `what's in my queue` · `what's in the queue` · `what's coming up` · `what's up next` · `show my queue` · `list my queue` |
+| Loop All On | `repeat the queue` · `repeat the whole queue` · `loop the queue` · `to repeat the queue` |
 | Loop Song On | `loop this song` · `loop this song forever` · `Repeat this song forever` · `repeat the song` · `repeat this song` |
 | Mark Favorite | `I like that` · `I like the video` · `I like the song` · `I like the music` · `I like this song` · `I like this` |
 | Media Info | `what's on` · `What {media_info_type} is this` · `information about this` · `what is this` · `details about this` · `tell me about this` |
@@ -456,6 +462,7 @@ Invocation name: **"jellyfin player"**
 | In Progress Media List | `qué estoy escuchando` · `qué estoy viendo` · `qué está en progreso` · `muestra mi progreso` · `qué he empezado` |
 | Learn My Voice | `Aprende mi voz` · `Reconoce mi voz` · `Vincula mi voz` · `Esta es mi voz` · `Reconóceme` · `Configura mi perfil de voz` |
 | List Queue | `Qué hay en mi cola` · `Qué hay en la cola` · `Qué viene después` · `Qué sigue` · `Muestra mi cola` · `Lista mi cola` |
+| Loop All On | `Repite la cola` · `Repetir la cola` · `Repite toda la cola` · `repita la cola` · `que repita la cola` |
 | Loop Song On | `Repite esta canción` · `Repite esta canción siempre` · `Repetir la canción` · `Repetir esta canción` · `Repetir esta canción siempre` |
 | Mark Favorite | `Me gusta` · `Me gusta el vídeo` · `Me gusta la canción` · `Me gusta la música` · `Añade el vídeo a mis favoritos` · `Añade la canción a mis favoritos` |
 | Media Info | `Cuál es el {media_info_type}` · `Qué está sonando` · `Cuál es la {media_info_type}` · `Dime el {media_info_type}` · `Dime la {media_info_type}` · `Qué {media_info_type} es` |
@@ -515,6 +522,7 @@ Invocation name: **"jellyfin player"**
 | In Progress Media List | `qué estoy escuchando` · `qué estoy viendo` · `qué está en progreso` · `muestra mi progreso` · `qué he empezado` |
 | Learn My Voice | `Aprende mi voz` · `Reconoce mi voz` · `Vincula mi voz` · `Esta es mi voz` · `Reconóceme` · `Configura mi perfil de voz` |
 | List Queue | `Qué hay en mi cola` · `Qué hay en la cola` · `Qué viene después` · `Qué sigue` · `Muestra mi cola` · `Lista mi cola` |
+| Loop All On | `Repite la cola` · `Repetir la cola` · `Repite toda la cola` · `repita la cola` |
 | Loop Song On | `Repite esta canción` · `Repite esta canción siempre` · `Repetir la canción` · `Repetir esta canción` · `Repetir esta canción siempre` |
 | Mark Favorite | `Me gusta` · `Me gusta el vídeo` · `Me gusta la canción` · `Me gusta la música` · `Añade el vídeo a mis favoritos` · `Añade la canción a mis favoritos` |
 | Media Info | `Cuál es el {media_info_type}` · `Qué está sonando` · `Cuál es la {media_info_type}` · `Dime el {media_info_type}` · `Dime la {media_info_type}` · `Qué {media_info_type} es` |
@@ -574,6 +582,7 @@ Invocation name: **"jellyfin player"**
 | In Progress Media List | `qué estoy escuchando` · `qué estoy viendo` · `qué está en progreso` · `muestra mi progreso` · `qué he empezado` |
 | Learn My Voice | `Aprende mi voz` · `Reconoce mi voz` · `Vincula mi voz` · `Esta es mi voz` · `Reconóceme` · `Configura mi perfil de voz` |
 | List Queue | `Qué hay en mi cola` · `Qué hay en la cola` · `Qué viene después` · `Qué sigue` · `Muestra mi cola` · `Lista mi cola` |
+| Loop All On | `Repite la cola` · `Repetir la cola` · `Repite toda la cola` · `repita la cola` |
 | Loop Song On | `Repite esta canción` · `Repite esta canción siempre` · `Repetir la canción` · `Repetir esta canción` · `Repetir esta canción siempre` |
 | Mark Favorite | `Me gusta` · `Me gusta el vídeo` · `Me gusta la canción` · `Me gusta la música` · `Añade el vídeo a mis favoritos` · `Añade la canción a mis favoritos` |
 | Media Info | `Cuál es el {media_info_type}` · `Qué está sonando` · `Cuál es la {media_info_type}` · `Dime el {media_info_type}` · `Dime la {media_info_type}` · `Qué {media_info_type} es` |
@@ -761,6 +770,7 @@ Invocation name: **"jellyfin player"**
 | In Progress Media List | `मैं क्या सुन रहा हूँ` · `मैं क्या देख रहा हूँ` · `क्या प्रगति पर है` · `मेरी प्रगति दिखाओ` · `मैं क्या चला रहा था` · `मेरी प्रगति पर मीडिया दिखाओ` |
 | Learn My Voice | `मेरी आवाज़ सीखो` · `मेरी आवाज़ याद रखो` · `मुझे पहचानो` · `मेरी आवाज़ लिंक करो` · `यह मेरी आवाज़ है` · `मेरा वॉइस प्रोफाइल सेटअप करो` |
 | List Queue | `कतार में क्या है` · `क्या आने वाला है` · `क्या अगला है` · `कतार दिखाओ` · `अगला क्या चलेगा` |
+| Loop All On | `कतार दोहराओ` · `पूरी कतार दोहराओ` · `कतार लूप करो` |
 | Loop Song On | `इस गाने को लूप करो` · `इस गाने को हमेशा लूप करो` · `गाना दोहराओ` · `इस गाने को दोहराओ` · `इस गाने को हमेशा दोहराओ` |
 | Mark Favorite | `मुझे यह पसंद है` · `मुझे वीडियो पसंद है` · `मुझे गाना पसंद है` · `मुझे म्यूज़िक पसंद है` · `मुझे यह गाना पसंद है` · `वीडियो को पसंदीदा में जोड़ो` |
 | Media Info | `गाने का नाम क्या है` · `यह {media_info_type} क्या है` · `वीडियो का नाम क्या है` · `म्यूज़िक का नाम क्या है` · `गाने का शीर्षक क्या है` · `अभी क्या चल रहा है` |
@@ -885,6 +895,7 @@ Invocation name: **"jellyfin player"**
 | In Progress Media List | `何聴いてたっけ` · `何見てたっけ` · `進行中のものは` · `進捗を見せて` · `何再生してたっけ` · `開始したものは何` |
 | Learn My Voice | `私の声を覚えて` · `私の声を記憶して` · `私を認識して` · `私の声をリンクして` · `これは私の声` · `ボイスプロフィールを設定して` |
 | List Queue | `キューには何がある` · `次は何` · `キューを見せて` · `次に何が来る` · `キューのリスト` |
+| Loop All On | `キューをリピートして` · `キュー全体をリピートして` · `キューをループして` |
 | Loop Song On | `この曲をループして` · `この曲をずっとループして` · `曲をリピートして` · `この曲をリピートして` |
 | Mark Favorite | `いいね` · `ビデオいいね` · `曲いいね` · `音楽いいね` · `この曲いいね` · `これいいね` |
 | Media Info | `曲の名前は何` · `{media_info_type} は何` · `ビデオの名前は何` · `音楽の名前は何` · `曲のタイトルは何` · `今何が再生中` |
@@ -944,6 +955,7 @@ Invocation name: **"jellyfin player"**
 | In Progress Media List | `waar was ik naar aan het luisteren` · `waar was ik naar aan het kijken` · `wat is in behandeling` · `laat mijn voortgang zien` · `wat was ik aan het afspelen` · `wat heb ik gestart` |
 | Learn My Voice | `leer mijn stem` · `onthoud mijn stem` · `herken mij` · `koppel mijn stem` · `dit is mijn stem` · `stel mijn stemprofiel in` |
 | List Queue | `wat zit er in mijn wachtrij` · `wat zit er in de wachtrij` · `wat komt er aan` · `wat is het volgende` · `laat mijn wachtrij zien` · `wat wordt hierna afgespeeld` |
+| Loop All On | `herhaal de wachtrij` · `herhaal de hele wachtrij` · `zet de wachtrij op repeat` · `om de wachtrij te herhalen` |
 | Loop Song On | `loop dit nummer` · `herhaal dit nummer` · `zet dit nummer op repeat` · `blijf dit nummer herhalen` |
 | Mark Favorite | `ik vind dit leuk` · `ik vind de video leuk` · `ik vind het nummer leuk` · `ik vind de muziek leuk` · `ik vind dit nummer leuk` · `voeg de video toe aan favorieten` |
 | Media Info | `hoe heet dit nummer` · `wat is de {media_info_type} hiervan` · `hoe heet de video` · `hoe heet de muziek` · `wat is de titel van het nummer` · `wat speelt er nu` |
@@ -1003,6 +1015,7 @@ Invocation name: **"jellyfin player"**
 | In Progress Media List | `o que eu estava ouvindo` · `o que eu estava assistindo` · `o que está em andamento` · `mostrar meu progresso` · `o que eu estava tocando` · `listar mídias em andamento` |
 | Learn My Voice | `aprender minha voz` · `lembrar minha voz` · `me reconhecer` · `vincular minha voz` · `essa é minha voz` · `configurar meu perfil de voz` |
 | List Queue | `o que tem na minha fila` · `o que tem na fila` · `o que vem aí` · `o que vem depois` · `mostrar minha fila` · `listar minha fila` |
+| Loop All On | `repetir a fila` · `repetir toda a fila` · `colocar a fila em loop` |
 | Loop Song On | `repetir esta música` · `colocar esta música em loop` · `repetir a música` · `repetir essa música para sempre` · `loop nesta música` |
 | Mark Favorite | `eu gostei` · `eu gostei do vídeo` · `eu gostei da música` · `adicionar o vídeo aos favoritos` · `adicionar a música aos favoritos` · `salvar nos favoritos` |
 | Media Info | `qual é o nome da música` · `qual {media_info_type} é essa` · `qual é o nome do vídeo` · `qual é o título da música` · `o que está tocando` · `me diga a {media_info_type}` |

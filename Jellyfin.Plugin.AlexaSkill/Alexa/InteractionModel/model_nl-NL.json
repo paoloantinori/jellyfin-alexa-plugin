@@ -69,6 +69,15 @@
         ]
       },
       {
+        "name": "LoopAllOnIntent",
+        "samples": [
+          "herhaal de wachtrij",
+          "herhaal de hele wachtrij",
+          "zet de wachtrij op repeat",
+          "om de wachtrij te herhalen"
+        ]
+      },
+      {
         "name": "AMAZON.ShuffleOnIntent"
       },
       {

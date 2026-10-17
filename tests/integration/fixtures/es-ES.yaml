@@ -4,8 +4,12 @@ tests:
   # -------------------------------------------------------------------------
   # 1. LoopSongOnIntent (no slots)
   # -------------------------------------------------------------------------
+  # JF-904: widened to the A|B alternation (the JF-902 convention):
+  # LoopAllOnIntent now competes in this locale's loop region, so
+  # either repeat-one delivery is correct and a LoopAllOnIntent
+  # delivery must fail the pin.
   - utterance: "Repite esta canción"
-    expected_intent: LoopSongOnIntent
+    expected_intent: LoopSongOnIntent|AMAZON.LoopOnIntent
     expected_slots: {}
 
   - utterance: "Repetir la canción"
@@ -472,4 +476,26 @@ tests:
   # Transport steal guard.
   - utterance: "siguiente canción"
     expected_intent: AMAZON.NextIntent
+    expected_slots: {}
+
+  # -----------------------------------------------------------------------
+  # LoopAllOnIntent (no slots) - JF-904 queue-scoped carriers
+  # (rationale: the loop constants in IntentNames). RED-UNTIL-DEPLOY
+  # until the 13-locale model rebuild (the JF-766 convention).
+  # -----------------------------------------------------------------------
+
+  - utterance: "Repite la cola"
+    expected_intent: LoopAllOnIntent
+    expected_slots: {}
+
+  # The subjunctive wrapper twin pins (the JF-902 it-IT/de-DE
+  # precedent pins this steal-prone class; without the exact rows the
+  # one-shot tail generalizes into the repeat-one region): the bare
+  # payload and the 'que' residue shape.
+  - utterance: "repita la cola"
+    expected_intent: LoopAllOnIntent
+    expected_slots: {}
+
+  - utterance: "que repita la cola"
+    expected_intent: LoopAllOnIntent
     expected_slots: {}

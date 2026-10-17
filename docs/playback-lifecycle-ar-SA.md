@@ -47,6 +47,7 @@ graph TD
 
     Playing -->|"كرر هذه الأغنية"| LoopSong["LoopSongOnIntent"]
     Playing -->|"تشغيل الحلقة"| LoopOn["AMAZON.LoopOnIntent"]
+    Playing -->|"كرر قائمة الانتظار"| LoopAll["LoopAllOnIntent"]
     Playing -->|"إيقاف الحلقة"| LoopOff["AMAZON.LoopOffIntent"]
 
     Playing -->|"التالي"| Next["AMAZON.NextIntent"]

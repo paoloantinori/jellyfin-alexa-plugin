@@ -21,8 +21,11 @@
 #   PlayNextEpisode (before BrowseLibrary), SearchMedia after
 #   QueryArtistLibrary (before PlayBook). The loop shape follows the
 #   en/es families (bare AMAZON.LoopOnIntent / AMAZON.LoopOffIntent +
-#   LoopSongOnIntent right after them), NOT the de/fr custom
-#   LoopAllOff/On/RepeatSingleOn trio.
+#   LoopSongOnIntent right after them; since JF-904 the queue-loop
+#   carrier LoopAllOnIntent sits right after LoopSongOn in the 13
+#   built-in-only locales; the de/fr/it trio keeps its own order),
+#   while the de/fr/it LoopAllOff/RepeatSingleOn customs stay absent
+#   here.
 # - Vocabulary reality, not to be normalized: the model is 100% ASCII;
 #   not one of the 362 samples carries a diacritic (loanwords sit
 #   unaccented: media, genre, serie). LibraryQueryType (tracks /
@@ -112,6 +115,16 @@ intents:
       - herhaal dit nummer
       - zet dit nummer op repeat
       - blijf dit nummer herhalen
+  - name: LoopAllOnIntent
+    samples:
+      # JF-904 queue-scoped repeat-ALL carriers (rationale: the loop
+      # constants in IntentNames); ASCII-only like the rest of this
+      # model. 'om de wachtrij te herhalen' is the 'om ... te' wrapper
+      # twin (the PlayPodcast precedent).
+      - herhaal de wachtrij
+      - herhaal de hele wachtrij
+      - zet de wachtrij op repeat
+      - om de wachtrij te herhalen
   - AMAZON.ShuffleOnIntent
   - AMAZON.ShuffleOffIntent
   - AMAZON.StartOverIntent

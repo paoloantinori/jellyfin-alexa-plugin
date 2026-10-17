@@ -70,6 +70,15 @@
         ]
       },
       {
+        "name": "LoopAllOnIntent",
+        "samples": [
+          "Repite la cola",
+          "Repetir la cola",
+          "Repite toda la cola",
+          "repita la cola"
+        ]
+      },
+      {
         "name": "AMAZON.ShuffleOnIntent"
       },
       {
