@@ -160,6 +160,36 @@ ALBUM_CARRIER_NOUNS: dict[str, list[str]] = {
     "hi": ["एल्बम"],
 }
 
+# Queue nouns a LoopAllOnIntent sample must name, keyed by language prefix.
+# SOURCE OF TRUTH: the queue word of each locale's own ListQueue/ClearQueue
+# vocabulary, i.e. exactly the word every JF-904 queue carrier uses, verified
+# against all 17 committed models (JF-905). A LoopAllOnIntent sample that drops
+# the queue noun regresses to the bare-loop class JF-902 eliminated (a bare
+# loop sample is repeat-ONE, so a queue utterance routed there silently
+# repeats the wrong thing). Deliberately a QUEUE-word subset: several locales'
+# queue intents also carry a playlist/lista word (en 'clear my playlist', de
+# 'Lösche meine Playlist', es 'Limpia mi lista'); a repeat-all carrier phrased
+# with that word is NOT accepted, it warns, so wording a LoopAllOn sample away
+# from the queue noun is always a conscious decision. Truncated stems match
+# orthographic variants without unicode folding, same rationale as
+# ALBUM_CARRIER_NOUNS: fr 'attente' survives straight vs typographic apostrophe
+# drift inside "file d'attente"; ar 'نتظار' drops the leading alif (the ALBUM
+# ar precedent) so the hamza variants انتظار/إنتظار and the article-elided form
+# all match. Matching is case-insensitive; a stem inside an unrelated token
+# also passes (the #10 substring trade, warning level is the net).
+QUEUE_CARRIER_NOUNS: dict[str, list[str]] = {
+    "en": ["queue"],
+    "de": ["Warteschlange"],
+    "es": ["cola"],
+    "fr": ["attente"],
+    "it": ["coda"],
+    "ja": ["キュー"],
+    "nl": ["wachtrij"],
+    "pt": ["fila"],
+    "hi": ["कतार"],
+    "ar": ["نتظار"],
+}
+
 # CJK text glued to a slot ref is an SMAPI build failure (JF-638; live
 # InvalidCharInSamples/InvalidSample hits: JF-513 {musician}を再生, JF-326
 # 星{star_rating}で, JF-636 速度{speed}). The documented rule
@@ -228,6 +258,20 @@ def load_model(path: Path) -> dict | None:
 def intent_by_name(lm: dict, name: str) -> dict | None:
     """Return the intent dict with this name, or None if the locale lacks it."""
     return next((i for i in lm.get("intents", []) if i.get("name") == name), None)
+
+
+def _carrier_misses_noun(sample: str, lowered_nouns: list[str]) -> bool:
+    """True when a sample's placeholder-stripped carrier names none of the nouns.
+
+    The ONE noun-match rule behind the #10 album and #12 loop carrier checks:
+    placeholders are stripped first (a slot named like the noun must not defeat
+    detection), then _lint_normalize (lowercase + whitespace collapse) makes
+    the containment case-insensitive. Checks #10/#12 own their extra gates
+    (which intent, which samples, the #10 free-text-slot condition) and their
+    warning wording; only this match rule is shared so it cannot drift.
+    """
+    carrier = _lint_normalize(SLOT_PLACEHOLDER_RE.sub("", sample))
+    return not any(n in carrier for n in lowered_nouns)
 
 
 def validate_single_model(locale: str, lm: dict) -> tuple[list[str], list[str]]:
@@ -394,14 +438,11 @@ def validate_single_model(locale: str, lm: dict) -> tuple[list[str], list[str]]:
             None,
         )
         if album_type and album_type.startswith("AMAZON."):
-            # Same carrier normalization as the fixture lint (_lint_normalize:
-            # lowercase + whitespace collapse), so the two checks cannot drift.
             lowered_nouns = [n.lower() for n in nouns]
             for sample in intent.get("samples", []):
                 if "{album}" not in sample:
                     continue
-                carrier = _lint_normalize(SLOT_PLACEHOLDER_RE.sub("", sample))
-                if not any(n in carrier for n in lowered_nouns):
+                if _carrier_misses_noun(sample, lowered_nouns):
                     warnings.append(
                         f"{prefix} PlayAlbumIntent bare album carrier "
                         f"(CLAUDE.md anti-pattern #11): '{sample}'"
@@ -444,6 +485,40 @@ def validate_single_model(locale: str, lm: dict) -> tuple[list[str], list[str]]:
                     f"fullwidth/halfwidth characters ({', '.join(banned)}); rewrite "
                     f"with standard-width text (banned from samples outright; JF-644)"
                 )
+
+    # 12. Bare loop carriers (WARNING, JF-905): every LoopAllOnIntent sample
+    # must name the queue. A sample that drops the noun regresses to the
+    # bare-loop class JF-902 eliminated (a bare loop sample is repeat-ONE), so
+    # the regression must surface at validation instead of waiting for a
+    # fixture pin or a live NLU steal. Nouns come from QUEUE_CARRIER_NOUNS, the
+    # queue word of each locale's own ListQueue/ClearQueue vocabulary exactly
+    # as the JF-904 carriers were built; unlike #10 there is no unlisted-locale
+    # escape, because the LoopAllOn invariant is universal: a locale declaring
+    # the intent with no table entry warns too, so an 18th locale cannot grow a
+    # silently unenforced carrier invariant. Every sample is checked (the
+    # intent is slotless today; the shared predicate strips placeholders
+    # anyway, so the shape cannot defeat detection if a slot ever lands).
+    # WARNING-level per the #10 precedent: a false positive must not break CI
+    # while errors still can. Promotion condition: the first real missed
+    # regression this check catches flips it to ERROR.
+    loop_all = intent_by_name(lm, "LoopAllOnIntent")
+    if loop_all:
+        lang = locale.split("-")[0]
+        loop_nouns = QUEUE_CARRIER_NOUNS.get(lang)
+        if not loop_nouns:
+            warnings.append(
+                f"{prefix} LoopAllOnIntent declared but '{lang}' has "
+                f"no QUEUE_CARRIER_NOUNS entry: the queue-carrier invariant is "
+                f"unenforced here; add the locale's queue noun (JF-905)"
+            )
+        else:
+            lowered_loop_nouns = [n.lower() for n in loop_nouns]
+            for sample in loop_all.get("samples", []):
+                if _carrier_misses_noun(sample, lowered_loop_nouns):
+                    warnings.append(
+                        f"{prefix} LoopAllOnIntent bare loop carrier "
+                        f"(must name the queue; JF-905): '{sample}'"
+                    )
 
     return errors, warnings
 
