@@ -76,7 +76,7 @@ internal static class IntentNames
     // "Répète la file d'attente"), so no utterance maps to both modes anymore
     // (the rows were moved, not dropped: without exact rows the phrases stole
     // live; see the template comments).
-    // REMAINING GAP (JF-903): LoopAllOnIntent is still declared in only those
+    // REMAINING GAP (JF-904): LoopAllOnIntent is still declared in only those
     // four locales, so the other 13 have NO voice path to repeat-all at all
     // (the bare built-in is repeat-one now); restoring a queue-loop carrier
     // family across the 13 built-in-only locales is its own tracked task.
