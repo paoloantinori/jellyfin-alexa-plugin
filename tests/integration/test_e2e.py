@@ -19,7 +19,12 @@ import xml.etree.ElementTree as ET
 
 import pytest
 
-from smapi_client import SmapiClient, SmapiError, SmapiUnexpectedError
+from smapi_client import (
+    SmapiClient,
+    SmapiError,
+    SmapiSelectionLostError,
+    SmapiUnexpectedError,
+)
 # JF-897: import the alarm class from the shared module, NOT from conftest:
 # if pytest ever resolves conftest to a second module instance, a
 # from-conftest except clause would miss the alarm the installed handler
@@ -74,6 +79,8 @@ _reset_initialized: set[str] = set()
 # attempt instead of burning the open+retry pair (~20s) per test.
 # Process-local and one-way: never re-probed after a mid-run recovery, and
 # invisible to a parallel run (no xdist today), so the flag is best-effort.
+# JF-899: the per-call selection-loss class deliberately does NOT flag
+# here (rationale on _fallback_open_to_one_shot).
 _open_outage_locales: set[str] = set()
 
 
@@ -1067,6 +1074,37 @@ def _note_open_fallback(utterance: str, locale: str, source: str) -> None:
     )
 
 
+def _fallback_open_to_one_shot(
+    utterance: str, locale: str, exc: Exception, source: str
+) -> None:
+    """Shared open-failure fallback body: switch the row to the one-shot.
+
+    JF-656 introduced it for the chronic outage class; JF-899 widens it to
+    the per-call skill-selection loss. Marks the dialog state unknown so
+    the next test resets, and surfaces the switch in the run report.
+
+    The selection-loss class deliberately does NOT join
+    _open_outage_locales: it is per-call flaky with minutes-scale recovery
+    (research 2026-10-17), so later rows keep their own fresh open attempt
+    with its built-in retry; and in the de/fr/es marketplaces the one-shot
+    fallback is the weaker shape, so foreclosing the open for the whole
+    run could only turn otherwise-recoverable rows red. The chronic
+    outage class keeps the flag: its opens stay dead for the run while
+    one-shot simulations work, so the flag is pure saved time there.
+    """
+    # The failed open leaves the dialog state unknown: assume open so the
+    # next test resets (same policy as the full-chain path; a prefixed
+    # one-shot against a stale open dialog is captured into the elicited
+    # slot and misroutes).
+    _open_sessions.add(locale)
+    logger.warning(
+        "OPEN FALLBACK (%s): open simulation failed (%s), falling back to a "
+        "one-shot command: %s",
+        locale, source, str(exc)[:150],
+    )
+    _note_open_fallback(utterance, locale, source)
+
+
 def _assert_play_or_gate_tell(
     utterance: str, locale: str, skill_response: dict, gate_substring: str
 ) -> None:
@@ -1188,6 +1226,10 @@ def test_e2e_smoke_two_step(
     # simulations work), the test falls back to a one-shot of the target
     # utterance instead of failing, and the locale is flagged so later
     # tests of the run skip the open attempt entirely.
+    # JF-899: the same fallback also fires for the per-call skill-selection
+    # loss class (SmapiSelectionLostError: FAILED with 'did not resolve to
+    # any intent', consideredIntents <IntentForDifferentSkill>); the locale
+    # is NOT flagged here (rationale on _fallback_open_to_one_shot).
     open_response = None
     if locale in _open_outage_locales:
         logger.info(
@@ -1205,17 +1247,13 @@ def test_e2e_smoke_two_step(
                 open_response = client.simulate(open_utterance)
         except SmapiUnexpectedError as exc:
             _open_outage_locales.add(locale)
-            # The failed open leaves the dialog state unknown: assume open
-            # so the next test resets (same policy as the full-chain path;
-            # a prefixed one-shot against a stale open dialog is captured
-            # into the elicited slot and misroutes).
-            _open_sessions.add(locale)
-            logger.warning(
-                "OPEN FALLBACK (%s): open simulation hit the outage class, "
-                "falling back to a one-shot command: %s",
-                locale, str(exc)[:150],
+            _fallback_open_to_one_shot(
+                utterance, locale, exc, "open hit the outage class"
             )
-            _note_open_fallback(utterance, locale, "open hit the outage class")
+        except SmapiSelectionLostError as exc:
+            _fallback_open_to_one_shot(
+                utterance, locale, exc, "open lost skill selection"
+            )
         except SmapiError as exc:
             pytest.fail(
                 f"Open simulation error for '{open_utterance}' ({locale}): {exc}"
@@ -1244,8 +1282,9 @@ def test_e2e_smoke_two_step(
         invocation_name = fixture.get("invocation_name", "")
         if not invocation_name:
             pytest.fail(
-                f"Cannot one-shot '{utterance}' ({locale}): the open hit the "
-                f"outage class but the fixture carries no invocation_name"
+                f"Cannot one-shot '{utterance}' ({locale}): the open fell "
+                f"back to a one-shot but the fixture carries no "
+                f"invocation_name"
             )
         command_client = SmapiClient(
             skill_id=skill_id, locale=locale, delay=smapi_delay,
@@ -1266,7 +1305,12 @@ def test_e2e_smoke_two_step(
         )
     except SmapiError as exc:
         _open_sessions.add(locale)
-        pytest.fail(f"SMAPI simulation error for '{utterance}' ({locale}): {exc}")
+        # Name the shape in the failure: a fallback row that dies here must
+        # not read as an in-session command failure (code-review JF-899).
+        shape = "one-shot, open fallback" if open_response is None else "in-session"
+        pytest.fail(
+            f"SMAPI simulation error for '{utterance}' ({locale}, {shape}): {exc}"
+        )
 
     _record_session_state(locale, response)
 
