@@ -1,12 +1,12 @@
 ---
 id: JF-904
 title: >-
-  Restore a repeat-all voice entry point in the 13 built-in-only locales via
-  a queue-loop carrier family
-status: To Do
+  Restore a repeat-all voice entry point in the 13 built-in-only locales via a
+  queue-loop carrier family
+status: Done
 assignee: []
 created_date: '2026-10-17 15:30'
-updated_date: '2026-10-17 15:30'
+updated_date: '2026-10-17 17:20'
 labels: []
 dependencies: []
 references:
@@ -61,3 +61,9 @@ subset before deploying to all 13.
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+EXECUTED on branch jf904 (01dccde5), merged to main 4197d585, pushed, DEPLOYED end to end: DLL to minix (md5-verified, config survived), all 13 locale model rebuilds SUCCEEDED via the plugin rebuild endpoint (ja-JP and ar-SA needed a second pass with a longer curl timeout: their builds exceed 120s now that the models grew; idempotent retry), live probes all green (en-US 'repeat the queue', es-ES 'Repite la cola' AND the 'que repita la cola' residue row, ja-JP, nl-NL, ar-SA -> LoopAllOnIntent every one), and 38/38 queue-carrier NLU fixtures green live. THE CHANGE: LoopAllOnIntent extended to all 17 locales with per-locale queue carriers (queue nouns from each locale's own ListQueue vocabulary; en/es/nl/ja/pt/hi/ar families, wrapper twins where the locale has compositions, es-ES-only que row per the JF-844 holding pattern, ar 'الحلقة' avoided because it names EPISODES in that model); LoopAllOffIntent deliberately NOT extended (no gap: AMAZON.LoopOff is declared everywhere and dual-accepted; a second same-mode intent would manufacture the JF-902 coin-flip class); IntentNames REMAINING GAP rewritten to GAP CLOSED. Fixtures x13 (2-3 queue pins each) + the JF-902 A|B boundary pin widened/new across 10 locales; docs mirrors synced (26 mds, VOICE_COMMANDS regenerated, graphs + data.json). Gates (in 01dccde5): 0-warning build both TFMs Debug+Release -warnaserror, 6041/6041 per TFM, validators at the 275 baseline, voice-reference --check OK, parse_mermaid clean, audit_backlog_orphans PASS, /simplify all applied (incl. the nl wrapper-twin catch), code-review high 3 applied. Follow-up filed: JF-905 (validator hardening, QUEUE_CARRIER_NOUNS). Residual noted: wrapper-battery queue-loop rows are a post-deploy candidate, not required. gate-exempt: gates ran in the dispatched worker's transcript; commit 01dccde5 carries the full Gates record.
+<!-- SECTION:FINAL_SUMMARY:END -->
