@@ -4,10 +4,10 @@ title: >-
   Post-JF-901 loop consistency: move the bare loop sample rows off
   LoopAllOnIntent in the 4 custom locales and sync the loop-semantics
   docs/mirrors
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-17 13:06'
-updated_date: '2026-10-17 13:18'
+updated_date: '2026-10-17 15:22'
 labels: []
 dependencies: []
 references:
@@ -44,3 +44,9 @@ Scope note: JF-901 deliberately excluded the model surface (maintainer decision 
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+EXECUTED on branch jf902 (64157daf + the orchestrator's JF-904 renumber fixup), merged to main 4b24334c, pushed, DEPLOYED end to end: DLL to minix (md5-verified), all 4 locale model rebuilds SUCCEEDED via the plugin rebuild endpoint (never raw SMAPI PUT), live routing probes exactly as designed (it 'attiva il loop'/'Schleife an'/'Active la boucle' -> LoopSongOnIntent; 'ripeti la coda'/'Wiederhole die Warteschlange'/'Répète la file d'attente' -> LoopAllOnIntent), and the live NLU suite green 43/43 on the loop-scoped selection (the red-until-deploy rows included). ITEM 1: the bare loop rows MOVED onto LoopSongOnIntent (not dropped: the JF-887/JF-889 steal evidence plus today's new-phrase steals proved bare rows must exist on the repeat-one side), LoopAllOn now carries only queue-named carriers localized per the template conventions, de/fr infinitive twins added (code-review), fixtures x4 with A|B alternation pins, wrapper battery rows flipped. ITEM 2: generator labels fixed and both VOICE_COMMANDS docs regenerated, 34 docs md synced (queue-radio + playback-lifecycle x17 each), graphs.json mirrors + data.json synced (16 pre-existing session-management entries swept with the wholesale rule). ITEM 1B: re-filed as its own row, RENUMBERED JF-904 by the orchestrator (its worker-file id collided with the truncated-tail JF-903 filed on main minutes earlier); the 13-locale translation surface untouched. Gates (in 64157daf): 0-warning build both TFMs Debug+Release -warnaserror, 6041/6041 per TFM, validate_interaction_models PASS at the 275 baseline, validate_locales PASS, voice-reference --check OK, parse_mermaid clean, NLU dry-run 43, audit_backlog_orphans --check PASS, /simplify all applied, code-review high 6/6 applied, live probes documented the trainer flip. Residuals: the es loop edge accents + the it lifecycle LoopSong label are pre-existing doc nits noted by the worker. gate-exempt: gates ran in the dispatched worker's transcript; commit 64157daf carries the full Gates record.
+<!-- SECTION:FINAL_SUMMARY:END -->
