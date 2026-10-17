@@ -33,11 +33,13 @@ echo "Installing dependencies..."
 
 # Run pytest.  The hermetic unit modules ride along so their contracts
 # (the JF-899 FAILED-simulation classifier, the JF-893/JF-897 timeout
-# verdict) are exercised by the standard entry point, not only manually.
+# verdict, the JF-900 fr fallback composition) are exercised by the
+# standard entry point, not only manually.
 cd "${INTEGRATION_DIR}"
 exec "${VENV_DIR}/bin/python" -m pytest test_e2e.py \
     test_smapi_failure_classification.py \
     test_reliability_timeout_outcome.py \
+    test_fallback_one_shot_composition.py \
     --tb=short \
     -v \
     "$@"

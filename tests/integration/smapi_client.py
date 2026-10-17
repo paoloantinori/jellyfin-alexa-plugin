@@ -178,6 +178,42 @@ class SmapiClient:
         "hi-IN": "{inv} से कहो ",
     }
 
+    # JF-900: fr one-shot FALLBACK composition grammar.  The fr prefix ends
+    # in "de ", which wants the INFINITIVE, but the smoke fixtures' commands
+    # are bare imperatives; the flat composition ("demande à mon serveur de
+    # lis ...") is ungrammatical and lost skill selection live (2026-10-17)
+    # while the manual infinitive form ("... de lire ...") routed.
+    FR_FALLBACK_INFINITIVE_LOCALES = frozenset({"fr-FR", "fr-CA"})
+
+    FR_FALLBACK_INFINITIVE: dict[str, str] = {
+        "lis": "lire",
+        "joue": "jouer",
+        "mets": "mettre",
+        "met": "mettre",
+        "ferme": "fermer",
+        "arrete": "arrêter",
+        "ouvre": "ouvrir",
+    }
+
+    @staticmethod
+    def compose_fallback_one_shot(utterance: str, locale: str) -> str:
+        """Rewrite a leading imperative to its infinitive for a fr one-shot.
+
+        "demande à {inv} de " + <infinitive> is the grammatical composition
+        the live evidence routed on.  Applied ONLY at the smoke
+        open-fallback construction site (test_e2e.py), never inside
+        simulate(): a full-chain fixture row's own utterance is authored
+        and must pass through byte-identical.  Unknown leading verbs and
+        non-fr locales pass through unchanged (safe default).
+        """
+        if locale not in SmapiClient.FR_FALLBACK_INFINITIVE_LOCALES:
+            return utterance
+        head, sep, tail = utterance.partition(" ")
+        infinitive = SmapiClient.FR_FALLBACK_INFINITIVE.get(head.lower())
+        if infinitive is None:
+            return utterance
+        return infinitive + sep + tail
+
     def simulate(self, utterance: str, stage: str = "development") -> dict[str, Any]:
         """Run simulate-skill and return the completed simulation result.
 
