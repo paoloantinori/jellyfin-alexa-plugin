@@ -81,8 +81,10 @@
       {
         "name": "LoopAllOnIntent",
         "samples": [
-          "Wiederholung an",
-          "Schleife an"
+          "Wiederhole die Warteschlange",
+          "Wiederhole die ganze Warteschlange",
+          "Zu wiederholen die Warteschlange",
+          "Zu wiederholen die ganze Warteschlange"
         ]
       },
       {
@@ -1021,7 +1023,9 @@
           "Wiederhole diesen Titel",
           "Loop dieses Lied",
           "Wiederhole endlos",
-          "Spiele dieses Lied in Schleife"
+          "Spiele dieses Lied in Schleife",
+          "Wiederholung an",
+          "Schleife an"
         ]
       },
       {

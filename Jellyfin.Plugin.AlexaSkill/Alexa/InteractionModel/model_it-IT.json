@@ -122,22 +122,11 @@
       {
         "name": "LoopAllOnIntent",
         "samples": [
-          "Attiva loop",
-          "Attiva ripetizione",
-          "attivare loop",
-          "attivare ripetizione",
-          "Di attivare loop",
-          "Di attivare ripetizione",
-          "Attiva il loop",
-          "Attiva la ripetizione",
-          "Attiva il ripetizione",
-          "attivare il loop",
-          "attivare la ripetizione",
-          "attivare il ripetizione",
-          "Di attivare il loop",
-          "Di attivare la ripetizione",
-          "Di attivare il ripetizione",
-          "loop"
+          "Ripeti la coda",
+          "Ripeti tutta la coda",
+          "Metti in loop la coda",
+          "ripetere la coda",
+          "Di ripetere la coda"
         ]
       },
       {
@@ -794,7 +783,23 @@
           "ripeti questa canzone",
           "metti in loop questo brano",
           "metti in loop questa canzone",
-          "ripeti per sempre questo brano"
+          "ripeti per sempre questo brano",
+          "Attiva loop",
+          "Attiva ripetizione",
+          "attivare loop",
+          "attivare ripetizione",
+          "Di attivare loop",
+          "Di attivare ripetizione",
+          "Attiva il loop",
+          "Attiva la ripetizione",
+          "Attiva il ripetizione",
+          "attivare il loop",
+          "attivare la ripetizione",
+          "attivare il ripetizione",
+          "Di attivare il loop",
+          "Di attivare la ripetizione",
+          "Di attivare il ripetizione",
+          "loop"
         ]
       },
       {

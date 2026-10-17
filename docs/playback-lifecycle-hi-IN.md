@@ -46,7 +46,7 @@ graph TD
     Chapter -.->|"SeekEnabled feature flag"| Playing
 
     Playing -->|"इस गाने को लूप करो"| LoopSong["LoopSongOnIntent"]
-    Playing -->|"लूप चालू करो"| LoopAll["AMAZON.LoopOnIntent"]
+    Playing -->|"लूप चालू करो"| LoopOn["AMAZON.LoopOnIntent"]
     Playing -->|"लूप बंद करो"| LoopOff["AMAZON.LoopOffIntent"]
 
     Playing -->|"अगला"| Next["AMAZON.NextIntent"]

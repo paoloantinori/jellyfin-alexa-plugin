@@ -14,11 +14,11 @@ tests:
 
   # JF-887 steal controls (red-until-deploy except where noted): the live
   # pre-fix state already had 'disattivare ripetizione' misrouting to
-  # LoopAllOnIntent; once LoopAllOn gains its 'attivare loop' rows these
-  # near-identical shapes must NOT flip across the family boundary. The
-  # battery's simulate row 'chiedi a mia collezione di disattivare loop'
-  # (green pre-deploy, live probe 2026-10-14) covers the same control at the
-  # wrapper layer.
+  # LoopAllOnIntent; once the loop-ON side (LoopSongOnIntent since JF-902)
+  # carries its 'attivare loop' rows these near-identical shapes must NOT
+  # flip across the family boundary. The battery's simulate row 'chiedi a
+  # mia collezione di disattivare loop' (green pre-deploy, live probe
+  # 2026-10-14) covers the same control at the wrapper layer.
   - utterance: "disattivare loop"
     expected_intent: LoopAllOffIntent
     expected_slots: {}
@@ -65,14 +65,61 @@ tests:
     expected_slots: {}
 
   # -------------------------------------------------------------------------
-  # 2. LoopAllOnIntent (no slots)
+  # 2. LoopAllOnIntent (no slots) - queue-scoped wording only since JF-902
   # -------------------------------------------------------------------------
-  - utterance: "Attiva loop"
+  # JF-902: the bare loop-activation rows moved to LoopSongOnIntent (2b
+  # below; JF-901 settled that bare 'loop' means repeat-ONE), so this
+  # intent's pins are the queue-naming family. RED-UNTIL-DEPLOY rows (the
+  # JF-766 convention): they go green on the live suite only after the
+  # rebuilt model deploys (DLL embedded template + rebuild endpoint).
+  - utterance: "ripeti la coda"
     expected_intent: LoopAllOnIntent
     expected_slots: {}
 
-  - utterance: "Attiva ripetizione"
+  - utterance: "ripeti tutta la coda"
     expected_intent: LoopAllOnIntent
+    expected_slots: {}
+
+  - utterance: "metti in loop la coda"
+    expected_intent: LoopAllOnIntent
+    expected_slots: {}
+
+  # The infinitive twins (the steal-prone JF-887 shape, pinned like every
+  # other model row of this family).
+  - utterance: "ripetere la coda"
+    expected_intent: LoopAllOnIntent
+    expected_slots: {}
+
+  - utterance: "di ripetere la coda"
+    expected_intent: LoopAllOnIntent
+    expected_slots: {}
+
+  # The wrapper twin (the JF-844 discipline): the phrase ends with the
+  # literal 'Di ripetere la coda' sample.
+  - utterance: "chiedi a mia collezione di ripetere la coda"
+    expected_intent: LoopAllOnIntent
+    expected_slots: {}
+
+  # -------------------------------------------------------------------------
+  # 2b. LoopSongOnIntent (no slots) - the bare loop-activation family
+  # -------------------------------------------------------------------------
+  # JF-902: every row below kept its template row verbatim and only changed
+  # owner (LoopAllOnIntent -> LoopSongOnIntent), because JF-901 made the
+  # phrases mean repeat-ONE; the rows were MOVED, not dropped, since the
+  # JF-887/JF-889 evidence below shows what steals each shape when no exact
+  # row exists. All rows are RED-UNTIL-DEPLOY until the rebuilt model with
+  # the moved rows is deployed (they read LoopAllOnIntent on the saved
+  # model today). The 'LoopSongOnIntent|AMAZON.LoopOnIntent' alternation:
+  # BOTH names are correct deliveries (LoopSongOnIntentHandler serves them
+  # identically since JF-901; the device evidence corr 6883f581 shows the
+  # built-in can win this phrase class even against an exact row). A
+  # LoopAllOnIntent delivery fails every row here, which is the pin's point.
+  - utterance: "Attiva loop"
+    expected_intent: LoopSongOnIntent|AMAZON.LoopOnIntent
+    expected_slots: {}
+
+  - utterance: "Attiva ripetizione"
+    expected_intent: LoopSongOnIntent|AMAZON.LoopOnIntent
     expected_slots: {}
 
   # JF-887 (2026-10-14): the article-less infinitive twins (the JF-844
@@ -80,36 +127,33 @@ tests:
   # LoopAllOffIntent and 'di attivare loop' NO_SELECTIONd (the one-shot
   # wrapper 'chiedi a mia collezione di attivare loop' fell to
   # LoopAllOffIntent in the battery); 'attivare ripetizione' routed green by
-  # generalization alone. RED-UNTIL-DEPLOY rows (the JF-766 convention): they
-  # go green on the live suite only after the model deploy (DLL embedded
-  # template + rebuild endpoint); the imperative rows above are the evergreen
-  # controls and stay green throughout.
+  # generalization alone.
   - utterance: "attivare loop"
-    expected_intent: LoopAllOnIntent
+    expected_intent: LoopSongOnIntent|AMAZON.LoopOnIntent
     expected_slots: {}
 
   - utterance: "attivare ripetizione"
-    expected_intent: LoopAllOnIntent
+    expected_intent: LoopSongOnIntent|AMAZON.LoopOnIntent
     expected_slots: {}
 
   - utterance: "di attivare loop"
-    expected_intent: LoopAllOnIntent
+    expected_intent: LoopSongOnIntent|AMAZON.LoopOnIntent
     expected_slots: {}
 
   - utterance: "di attivare ripetizione"
-    expected_intent: LoopAllOnIntent
+    expected_intent: LoopSongOnIntent|AMAZON.LoopOnIntent
     expected_slots: {}
 
   # The wrapper twin. Live probe 2026-10-14: 'chiedi a mia collezione di
   # attivare il mescolamento' routes ShuffleAllOnIntent on profile-nlu
   # because the phrase ends with the literal 'Di attivare il mescolamento'
-  # sample; the new 'Di attivare loop' row gives this phrase the same no-slot
+  # sample; the 'Di attivare loop' row gives this phrase the same no-slot
   # exact-suffix shape. If it still reads Fallback post-deploy, the wrapper
   # belongs to the prefixed-phrase artifact class (see the podcast note below)
   # and the pin moves to the battery's simulate row instead; verify once
   # after the deploy before trusting the class.
   - utterance: "chiedi a mia collezione di attivare loop"
-    expected_intent: LoopAllOnIntent
+    expected_intent: LoopSongOnIntent|AMAZON.LoopOnIntent
     expected_slots: {}
 
   # JF-889 article twins (on family). Live pre-fix probes 2026-10-14 (post
@@ -117,49 +161,49 @@ tests:
   # il casuale' region) and the gender-confused 'attiva il ripetizione' stole
   # the same way; 'attiva la ripetizione'/'attivare il loop' were green only
   # by generalization ('attivare il loop' read Fallback before the JF-887
-  # deploy). RED-UNTIL-DEPLOY rows except the generalization-green forms,
-  # which must stay green.
+  # deploy).
   - utterance: "attiva il loop"
-    expected_intent: LoopAllOnIntent
+    expected_intent: LoopSongOnIntent|AMAZON.LoopOnIntent
     expected_slots: {}
 
   - utterance: "attiva la ripetizione"
-    expected_intent: LoopAllOnIntent
+    expected_intent: LoopSongOnIntent|AMAZON.LoopOnIntent
     expected_slots: {}
 
   - utterance: "attiva il ripetizione"
-    expected_intent: LoopAllOnIntent
+    expected_intent: LoopSongOnIntent|AMAZON.LoopOnIntent
     expected_slots: {}
 
   - utterance: "attivare il loop"
-    expected_intent: LoopAllOnIntent
+    expected_intent: LoopSongOnIntent|AMAZON.LoopOnIntent
     expected_slots: {}
 
   - utterance: "attivare la ripetizione"
-    expected_intent: LoopAllOnIntent
+    expected_intent: LoopSongOnIntent|AMAZON.LoopOnIntent
     expected_slots: {}
 
   # JF-889 bare-noun claim: bare 'loop' STOLE to ShowMoreIntent (the
   # pagination family's generalization region; bare 'ripetizione' stole the
   # same way and stays unclaimed, one bare-noun experiment at a time). 'loop'
-  # names exactly one thing in this vocabulary, so claiming it for loop-on is
-  # right for intent; whether the trainer honors the exact row over the
-  # ShowMore generalization is the POST-DEPLOY DECISION: if this row stays red
-  # (ShowMore keeps it), drop the bare 'loop' template row and keep the
-  # documented trade-off (the JF-377 string-indistinguishability class); do
-  # NOT remove ShowMore's bare rows. The pagination controls below must stay
-  # green either way.
+  # names exactly one thing in this vocabulary, so claiming it for the
+  # loop-ON side is right for intent; since JF-901/JF-902 that side is
+  # LoopSongOnIntent (repeat-ONE). Whether the trainer honors the exact row
+  # over the ShowMore generalization is the POST-DEPLOY DECISION: if this row
+  # stays red (ShowMore keeps it), drop the bare 'loop' template row and keep
+  # the documented trade-off (the JF-377 string-indistinguishability class);
+  # do NOT remove ShowMore's bare rows. The pagination controls below must
+  # stay green either way.
   - utterance: "loop"
-    expected_intent: LoopAllOnIntent
+    expected_intent: LoopSongOnIntent|AMAZON.LoopOnIntent
     expected_slots: {}
 
   # JF-889 steal controls for the three regions named above (the 'Attiva il
   # casuale' shuffle region, the bare-noun pagination region, and the
   # TurnRadioOff 'disattiva la ...' region that stole 'disattiva la
   # ripetizione' live). 'disattiva la radio' is an exact TurnRadioOff row;
-  # 'attiva il mescolamento' rides generalization until this change's
-  # 'Attiva il mescolamento' exact row deploys, exact after. If either ever
-  # flips red on a rebuild, fix the model, never loosen the pin.
+  # 'attiva il mescolamento' is an exact ShuffleAllOn row since the JF-889
+  # deploy. If either ever flips red on a rebuild, fix the model, never
+  # loosen the pin.
   - utterance: "attiva il mescolamento"
     expected_intent: ShuffleAllOnIntent
     expected_slots: {}

@@ -187,8 +187,11 @@ GROUPS = [
         ("AMAZON.ShuffleOffIntent", "Shuffle off", True),
         ("AMAZON.StartOverIntent", "Start over", True),
         ("AMAZON.RepeatIntent", "Repeat", True),
-        ("AMAZON.LoopOnIntent", "Repeat all on", True),
-        ("AMAZON.LoopOffIntent", "Repeat all off", True),
+        # JF-901: the built-in loop intents apply repeat-ONE (current track)
+        # and repeat-OFF (clears both loop modes), never queue-wide repeat;
+        # labels updated at JF-902 alongside the docs sync.
+        ("AMAZON.LoopOnIntent", "Repeat the current track on", True),
+        ("AMAZON.LoopOffIntent", "Repeat off", True),
     ]),
     ("Timers and reminders", [
         ("SleepTimerIntent", "Set a sleep timer", False),

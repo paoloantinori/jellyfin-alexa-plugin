@@ -44,9 +44,12 @@ static_intents:
   - AMAZON.PreviousIntent
   - AMAZON.YesIntent
   - AMAZON.NoIntent
-  # JF-562: the Loop* built-ins ride next to the custom LoopAll* vocabulary in
-  # explicit_intents (dual-accept CanHandle per JF-450: whichever name wins
-  # NLU, the same loop mode applies).
+  # JF-562: the Loop* built-ins ride next to the custom loop vocabulary in
+  # explicit_intents. The OFF pair still dual-accepts both names (do not
+  # remove it: Amazon-side models built before the JF-562 declarations still
+  # deliver only the custom names); the ON pair's dual accept ended at JF-901
+  # (do not re-add it). The JF-902 sample split and its full rationale live
+  # on the loop intent constants in IntentNames.
   - AMAZON.LoopOnIntent
   - AMAZON.LoopOffIntent
   - AMAZON.ShuffleOnIntent
@@ -87,11 +90,12 @@ explicit_intents:
       - Disattiva loop
       - Disattiva ripetizione
       # JF-887 infinitive twins (the JF-844 wrapper discipline). Exact rows pin
-      # the off family against the new near-identical LoopAllOn rows below
-      # (generalization alone cannot be trusted to keep them apart across
-      # trainer rebuilds): live pre-fix state already had 'disattivare
-      # ripetizione' misrouting to LoopAllOnIntent (2026-10-14 probe), and
-      # 'disattivare loop' must keep this family once 'attivare loop' exists.
+      # the off family against the near-identical loop-ON rows (on
+      # LoopSongOnIntent since JF-902; generalization alone cannot be trusted
+      # to keep them apart across trainer rebuilds): live pre-fix state
+      # already had 'disattivare ripetizione' misrouting to LoopAllOnIntent
+      # (2026-10-14 probe), and 'disattivare loop' must keep this family once
+      # 'attivare loop' exists.
       - disattivare loop
       - disattivare ripetizione
       - Di disattivare loop
@@ -146,46 +150,20 @@ explicit_intents:
       - Di disattivare il mescolamento
   LoopAllOnIntent:
     samples:
-      - Attiva loop
-      - Attiva ripetizione
-      # JF-887: the article-less bare-infinitive 'attivare loop' shape had no
-      # row; the wrapper 'chiedi a mia collezione di attivare loop' fell to
-      # LoopAllOffIntent (live battery 2026-10-14) and 'di attivare loop'
-      # NO_SELECTIONd. Literal rows per the shuffle-family precedent above
-      # (JF-551/JF-844); 'attivare il mescolamento' already worked, the gap
-      # was the loop twin.
-      - attivare loop
-      - attivare ripetizione
-      - Di attivare loop
-      - Di attivare ripetizione
-      # JF-889 article twins: live probes 2026-10-14 (post JF-887 deploy) had
-      # 'attiva il loop' shuffle-stealing to ShuffleAllOnIntent (via the
-      # 'Attiva il casuale' region) and the gender-confused 'attiva il
-      # ripetizione' stealing the same way; the infinitive article forms were
-      # green only by generalization (exact rows per the JF-887 lesson above).
-      # The ungrammatical 'Attiva il ripetizione' row is the same
-      # coverage-over-precision insurance as its off-twin on LoopAllOffIntent.
-      - Attiva il loop
-      - Attiva la ripetizione
-      - Attiva il ripetizione
-      - attivare il loop
-      - attivare la ripetizione
-      - attivare il ripetizione
-      - Di attivare il loop
-      - Di attivare la ripetizione
-      - Di attivare il ripetizione
-      # JF-889 bare-noun claim: bare 'loop' stole to ShowMoreIntent (the
-      # pagination family's generalization region, probes 2026-10-14; bare
-      # 'ripetizione' stole the same way and is deliberately left unclaimed,
-      # one bare-noun experiment at a time). 'loop' dominantly means loop-on
-      # here, but NOT exclusively: LoopSongOn also uses the noun ('metti in
-      # loop questo brano'), so a bare 'loop' wanting repeat-one lands on
-      # queue-loop; unlike 'ancora' (again vs more) there is no pagination
-      # meaning to protect. Whether the trainer honors the exact row over the
-      # ShowMore generalization is a post-deploy check (decision protocol and
-      # steal controls live on the fixture's JF-889 pins; ShowMore's own bare
-      # rows are not touched, in-session pagination depends on them).
-      - loop
+      # JF-902: queue-scoped wording ONLY. This intent applies repeat-ALL
+      # (LoopOnIntentHandler), and JF-901 settled that the BARE loop-activation
+      # phrases ('Attiva loop', 'attiva il loop', bare 'loop', ...) mean
+      # repeat-ONE, so their exact rows moved to LoopSongOnIntent (see the
+      # moved rationale there; dropping them instead would re-expose the
+      # documented JF-887/JF-889 steals to ShuffleAllOnIntent, ShowMoreIntent,
+      # and LoopAllOffIntent). Naming the queue ('la coda') is the only shape
+      # that keeps repeat-ALL reachable by voice, mirroring 'Mescola la coda'
+      # on ShuffleAllOnIntent; the wrapper twin follows the JF-844 discipline.
+      - Ripeti la coda
+      - Ripeti tutta la coda
+      - Metti in loop la coda
+      - ripetere la coda
+      - Di ripetere la coda
   RepeatSingleOnIntent:
     samples:
       # JF-438: the old "Suonalo ancora"/"Suonala ancora" forms collided with the
@@ -797,6 +775,49 @@ explicit_intents:
       - metti in loop questo brano
       - metti in loop questa canzone
       - ripeti per sempre questo brano
+      # JF-902: the BARE loop-activation family moved here from LoopAllOnIntent
+      # (JF-901: bare 'loop' means repeat-ONE; the exact rows follow the
+      # semantics instead of being dropped, because without them the phrases
+      # stole live; evidence in the moved comments below). LoopAllOnIntent
+      # keeps only queue-scoped wording now ('Ripeti la coda' family).
+      - Attiva loop
+      - Attiva ripetizione
+      # JF-887: the article-less bare-infinitive 'attivare loop' shape had no
+      # row; the wrapper 'chiedi a mia collezione di attivare loop' fell to
+      # LoopAllOffIntent (live battery 2026-10-14) and 'di attivare loop'
+      # NO_SELECTIONd. Literal rows per the shuffle-family precedent
+      # (JF-551/JF-844); 'attivare il mescolamento' already worked, the gap
+      # was the loop twin.
+      - attivare loop
+      - attivare ripetizione
+      - Di attivare loop
+      - Di attivare ripetizione
+      # JF-889 article twins: live probes 2026-10-14 (post JF-887 deploy) had
+      # 'attiva il loop' shuffle-stealing to ShuffleAllOnIntent (via the
+      # 'Attiva il casuale' region) and the gender-confused 'attiva il
+      # ripetizione' stealing the same way; the infinitive article forms were
+      # green only by generalization (exact rows per the JF-887 lesson above).
+      # The ungrammatical 'Attiva il ripetizione' row is the same
+      # coverage-over-precision insurance as its off-twin on LoopAllOffIntent.
+      - Attiva il loop
+      - Attiva la ripetizione
+      - Attiva il ripetizione
+      - attivare il loop
+      - attivare la ripetizione
+      - attivare il ripetizione
+      - Di attivare il loop
+      - Di attivare la ripetizione
+      - Di attivare il ripetizione
+      # JF-889 bare-noun claim: bare 'loop' stole to ShowMoreIntent (the
+      # pagination family's generalization region, probes 2026-10-14; bare
+      # 'ripetizione' stole the same way and is deliberately left unclaimed,
+      # one bare-noun experiment at a time). Since JF-901/JF-902 bare 'loop'
+      # belongs on the repeat-ONE side with the other bare activation rows.
+      # Whether the trainer honors the exact row over the ShowMore
+      # generalization is a post-deploy check (decision protocol and steal
+      # controls live on the fixture's JF-889 pins; ShowMore's own bare rows
+      # are not touched, in-session pagination depends on them).
+      - loop
   PlayBookIntent:
     samples:
       # JF-816: the DI-CONNECTOR family. Italian speakers naturally say

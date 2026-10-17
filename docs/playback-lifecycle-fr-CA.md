@@ -46,8 +46,9 @@ graph TD
     Chapter -.->|"SeekEnabled feature flag"| Playing
 
     Playing -->|"Répète cette chanson"| LoopSong["LoopSongOnIntent"]
-    Playing -->|"Active la boucle"| LoopAll["AMAZON.LoopOnIntent"]
-    Playing -->|"Désactive la boucle"| LoopOff["AMAZON.LoopOffIntent"]
+    Playing -->|"Active la boucle"| LoopSong
+    Playing -->|"Répète la file d'attente"| LoopAll["LoopAllOnIntent"]
+    Playing -->|"Désactive la boucle"| LoopOff["LoopAllOffIntent"]
 
     Playing -->|"suivant"| Next["AMAZON.NextIntent"]
     Playing -->|"précédent"| Prev["AMAZON.PreviousIntent"]

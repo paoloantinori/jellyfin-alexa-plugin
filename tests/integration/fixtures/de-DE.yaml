@@ -13,14 +13,38 @@ tests:
     expected_slots: {}
 
   # -------------------------------------------------------------------------
-  # 2. LoopAllOnIntent (no slots)
+  # 2. LoopAllOnIntent (no slots) - queue-scoped wording only since JF-902
   # -------------------------------------------------------------------------
-  - utterance: "Wiederholung an"
+  # JF-902: the bare loop-activation rows ('Wiederholung an'/'Schleife an')
+  # moved to LoopSongOnIntent (2b below; JF-901 settled that bare loop
+  # activation means repeat-ONE); this intent's pins are the queue-naming
+  # family. RED-UNTIL-DEPLOY rows (the JF-766 convention): green on the live
+  # suite only after the rebuilt model deploys.
+  - utterance: "Wiederhole die Warteschlange"
     expected_intent: LoopAllOnIntent
     expected_slots: {}
 
-  - utterance: "Schleife an"
+  - utterance: "Wiederhole die ganze Warteschlange"
     expected_intent: LoopAllOnIntent
+    expected_slots: {}
+
+  - utterance: "Zu wiederholen die Warteschlange"
+    expected_intent: LoopAllOnIntent
+    expected_slots: {}
+
+  # -------------------------------------------------------------------------
+  # 2b. LoopSongOnIntent (no slots) - the bare loop-activation family
+  # -------------------------------------------------------------------------
+  # JF-902: rows MOVED from LoopAllOnIntent (not dropped: without an exact
+  # row the local loop words have no reliable router claim, the same
+  # built-in gap the de-DE shuffle probes documented live 2026-09-23).
+  # RED-UNTIL-DEPLOY: they read LoopAllOnIntent on the saved model today.
+  - utterance: "Wiederholung an"
+    expected_intent: LoopSongOnIntent|AMAZON.LoopOnIntent
+    expected_slots: {}
+
+  - utterance: "Schleife an"
+    expected_intent: LoopSongOnIntent|AMAZON.LoopOnIntent
     expected_slots: {}
 
   # -------------------------------------------------------------------------

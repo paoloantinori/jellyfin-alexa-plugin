@@ -35,8 +35,9 @@ graph TD
     Shuffled --> Playing
 
     LoopOps -->|"Répète cette chanson"| LoopSong["LoopSongOnIntent<br/>Répéter la chanson actuelle"]
-    LoopOps -->|"Active la boucle"| LoopAll["AMAZON.LoopOnIntent<br/>Répéter toute la file"]
-    LoopOps -->|"Désactive la boucle"| LoopOff["AMAZON.LoopOffIntent<br/>Désactiver la boucle"]
+    LoopOps -->|"Active la boucle"| LoopSong
+    LoopOps -->|"Répète la file d'attente"| LoopAll["LoopAllOnIntent<br/>Répéter toute la file"]
+    LoopOps -->|"Désactive la boucle"| LoopOff["LoopAllOffIntent<br/>Désactiver la boucle"]
 
     LoopSong --> SongLooping["Boucle sur une chanson"]
     LoopAll --> AllLooping["Boucle sur la file"]

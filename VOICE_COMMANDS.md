@@ -97,7 +97,7 @@ Invocation name: **"jellyfin player"**
 | Learn My Voice | `Lerne meine Stimme` · `Erkenne meine Stimme` · `Verknüpfe meine Stimme` · `Das ist meine Stimme` · `Erkenne mich` · `Richte mein Stimmprofil ein` |
 | List Queue | `Was ist in meiner Warteschlange` · `Was steht als Nächstes an` · `Was kommt als Nächstes` · `Zeige meine Warteschlange` · `Zeige die Warteschlange` · `Was wird als Nächstes gespielt` |
 | Loop All Off | `Wiederholung aus` · `Schleife aus` |
-| Loop All On | `Wiederholung an` · `Schleife an` |
+| Loop All On | `Wiederhole die Warteschlange` · `Wiederhole die ganze Warteschlange` · `Zu wiederholen die Warteschlange` · `Zu wiederholen die ganze Warteschlange` |
 | Loop Song On | `Wiederhole dieses Lied` · `Wiederhole diesen Song` · `Wiederhole diesen Titel` · `Loop dieses Lied` · `Wiederhole endlos` · `Spiele dieses Lied in Schleife` |
 | Mark Favorite | `Das gefaellt mir` · `Das Video gefaellt mir` · `Das Lied gefaellt mir` · `Die Musik gefaellt mir` · `Fuege das Video zu meinen Favoriten hinzu` · `Fuege das Lied zu meinen Favoriten hinzu` |
 | Media Info | `Was ist der {media_info_type}` · `Was läuft gerade` · `Was ist die {media_info_type}` · `Sag mir den {media_info_type}` · `Sag mir die {media_info_type}` · `Welcher {media_info_type} ist das` |
@@ -634,8 +634,8 @@ Invocation name: **"jellyfin player"**
 | Learn My Voice | `Apprends ma voix` · `Reconnais ma voix` · `Lie ma voix` · `C'est ma voix` · `Reconnais-moi` · `Configure mon profil vocal` |
 | List Queue | `Qu'est-ce qu'il y a dans ma file d'attente` · `Qu'est-ce qu'il y a dans la file d'attente` · `Qu'est-ce qui vient après` · `Qu'est-ce qui suit` · `Affiche ma file d'attente` · `Liste ma file d'attente` |
 | Loop All Off | `Désactive la boucle` · `Désactive la répétition` |
-| Loop All On | `Active la boucle` · `Active la répétition` |
-| Loop Song On | `Répète cette chanson` · `Répète ce morceau` · `Mets cette chanson en boucle` · `Loop cette chanson` · `Répète indéfiniment` |
+| Loop All On | `Répète la file d'attente` · `Répète toute la file d'attente` · `Mets la file d'attente en boucle` · `De répéter la file d'attente` · `De répéter toute la file d'attente` |
+| Loop Song On | `Répète cette chanson` · `Répète ce morceau` · `Mets cette chanson en boucle` · `Loop cette chanson` · `Répète indéfiniment` · `Active la boucle` |
 | Mark Favorite | `J'aime bien` · `J'aime cette vidéo` · `J'aime cette chanson` · `J'aime cette musique` · `Ajoute la vidéo aux favoris` · `Ajoute la chanson aux favoris` |
 | Media Info | `Quel est le {media_info_type}` · `Qu'est-ce qui joue` · `Quelle est la {media_info_type}` · `Dis-moi le {media_info_type}` · `Dis-moi la {media_info_type}` · `Quel {media_info_type} est-ce` |
 | Play Album | `Lis l'album {album}` · `Lis l'album {album} de {musician}` · `un album de {musician}` · `Lis album {album}` · `Écoute l'album {album}` · `Écoute l'album {album} de {musician}` |
@@ -698,8 +698,8 @@ Invocation name: **"jellyfin player"**
 | Learn My Voice | `Apprends ma voix` · `Reconnais ma voix` · `Lie ma voix` · `C'est ma voix` · `Reconnais-moi` · `Configure mon profil vocal` |
 | List Queue | `Qu'est-ce qu'il y a dans ma file d'attente` · `Qu'est-ce qu'il y a dans la file d'attente` · `Qu'est-ce qui vient après` · `Qu'est-ce qui suit` · `Affiche ma file d'attente` · `Liste ma file d'attente` |
 | Loop All Off | `Désactive la boucle` · `Désactive la répétition` |
-| Loop All On | `Active la boucle` · `Active la répétition` |
-| Loop Song On | `Répète cette chanson` · `Répète ce morceau` · `Mets cette chanson en boucle` · `Loop cette chanson` · `Répète indéfiniment` |
+| Loop All On | `Répète la file d'attente` · `Répète toute la file d'attente` · `Mets la file d'attente en boucle` · `De répéter la file d'attente` · `De répéter toute la file d'attente` |
+| Loop Song On | `Répète cette chanson` · `Répète ce morceau` · `Mets cette chanson en boucle` · `Loop cette chanson` · `Répète indéfiniment` · `Active la boucle` |
 | Mark Favorite | `J'aime bien` · `J'aime cette vidéo` · `J'aime cette chanson` · `J'aime cette musique` · `Ajoute la vidéo aux favoris` · `Ajoute la chanson aux favoris` |
 | Media Info | `Quel est le {media_info_type}` · `Qu'est-ce qui joue` · `Quelle est la {media_info_type}` · `Dis-moi le {media_info_type}` · `Dis-moi la {media_info_type}` · `Quel {media_info_type} est-ce` |
 | Play Album | `Lis l'album {album}` · `Lis l'album {album} de {musician}` · `un album de {musician}` · `Lis album {album}` · `Écoute l'album {album}` · `Écoute l'album {album} de {musician}` |
@@ -821,8 +821,8 @@ Invocation name: **"mia collezione"**
 | Learn My Voice | `Impara la mia voce` · `Riconosci la mia voce` · `Associa la mia voce` · `Collega la mia voce` · `Impara chi sono` · `Riconoscimi` |
 | List Queue | `cosa c'è nella coda` · `cosa c'è in coda` · `cosa c'è dopo` · `cosa suona dopo` · `mostra la coda` · `elenca la coda` |
 | Loop All Off | `Disattiva loop` · `Disattiva ripetizione` · `disattivare loop` · `disattivare ripetizione` · `Di disattivare loop` · `Di disattivare ripetizione` |
-| Loop All On | `Attiva loop` · `Attiva ripetizione` · `attivare loop` · `attivare ripetizione` · `Di attivare loop` · `Di attivare ripetizione` |
-| Loop Song On | `ripeti questo brano` · `ripeti questa canzone` · `metti in loop questo brano` · `metti in loop questa canzone` · `ripeti per sempre questo brano` |
+| Loop All On | `Ripeti la coda` · `Ripeti tutta la coda` · `Metti in loop la coda` · `ripetere la coda` · `Di ripetere la coda` |
+| Loop Song On | `ripeti questo brano` · `ripeti questa canzone` · `metti in loop questo brano` · `metti in loop questa canzone` · `ripeti per sempre questo brano` · `Attiva loop` |
 | Mark Favorite | `Aggiungi ai preferiti` · `Metti nei preferiti` · `Segna come preferito` · `Mi piace` · `Aggiungi questo ai preferiti` · `Metti questo nei preferiti` |
 | Media Info | `Cosa sta suonando` · `{media_info_type}` · `Cosa sta suonando adesso` · `Che brano è questo` · `Che canzone è questa` · `Chi è questo artista` |
 | Play Album | `Riproduci l'album {album}` · `Riproduci l'album {album} di {musician}` · `un disco di {musician}` · `Riproduci il disco {album}` · `Riproduci album {album}` · `Riproduci disco {album}` |

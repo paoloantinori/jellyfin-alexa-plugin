@@ -72,7 +72,13 @@ def test_utterance_resolves_correct_intent(dry_run, nlu_fixture, smapi_client):
     resolved_intent = result["intent"]
 
     # --- Intent assertion ---
-    assert resolved_intent == expected_intent, (
+    # 'A|B' alternation (the nlu_wrapper_battery.py convention): every listed
+    # name is a CORRECT delivery for the phrase, e.g. the bare loop-activation
+    # rows may legitimately arrive as the custom exact-row owner or as the
+    # built-in (both names are served by the same handler since JF-901/JF-902).
+    # A delivery outside the list is still a hard failure.
+    accepted_intents = expected_intent.split("|")
+    assert resolved_intent in accepted_intents, (
         f"Intent mismatch for '{utterance}' ({locale}):\n"
         f"  expected: {expected_intent}\n"
         f"  actual:   {resolved_intent}"

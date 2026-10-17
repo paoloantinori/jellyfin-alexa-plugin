@@ -68,14 +68,18 @@ internal static class IntentNames
     // repeat-ONE, so LoopSongOnIntentHandler owns it beside its custom twins;
     // LoopAllOnIntent keeps repeat-all in LoopOnIntentHandler, and
     // LoopAllOffIntent stays paired with the AMAZON.LoopOffIntent built-in
-    // (repeat-none). KNOWN GAP (JF-902): LoopAllOnIntent's samples in the four
-    // custom locales still include the BARE loop phrases ("Attiva loop",
-    // "attiva il loop", ...), so the same utterance can select either intent
-    // and apply opposite modes until the sample-move follow-up lands; on device
-    // the built-in is the one that wins. Corollary: LoopAllOnIntent is declared
-    // in only those four locales, so until JF-902 gives the queue-repeat
-    // application a carrier the other 13 locales have NO voice path to
-    // repeat-all at all (the bare built-in is repeat-one now).
+    // (repeat-none). Since JF-902 the model layer matches that split in the
+    // four custom locales: the BARE loop phrases ("Attiva loop", "attiva il
+    // loop", bare "loop", "Schleife an", "Active la boucle", ...) are exact
+    // rows on LoopSongOnIntent, and LoopAllOnIntent carries only
+    // queue-scoped carriers ("Ripeti la coda", "Wiederhole die Warteschlange",
+    // "Répète la file d'attente"), so no utterance maps to both modes anymore
+    // (the rows were moved, not dropped: without exact rows the phrases stole
+    // live; see the template comments).
+    // REMAINING GAP (JF-903): LoopAllOnIntent is still declared in only those
+    // four locales, so the other 13 have NO voice path to repeat-all at all
+    // (the bare built-in is repeat-one now); restoring a queue-loop carrier
+    // family across the 13 built-in-only locales is its own tracked task.
     public const string LoopSongOn = "LoopSongOnIntent";
     public const string RepeatSingleOn = "RepeatSingleOnIntent";
     public const string LoopAllOn = "LoopAllOnIntent";

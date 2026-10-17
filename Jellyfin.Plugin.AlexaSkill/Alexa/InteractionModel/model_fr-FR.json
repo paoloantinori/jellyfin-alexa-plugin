@@ -80,8 +80,11 @@
       {
         "name": "LoopAllOnIntent",
         "samples": [
-          "Active la boucle",
-          "Active la répétition"
+          "Répète la file d'attente",
+          "Répète toute la file d'attente",
+          "Mets la file d'attente en boucle",
+          "De répéter la file d'attente",
+          "De répéter toute la file d'attente"
         ]
       },
       {
@@ -1015,7 +1018,9 @@
           "Répète ce morceau",
           "Mets cette chanson en boucle",
           "Loop cette chanson",
-          "Répète indéfiniment"
+          "Répète indéfiniment",
+          "Active la boucle",
+          "Active la répétition"
         ]
       },
       {
