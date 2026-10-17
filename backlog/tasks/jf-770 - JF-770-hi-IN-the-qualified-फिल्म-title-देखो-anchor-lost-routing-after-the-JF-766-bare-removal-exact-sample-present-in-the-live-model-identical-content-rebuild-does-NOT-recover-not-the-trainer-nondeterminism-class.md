@@ -7,7 +7,7 @@ title: >-
 status: In Progress
 assignee: []
 created_date: '2026-10-05'
-updated_date: '2026-10-09 23:14'
+updated_date: '2026-10-17 22:09'
 labels:
   - interaction-model
   - nlu
@@ -208,6 +208,56 @@ THIRD-REBUILD DATA POINT (2026-10-05, orchestrator): rebuild with the post-JF-75
 
 FOURTH-REBUILD DATA POINT (2026-10-10 02:05, orchestrator): the night batch deploy (0f0a3c7d build, md5 0e7e91e2) rode a full 17/17 locale model rebuild (all SUCCEEDED); the anchor 'film inceptio dekho' re-probed 4x on the fresh hi-IN model: AMAZON.FallbackIntent 4/4. The anomaly now persists across FOUR rebuilds and THREE DLL generations. Task stays parked exactly per its disposition (trainer-side, template changes cannot reach it; the working user-facing carriers remain video/moovie, live-proven); the remaining paths are Paolo's device round or a trainer-side recovery on some future rebuild.
 FIFTH-REBUILD DATA POINT (2026-10-10 13:05, orchestrator): the JF-771 batch deploy rode a hi-IN rebuild (SUCCEEDED) whose model carries SIX MORE PlayVideo samples (the JF-771 family strengthening, real content change); the film anchors re-probed in its matrix: film+khojo Fallback 4/4, film+chalao PlaySong steal 4/4. The anomaly now persists across FIVE rebuilds (one with substantial unrelated PlayVideo content growth), THREE+1 DLL generations. All the NEW video/movie-carried samples route 4/4 on the same trainer - the anomaly is film-token-sequence-specific, reconfirmed.
+
+SIXTH-REBUILD RE-BASELINE + ROUND 2 (2026-10-17, worktree agent, branch
+jf770): re-baselined live on the JF-904-rolled model (skill
+amzn1.ask.skill.33dfacd5-3676-4cdc-8b02-81efb227df83 discovered fresh,
+lastUpdated 2026-10-17T17:13Z): 'फिल्म इंसेप्शन देखो' AMAZON.FallbackIntent
+4/4 (SIX rebuilds now, incl. a real-content roll); the nukta utterance
+'फ़िल्म इंसेप्शन देखो' (decomposed U+092B U+093C, byte-checked) Fallback
+4/4; uninformative on the anomaly itself since NO nukta sample existed in
+the model; bare 'इंसेप्शन देखो' NO_SELECTION 2/2 (the JF-766-accepted cost,
+unchanged). NOT recovered-on-roll, so the orchestrator's second-attempt
+dispatch applied: +4 QUALIFIED PlayVideo rows in templates/hi-IN.yaml, never
+bare (JF-459/JF-766 discipline), shapes round 1 never tried: the NUKTA twin
+'फ़िल्म {title} देखो' (a DIFFERENT token sequence; the anomaly is proven
+film-token-sequence-specific; फ़ written in the file's decomposed
+convention, cf. फ़ोटो, zero precomposed U+095E in the file), the POST-
+POSITION twin '{title} फिल्म देखो' (फिल्म mid-phrase; every known-failing
+shape is फिल्म-initial), and the fresh दिखाओ tail crossed with the weak
+फिल्म carrier AND the proven-strong वीडियो carrier (the JF-771 crossing
+pattern; diagnostic separation: carrier anomaly vs tail viability). The
+dispatch's 'फिल्म {title} चलाओ' example was a DUPLICATE (live since round 1)
+and skipped. Steal-safety: every new row requires its literal carrier token
+and the JF-766 episode address carries no फिल्म token, so the steal cannot
+recur; the shared-tail precedent (खोजो lives in SearchMedia AND PlayVideo
+without cross-steal) covers दिखाओ vs the browse family (their rows require
+मुझे/नए/के ट्रैक literals). model_hi-IN.json regenerated (384 → 388 samples,
+exactly 4 lines); VOICE_COMMANDS_BY_LOCALE.md regenerated (384 → 388
+phrases); VOICE_COMMANDS.md unchanged (its quick-ref caps at 6 samples per
+intent and the 4 new rows sit beyond the cap; it covers all 17 locales incl.
+hi-IN, and --check is exit 0, so the in-sync proof is mechanical); playback-
+lifecycle-hi-IN.md untouched (no देखो/दिखाओ edge exists), parse_mermaid no-
+op confirmed. Fixtures +5 pins (red until deploy per the JF-766 convention):
+the 4 new forms + THE ANCHOR PIN 'फिल्म इंसेप्शन देखो' → PlayVideoIntent
+title raw 'इंसेप्शन', which SUPERSEDES the round-1 dfe9b745 stance (unpinned
+while the anomaly stands) as the second attempt's acceptance tracker; the
+four new-form rows pin slot-present-any-value (whole-absorb tolerance on
+shapes no live probe has proven; the anchor alone pins the raw exact value,
+the round-1 matrix bar; tighten the loose ones on first green live read).
+ACCEPTANCE stays the orchestrator's post-merge 4x probe after the hi-IN
+rebuild (round 1's 8-leg matrix + the 5 new utterances); if the anchor still
+reads Fallback, the two- failed-fixes bar is MET: no third template patch,
+park on the device round, and the close-out decides anchor-pin
+keep-as-standing-tracker vs remove (JF-769 ja precedent). NORM RISK for the
+close-out's get-interaction-model check: if SMAPI-side Unicode folding ever
+strips the nukta, 'फ़िल्म {title} देखो' would deduplicate against 'फिल्म
+{title} देखो' and drop at build time; verify the nukta row SURVIVED in the
+live model before reading its probe as anomaly evidence, and compare
+NFC-normalized: a benign SMAPI composition fold would return फ़िल्म as
+precomposed U+095E, byte-mismatching the file's decomposed U+092B U+093C
+with no row dropped.
+
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary

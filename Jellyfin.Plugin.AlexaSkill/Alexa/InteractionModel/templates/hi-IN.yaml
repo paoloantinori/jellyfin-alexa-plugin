@@ -41,8 +41,9 @@
 # - Script reality, preserved code point for code point (any
 #   normalization is a byte-diff; the regen check will catch it):
 #   Devanagari throughout with combining matras (Mn) and vowel signs
-#   (Mc); the nukta U+093C appears 64 times in Perso-Arabic loanwords
-#   (म्यूज़िक, सीज़न, रेटिंग, ज़ class); NO ZWJ/U+200D or ZWNJ/U+200C
+#   (Mc); the nukta U+093C runs through the Perso-Arabic loanwords
+#   (म्यूज़िक, सीज़न, रेटिंग, ज़ class; no fixed count, the regen
+#   byte-diff is the guard); NO ZWJ/U+200D or ZWNJ/U+200C
 #   anywhere, so no conjunct depends on joiners; NO danda (।)
 #   punctuation (samples carry no sentence-final marks at all).
 # - English inertia MOSTLY RESOLVED 2026-09-12 (JF-399 executable half):
@@ -243,7 +244,9 @@ intents:
       # JF-770 L1b precedent: strong carrier + sample routes ('वीडियो/मूवी
       # इंसेप्शन देखो' PlayVideo 4/4 live). NO फिल्म-carried additions: that
       # carrier is trainer-anomalous (JF-770 above; even SearchMedia's exact
-      # 'एक फिल्म {query} खोजो' reads Fallback). Two-failed-fixes rule.
+      # 'एक फिल्म {query} खोजो' reads Fallback). Two-failed-fixes rule
+      # (superseded once, dispatch-authorized 2026-10-17, by the round-2
+      # batch below).
       # 'मूवी इंसेप्शन शुरू करो' already routes PlayVideo via the bare
       # '{title} शुरू करो' above (title whole-absorbed, the JF-770 मैं-फिल्म
       # nuance, accepted there too): deliberately not duplicated here.
@@ -251,6 +254,22 @@ intents:
       - मूवी {title} खोजो
       - मूवी {title} चलाओ
       - मूवी {title} लगाओ
+      # JF-770 round 2 (2026-10-17): the anchor 'फिल्म इंसेप्शन देखो'
+      # still read Fallback 4/4 across six rebuilds incl. that day's
+      # JF-904 roll (re-baseline map in task JF-770), so one FINAL
+      # thickening with shapes round 1 never tried: the NUKTA twin (a
+      # different token sequence, header script convention), the
+      # POST-POSITION twin (फिल्म mid-phrase; every known-failing
+      # shape is फिल्म-initial), and the fresh दिखाओ tail crossed with
+      # the weak फिल्म and the proven-strong वीडियो carrier (the
+      # JF-771 crossing pattern). Each row requires its literal carrier
+      # token, so the JF-766 episode steal cannot recur. If the anchor
+      # still reads Fallback post-deploy, the two-failed-fixes bar is
+      # met: park on the device round, no further template patches.
+      - फ़िल्म {title} देखो
+      - '{title} फिल्म देखो'
+      - फिल्म {title} दिखाओ
+      - वीडियो {title} दिखाओ
     slots:
       - name: title
         type: AMAZON.SearchQuery

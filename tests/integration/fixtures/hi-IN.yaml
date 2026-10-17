@@ -84,7 +84,8 @@ tests:
   # JF-770: the strengthened qualified video-watch family. The वीडियो carrier
   # routes PlayVideoIntent clean (live 2026-10-05, post-deploy 2fddf2be); the
   # फिल्म anchor is under a trainer-side anomaly (see the JF-770 record) and is
-  # deliberately NOT pinned here - pin only proven rows.
+  # deliberately NOT pinned here; pin only proven rows (superseded 2026-10-17
+  # by the round-2 anchor pin below).
   - utterance: "वीडियो इंसेप्शन देखो"
     expected_intent: PlayVideoIntent
     expected_slots:
@@ -141,6 +142,42 @@ tests:
     expected_slots:
       song:
         value: "bohemian rhapsody"
+
+  # ------------------------------------------------------------------------
+  # JF-770 round 2 (2026-10-17): pins for the second thickening (the
+  # nukta twin, the post-position twin, the दिखाओ tail on both carriers)
+  # plus the anchor pin itself, the acceptance tracker of the final
+  # attempt (round-1 note above superseded). RED until the rebuilt hi-IN
+  # model deploys (the JF-766 convention). Unproven shapes pin the slot
+  # present-but-any-value; tighten to the raw 'इंसेप्शन' after the first
+  # green live read (the JF-769 raw rule). Matrix and exit criterion:
+  # task JF-770.
+  # ------------------------------------------------------------------------
+  - utterance: "फ़िल्म इंसेप्शन देखो"
+    expected_intent: PlayVideoIntent
+    expected_slots:
+      title: {}
+
+  - utterance: "इंसेप्शन फिल्म देखो"
+    expected_intent: PlayVideoIntent
+    expected_slots:
+      title: {}
+
+  - utterance: "फिल्म इंसेप्शन दिखाओ"
+    expected_intent: PlayVideoIntent
+    expected_slots:
+      title: {}
+
+  - utterance: "वीडियो इंसेप्शन दिखाओ"
+    expected_intent: PlayVideoIntent
+    expected_slots:
+      title: {}
+
+  - utterance: "फिल्म इंसेप्शन देखो"
+    expected_intent: PlayVideoIntent
+    expected_slots:
+      title:
+        value: "इंसेप्शन"
 
   # -------------------------------------------------------------------------
   # SkipForwardBackIntent (JF-875 rollout). Hindi word order follows the
