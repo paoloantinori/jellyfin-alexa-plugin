@@ -89,17 +89,33 @@ intents:
       - Désactive la répétition
   - name: LoopAllOnIntent
     samples:
-      - Active la boucle
-      - Active la répétition
+      # JF-902: queue-scoped wording ONLY (JF-901 made bare loop-activation
+      # mean repeat-ONE; 'Active la boucle'/'Active la répétition' moved to
+      # LoopSongOnIntent below instead of being dropped: without an exact row
+      # the local loop words have no reliable claim, the same built-in gap the
+      # shuffle probes documented live 2026-09-23). Naming the queue keeps
+      # repeat-ALL reachable by voice, mirroring 'mélange la file d'attente'.
+      - Répète la file d'attente
+      - Répète toute la file d'attente
+      - Mets la file d'attente en boucle
+      # The De-infinitive wrapper twins (this template's 'De jouer le film'
+      # convention; the JF-844 wrapper discipline, JF-902 code-review round):
+      # without them the one-shot tail generalizes into the repeat-one
+      # 'Répète la chanson'/'Répète' region.
+      - De répéter la file d'attente
+      - De répéter toute la file d'attente
   - name: RepeatSingleOnIntent
     samples:
       - Répète la chanson
       - Répète le morceau
       - Répète la vidéo
       - Répète
-  # JF-562: the Loop* built-ins ride next to the custom loop trio above
-  # (dual-accept CanHandle per JF-450: whichever name wins NLU, the same
-  # loop mode applies).
+  # JF-562: the Loop* built-ins ride next to the custom loop trio above. The
+  # OFF pair still dual-accepts both names (do not remove it: Amazon-side
+  # models built before the JF-562 declarations still deliver only the custom
+  # names); the ON pair's dual accept ended at JF-901 (do not re-add it). The
+  # JF-902 sample split and its full rationale live on the loop intent
+  # constants in IntentNames.
   - AMAZON.LoopOnIntent
   - AMAZON.LoopOffIntent
   - AMAZON.ShuffleOnIntent
@@ -765,6 +781,9 @@ intents:
       - Mets cette chanson en boucle
       - Loop cette chanson
       - Répète indéfiniment
+      # JF-902: moved from LoopAllOnIntent (move rationale on that block).
+      - Active la boucle
+      - Active la répétition
   - name: ShowMoreIntent
     samples:
       - montre plus

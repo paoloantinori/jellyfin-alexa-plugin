@@ -579,7 +579,7 @@ Complete phrase list (349 phrases across 68 commands):
 - `استمر في التشغيل`
 - `انقل التشغيل`
 
-**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat, Repeat all on, Repeat all off): Alexa understands these natively; say them the usual way.
+**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat, Repeat the current track on, Repeat off): Alexa understands these natively; say them the usual way.
 
 #### Timers and reminders
 
@@ -1229,7 +1229,7 @@ Complete phrase list (406 phrases across 68 commands):
 - `neem het over`
 - `doorgaan met luisteren`
 
-**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat, Repeat all on, Repeat all off): Alexa understands these natively; say them the usual way.
+**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat, Repeat the current track on, Repeat off): Alexa understands these natively; say them the usual way.
 
 #### Timers and reminders
 
@@ -1981,7 +1981,7 @@ Complete phrase list (509 phrases across 68 commands):
 - `keep playing`
 - `pick up where I left off`
 
-**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat, Repeat all on, Repeat all off): Alexa understands these natively; say them the usual way.
+**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat, Repeat the current track on, Repeat off): Alexa understands these natively; say them the usual way.
 
 #### Timers and reminders
 
@@ -2737,7 +2737,7 @@ Complete phrase list (511 phrases across 68 commands):
 - `take over playback`
 - `keep playing`
 
-**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat, Repeat all on, Repeat all off): Alexa understands these natively; say them the usual way.
+**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat, Repeat the current track on, Repeat off): Alexa understands these natively; say them the usual way.
 
 #### Timers and reminders
 
@@ -3580,7 +3580,7 @@ Complete phrase list (598 phrases across 68 commands):
 - `pick up where I left off`
 - `carry on playing`
 
-**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat, Repeat all on, Repeat all off): Alexa understands these natively; say them the usual way.
+**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat, Repeat the current track on, Repeat off): Alexa understands these natively; say them the usual way.
 
 #### Timers and reminders
 
@@ -4338,7 +4338,7 @@ Complete phrase list (513 phrases across 68 commands):
 - `resume from where I left off`
 - `take over playback`
 
-**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat, Repeat all on, Repeat all off): Alexa understands these natively; say them the usual way.
+**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat, Repeat the current track on, Repeat off): Alexa understands these natively; say them the usual way.
 
 #### Timers and reminders
 
@@ -5360,7 +5360,7 @@ Complete phrase list (770 phrases across 69 commands):
 - `pick up where I left off`
 - `carry on playing`
 
-**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat, Repeat all on, Repeat all off): Alexa understands these natively; say them the usual way.
+**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat, Repeat the current track on, Repeat off): Alexa understands these natively; say them the usual way.
 
 #### Timers and reminders
 
@@ -5452,7 +5452,7 @@ Placeholder legend:
 | `<mots du titre de la chanson>` | `{titleKeywords}` |
 | `<nom d'utilisateur>` | `{username}` |
 
-Complete phrase list (468 phrases across 73 commands):
+Complete phrase list (473 phrases across 73 commands):
 
 #### Play music
 
@@ -5864,6 +5864,8 @@ Complete phrase list (468 phrases across 73 commands):
 - `Mets cette chanson en boucle`
 - `Loop cette chanson`
 - `Répète indéfiniment`
+- `Active la boucle`
+- `Active la répétition`
 
 **Repeat the current track**
 
@@ -5874,8 +5876,11 @@ Complete phrase list (468 phrases across 73 commands):
 
 **Repeat all**
 
-- `Active la boucle`
-- `Active la répétition`
+- `Répète la file d'attente`
+- `Répète toute la file d'attente`
+- `Mets la file d'attente en boucle`
+- `De répéter la file d'attente`
+- `De répéter toute la file d'attente`
 
 **Shuffle queue**
 
@@ -6090,7 +6095,7 @@ Complete phrase list (468 phrases across 73 commands):
 - `reprendre la lecture`
 - `transférer la lecture`
 
-**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat, Repeat all on, Repeat all off): Alexa understands these natively; say them the usual way.
+**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat, Repeat the current track on, Repeat off): Alexa understands these natively; say them the usual way.
 
 #### Timers and reminders
 
@@ -6180,7 +6185,7 @@ Placeholder legend:
 | `<mots du titre de la chanson>` | `{titleKeywords}` |
 | `<nom d'utilisateur>` | `{username}` |
 
-Complete phrase list (480 phrases across 73 commands):
+Complete phrase list (485 phrases across 73 commands):
 
 #### Play music
 
@@ -6600,6 +6605,8 @@ Complete phrase list (480 phrases across 73 commands):
 - `Mets cette chanson en boucle`
 - `Loop cette chanson`
 - `Répète indéfiniment`
+- `Active la boucle`
+- `Active la répétition`
 
 **Repeat the current track**
 
@@ -6610,8 +6617,11 @@ Complete phrase list (480 phrases across 73 commands):
 
 **Repeat all**
 
-- `Active la boucle`
-- `Active la répétition`
+- `Répète la file d'attente`
+- `Répète toute la file d'attente`
+- `Mets la file d'attente en boucle`
+- `De répéter la file d'attente`
+- `De répéter toute la file d'attente`
 
 **Shuffle queue**
 
@@ -6830,7 +6840,7 @@ Complete phrase list (480 phrases across 73 commands):
 - `transférer la lecture`
 - `reprendre où j'en étais`
 
-**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat, Repeat all on, Repeat all off): Alexa understands these natively; say them the usual way.
+**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat, Repeat the current track on, Repeat off): Alexa understands these natively; say them the usual way.
 
 #### Timers and reminders
 
@@ -6920,7 +6930,7 @@ Placeholder legend:
 | `<Wörter aus dem Songtitel>` | `{titleKeywords}` |
 | `<Benutzername>` | `{username}` |
 
-Complete phrase list (485 phrases across 73 commands):
+Complete phrase list (489 phrases across 73 commands):
 
 #### Play music
 
@@ -7345,6 +7355,8 @@ Complete phrase list (485 phrases across 73 commands):
 - `Loop dieses Lied`
 - `Wiederhole endlos`
 - `Spiele dieses Lied in Schleife`
+- `Wiederholung an`
+- `Schleife an`
 
 **Repeat the current track**
 
@@ -7355,8 +7367,10 @@ Complete phrase list (485 phrases across 73 commands):
 
 **Repeat all**
 
-- `Wiederholung an`
-- `Schleife an`
+- `Wiederhole die Warteschlange`
+- `Wiederhole die ganze Warteschlange`
+- `Zu wiederholen die Warteschlange`
+- `Zu wiederholen die ganze Warteschlange`
 
 **Shuffle queue**
 
@@ -7575,7 +7589,7 @@ Complete phrase list (485 phrases across 73 commands):
 - `weiter abspielen`
 - `musik mitnehmen`
 
-**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat, Repeat all on, Repeat all off): Alexa understands these natively; say them the usual way.
+**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat, Repeat the current track on, Repeat off): Alexa understands these natively; say them the usual way.
 
 #### Timers and reminders
 
@@ -8203,7 +8217,7 @@ Complete phrase list (381 phrases across 68 commands):
 - `चलाना जारी रखो`
 - `जहां छोड़ा थे वहां से शुरू करो`
 
-**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat, Repeat all on, Repeat all off): Alexa understands these natively; say them the usual way.
+**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat, Repeat the current track on, Repeat off): Alexa understands these natively; say them the usual way.
 
 #### Timers and reminders
 
@@ -8294,7 +8308,7 @@ Placeholder legend:
 | `<titolo del video o del film>` | `{title}` |
 | `<parole del titolo del brano>` | `{titleKeywords}` |
 
-Complete phrase list (1664 phrases across 74 commands):
+Complete phrase list (1669 phrases across 74 commands):
 
 #### Play music
 
@@ -9797,6 +9811,22 @@ Complete phrase list (1664 phrases across 74 commands):
 - `metti in loop questo brano`
 - `metti in loop questa canzone`
 - `ripeti per sempre questo brano`
+- `Attiva loop`
+- `Attiva ripetizione`
+- `attivare loop`
+- `attivare ripetizione`
+- `Di attivare loop`
+- `Di attivare ripetizione`
+- `Attiva il loop`
+- `Attiva la ripetizione`
+- `Attiva il ripetizione`
+- `attivare il loop`
+- `attivare la ripetizione`
+- `attivare il ripetizione`
+- `Di attivare il loop`
+- `Di attivare la ripetizione`
+- `Di attivare il ripetizione`
+- `loop`
 
 **Repeat the current track**
 
@@ -9819,22 +9849,11 @@ Complete phrase list (1664 phrases across 74 commands):
 
 **Repeat all**
 
-- `Attiva loop`
-- `Attiva ripetizione`
-- `attivare loop`
-- `attivare ripetizione`
-- `Di attivare loop`
-- `Di attivare ripetizione`
-- `Attiva il loop`
-- `Attiva la ripetizione`
-- `Attiva il ripetizione`
-- `attivare il loop`
-- `attivare la ripetizione`
-- `attivare il ripetizione`
-- `Di attivare il loop`
-- `Di attivare la ripetizione`
-- `Di attivare il ripetizione`
-- `loop`
+- `Ripeti la coda`
+- `Ripeti tutta la coda`
+- `Metti in loop la coda`
+- `ripetere la coda`
+- `Di ripetere la coda`
 
 **Shuffle queue**
 
@@ -10132,7 +10151,7 @@ Complete phrase list (1664 phrases across 74 commands):
 - `ferma la riproduzione`
 - `stop`
 
-**Built-in commands, no custom phrases in this language** (Pause, Resume, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat, Repeat all on, Repeat all off): Alexa understands these natively; say them the usual way.
+**Built-in commands, no custom phrases in this language** (Pause, Resume, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat, Repeat the current track on, Repeat off): Alexa understands these natively; say them the usual way.
 
 #### Timers and reminders
 
@@ -10724,7 +10743,7 @@ Complete phrase list (343 phrases across 68 commands):
 - `続きから再生`
 - `再生を引き継ぐ`
 
-**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat, Repeat all on, Repeat all off): Alexa understands these natively; say them the usual way.
+**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat, Repeat the current track on, Repeat off): Alexa understands these natively; say them the usual way.
 
 #### Timers and reminders
 
@@ -11386,7 +11405,7 @@ Complete phrase list (419 phrases across 68 commands):
 - `retomar a reprodução`
 - `transferir a música`
 
-**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat, Repeat all on, Repeat all off): Alexa understands these natively; say them the usual way.
+**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat, Repeat the current track on, Repeat off): Alexa understands these natively; say them the usual way.
 
 #### Timers and reminders
 
@@ -12105,7 +12124,7 @@ Complete phrase list (472 phrases across 68 commands):
 - `retomar reproducción`
 - `transferir la música`
 
-**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat, Repeat all on, Repeat all off): Alexa understands these natively; say them the usual way.
+**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat, Repeat the current track on, Repeat off): Alexa understands these natively; say them the usual way.
 
 #### Timers and reminders
 
@@ -12819,7 +12838,7 @@ Complete phrase list (469 phrases across 68 commands):
 - `seguir escuchando`
 - `retomar reproducción`
 
-**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat, Repeat all on, Repeat all off): Alexa understands these natively; say them the usual way.
+**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat, Repeat the current track on, Repeat off): Alexa understands these natively; say them the usual way.
 
 #### Timers and reminders
 
@@ -13523,7 +13542,7 @@ Complete phrase list (459 phrases across 68 commands):
 - `seguir escuchando`
 - `retomar reproducción`
 
-**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat, Repeat all on, Repeat all off): Alexa understands these natively; say them the usual way.
+**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat, Repeat the current track on, Repeat off): Alexa understands these natively; say them the usual way.
 
 #### Timers and reminders
 
@@ -13636,8 +13655,8 @@ The body above is user-facing and never names intents or handlers. This table ma
 | Playback control | Shuffle off | `AMAZON.ShuffleOffIntent` |
 | Playback control | Start over | `AMAZON.StartOverIntent` |
 | Playback control | Repeat | `AMAZON.RepeatIntent` |
-| Playback control | Repeat all on | `AMAZON.LoopOnIntent` |
-| Playback control | Repeat all off | `AMAZON.LoopOffIntent` |
+| Playback control | Repeat the current track on | `AMAZON.LoopOnIntent` |
+| Playback control | Repeat off | `AMAZON.LoopOffIntent` |
 | Timers and reminders | Set a sleep timer | `SleepTimerIntent` |
 | Timers and reminders | Set a reminder | `SetReminderIntent` |
 | Account and voice | Learn my voice | `LearnMyVoiceIntent` |

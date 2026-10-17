@@ -35,7 +35,8 @@ graph TD
     Shuffled --> Playing
 
     LoopOps -->|"ripeti questa canzone"| LoopSong["LoopSongOnIntent<br/>Ripeti brano corrente"]
-    LoopOps -->|"Attiva loop"| LoopAll["LoopAllOnIntent<br/>Ripeti tutta la coda"]
+    LoopOps -->|"attiva il loop"| LoopSong
+    LoopOps -->|"Ripeti la coda"| LoopAll["LoopAllOnIntent<br/>Ripeti tutta la coda"]
     LoopOps -->|"Disattiva loop"| LoopOff["LoopAllOffIntent<br/>Disabilita ripetizione"]
 
     LoopSong --> SongLooping["Ripetizione singolo brano"]

@@ -12918,7 +12918,7 @@
             "label": "LoopSongOnIntent"
           },
           {
-            "id": "LoopAll",
+            "id": "LoopOn",
             "label": "AMAZON.LoopOnIntent"
           },
           {
@@ -13171,7 +13171,7 @@
           },
           {
             "source": "Playing",
-            "target": "LoopAll",
+            "target": "LoopOn",
             "label": "تشغيل الحلقة",
             "style": "solid"
           },
@@ -13565,6 +13565,12 @@
           {
             "source": "Playing",
             "target": "LoopAll",
+            "label": "Wiederhole die Warteschlange",
+            "style": "solid"
+          },
+          {
+            "source": "Playing",
+            "target": "LoopSong",
             "label": "Wiederholung an",
             "style": "solid"
           },
@@ -13702,7 +13708,7 @@
             "label": "LoopSongOnIntent"
           },
           {
-            "id": "LoopAll",
+            "id": "LoopOn",
             "label": "AMAZON.LoopOnIntent"
           },
           {
@@ -13961,7 +13967,7 @@
           },
           {
             "source": "Playing",
-            "target": "LoopAll",
+            "target": "LoopOn",
             "label": "loop on",
             "style": "solid"
           },
@@ -14105,7 +14111,7 @@
             "label": "LoopSongOnIntent"
           },
           {
-            "id": "LoopAll",
+            "id": "LoopOn",
             "label": "AMAZON.LoopOnIntent"
           },
           {
@@ -14364,7 +14370,7 @@
           },
           {
             "source": "Playing",
-            "target": "LoopAll",
+            "target": "LoopOn",
             "label": "loop on",
             "style": "solid"
           },
@@ -14508,7 +14514,7 @@
             "label": "LoopSongOnIntent"
           },
           {
-            "id": "LoopAll",
+            "id": "LoopOn",
             "label": "AMAZON.LoopOnIntent"
           },
           {
@@ -14761,7 +14767,7 @@
           },
           {
             "source": "Playing",
-            "target": "LoopAll",
+            "target": "LoopOn",
             "label": "loop on",
             "style": "solid"
           },
@@ -14905,7 +14911,7 @@
             "label": "LoopSongOnIntent"
           },
           {
-            "id": "LoopAll",
+            "id": "LoopOn",
             "label": "AMAZON.LoopOnIntent"
           },
           {
@@ -15164,7 +15170,7 @@
           },
           {
             "source": "Playing",
-            "target": "LoopAll",
+            "target": "LoopOn",
             "label": "loop on",
             "style": "solid"
           },
@@ -15308,7 +15314,7 @@
             "label": "LoopSongOnIntent"
           },
           {
-            "id": "LoopAll",
+            "id": "LoopOn",
             "label": "AMAZON.LoopOnIntent"
           },
           {
@@ -15561,7 +15567,7 @@
           },
           {
             "source": "Playing",
-            "target": "LoopAll",
+            "target": "LoopOn",
             "label": "loop on",
             "style": "solid"
           },
@@ -15705,7 +15711,7 @@
             "label": "LoopSongOnIntent"
           },
           {
-            "id": "LoopAll",
+            "id": "LoopOn",
             "label": "AMAZON.LoopOnIntent"
           },
           {
@@ -15958,7 +15964,7 @@
           },
           {
             "source": "Playing",
-            "target": "LoopAll",
+            "target": "LoopOn",
             "label": "repetir activado",
             "style": "solid"
           },
@@ -16102,7 +16108,7 @@
             "label": "LoopSongOnIntent"
           },
           {
-            "id": "LoopAll",
+            "id": "LoopOn",
             "label": "AMAZON.LoopOnIntent"
           },
           {
@@ -16355,7 +16361,7 @@
           },
           {
             "source": "Playing",
-            "target": "LoopAll",
+            "target": "LoopOn",
             "label": "repetir activado",
             "style": "solid"
           },
@@ -16499,7 +16505,7 @@
             "label": "LoopSongOnIntent"
           },
           {
-            "id": "LoopAll",
+            "id": "LoopOn",
             "label": "AMAZON.LoopOnIntent"
           },
           {
@@ -16752,7 +16758,7 @@
           },
           {
             "source": "Playing",
-            "target": "LoopAll",
+            "target": "LoopOn",
             "label": "repetir activado",
             "style": "solid"
           },
@@ -16897,11 +16903,11 @@
           },
           {
             "id": "LoopAll",
-            "label": "AMAZON.LoopOnIntent"
+            "label": "LoopAllOnIntent"
           },
           {
             "id": "LoopOff",
-            "label": "AMAZON.LoopOffIntent"
+            "label": "LoopAllOffIntent"
           },
           {
             "id": "Next",
@@ -17149,8 +17155,14 @@
           },
           {
             "source": "Playing",
-            "target": "LoopAll",
+            "target": "LoopSong",
             "label": "Active la boucle",
+            "style": "solid"
+          },
+          {
+            "source": "Playing",
+            "target": "LoopAll",
+            "label": "Répète la file d'attente",
             "style": "solid"
           },
           {
@@ -17294,11 +17306,11 @@
           },
           {
             "id": "LoopAll",
-            "label": "AMAZON.LoopOnIntent"
+            "label": "LoopAllOnIntent"
           },
           {
             "id": "LoopOff",
-            "label": "AMAZON.LoopOffIntent"
+            "label": "LoopAllOffIntent"
           },
           {
             "id": "Next",
@@ -17546,8 +17558,14 @@
           },
           {
             "source": "Playing",
-            "target": "LoopAll",
+            "target": "LoopSong",
             "label": "Active la boucle",
+            "style": "solid"
+          },
+          {
+            "source": "Playing",
+            "target": "LoopAll",
+            "label": "Répète la file d'attente",
             "style": "solid"
           },
           {
@@ -17690,7 +17708,7 @@
             "label": "LoopSongOnIntent"
           },
           {
-            "id": "LoopAll",
+            "id": "LoopOn",
             "label": "AMAZON.LoopOnIntent"
           },
           {
@@ -17943,7 +17961,7 @@
           },
           {
             "source": "Playing",
-            "target": "LoopAll",
+            "target": "LoopOn",
             "label": "लूप चालू करो",
             "style": "solid"
           },
@@ -18337,7 +18355,13 @@
           {
             "source": "Playing",
             "target": "LoopAll",
-            "label": "riproduci in loop",
+            "label": "Ripeti la coda",
+            "style": "solid"
+          },
+          {
+            "source": "Playing",
+            "target": "LoopSong",
+            "label": "attiva il loop",
             "style": "solid"
           },
           {
@@ -18474,7 +18498,7 @@
             "label": "LoopSongOnIntent"
           },
           {
-            "id": "LoopAll",
+            "id": "LoopOn",
             "label": "AMAZON.LoopOnIntent"
           },
           {
@@ -18727,7 +18751,7 @@
           },
           {
             "source": "Playing",
-            "target": "LoopAll",
+            "target": "LoopOn",
             "label": "ループオン",
             "style": "solid"
           },
@@ -18871,7 +18895,7 @@
             "label": "LoopSongOnIntent"
           },
           {
-            "id": "LoopAll",
+            "id": "LoopOn",
             "label": "AMAZON.LoopOnIntent"
           },
           {
@@ -19124,7 +19148,7 @@
           },
           {
             "source": "Playing",
-            "target": "LoopAll",
+            "target": "LoopOn",
             "label": "loop aan",
             "style": "solid"
           },
@@ -19268,7 +19292,7 @@
             "label": "LoopSongOnIntent"
           },
           {
-            "id": "LoopAll",
+            "id": "LoopOn",
             "label": "AMAZON.LoopOnIntent"
           },
           {
@@ -19521,7 +19545,7 @@
           },
           {
             "source": "Playing",
-            "target": "LoopAll",
+            "target": "LoopOn",
             "label": "repetir ligado",
             "style": "solid"
           },
@@ -19643,8 +19667,8 @@
             "label": "LoopSongOnIntent\nتكرار الأغنية الحالية"
           },
           {
-            "id": "LoopAll",
-            "label": "AMAZON.LoopOnIntent\nتكرار الطابور بالكامل"
+            "id": "LoopOn",
+            "label": "AMAZON.LoopOnIntent\nتكرار المقطع الحالي"
           },
           {
             "id": "LoopOff",
@@ -19653,12 +19677,6 @@
           {
             "id": "SongLooping",
             "label": "تكرار أغنية واحدة",
-            "fill": "#2196F3",
-            "textColor": "#fff"
-          },
-          {
-            "id": "AllLooping",
-            "label": "تكرار الطابور",
             "fill": "#2196F3",
             "textColor": "#fff"
           },
@@ -19826,7 +19844,7 @@
           },
           {
             "source": "LoopOps",
-            "target": "LoopAll",
+            "target": "LoopOn",
             "label": "تشغيل التكرار",
             "style": "solid"
           },
@@ -19843,8 +19861,8 @@
             "style": "solid"
           },
           {
-            "source": "LoopAll",
-            "target": "AllLooping",
+            "source": "LoopOn",
+            "target": "SongLooping",
             "label": "",
             "style": "solid"
           },
@@ -19856,12 +19874,6 @@
           },
           {
             "source": "SongLooping",
-            "target": "Playing",
-            "label": "",
-            "style": "solid"
-          },
-          {
-            "source": "AllLooping",
             "target": "Playing",
             "label": "",
             "style": "solid"
@@ -20153,8 +20165,14 @@
           },
           {
             "source": "LoopOps",
-            "target": "LoopAll",
+            "target": "LoopSong",
             "label": "Wiederholung an",
+            "style": "solid"
+          },
+          {
+            "source": "LoopOps",
+            "target": "LoopAll",
+            "label": "Wiederhole die Warteschlange",
             "style": "solid"
           },
           {
@@ -20297,8 +20315,8 @@
             "label": "LoopSongOnIntent\nRepeat current song"
           },
           {
-            "id": "LoopAll",
-            "label": "AMAZON.LoopOnIntent\nLoop entire queue"
+            "id": "LoopOn",
+            "label": "AMAZON.LoopOnIntent\nRepeat current track"
           },
           {
             "id": "LoopOff",
@@ -20307,12 +20325,6 @@
           {
             "id": "SongLooping",
             "label": "Single song looping",
-            "fill": "#2196F3",
-            "textColor": "#fff"
-          },
-          {
-            "id": "AllLooping",
-            "label": "Queue looping",
             "fill": "#2196F3",
             "textColor": "#fff"
           },
@@ -20480,7 +20492,7 @@
           },
           {
             "source": "LoopOps",
-            "target": "LoopAll",
+            "target": "LoopOn",
             "label": "loop on",
             "style": "solid"
           },
@@ -20497,8 +20509,8 @@
             "style": "solid"
           },
           {
-            "source": "LoopAll",
-            "target": "AllLooping",
+            "source": "LoopOn",
+            "target": "SongLooping",
             "label": "",
             "style": "solid"
           },
@@ -20510,12 +20522,6 @@
           },
           {
             "source": "SongLooping",
-            "target": "Playing",
-            "label": "",
-            "style": "solid"
-          },
-          {
-            "source": "AllLooping",
             "target": "Playing",
             "label": "",
             "style": "solid"
@@ -20624,8 +20630,8 @@
             "label": "LoopSongOnIntent\nRepeat current song"
           },
           {
-            "id": "LoopAll",
-            "label": "AMAZON.LoopOnIntent\nLoop entire queue"
+            "id": "LoopOn",
+            "label": "AMAZON.LoopOnIntent\nRepeat current track"
           },
           {
             "id": "LoopOff",
@@ -20634,12 +20640,6 @@
           {
             "id": "SongLooping",
             "label": "Single song looping",
-            "fill": "#2196F3",
-            "textColor": "#fff"
-          },
-          {
-            "id": "AllLooping",
-            "label": "Queue looping",
             "fill": "#2196F3",
             "textColor": "#fff"
           },
@@ -20807,7 +20807,7 @@
           },
           {
             "source": "LoopOps",
-            "target": "LoopAll",
+            "target": "LoopOn",
             "label": "loop on",
             "style": "solid"
           },
@@ -20824,8 +20824,8 @@
             "style": "solid"
           },
           {
-            "source": "LoopAll",
-            "target": "AllLooping",
+            "source": "LoopOn",
+            "target": "SongLooping",
             "label": "",
             "style": "solid"
           },
@@ -20837,12 +20837,6 @@
           },
           {
             "source": "SongLooping",
-            "target": "Playing",
-            "label": "",
-            "style": "solid"
-          },
-          {
-            "source": "AllLooping",
             "target": "Playing",
             "label": "",
             "style": "solid"
@@ -20951,8 +20945,8 @@
             "label": "LoopSongOnIntent\nRepeat current song"
           },
           {
-            "id": "LoopAll",
-            "label": "AMAZON.LoopOnIntent\nLoop entire queue"
+            "id": "LoopOn",
+            "label": "AMAZON.LoopOnIntent\nRepeat current track"
           },
           {
             "id": "LoopOff",
@@ -20961,12 +20955,6 @@
           {
             "id": "SongLooping",
             "label": "Single song looping",
-            "fill": "#2196F3",
-            "textColor": "#fff"
-          },
-          {
-            "id": "AllLooping",
-            "label": "Queue looping",
             "fill": "#2196F3",
             "textColor": "#fff"
           },
@@ -21134,7 +21122,7 @@
           },
           {
             "source": "LoopOps",
-            "target": "LoopAll",
+            "target": "LoopOn",
             "label": "loop on",
             "style": "solid"
           },
@@ -21151,8 +21139,8 @@
             "style": "solid"
           },
           {
-            "source": "LoopAll",
-            "target": "AllLooping",
+            "source": "LoopOn",
+            "target": "SongLooping",
             "label": "",
             "style": "solid"
           },
@@ -21164,12 +21152,6 @@
           },
           {
             "source": "SongLooping",
-            "target": "Playing",
-            "label": "",
-            "style": "solid"
-          },
-          {
-            "source": "AllLooping",
             "target": "Playing",
             "label": "",
             "style": "solid"
@@ -21278,8 +21260,8 @@
             "label": "LoopSongOnIntent\nRepeat current song"
           },
           {
-            "id": "LoopAll",
-            "label": "AMAZON.LoopOnIntent\nLoop entire queue"
+            "id": "LoopOn",
+            "label": "AMAZON.LoopOnIntent\nRepeat current track"
           },
           {
             "id": "LoopOff",
@@ -21288,12 +21270,6 @@
           {
             "id": "SongLooping",
             "label": "Single song looping",
-            "fill": "#2196F3",
-            "textColor": "#fff"
-          },
-          {
-            "id": "AllLooping",
-            "label": "Queue looping",
             "fill": "#2196F3",
             "textColor": "#fff"
           },
@@ -21461,7 +21437,7 @@
           },
           {
             "source": "LoopOps",
-            "target": "LoopAll",
+            "target": "LoopOn",
             "label": "loop on",
             "style": "solid"
           },
@@ -21478,8 +21454,8 @@
             "style": "solid"
           },
           {
-            "source": "LoopAll",
-            "target": "AllLooping",
+            "source": "LoopOn",
+            "target": "SongLooping",
             "label": "",
             "style": "solid"
           },
@@ -21491,12 +21467,6 @@
           },
           {
             "source": "SongLooping",
-            "target": "Playing",
-            "label": "",
-            "style": "solid"
-          },
-          {
-            "source": "AllLooping",
             "target": "Playing",
             "label": "",
             "style": "solid"
@@ -21605,8 +21575,8 @@
             "label": "LoopSongOnIntent\nRepeat current song"
           },
           {
-            "id": "LoopAll",
-            "label": "AMAZON.LoopOnIntent\nLoop entire queue"
+            "id": "LoopOn",
+            "label": "AMAZON.LoopOnIntent\nRepeat current track"
           },
           {
             "id": "LoopOff",
@@ -21615,12 +21585,6 @@
           {
             "id": "SongLooping",
             "label": "Single song looping",
-            "fill": "#2196F3",
-            "textColor": "#fff"
-          },
-          {
-            "id": "AllLooping",
-            "label": "Queue looping",
             "fill": "#2196F3",
             "textColor": "#fff"
           },
@@ -21788,7 +21752,7 @@
           },
           {
             "source": "LoopOps",
-            "target": "LoopAll",
+            "target": "LoopOn",
             "label": "loop on",
             "style": "solid"
           },
@@ -21805,8 +21769,8 @@
             "style": "solid"
           },
           {
-            "source": "LoopAll",
-            "target": "AllLooping",
+            "source": "LoopOn",
+            "target": "SongLooping",
             "label": "",
             "style": "solid"
           },
@@ -21818,12 +21782,6 @@
           },
           {
             "source": "SongLooping",
-            "target": "Playing",
-            "label": "",
-            "style": "solid"
-          },
-          {
-            "source": "AllLooping",
             "target": "Playing",
             "label": "",
             "style": "solid"
@@ -21932,22 +21890,16 @@
             "label": "LoopSongOnIntent\nRepetir cancion actual"
           },
           {
-            "id": "LoopAll",
-            "label": "LoopAllOnIntent\nRepetir toda la cola"
+            "id": "LoopOn",
+            "label": "AMAZON.LoopOnIntent\nRepetir pista actual"
           },
           {
             "id": "LoopOff",
-            "label": "LoopAllOffIntent\nDeshabilitar repeticion"
+            "label": "AMAZON.LoopOffIntent\nDeshabilitar repeticion"
           },
           {
             "id": "SongLooping",
             "label": "Repeticion de cancion unica",
-            "fill": "#2196F3",
-            "textColor": "#fff"
-          },
-          {
-            "id": "AllLooping",
-            "label": "Repeticion de cola",
             "fill": "#2196F3",
             "textColor": "#fff"
           },
@@ -22115,7 +22067,7 @@
           },
           {
             "source": "LoopOps",
-            "target": "LoopAll",
+            "target": "LoopOn",
             "label": "repetir activado",
             "style": "solid"
           },
@@ -22132,8 +22084,8 @@
             "style": "solid"
           },
           {
-            "source": "LoopAll",
-            "target": "AllLooping",
+            "source": "LoopOn",
+            "target": "SongLooping",
             "label": "",
             "style": "solid"
           },
@@ -22145,12 +22097,6 @@
           },
           {
             "source": "SongLooping",
-            "target": "Playing",
-            "label": "",
-            "style": "solid"
-          },
-          {
-            "source": "AllLooping",
             "target": "Playing",
             "label": "",
             "style": "solid"
@@ -22259,22 +22205,16 @@
             "label": "LoopSongOnIntent\nRepetir cancion actual"
           },
           {
-            "id": "LoopAll",
-            "label": "LoopAllOnIntent\nRepetir toda la cola"
+            "id": "LoopOn",
+            "label": "AMAZON.LoopOnIntent\nRepetir pista actual"
           },
           {
             "id": "LoopOff",
-            "label": "LoopAllOffIntent\nDeshabilitar repeticion"
+            "label": "AMAZON.LoopOffIntent\nDeshabilitar repeticion"
           },
           {
             "id": "SongLooping",
             "label": "Repeticion de cancion unica",
-            "fill": "#2196F3",
-            "textColor": "#fff"
-          },
-          {
-            "id": "AllLooping",
-            "label": "Repeticion de cola",
             "fill": "#2196F3",
             "textColor": "#fff"
           },
@@ -22442,7 +22382,7 @@
           },
           {
             "source": "LoopOps",
-            "target": "LoopAll",
+            "target": "LoopOn",
             "label": "repetir activado",
             "style": "solid"
           },
@@ -22459,8 +22399,8 @@
             "style": "solid"
           },
           {
-            "source": "LoopAll",
-            "target": "AllLooping",
+            "source": "LoopOn",
+            "target": "SongLooping",
             "label": "",
             "style": "solid"
           },
@@ -22472,12 +22412,6 @@
           },
           {
             "source": "SongLooping",
-            "target": "Playing",
-            "label": "",
-            "style": "solid"
-          },
-          {
-            "source": "AllLooping",
             "target": "Playing",
             "label": "",
             "style": "solid"
@@ -22586,22 +22520,16 @@
             "label": "LoopSongOnIntent\nRepetir cancion actual"
           },
           {
-            "id": "LoopAll",
-            "label": "LoopAllOnIntent\nRepetir toda la cola"
+            "id": "LoopOn",
+            "label": "AMAZON.LoopOnIntent\nRepetir pista actual"
           },
           {
             "id": "LoopOff",
-            "label": "LoopAllOffIntent\nDeshabilitar repeticion"
+            "label": "AMAZON.LoopOffIntent\nDeshabilitar repeticion"
           },
           {
             "id": "SongLooping",
             "label": "Repeticion de cancion unica",
-            "fill": "#2196F3",
-            "textColor": "#fff"
-          },
-          {
-            "id": "AllLooping",
-            "label": "Repeticion de cola",
             "fill": "#2196F3",
             "textColor": "#fff"
           },
@@ -22769,7 +22697,7 @@
           },
           {
             "source": "LoopOps",
-            "target": "LoopAll",
+            "target": "LoopOn",
             "label": "repetir activado",
             "style": "solid"
           },
@@ -22786,8 +22714,8 @@
             "style": "solid"
           },
           {
-            "source": "LoopAll",
-            "target": "AllLooping",
+            "source": "LoopOn",
+            "target": "SongLooping",
             "label": "",
             "style": "solid"
           },
@@ -22799,12 +22727,6 @@
           },
           {
             "source": "SongLooping",
-            "target": "Playing",
-            "label": "",
-            "style": "solid"
-          },
-          {
-            "source": "AllLooping",
             "target": "Playing",
             "label": "",
             "style": "solid"
@@ -22914,11 +22836,11 @@
           },
           {
             "id": "LoopAll",
-            "label": "AMAZON.LoopOnIntent\nRépéter toute la file"
+            "label": "LoopAllOnIntent\nRépéter toute la file"
           },
           {
             "id": "LoopOff",
-            "label": "AMAZON.LoopOffIntent\nDésactiver la boucle"
+            "label": "LoopAllOffIntent\nDésactiver la boucle"
           },
           {
             "id": "SongLooping",
@@ -23096,8 +23018,14 @@
           },
           {
             "source": "LoopOps",
-            "target": "LoopAll",
+            "target": "LoopSong",
             "label": "Active la boucle",
+            "style": "solid"
+          },
+          {
+            "source": "LoopOps",
+            "target": "LoopAll",
+            "label": "Répète la file d'attente",
             "style": "solid"
           },
           {
@@ -23241,11 +23169,11 @@
           },
           {
             "id": "LoopAll",
-            "label": "AMAZON.LoopOnIntent\nRépéter toute la file"
+            "label": "LoopAllOnIntent\nRépéter toute la file"
           },
           {
             "id": "LoopOff",
-            "label": "AMAZON.LoopOffIntent\nDésactiver la boucle"
+            "label": "LoopAllOffIntent\nDésactiver la boucle"
           },
           {
             "id": "SongLooping",
@@ -23423,8 +23351,14 @@
           },
           {
             "source": "LoopOps",
-            "target": "LoopAll",
+            "target": "LoopSong",
             "label": "Active la boucle",
+            "style": "solid"
+          },
+          {
+            "source": "LoopOps",
+            "target": "LoopAll",
+            "label": "Répète la file d'attente",
             "style": "solid"
           },
           {
@@ -23567,8 +23501,8 @@
             "label": "LoopSongOnIntent\nवर्तमान गाना दोहराओ"
           },
           {
-            "id": "LoopAll",
-            "label": "AMAZON.LoopOnIntent\nपूरी कतार लूप करो"
+            "id": "LoopOn",
+            "label": "AMAZON.LoopOnIntent\nवर्तमान ट्रैक दोहराओ"
           },
           {
             "id": "LoopOff",
@@ -23577,12 +23511,6 @@
           {
             "id": "SongLooping",
             "label": "एकल गाना लूप",
-            "fill": "#2196F3",
-            "textColor": "#fff"
-          },
-          {
-            "id": "AllLooping",
-            "label": "कतार लूप",
             "fill": "#2196F3",
             "textColor": "#fff"
           },
@@ -23750,7 +23678,7 @@
           },
           {
             "source": "LoopOps",
-            "target": "LoopAll",
+            "target": "LoopOn",
             "label": "लूप चालू",
             "style": "solid"
           },
@@ -23767,8 +23695,8 @@
             "style": "solid"
           },
           {
-            "source": "LoopAll",
-            "target": "AllLooping",
+            "source": "LoopOn",
+            "target": "SongLooping",
             "label": "",
             "style": "solid"
           },
@@ -23780,12 +23708,6 @@
           },
           {
             "source": "SongLooping",
-            "target": "Playing",
-            "label": "",
-            "style": "solid"
-          },
-          {
-            "source": "AllLooping",
             "target": "Playing",
             "label": "",
             "style": "solid"
@@ -24077,8 +23999,14 @@
           },
           {
             "source": "LoopOps",
+            "target": "LoopSong",
+            "label": "attiva il loop",
+            "style": "solid"
+          },
+          {
+            "source": "LoopOps",
             "target": "LoopAll",
-            "label": "Attiva loop",
+            "label": "Ripeti la coda",
             "style": "solid"
           },
           {
@@ -24221,8 +24149,8 @@
             "label": "LoopSongOnIntent\n現在の曲をリピート"
           },
           {
-            "id": "LoopAll",
-            "label": "AMAZON.LoopOnIntent\nキュー全体をループ"
+            "id": "LoopOn",
+            "label": "AMAZON.LoopOnIntent\n現在のトラックをリピート"
           },
           {
             "id": "LoopOff",
@@ -24231,12 +24159,6 @@
           {
             "id": "SongLooping",
             "label": "単曲ループ",
-            "fill": "#2196F3",
-            "textColor": "#fff"
-          },
-          {
-            "id": "AllLooping",
-            "label": "キューループ",
             "fill": "#2196F3",
             "textColor": "#fff"
           },
@@ -24404,7 +24326,7 @@
           },
           {
             "source": "LoopOps",
-            "target": "LoopAll",
+            "target": "LoopOn",
             "label": "ループオン",
             "style": "solid"
           },
@@ -24421,8 +24343,8 @@
             "style": "solid"
           },
           {
-            "source": "LoopAll",
-            "target": "AllLooping",
+            "source": "LoopOn",
+            "target": "SongLooping",
             "label": "",
             "style": "solid"
           },
@@ -24434,12 +24356,6 @@
           },
           {
             "source": "SongLooping",
-            "target": "Playing",
-            "label": "",
-            "style": "solid"
-          },
-          {
-            "source": "AllLooping",
             "target": "Playing",
             "label": "",
             "style": "solid"
@@ -24548,8 +24464,8 @@
             "label": "LoopSongOnIntent\nHuidige nummer herhalen"
           },
           {
-            "id": "LoopAll",
-            "label": "AMAZON.LoopOnIntent\nHele wachtrij herhalen"
+            "id": "LoopOn",
+            "label": "AMAZON.LoopOnIntent\nHuidige track herhalen"
           },
           {
             "id": "LoopOff",
@@ -24558,12 +24474,6 @@
           {
             "id": "SongLooping",
             "label": "Enkel nummer herhalen",
-            "fill": "#2196F3",
-            "textColor": "#fff"
-          },
-          {
-            "id": "AllLooping",
-            "label": "Wachtrij herhalen",
             "fill": "#2196F3",
             "textColor": "#fff"
           },
@@ -24731,7 +24641,7 @@
           },
           {
             "source": "LoopOps",
-            "target": "LoopAll",
+            "target": "LoopOn",
             "label": "loop aan",
             "style": "solid"
           },
@@ -24748,8 +24658,8 @@
             "style": "solid"
           },
           {
-            "source": "LoopAll",
-            "target": "AllLooping",
+            "source": "LoopOn",
+            "target": "SongLooping",
             "label": "",
             "style": "solid"
           },
@@ -24761,12 +24671,6 @@
           },
           {
             "source": "SongLooping",
-            "target": "Playing",
-            "label": "",
-            "style": "solid"
-          },
-          {
-            "source": "AllLooping",
             "target": "Playing",
             "label": "",
             "style": "solid"
@@ -24875,8 +24779,8 @@
             "label": "LoopSongOnIntent\nRepetir música atual"
           },
           {
-            "id": "LoopAll",
-            "label": "AMAZON.LoopOnIntent\nRepetir toda a fila"
+            "id": "LoopOn",
+            "label": "AMAZON.LoopOnIntent\nRepetir faixa atual"
           },
           {
             "id": "LoopOff",
@@ -24885,12 +24789,6 @@
           {
             "id": "SongLooping",
             "label": "Repetição de música única",
-            "fill": "#2196F3",
-            "textColor": "#fff"
-          },
-          {
-            "id": "AllLooping",
-            "label": "Repetição de fila",
             "fill": "#2196F3",
             "textColor": "#fff"
           },
@@ -25058,7 +24956,7 @@
           },
           {
             "source": "LoopOps",
-            "target": "LoopAll",
+            "target": "LoopOn",
             "label": "repetir ligado",
             "style": "solid"
           },
@@ -25075,8 +24973,8 @@
             "style": "solid"
           },
           {
-            "source": "LoopAll",
-            "target": "AllLooping",
+            "source": "LoopOn",
+            "target": "SongLooping",
             "label": "",
             "style": "solid"
           },
@@ -25088,12 +24986,6 @@
           },
           {
             "source": "SongLooping",
-            "target": "Playing",
-            "label": "",
-            "style": "solid"
-          },
-          {
-            "source": "AllLooping",
             "target": "Playing",
             "label": "",
             "style": "solid"

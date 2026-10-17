@@ -35,14 +35,13 @@ graph TD
     Shuffled --> Playing
 
     LoopOps -->|"كرر هذه الأغنية"| LoopSong["LoopSongOnIntent<br/>تكرار الأغنية الحالية"]
-    LoopOps -->|"تشغيل التكرار"| LoopAll["AMAZON.LoopOnIntent<br/>تكرار الطابور بالكامل"]
+    LoopOps -->|"تشغيل التكرار"| LoopOn["AMAZON.LoopOnIntent<br/>تكرار المقطع الحالي"]
     LoopOps -->|"إيقاف التكرار"| LoopOff["AMAZON.LoopOffIntent<br/>تعطيل التكرار"]
 
     LoopSong --> SongLooping["تكرار أغنية واحدة"]
-    LoopAll --> AllLooping["تكرار الطابور"]
+    LoopOn --> SongLooping
     LoopOff --> Playing
     SongLooping --> Playing
-    AllLooping --> Playing
 
     Playing -->|"شغل القناة {channel}"| Channel["PlayChannelIntent<br/>تشغيل قناة راديو إنترنت"]
     Channel --> Playing
@@ -54,6 +53,5 @@ graph TD
     style RadioActive fill:#9C27B0,color:#fff
     style Shuffled fill:#FF9800,color:#fff
     style SongLooping fill:#2196F3,color:#fff
-    style AllLooping fill:#2196F3,color:#fff
     style AutoPlay fill:#00BCD4,color:#fff
 ```

@@ -46,7 +46,7 @@ graph TD
     Chapter -.->|"SeekEnabled feature flag"| Playing
 
     Playing -->|"repetir esta música"| LoopSong["LoopSongOnIntent"]
-    Playing -->|"repetir ligado"| LoopAll["AMAZON.LoopOnIntent"]
+    Playing -->|"repetir ligado"| LoopOn["AMAZON.LoopOnIntent"]
     Playing -->|"repetir desligado"| LoopOff["AMAZON.LoopOffIntent"]
 
     Playing -->|"próximo"| Next["AMAZON.NextIntent"]

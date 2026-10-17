@@ -35,7 +35,8 @@ graph TD
     Shuffled --> Playing
 
     LoopOps -->|"Wiederhole dieses Lied"| LoopSong["LoopSongOnIntent<br/>Aktuellen Titel wiederholen"]
-    LoopOps -->|"Wiederholung an"| LoopAll["LoopAllOnIntent<br/>Gesamte Warteschlange wiederholen"]
+    LoopOps -->|"Wiederholung an"| LoopSong
+    LoopOps -->|"Wiederhole die Warteschlange"| LoopAll["LoopAllOnIntent<br/>Gesamte Warteschlange wiederholen"]
     LoopOps -->|"Wiederholung aus"| LoopOff["LoopAllOffIntent<br/>Wiederholung deaktivieren"]
 
     LoopSong --> SongLooping["Einzelnen Titel wiederholen"]

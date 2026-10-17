@@ -53,24 +53,29 @@ BATTERY: dict[str, list[tuple[str, str, str]]] = {
         ("simulate", "chiedi a mia collezione di riprodurre musica a caso", "PlayRandomIntent"),
         ("simulate", "chiedi a mia collezione di mettere rapsodia in coda", "AddToQueueIntent"),
         ("simulate", "chiedi a mia collezione di riprodurre rapsodia dopo", "PlayNextIntent"),
-        # JF-887: PRE-DEPLOY WINDOW for the ON row. The article-less
-        # 'attivare loop' tail had no LoopAllOn row, so the wrapper fell to
+        # JF-887/JF-902: PRE-DEPLOY WINDOW for the ON rows. The article-less
+        # 'attivare loop' tail had no loop-on row, so the wrapper fell to
         # LoopAllOffIntent (live 2026-10-14) and profile-nlu read the same
         # steal on the bare tail; it stays red until the orchestrator deploys
         # the rebuilt it-IT model (DLL embedded template + rebuild endpoint).
-        # The OFF row is the steal control: green pre-deploy (live probe
-        # 2026-10-14, LoopAllOffIntent with LoopAllOn considered second) and
-        # it must STAY green once LoopAllOn gains its near-identical
-        # 'attivare loop' rows. The neighboring mescolamento row staying green
-        # is the marker that only the pending flip is red.
-        ("simulate", "chiedi a mia collezione di attivare loop", "LoopAllOnIntent"),
+        # JF-902 flipped the expectation: the bare loop-activation rows moved
+        # to LoopSongOnIntent (JF-901 made bare 'loop' mean repeat-ONE), so
+        # the wrapper now expects LoopSongOnIntent; on the saved model it
+        # still reads LoopAllOnIntent until that deploy. The OFF row is the
+        # steal control: green pre-deploy (live probe 2026-10-14,
+        # LoopAllOffIntent with LoopAllOn considered second) and it must STAY
+        # green once the loop-ON side gains its near-identical rows. The
+        # neighboring mescolamento row staying green is the marker that only
+        # the pending flip is red.
+        ("simulate", "chiedi a mia collezione di attivare loop", "LoopSongOnIntent|AMAZON.LoopOnIntent"),
         ("simulate", "chiedi a mia collezione di disattivare loop", "LoopAllOffIntent"),
         ("simulate", "chiedi a mia collezione di attivare il mescolamento", "ShuffleAllOnIntent"),
         # JF-889: the article-tail twins, the wrapper shape of the live-failing
-        # article forms ('attiva il loop' shuffle-stole live). RED-UNTIL-DEPLOY:
-        # the 'Di attivare il loop' suffix rows land with this change's model
-        # deploy; the article-less rows above are the evergreen controls.
-        ("simulate", "chiedi a mia collezione di attivare il loop", "LoopAllOnIntent"),
+        # article forms ('attiva il loop' shuffle-stole live). RED-UNTIL-DEPLOY
+        # since the JF-902 rebuild (the suffix rows moved to LoopSongOnIntent):
+        # green again only once the JF-902 model is deployed; the article-less
+        # rows above are the evergreen controls.
+        ("simulate", "chiedi a mia collezione di attivare il loop", "LoopSongOnIntent|AMAZON.LoopOnIntent"),
         ("simulate", "chiedi a mia collezione di disattivare il loop", "LoopAllOffIntent"),
         # JF-874: the film wrapper routes the catalog-backed MovieTitle twin
         # (PlayMovieIntent, served by the PlayVideo handler); the expectation

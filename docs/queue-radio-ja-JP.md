@@ -35,14 +35,13 @@ graph TD
     Shuffled --> Playing
 
     LoopOps -->|"この曲をループして"| LoopSong["LoopSongOnIntent<br/>現在の曲をリピート"]
-    LoopOps -->|"ループオン"| LoopAll["AMAZON.LoopOnIntent<br/>キュー全体をループ"]
+    LoopOps -->|"ループオン"| LoopOn["AMAZON.LoopOnIntent<br/>現在のトラックをリピート"]
     LoopOps -->|"ループオフ"| LoopOff["AMAZON.LoopOffIntent<br/>ループ無効化"]
 
     LoopSong --> SongLooping["単曲ループ"]
-    LoopAll --> AllLooping["キューループ"]
+    LoopOn --> SongLooping
     LoopOff --> Playing
     SongLooping --> Playing
-    AllLooping --> Playing
 
     Playing -->|"チャンネル {channel} を再生して"| Channel["PlayChannelIntent<br/>インターネットラジオチャンネル再生"]
     Channel --> Playing
@@ -54,6 +53,5 @@ graph TD
     style RadioActive fill:#9C27B0,color:#fff
     style Shuffled fill:#FF9800,color:#fff
     style SongLooping fill:#2196F3,color:#fff
-    style AllLooping fill:#2196F3,color:#fff
     style AutoPlay fill:#00BCD4,color:#fff
 ```

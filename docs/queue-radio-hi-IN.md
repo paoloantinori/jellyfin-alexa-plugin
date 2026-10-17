@@ -35,14 +35,13 @@ graph TD
     Shuffled --> Playing
 
     LoopOps -->|"इस गाने को लूप करो"| LoopSong["LoopSongOnIntent<br/>वर्तमान गाना दोहराओ"]
-    LoopOps -->|"लूप चालू"| LoopAll["AMAZON.LoopOnIntent<br/>पूरी कतार लूप करो"]
+    LoopOps -->|"लूप चालू"| LoopOn["AMAZON.LoopOnIntent<br/>वर्तमान ट्रैक दोहराओ"]
     LoopOps -->|"लूप बंद"| LoopOff["AMAZON.LoopOffIntent<br/>लूप अक्षम करो"]
 
     LoopSong --> SongLooping["एकल गाना लूप"]
-    LoopAll --> AllLooping["कतार लूप"]
+    LoopOn --> SongLooping
     LoopOff --> Playing
     SongLooping --> Playing
-    AllLooping --> Playing
 
     Playing -->|"चैनल {channel} चलाओ"| Channel["PlayChannelIntent<br/>इंटरनेट रेडियो चैनल चलाओ"]
     Channel --> Playing
@@ -54,6 +53,5 @@ graph TD
     style RadioActive fill:#9C27B0,color:#fff
     style Shuffled fill:#FF9800,color:#fff
     style SongLooping fill:#2196F3,color:#fff
-    style AllLooping fill:#2196F3,color:#fff
     style AutoPlay fill:#00BCD4,color:#fff
 ```

@@ -44,8 +44,9 @@ public class LoopSongOnIntentHandler : BaseHandler
         // Locale aliases (RepeatSingleOn, the repeat-one sibling): see the comment
         // on the loop intent constants in IntentNames. JF-901: the bare built-in
         // AMAZON.LoopOnIntent ("loop", "attiva il loop") also lands here as
-        // repeat-one (rationale, device evidence, and the model-side follow-up
-        // JF-902 live on that comment).
+        // repeat-one (rationale, device evidence, and the JF-902 model-side
+        // sample move that put the bare-phrase rows on this intent's family
+        // live on that comment).
         IntentRequest? intentRequest = request as IntentRequest;
         return intentRequest != null
             && (string.Equals(intentRequest.Intent.Name, IntentNames.AmazonLoopOn, StringComparison.Ordinal)
