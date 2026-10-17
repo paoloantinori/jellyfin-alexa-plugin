@@ -4,6 +4,18 @@
 **Depth**: exhaustive
 **Confidence**: HIGH (official doc scraped live + raw REST probe against the production endpoint, control included)
 
+> **CORRECTION 2026-10-17** (see claudedocs/research_simulate-routing_2026-10-17.md): finding 4's
+> "decisive" probe compared fr-FR with a BARE phrase under FORCE_NEW_SESSION against an it-IT
+> control carrying the INVOCATION. That shape pair is not a fair comparison: the bare,
+> session-less form fails for EVERY locale (it-IT and de-DE included), because without a session
+> and without an invocation the router selects another skill; it is expected semantics, not an
+> outage. The endpoint conclusions (finding 1) and the response-schema work (finding 2) stand.
+> The phenomenon itself (the e2e fr/es rows failing) was real, but the correct classification is
+> intermittent skill-SELECTION flakiness in the simulated device's router, not a simulate-service
+> degradation scoped to those locales: on 2026-10-17 the same fr open utterance failed three
+> times and succeeded twice within fifteen minutes on the identical pipeline, and a fr one-shot
+> with the invocation routed to the skill every time.
+
 ## Executive Summary
 
 Gli endpoint NON sono cambiati. La superficie REST della Skill Simulation API è la solita v2 documentata (`POST /v2/skills/{id}/stages/{stage}/simulations` + `GET .../simulations/{simulationId}` su `api.amazonalexa.com`), e la Utterance Profiler API resta `POST /v1/skills/{id}/stages/{stage}/interactionModel/locales/{locale}/profileNlu`. Il degrado fr/es è confermato Amazon-side DA UNA CHIAMATA REST DIRETTA (bypassando completamente l'ask CLI): fr-FR risponde "did not resolve to any intent" mentre it-IT, con lo stesso codice e lo stesso token, invoca `PlayArtistSongsIntent`. Non è un problema nostro né del CLI.
