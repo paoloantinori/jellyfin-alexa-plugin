@@ -247,8 +247,9 @@ tests:
   # imperative sample and glued the verb into the slot (series_name
   # "reproduzca breaking bad" on every SELECTED reading, catalog-independent),
   # so the exact-value pin below is the anti-pollution regression pin: it
-  # stays red until the rebuilt model with the "reproduzca" family is
-  # deployed, and any future verb-glue regression fails it again.
+  # stayed red until the rebuilt model with the "reproduzca" family was
+  # deployed (green since; re-verified 3/3 on the 2026-10-17 JF-904 roll),
+  # and any future verb-glue regression fails it again.
   # Post-deploy triage: if this row routes to PlayNextIntent instead, that is
   # the known es-ES bare-carrier competition (the imperative twin
   # "reproduce {song} ..." steals the same shape for non-catalog values,
@@ -273,7 +274,10 @@ tests:
   # it-IT "Di" precedent), decided on a healthy simulate window.
   # JF-844 (2026-10-09): that pre-recorded path is taken; the connector
   # "que reproduzca" twins landed in the template (rationale in its header
-  # note). Red until the JF-844 model roll; probe protocol in backlog JF-844.
+  # note). GREEN since the 2026-10-09 densification roll (task notes) and
+  # re-verified 3/3 with all slots on the 2026-10-17 JF-904 roll; the same
+  # green fired the recorded mirror trigger, so es-MX/es-US now carry the
+  # connector rows too (their pins in their own fixtures).
   # The number slots are pinned like the bare-form sibling above: the
   # murderbot incident class is "intent selected, numbers empty", which a
   # series-only pin would read green through.
@@ -293,7 +297,11 @@ tests:
   # steal of the 2026-10-09 morning battery), "pon ..." had no anchored
   # sample at all. Both pin the SPOKEN text for series_name (the pinning
   # convention) and presence-pin both numbers (the murderbot class, see the
-  # connector pin above). Red until the JF-844 densification model roll.
+  # connector pin above). The densification roll ran and these shapes stayed
+  # stolen: STILL RED 3/3 on the 2026-10-17 JF-904 roll ("reproduce ..." ->
+  # PlayNextIntent, "pon ..." -> PlaySongIntent song="breaking bad
+  # temporada 1"); the rows stay red deliberately as the tracker for the
+  # parked handler-side decision (JF-865 multi-medium).
   - utterance: "reproduce breaking bad temporada uno episodio tres"
     expected_intent: PlayEpisodeIntent
     expected_slots:

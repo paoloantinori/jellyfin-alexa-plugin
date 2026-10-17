@@ -12288,7 +12288,7 @@ Placeholder legend:
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (473 phrases across 69 commands):
+Complete phrase list (476 phrases across 69 commands):
 
 #### Play music
 
@@ -12478,6 +12478,9 @@ Complete phrase list (473 phrases across 69 commands):
 - `reproduce el episodio <número de episodio> de <nombre de la serie>`
 - `ver el episodio <número de episodio> de <nombre de la serie>`
 - `reproduzca el episodio <número de episodio> de <nombre de la serie>`
+- `que reproduzca <nombre de la serie> temporada <número de temporada> episodio <número de episodio>`
+- `que reproduzca la temporada <número de temporada> episodio <número de episodio> de <nombre de la serie>`
+- `que reproduzca el episodio <número de episodio> de <nombre de la serie>`
 
 **Play the next episode**
 
@@ -13009,7 +13012,7 @@ Placeholder legend:
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (463 phrases across 69 commands):
+Complete phrase list (466 phrases across 69 commands):
 
 #### Play music
 
@@ -13192,6 +13195,9 @@ Complete phrase list (463 phrases across 69 commands):
 - `reproduce el episodio <número de episodio> de <nombre de la serie>`
 - `ver el episodio <número de episodio> de <nombre de la serie>`
 - `reproduzca el episodio <número de episodio> de <nombre de la serie>`
+- `que reproduzca <nombre de la serie> temporada <número de temporada> episodio <número de episodio>`
+- `que reproduzca la temporada <número de temporada> episodio <número de episodio> de <nombre de la serie>`
+- `que reproduzca el episodio <número de episodio> de <nombre de la serie>`
 
 **Play the next episode**
 

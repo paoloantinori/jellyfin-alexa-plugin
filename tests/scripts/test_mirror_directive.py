@@ -1,15 +1,16 @@
 """JF-855: the pytest harness for the generator's `mirror` directive.
 
 The es-MX / es-US PlayEpisodeIntent families are DECLARED MIRRORS of es-ES:
-the generator sources their samples from templates/es-ES.yaml minus the
-declared exclude rows, so the JF-844.1 mirroring lint and its whitelist are
-retired and every drift shape it caught after the fact is now a generation
-error. The harness asserts each error shape on synthetic templates (the
-generator's real template loader is pointed at a temp dir), the real tree's
-golden master (regenerating es-MX / es-US reproduces the committed JSONs
-byte-identically, which pins the exclude rows byte-for-byte), and the
-retirement itself (the lint and its tables no longer exist in the
-validator).
+the generator sources their samples from templates/es-ES.yaml in full (the
+JF-844 mirror round of 2026-10-17 deleted the last exclude lists; the
+directive still supports `exclude` for future divergences, asserted on
+synthetic templates below), so the JF-844.1 mirroring lint and its whitelist
+are retired and every drift shape it caught after the fact is now a
+generation error. The harness asserts each error shape on synthetic
+templates (the generator's real template loader is pointed at a temp dir),
+the real tree's golden master (regenerating es-MX / es-US reproduces the
+committed JSONs byte-identically), and the retirement itself (the lint and
+its tables no longer exist in the validator).
 """
 import json
 import shutil
@@ -168,8 +169,8 @@ def test_build_without_locale_raises_on_mirror_template(templates_dir):
 
 def test_committed_es_siblings_regenerate_byte_identically():
     """The golden master: the committed es-MX / es-US JSONs are what the
-    mirror directive produces, which also pins the exclude rows (a typo'd
-    row makes this fail with a generation error or a byte diff)."""
+    mirror directive produces, which pins the mirrored family byte-for-byte
+    (a drifted row makes this fail with a generation error or a byte diff)."""
     for locale in ("es-MX", "es-US"):
         template = yaml.safe_load(
             (REPO / "Jellyfin.Plugin.AlexaSkill" / "Alexa" / "InteractionModel"
@@ -184,9 +185,11 @@ def test_committed_es_siblings_regenerate_byte_identically():
 
 
 def test_mirror_sample_order_matches_es_es_not_sibling_transcription():
-    """The mirror's samples must equal es-ES's PlayEpisode samples minus the
-    three excluded connector rows, in es-ES's order (the retired lint's
-    subset contract, now by construction)."""
+    """The mirror's samples must equal es-ES's FULL PlayEpisode sample list,
+    in es-ES's order (the retired lint's subset contract, by construction).
+    JF-844 mirror round (2026-10-17): the connector-row exclude lists were
+    deleted after the es-ES connector probe went green, so the sibling now
+    carries every es-ES row, connectors included."""
     lm = json.loads(
         (REPO / "Jellyfin.Plugin.AlexaSkill" / "Alexa" / "InteractionModel"
          / "model_es-MX.json").read_text()
@@ -199,8 +202,7 @@ def test_mirror_sample_order_matches_es_es_not_sibling_transcription():
         i["samples"] for i in d["languageModel"]["intents"]
         if i["name"] == "PlayEpisodeIntent"
     )
-    expected = [s for s in get(ref) if s not in CONNECTORS]
-    assert get(lm) == expected
+    assert get(lm) == get(ref)
 
 
 def test_es_trio_lint_is_retired():

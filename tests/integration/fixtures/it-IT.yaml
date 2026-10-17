@@ -488,10 +488,23 @@ tests:
   # guardare family), so the music-verb + film-noun cross is the JF-436
   # non-endorsement class (section note above), not a carrier gap to
   # strengthen.
+  # JF-844 RE-PIN (2026-10-17, after the JF-902 it-IT roll): probe 3/3
+  # 'suona il film star wars' -> PlayMovieIntent movie='star wars'. The
+  # JF-874 MovieTitle catalog family (landed AFTER the 2026-10-09
+  # re-pin) now owns the film-noun shape across verbs: the film noun
+  # steers even the music verb to the movie intent, and the destination
+  # is semantically right (a film ask routes to the movie intent, the
+  # user gets the movie instead of a song search). Boundary verified on
+  # the same model: 'metti il film matrix' 2/2, 'voglio guardare star
+  # wars' 2/2 and 'Di riprodurre il film ada' 2/2 all still
+  # PlayVideoIntent, and all four JF-874 wrapper pins green, so this is
+  # a per-shape generalization, not a family flip. Same convention as
+  # every re-pin above: record reality, do not endorse; a future flip
+  # re-flags here.
   - utterance: "suona il film star wars"
-    expected_intent: PlaySongIntent
+    expected_intent: PlayMovieIntent
     expected_slots:
-      song: {}
+      movie: {}
 
   # -------------------------------------------------------------------------
   # 6. PlayByGenreIntent (genre)
@@ -890,12 +903,20 @@ tests:
   # EMPTY; the digit after "la stagione" does not slot-align on the
   # generalized verb prefix, while the word form fills all slots). The
   # template now carries explicit bare-infinitive rows (the PlaySong
-  # aggiungere-class anchor precedent). Red until the JF-844 model roll;
-  # probe protocol in backlog JF-844. series_name left unpinned: catalog
-  # fill is wiring-state dependent for a non-seed series (JF-552 family);
-  # the two NUMBER slots are the incident surface, and episode_number is
-  # pinned too so a fix that lands the season while breaking the episode
-  # still fails here.
+  # aggiungere-class anchor precedent). VERDICT (2026-10-17, after the
+  # JF-902 it-IT roll): GREEN 3/3, season_number=1 episode_number=3
+  # series_name='murderbot'. Attribution caveat: the rows were live and
+  # failing on 2026-10-09, and the model's CONTENT changed in between (the
+  # JF-874 MovieTitle family landed 2026-10-12, the JF-902 loop rows moved
+  # on the day of this reading), so roll-nondeterminism vs
+  # neighboring-family mass shift is not separable from probe evidence
+  # alone (the suona re-pin below is the same JF-874-content-coincident
+  # class). What the pin needs holds either way: the shape fills on the
+  # live model.
+  # series_name left unpinned: catalog fill is wiring-state dependent for a
+  # non-seed series (JF-552 family); the two NUMBER slots are the incident
+  # surface, and episode_number is pinned too so a fix that lands the season
+  # while breaking the episode still fails here.
   - utterance: "mettere la stagione 1 episodio 3 di murderbot"
     expected_intent: PlayEpisodeIntent
     expected_slots:
@@ -903,9 +924,10 @@ tests:
       episode_number: {}
 
   # JF-844 word-form contrast twin (live-green in the 2026-10-09 03:50
-  # probes): the diagnosis rests on word-fills vs digit-does-not, so the
-  # word form is pinned beside the digit pin to catch a fix that lands the
-  # digits while breaking the words.
+  # probes; re-verified green 3/3 on the 2026-10-17 roll): the diagnosis
+  # rests on word-fills vs digit-does-not, so the word form is pinned
+  # beside the digit pin to catch a fix that lands the digits while
+  # breaking the words.
   - utterance: "mettere la stagione uno episodio tre di murderbot"
     expected_intent: PlayEpisodeIntent
     expected_slots:

@@ -47,8 +47,10 @@ tests:
   # FIRST). Pre-family evidence on es-US: the BARE form selected
   # PlayEpisodeIntent but DROPPED series_name entirely, while the
   # connector-residue form glued "que reproduzca breaking bad" into the slot;
-  # the exact-value pin is the anti-pollution regression pin and stays red
-  # until the rebuilt model with the "reproduzca" family is deployed. The
+  # the exact-value pin is the anti-pollution regression pin and stayed red
+  # until the rebuilt model with the "reproduzca" family was deployed
+  # (green since; re-verified 2/2 with all slots on the 2026-10-17 JF-904
+  # roll). The
   # number slots are pinned because every subjunctive reading on es-US filled
   # both consistently. The imperative episode forms are deliberately NOT
   # pinned: their probes on es-US filled slots inconsistently (JF-406
@@ -71,6 +73,23 @@ tests:
   # (skip_reason with the probe evidence), never a silent weakening. Red
   # until the roll.
   - utterance: "reproduce breaking bad temporada uno episodio tres"
+    expected_intent: PlayEpisodeIntent
+    expected_slots:
+      series_name:
+        value: "breaking bad"
+      season_number: {}
+      episode_number: {}
+
+  # JF-844 mirror round (2026-10-17): the CONNECTOR-RESIDUE twin, inherited
+  # from es-ES by deleting the mirror exclude list after the es-ES connector
+  # probe went green 3/3 on the JF-904 roll (the task's recorded trigger).
+  # Live before-picture here: the connector shape ALREADY generalized green
+  # to PlayEpisodeIntent with all slots 2/2 on the pre-mirror model, so the
+  # inherited rows anchor the shape against future trainer flips rather
+  # than repair it; the pin turns red only if a roll breaks what the rows
+  # now make explicit. Both numbers pinned per this locale's convention
+  # (subjunctive readings fill both consistently, JF-551 note above).
+  - utterance: "que reproduzca breaking bad temporada uno episodio tres"
     expected_intent: PlayEpisodeIntent
     expected_slots:
       series_name:
