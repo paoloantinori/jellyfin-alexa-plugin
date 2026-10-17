@@ -4,9 +4,10 @@ title: >-
   Validator hardening: QUEUE_CARRIER_NOUNS table + LoopAllOn queue-noun check in
   validate_interaction_models (the bare-loop regression class becomes
   self-enforcing)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-17 16:45'
+updated_date: '2026-10-17 17:56'
 labels: []
 dependencies: []
 priority: low
@@ -31,3 +32,9 @@ From the JF-904 simplify review (worker handback, could not file from the worktr
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+EXECUTED on branch jf905 (e42103f6), merged to main cab41858, pushed. No deploy (validator + tests only, no model or DLL surface). THE CHANGE: QUEUE_CARRIER_NOUNS table (nouns verified against every locale's own ListQueue/ClearQueue vocabulary; fr on the 'attente' stem for the apostrophe variants, ar on the alif-dropped stem so both hamza variants match - a bug the worker's own test caught pre-commit) + check #12 at warning level with the documented promotion condition (first real missed regression flips it to error), built on the shared _carrier_misses_noun predicate that check #10 was rewired onto behavior-identically (the unchanged 275-warning baseline proves it). The code-review round added the missing-entry coverage: an 18th locale declaring LoopAllOnIntent with no table entry warns keyed JF-905, which the real-corpus test turns into a hard CI failure. Gates (in e42103f6): py_compile clean, tests/scripts 86/86, real-corpus validator PASS before AND after at the 275 baseline with 0 new warnings, code-review high 6/6 applied; /simplify and the dotnet DoD rows N/A for a python-only change, stated at the merge. Residuals: FIXTURE_LINT_INTENTS covers only PlayAlbumIntent (queue-noun lint for fixtures is future defense-in-depth); the substring trade is accepted and documented (same as #10 since JF-459). gate-exempt: gates ran in the dispatched worker's transcript; commit e42103f6 carries the full Gates record.
+<!-- SECTION:FINAL_SUMMARY:END -->
