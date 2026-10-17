@@ -249,4 +249,75 @@ THE DECISION (Paolo's, one axis): make the bare movie ask route PlayVideo, or le
 - OPTION FIX: per-locale densification rounds (the es-surgery shape) with probe-gated acceptance; expect a multi-wave campaign with real steal-back risk on the song side (the exact JF-844 scar).
 This document does NOT decide; it parks the call with the data attached. If you say FIX, the natural vehicle is the JF-855 generator-mirror mechanism (per-locale sample families from one declaration) - deciding JF-855 and JF-844 together is the efficient shape.
 MAINTAINER DECISION (2026-10-11 21:20, chat): FIX, handler-side MULTI-MEDIUM. Paolo's shape: on greedy-slot handlers whose own-medium search misses (PlaySong catching a bare 'play nemo'), search the other media; if multiple high-confidence hits OR a confident cross-medium hit, ask the disambiguation question; the carrier form remains the guaranteed first-shot path (never disambiguated). This rides the EXISTING CrossMediaFallback architecture (TryEntityFallbackAsync/JF-363 Confirm flow) extended from artist-only to video. CAVEAT RECORDED HONESTLY: this helps the STEAL locales (en/de/es-US/fr-CA etc. where the request reaches a handler); it CANNOT help the NO_SELECTION locales (it-IT included) where the bare shape selects no intent at all and never reaches any handler - for those the carrier stays the only path. New task JF-865 owns the implementation.
+
+JF-844 FINAL ROLL-DISCRIMINATION VERDICT (2026-10-17 evening, the implementation
+worker; the same-day rolls: it-IT via JF-902, the 13 others via JF-904, every
+rebuild SUCCEEDED; all readings profile-nlu on the live development model,
+3x per shape unless noted):
+
+1. STAR WARS PAIR: SPLIT, BOTH CLOSED.
+   - 'riproduci il film star wars' -> PlayVideoIntent title='star wars' 3/3:
+     GREEN (roll-recovered on 2026-10-09, stable across every roll since).
+   - 'suona il film star wars' -> PlayMovieIntent movie='star wars' 3/3: a NEW
+     routing that postdates the 2026-10-09 PlaySong re-pin (the JF-874
+     MovieTitle catalog family, 2026-10-12). The film noun now steers even the
+     music verb to the movie intent, and the destination is semantically right
+     (a film ask routes to the movie intent). RE-PINNED PlaySongIntent ->
+     PlayMovieIntent (movie presence-only) with the boundary evidence in the
+     fixture comment: 'metti il film matrix' 2/2, 'voglio guardare star wars'
+     2/2, 'Di riprodurre il film ada' 2/2 all still PlayVideoIntent, and all
+     four JF-874 wrapper pins green ('chiedi a mia collezione di
+     riprodurre/vedere/guardare/mettere il film sunny dancer' -> PlayMovieIntent).
+     Per-shape generalization, not a family flip; record-reality convention.
+
+2. MURDERBOT DIGIT SEASON: RECOVERED. 'mettere la stagione 1 episodio 3
+   di murderbot' -> PlayEpisodeIntent season_number=1 episode_number=3
+   series_name='murderbot' 3/3; the word-form twin identical 3/3. The
+   bare-infinitive rows were live and FAILING on 2026-10-09 (the morning
+   battery read them empty 3/3). ATTRIBUTION CAVEAT (code review, applied):
+   the model's content changed between the red and the green (the JF-874
+   MovieTitle family landed 2026-10-12, the JF-902 loop rows moved on the
+   day of this reading), so trainer roll-nondeterminism vs
+   neighboring-family mass shift is not separable from probe evidence
+   alone; the suona flip in item 1 is the same JF-874-content-coincident
+   class. What matters for the pins holds either way: the shape fills on
+   the live model, and the red-until-roll fixture pins now read green
+   (their comments carry the verdict and the caveat). The 2026-10-09
+   "residual accepted unless a sample shape that fills stagione-first
+   digits is ever found" caveat is overtaken: the shape fills on the
+   current trainer state.
+
+3. CANZONE: NOT A STEAL per the fixtures. 'metti una canzone dei pink floyd'
+   -> PlayArtistSongsIntent musician='P!nk floyd' 3/3, EXACTLY the pinned
+   expectation (profile fixture: 'Metti una canzone dei soul coughing' ->
+   PlayArtistSongsIntent; e2e fixture: this very utterance ->
+   PlayArtistSongsIntent, the JF-510 re-pin of 2026-09-06). The residual's
+   'Expected PlaySongIntent' wording was the pre-JF-510 expectation; the
+   routing layer matches the pins. The residual's real surface is
+   RESPONSE-level (the e2e row's AudioPlayer.Play vs the JF-690/JF-885
+   arbitration outcome on the P!nk/Pink Floyd tie), which profile-nlu cannot
+   see; left to the orchestrator's post-merge acceptance window (simulate-skill
+   was out of this round's instrument set). No model change, no fixture change;
+   this record is the disposition.
+
+4. ES-ES SUBJUNCTIVE: GREEN, STABLE. 'que reproduzca breaking bad temporada
+   uno episodio tres' -> PlayEpisodeIntent all slots 3/3 (green since the
+   2026-10-09 densification roll, re-verified on today's); the bare control
+   'reproduzca ...' 3/3 green as well.
+
+MIRROR ROUND EXECUTED (the task's recorded trigger 'if es-ES goes green,
+mirror'): the three 'que reproduzca' connector rows now flow to es-MX and
+es-US (both mirror exclude lists deleted; the family comments, the header
+divergence bullets, the es-ES mirror-reference note, and the JF-855
+committed-model test contract updated in the same change, per the JF-844.1
+same-change discipline). Live before-pictures: es-MX connector ->
+AMAZON.FallbackIntent 2/2 (the rows are repair); es-US -> PlayEpisodeIntent
+all slots 2/2 pre-mirror (the rows anchor against future trainer flips).
+Connector pins added to both sibling fixtures, red-until-roll on es-MX
+(season_number unpinned per es-MX's documented word-form asymmetry; both
+numbers pinned on es-US per its convention). Context readings, NOT residuals:
+the parked reproduce/pon series-first steals are still stolen on today's roll
+('reproduce breaking bad temporada uno episodio tres' -> PlayNextIntent 3/3,
+'pon ...' -> PlaySongIntent song='breaking bad temporada 1' 3/3; the JF-865
+open question owns that surface).
 <!-- SECTION:NOTES:END -->

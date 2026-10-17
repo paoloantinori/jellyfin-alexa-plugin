@@ -261,8 +261,9 @@ tests:
   # reproduzca ...", series FIRST), same family as es-ES's. The exact-value
   # pin is the anti-pollution regression pin (pre-family the verb glued into
   # series_name, live 4/4 probes); red until the rebuilt model with the
-  # "reproduzca" family is deployed. Season left unpinned per this locale's
-  # documented word-form asymmetry above.
+  # "reproduzca" family was deployed (green since; re-verified 2/2 with all
+  # slots on the 2026-10-17 JF-904 roll). Season left unpinned per this
+  # locale's documented word-form asymmetry above.
   - utterance: "reproduzca breaking bad temporada uno episodio tres"
     expected_intent: PlayEpisodeIntent
     expected_slots:
@@ -277,6 +278,22 @@ tests:
   # locale's documented word-form asymmetry above. Red until the JF-844
   # densification model roll.
   - utterance: "reproduce breaking bad temporada uno episodio tres"
+    expected_intent: PlayEpisodeIntent
+    expected_slots:
+      series_name:
+        value: "breaking bad"
+      episode_number: {}
+
+  # JF-844 mirror round (2026-10-17): the CONNECTOR-RESIDUE twin, inherited
+  # from es-ES by deleting the mirror exclude list after the es-ES connector
+  # probe went green 3/3 on the JF-904 roll (the task's recorded trigger).
+  # Live before-picture here: AMAZON.FallbackIntent 2/2 on the pre-mirror
+  # model, the exact failure shape es-ES carried across two builds, so the
+  # rows are repair, not anchoring. Red until the mirror model roll;
+  # season_number left unpinned per the documented word-form asymmetry
+  # above; the los-simpson row shows that asymmetry is not universal
+  # (series-dependent), so presence-pinning here would be a gamble.
+  - utterance: "que reproduzca breaking bad temporada uno episodio tres"
     expected_intent: PlayEpisodeIntent
     expected_slots:
       series_name:

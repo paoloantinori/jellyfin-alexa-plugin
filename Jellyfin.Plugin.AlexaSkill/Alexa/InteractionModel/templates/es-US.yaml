@@ -43,15 +43,16 @@
 #   "sugiere {media_type}" (6 samples).
 # - SeriesName's last entry is El Señor de los Cielos (es-ES: El
 #   Internado).
-# - PlayEpisodeIntent: es-ES additionally carries the three JF-844 "que
-#   reproduzca" connector rows; they stay es-ES-only pending the es-ES
-#   connector probe going green (the JF-844 task's recorded follow-up;
-#   es-ES stayed red in the 2026-10-09 morning battery, so the siblings
-#   inherit the rows after es-ES is solved). The JF-844 season-ed
-#   densification is shared by all three es locales. JF-855: the whole
-#   family is a DECLARED MIRROR (see the intent block) - the generator
-#   sources the samples from es-ES minus the exclude rows, and the
-#   JF-844.1 mirroring lint is retired.
+# - PlayEpisodeIntent: no divergence since the JF-844 mirror round
+#   (2026-10-17): the es-ES connector probe went green 3/3 on the JF-904
+#   roll, so the siblings inherited the three JF-844 "que reproduzca"
+#   connector rows by deleting their exclude lists (the recorded
+#   follow-up; live before-picture here: the connector shape already
+#   generalized green to PlayEpisodeIntent 2/2 pre-mirror, so the rows
+#   are anchoring, not repair). The JF-844 season-ed densification is
+#   shared by all three es locales. JF-855: the whole family is a
+#   DECLARED MIRROR (see the intent block): the generator sources the
+#   samples from es-ES, and the JF-844.1 mirroring lint is retired.
 # Everything else is verbatim es-ES: the AMAZON.Musician built-in
 # musician slots (no JellyfinArtist type, no JF-415 seed), the 8-type
 # roster, the absent modelConfiguration, the no-prompts dialog. See
@@ -107,8 +108,8 @@ intents:
       # JF-904 queue-scoped repeat-ALL carriers (rationale: the loop
       # constants in IntentNames); 'repita la cola' is the JF-551
       # subjunctive wrapper payload. The 'que' residue twin stays
-      # es-ES-only per the JF-844 holding pattern (the PlayEpisode
-      # mirror exclude).
+      # es-ES-only per the JF-844 holding pattern (decision record in
+      # the JF-904 task notes).
       - Repite la cola
       - Repetir la cola
       - Repite toda la cola
@@ -462,18 +463,15 @@ intents:
         type: AMAZON.NUMBER
     # JF-855: this family is a DECLARED MIRROR of es-ES (the JF-844.1
     # hand-mirroring is now generator-enforced). Samples come from
-    # templates/es-ES.yaml verbatim, in es-ES's order, minus the three
-    # "que reproduzca" connector rows in the exclude list (es-ES-only
-    # pending the es-ES connector probe going green, JF-844; the siblings
-    # inherit them by deleting their exclude rows). The per-family
-    # comments (JF-844 densification, JF-551 subjunctive payload, JF-814
-    # season-less family) moved to es-ES.yaml, which now owns every row.
+    # templates/es-ES.yaml verbatim, in es-ES's order. JF-844 mirror
+    # round (2026-10-17): the exclude list is DELETED (the es-ES
+    # connector probe went green; trigger and before-picture in the
+    # header bullet), so the full family flows here, "que reproduzca"
+    # connectors included. The per-family comments (JF-844 densification,
+    # JF-551 subjunctive payload, JF-814 season-less family) live in
+    # es-ES.yaml, which owns every row.
     mirror:
       locale: es-ES
-      exclude:
-        - que reproduzca {series_name} temporada {season_number} episodio {episode_number}
-        - que reproduzca la temporada {season_number} episodio {episode_number} de {series_name}
-        - que reproduzca el episodio {episode_number} de {series_name}
   # JF-583: the próximo/último carriers are slotted ({episode_position},
   # custom EpisodePosition type): próximo keeps NextUp, último resolves by
   # recency; 'continúa viendo' carries no position (NextUp by design).

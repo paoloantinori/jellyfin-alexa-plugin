@@ -14,10 +14,12 @@
 #
 # JF-855 (2026-10-13): this locale is the MIRROR REFERENCE for
 # PlayEpisodeIntent: es-MX and es-US declare a `mirror` on the family and
-# source their samples from this template, minus the three "que
-# reproduzca" connector rows (es-ES-only, per the JF-844 note above).
-# Editing a row here changes the siblings at their next regen; deleting an
-# excluded row errors their generation until the exclude list is updated.
+# source their samples from this template. JF-844 mirror round
+# (2026-10-17): the connector probe below went green 3/3 on the JF-904
+# roll, so the siblings' three-row exclude lists were deleted and the
+# full family (the "que reproduzca" connector rows included) flows to
+# all three es locales.
+# Editing or deleting a row here changes the siblings at their next regen.
 #
 # JF-844 (2026-10-09): PlayEpisodeIntent gained the CONNECTOR-RESIDUE
 # subjunctive twins ("que reproduzca ...", both word orders + the
@@ -25,6 +27,9 @@
 # form fell to AMAZON.FallbackIntent across two builds (the season-less
 # additions displaced the JF-551 wrapper family's mass); the fixture
 # note had pre-recorded this path (the it-IT "Di" connector precedent).
+# Outcome: GREEN since the 2026-10-09 densification roll, re-verified
+# 3/3 with all slots on the 2026-10-17 JF-904 roll (probe record in the
+# JF-844 task notes).
 #
 # JF-844 densification (2026-10-09, same task): the SEASON-ED family was
 # 7 rows against the it-IT vocabulary-Cartesian dozens and lost the
@@ -164,8 +169,8 @@ intents:
       # JF-904 queue-scoped repeat-ALL carriers (rationale: the loop
       # constants in IntentNames). 'repita la cola' is the subjunctive
       # wrapper payload (the JF-551 'pide a X que' family); its 'que'
-      # residue twin is es-ES-only per the JF-844 holding pattern (the
-      # PlayEpisode mirror exclude).
+      # residue twin is es-ES-only per the JF-844 holding pattern
+      # (decision record in the JF-904 task notes).
       - Repite la cola
       - Repetir la cola
       - Repite toda la cola
