@@ -272,6 +272,25 @@ public class DispatchRoutingTests : PluginTestBase
         }
     }
 
+    // JF-901 ownership pin beside the family guard above: the bare built-in
+    // AMAZON.LoopOnIntent ("attiva il loop" on device; Amazon's loop-THIS-track
+    // convention) must be owned by the repeat-ONE handler alone, and
+    // LoopOnIntentHandler (the custom LoopAllOnIntent) must not claim it, so
+    // registration order can never pick between two handlers applying
+    // different repeat modes.
+    [Fact]
+    public void AmazonLoopOn_HasExactlyOneOwner_TheRepeatOneHandler_Jf901()
+    {
+        using var harness = new DispatchHarness();
+        IntentRequest request = IntentProbe(IntentNames.AmazonLoopOn);
+
+        List<BaseHandler> claimers = harness.Handlers.Where(h => h.CanHandle(request)).ToList();
+        Assert.IsType<LoopSongOnIntentHandler>(Assert.Single(claimers));
+
+        RoutingDecision decision = harness.Select(DispatchHarness.CreateSkillRequest(request));
+        Assert.IsType<LoopSongOnIntentHandler>(decision.Handler);
+    }
+
     // Every CUSTOM intent declared in ANY embedded interaction model has a registered
     // handler owner. Catches model drift: an intent in a model with no handler routes
     // to the controller's CouldNotUnderstand tell at runtime. No allowlist: a custom

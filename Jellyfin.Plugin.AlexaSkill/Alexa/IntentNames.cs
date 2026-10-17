@@ -56,23 +56,37 @@ internal static class IntentNames
     // JF-450 loop-mode vocabulary: de-DE, fr-FR, fr-CA and it-IT declare the custom
     // loop intents (locale vocabulary: "Ripeti la canzone", "Répète la chanson",
     // "Lied wiederholen"); since JF-562 they ALSO declare the AMAZON.LoopOn/LoopOff
-    // built-ins like every other locale. The loop handlers' CanHandle keeps
-    // accepting BOTH names per mode (do not remove the dual accept: Amazon-side
-    // models built before the JF-562 declarations still deliver only the custom
-    // names, and the built-ins can win NLU in these four locales):
-    // LoopAllOnIntent pairs with AMAZON.LoopOnIntent (repeat-all),
-    // LoopAllOffIntent with AMAZON.LoopOffIntent (repeat-none), and
-    // RepeatSingleOnIntent is the repeat-one sibling of LoopSongOnIntent.
+    // built-ins like every other locale. The OFF pair still dual-accepts both
+    // names (do not remove it: Amazon-side models built before the JF-562
+    // declarations still deliver only the custom names, and the built-ins can
+    // win NLU in these four locales); the ON pair's dual accept ended at JF-901,
+    // do not re-add it. Since JF-901
+    // the bare built-in AMAZON.LoopOnIntent ("loop", "attiva il loop"; Amazon's
+    // own loop-THIS-track convention, live device evidence 2026-10-17: corr
+    // 6883f581 resolved the phrase to the built-in while the old repeat-all
+    // mapping advanced the queue at track end, corr 4e6ce000) applies
+    // repeat-ONE, so LoopSongOnIntentHandler owns it beside its custom twins;
+    // LoopAllOnIntent keeps repeat-all in LoopOnIntentHandler, and
+    // LoopAllOffIntent stays paired with the AMAZON.LoopOffIntent built-in
+    // (repeat-none). KNOWN GAP (JF-902): LoopAllOnIntent's samples in the four
+    // custom locales still include the BARE loop phrases ("Attiva loop",
+    // "attiva il loop", ...), so the same utterance can select either intent
+    // and apply opposite modes until the sample-move follow-up lands; on device
+    // the built-in is the one that wins. Corollary: LoopAllOnIntent is declared
+    // in only those four locales, so until JF-902 gives the queue-repeat
+    // application a carrier the other 13 locales have NO voice path to
+    // repeat-all at all (the bare built-in is repeat-one now).
     public const string LoopSongOn = "LoopSongOnIntent";
     public const string RepeatSingleOn = "RepeatSingleOnIntent";
     public const string LoopAllOn = "LoopAllOnIntent";
     public const string LoopAllOff = "LoopAllOffIntent";
 
     // ShuffleAllOn/OffIntent pair with the AMAZON.ShuffleOn/OffIntent built-ins the
-    // same way the loop family does (live incident 2026-09-23: «mescola la coda»
-    // statistically landed on ClearQueueIntent because the it-IT built-in carries no
-    // custom samples and anti-pattern #5 forbids adding them; custom twins are the
-    // loop-family precedent). Handlers accept BOTH names per mode.
+    // same way the loop family's OFF pair still does (live incident 2026-09-23:
+    // «mescola la coda» statistically landed on ClearQueueIntent because the it-IT
+    // built-in carries no custom samples and anti-pattern #5 forbids adding them;
+    // custom twins are the loop-family precedent; JF-901 split the loop ON pair
+    // across two handlers). Handlers accept BOTH names per mode.
     public const string ShuffleAllOn = "ShuffleAllOnIntent";
     public const string ShuffleAllOff = "ShuffleAllOffIntent";
     public const string AddToQueue = "AddToQueueIntent";

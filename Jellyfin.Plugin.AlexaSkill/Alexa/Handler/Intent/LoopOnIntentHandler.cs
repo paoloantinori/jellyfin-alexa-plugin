@@ -41,16 +41,18 @@ public class LoopOnIntentHandler : BaseHandler
     /// <inheritdoc/>
     public override bool CanHandle(Request request)
     {
-        // Locale aliases (LoopAllOn vs the AMAZON.LoopOnIntent built-in): see the
-        // comment on the loop intent constants in IntentNames.
+        // JF-901: this handler owns ONLY the custom LoopAllOnIntent
+        // (repeat-all); the bare built-in AMAZON.LoopOnIntent moved to
+        // LoopSongOnIntentHandler (repeat-one). See the comment on the loop
+        // intent constants in IntentNames.
         IntentRequest? intentRequest = request as IntentRequest;
         return intentRequest != null
-            && (string.Equals(intentRequest.Intent.Name, IntentNames.AmazonLoopOn, StringComparison.Ordinal)
-                || string.Equals(intentRequest.Intent.Name, IntentNames.LoopAllOn, StringComparison.Ordinal));
+            && string.Equals(intentRequest.Intent.Name, IntentNames.LoopAllOn, StringComparison.Ordinal);
     }
 
     /// <summary>
-    /// Applies repeat-all to the currently playing item; shared body in
+    /// Applies repeat-all to the currently playing item, serving only the custom
+    /// LoopAllOnIntent since JF-901; shared body in
     /// <see cref="ProgressReporter.ApplyRepeatModeAsync"/>.
     /// </summary>
     /// <param name="request">The skill request which should be handled.</param>
