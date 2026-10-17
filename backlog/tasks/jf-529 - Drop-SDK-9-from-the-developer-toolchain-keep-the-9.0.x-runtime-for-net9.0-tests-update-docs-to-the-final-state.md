@@ -3,15 +3,15 @@ id: JF-529
 title: >-
   Drop SDK 9 from the developer toolchain (keep the 9.0.x runtime for net9.0
   tests); update docs to the final state
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-09 13:34'
-updated_date: '2026-09-27 19:12'
+updated_date: '2026-10-17 19:30'
 labels:
   - toolchain
   - tech-debt
   - net10
-  - gate:root
+  - 'gate:root'
 dependencies: []
 references:
   - JF-307
@@ -44,6 +44,12 @@ BLOCKED 2026-09-12 ~02:50 (night run): the uninstall needs root and no passwordl
 
 2026-09-27 audit: the captured inventory is STALE - this machine now has BOTH SDKs as Fedora system rpms (/usr/lib64/dotnet: 9.0.121 and 10.0.112; the pinned rpm -e command and rollback pin reference a package version that no longer exists), the 'SDK 10 user-local at ~/.dotnet-jf307' premise is gone (SDK 10 is the system install, and CLAUDE.md already documents it), so the docs half is partially done. Re-capture the inventory and recipe before executing; still blocked on root.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+CLOSED 2026-10-17 ~21:5x (final-state verification): the toolchain already reached the task's target by drift, and the leftover is now gone. EVIDENCE: the system carries ONLY SDK 10.0.112 (/usr/lib64/dotnet/sdk; no SDK 9 anywhere in the default paths, verified dotnet --list-sdks), CI installs SDK 10 + the 9.x runtime via setup-dotnet's two-version pin (exactly the 'keep the 9.0.x runtime for net9.0 tests' clause), no active workflow/script/hook referenced the dedicated dir (the only mentions are the historical spike doc), and the redundant ~/.dotnet-jf307 SDK-10.0.400 directory (621M, installed 2026-09-07 with approval, self-documented as reversible) has been REMOVED. Docs updated to the final state: the CLAUDE.md build section now states SDK 10.0.112, the SDK-9 absence, the dir removal, and that the 9.x runtime arrives only via CI. gate-exempt: doc edit + a user-approved reversible home-dir removal; no product code.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
