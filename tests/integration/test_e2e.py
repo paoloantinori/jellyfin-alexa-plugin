@@ -1105,6 +1105,20 @@ def _fallback_open_to_one_shot(
     _note_open_fallback(utterance, locale, source)
 
 
+def smapi_failure_detail(exc: Exception) -> str:
+    """Type name + truncated message for a caught SmapiError (JF-900).
+
+    The raw platform cause cannot tell a per-call skill-selection loss
+    from a genuine NLU no-match: the shared "did not resolve to any
+    intent" marker reads identically in both, and the FAILED simulation's
+    consideredIntents are not retrievable (the client raises instead of
+    returning the result).  The typed class name in the failure text is
+    the honest discriminator; the message is truncated because the cause
+    already rode along in every report.
+    """
+    return f"{type(exc).__name__}: {str(exc)[:120]}"
+
+
 def _assert_play_or_gate_tell(
     utterance: str, locale: str, skill_response: dict, gate_substring: str
 ) -> None:
@@ -1278,6 +1292,7 @@ def test_e2e_smoke_two_step(
     # with the invocation prefix in the fallback (the same composition the
     # full-chain e2e_*.yaml cases use) ---
     command_client = client
+    command_utterance = utterance
     if open_response is None:
         invocation_name = fixture.get("invocation_name", "")
         if not invocation_name:
@@ -1290,10 +1305,17 @@ def test_e2e_smoke_two_step(
             skill_id=skill_id, locale=locale, delay=smapi_delay,
             invocation_name=invocation_name,
         )
+        # JF-900: the fr prefix wants the infinitive after "de"; the
+        # fixture's bare imperative is rewritten here and ONLY here, so
+        # the full-chain rows' own utterances pass through byte-identical
+        # (non-fr locales are a no-op inside the composer).
+        command_utterance = SmapiClient.compose_fallback_one_shot(
+            utterance, locale
+        )
 
     logger.info(
         "SMOKE CMD [%s] (%s) expecting %s (response: %s)",
-        utterance, locale, expected_intent, expected_response_type,
+        command_utterance, locale, expected_intent, expected_response_type,
     )
     needs_body = (
         expected_response_type != "any"
@@ -1301,15 +1323,27 @@ def test_e2e_smoke_two_step(
     )
     try:
         response = _simulate_with_invocation_retry(
-            command_client, utterance, expected_intent, needs_body
+            command_client, command_utterance, expected_intent, needs_body
         )
     except SmapiError as exc:
         _open_sessions.add(locale)
         # Name the shape in the failure: a fallback row that dies here must
         # not read as an in-session command failure (code-review JF-899).
+        # JF-900: name the typed class too (smapi_failure_detail), since the
+        # shared no-intent marker alone reads as an NLU no-match even when
+        # the raise was the per-call skill-selection loss.
         shape = "one-shot, open fallback" if open_response is None else "in-session"
+        # The embedded exception text quotes what was SENT; when the
+        # composer rewrote the row (code-review JF-900) the report must not
+        # show two unlabelled French strings.
+        sent = (
+            f", sent: '{command_utterance}'"
+            if command_utterance != utterance
+            else ""
+        )
         pytest.fail(
-            f"SMAPI simulation error for '{utterance}' ({locale}, {shape}): {exc}"
+            f"SMAPI simulation error for '{utterance}' ({locale}, {shape}"
+            f"{sent}): {smapi_failure_detail(exc)}"
         )
 
     _record_session_state(locale, response)
