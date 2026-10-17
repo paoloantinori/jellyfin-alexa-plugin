@@ -18,7 +18,7 @@
 
 ## Executive Summary
 
-Gli endpoint NON sono cambiati. La superficie REST della Skill Simulation API è la solita v2 documentata (`POST /v2/skills/{id}/stages/{stage}/simulations` + `GET .../simulations/{simulationId}` su `api.amazonalexa.com`), e la Utterance Profiler API resta `POST /v1/skills/{id}/stages/{stage}/interactionModel/locales/{locale}/profileNlu`. Il degrado fr/es è confermato Amazon-side DA UNA CHIAMATA REST DIRETTA (bypassando completamente l'ask CLI): fr-FR risponde "did not resolve to any intent" mentre it-IT, con lo stesso codice e lo stesso token, invoca `PlayArtistSongsIntent`. Non è un problema nostro né del CLI.
+Gli endpoint NON sono cambiati. La superficie REST della Skill Simulation API è la solita v2 documentata (`POST /v2/skills/{id}/stages/{stage}/simulations` + `GET .../simulations/{simulationId}` su `api.amazonalexa.com`), e la Utterance Profiler API resta `POST /v1/skills/{id}/stages/{stage}/interactionModel/locales/{locale}/profileNlu`. Il degrado fr/es è confermato Amazon-side DA UNA CHIAMATA REST DIRETTA (bypassando completamente l'ask CLI): fr-FR risponde "did not resolve to any intent" mentre it-IT, con lo stesso codice e lo stesso token, invoca `PlayArtistSongsIntent`. Non è un problema nostro né del CLI. [NOTA 2026-10-17: questa frase va letta con la correzione in testa al documento: la prova qui descritta era confondata (frase nuda senza sessione contro controllo con invocazione) e la classe corretta è selezione skill intermittente, non degrado del servizio per locale.]
 
 ## Findings
 
@@ -41,7 +41,7 @@ ask CLI 2.30.7 (installato = ultimo pubblicato su npm): `ask smapi simulate-skil
 Chiamata REST diretta con il token LWA valido (scavato dalla config del CLI, expiry verificata):
 - **fr-FR** "lis les chansons de pink floyd": POST 200 IN_PROGRESS, poi il poll risponde FAILED con "This utterance did not resolve to any intent in your skill" [probe b61f4853].
 - **it-IT** "chiedi a mia collezione di suonare i radiohead" (controllo, stesso codice/token/pipeline): SUCCESSFUL, intent invocato `PlayArtistSongsIntent`.
-- I modelli salvati fr-IT/es-ES risolvono le frasi correttamente su profile-nlu (verificato 2026-10-13: PlayArtistSongsIntent 3/3): il modello è sano, è il runtime di simulazione NLU per quelle locale che non risolve.
+- I modelli salvati fr-FR/es-ES risolvono le frasi correttamente su profile-nlu (verificato 2026-10-13: PlayArtistSongsIntent 3/3): il modello è sano, è il runtime di simulazione NLU per quelle locale che non risolve.
 - Conclusione: non è l'endpoint, non è il CLI, non è il nostro modello. È il servizio di simulazione Amazon per quelle locale (classe ricorrente già documentata in `simulate_outage_per_locale`).
 
 ### 5. Nota minore: la lista locale nella doc è stantia

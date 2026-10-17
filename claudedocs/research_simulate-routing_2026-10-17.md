@@ -6,7 +6,7 @@
 
 ## Executive Summary
 
-Non è un outage, non sono endpoint cambiati, non siamo bannati e non è un nostro bug di pipeline, MA la ricerca ha trovato un mio errore metodologico reale nel report del 2026-10-15. La vera condizione: il servizio simulate è attivo e le nostre chiamate funzionano; ciò che fallisce è la SELEZIONE DELLA SKILL da parte del router Alexa per il dispositivo simulato, ed è INTERMITTENTE PER CHIAMATA: la stessa coppia (locale, frase) oggi è passata da FAILED con `<IntentForDifferentSkill>` a SUCCESSFUL nel giro di quindici minuti, con lo stesso token e la stessa pipeline. fr-FR/fr-CA sono le peggiori (falliscono da giorni nella batteria), de-DE ha mostrato il primo fallimento oggi, es-ES alterna, it-IT ed en-GB restano stabili. Verdetto per le cinque ipotesi di Paolo: (1) endpoint cambiati NO, (2) ban NO, (3) servizio rimosso NO, degradato-ino il router SI, (4) "sbagli qualcosa tu" SI ma non dove pensavamo: il confronto decisivo del report del 15 ottobre confrontava una frase fr nuda senza sessione contro una frase it con invocazione, un confronto truccato che ha prodotto il falso "fr giù, it su" (dettagli sotto).
+Non è un outage, non sono endpoint cambiati, non siamo bannati e non è un nostro bug di pipeline, MA la ricerca ha trovato un mio errore metodologico reale nel report del 2026-10-15. La vera condizione: il servizio simulate è attivo e le nostre chiamate funzionano; ciò che fallisce è la SELEZIONE DELLA SKILL da parte del router Alexa per il dispositivo simulato, ed è INTERMITTENTE PER CHIAMATA: la stessa coppia (locale, frase) oggi è passata da FAILED con `<IntentForDifferentSkill>` a SUCCESSFUL nel giro di quindici minuti, con lo stesso token e la stessa pipeline. fr-FR/fr-CA sono le peggiori (falliscono da giorni nella batteria), de-DE ha mostrato il primo fallimento oggi, es-ES alterna, it-IT ed en-GB restano stabili. Verdetto per le cinque ipotesi di Paolo: (1) endpoint cambiati NO, (2) ban NO, (3) servizio rimosso NO, il router invece è instabile SI, (4) "sbagli qualcosa tu" SI ma non dove pensavamo: il confronto decisivo del report del 15 ottobre confrontava una frase fr nuda senza sessione contro una frase it con invocazione, un confronto truccato che ha prodotto il falso "fr giù, it su" (dettagli sotto).
 
 ## Findings
 
@@ -19,7 +19,7 @@ Non è un outage, non sono endpoint cambiati, non siamo bannati e non è un nost
 | it-IT "chiedi a mia collezione di suonare i radiohead" | one-shot con invocazione (raw FORCE_NEW) | SUCCESS, ER completa |
 | en-GB "open jellyfin player" | open (CLI) | SUCCESS, LaunchRequest |
 | es-ES "abre mi colección" | open (CLI) | SUCCESS, IntentRequest (i nostri intent nei considered) |
-| es-ES "pon las canciones di pink floyd" | nuda, stato sessione residuo (CLI) | SUCCESS |
+| es-ES "pon las canciones de pink floyd" | nuda, stato sessione residuo (CLI) | SUCCESS |
 | fr-FR "ouvre mon serveur" | open (raw FORCE_NEW, raw DEFAULT, CLI) | FAILED x3, `<IntentForDifferentSkill>` |
 | fr-FR "ouvre mon serveur" | open (CLI, ~15 min dopo) | SUCCESS x2 |
 | fr-FR "demande à mon serveur de lire les chansons de pink floyd" | one-shot con invocazione (raw + CLI) | SUCCESS x2 |
