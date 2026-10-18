@@ -1,7 +1,7 @@
 ---
 name: Alexa Skill
 guid: c5df7de0-8777-4b3c-a70d-5c3dae359c9e
-version: 0.12.1.0
+version: 1.0.0.0
 targetAbi: 10.11.0.0
 framework: net9.0
 overview: Alexa skill plugin for Jellyfin
@@ -20,4 +20,4 @@ artifacts:
   - Amazon.Lambda.Serialization.Json.dll
   - Jellyfin.Plugin.AlexaSkill.dll
   - Refit.dll
-changelog: "Fixes artist and playlist playback for users who restrict the skill to specific libraries: with a per-user library restriction configured, every artist request returned no results and playlists could not be found at all. Asking for an artist, a playlist or a song now behaves the same with or without library restrictions. Playlist requests no longer apply the library filter, since playlists live outside libraries. Song search by name is also faster again for restricted users: it was silently falling back to the slower library-wide search path."
+changelog: "Loop now repeats the track you are listening to and the setting survives track changes; whole-queue repeat is available in all 17 languages. Adds photo slideshows on Echo Show, one-shot film requests by title, skip forward and back in every language, and honest which-did-you-mean questions for ambiguous artist requests. Pause and stop say what they actually stopped (music, book or video), asking for a film without a title now prompts for it, resume keeps offering the same item it will play, sleep timers confirm what they will really do, and shuffle, repeat and loop answer out loud when they take effect. Includes many reliability fixes around search, playback and session handling."
