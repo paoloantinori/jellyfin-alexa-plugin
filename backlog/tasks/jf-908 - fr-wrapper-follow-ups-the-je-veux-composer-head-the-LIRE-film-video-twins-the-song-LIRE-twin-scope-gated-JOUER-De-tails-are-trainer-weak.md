@@ -6,6 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-10-18 22:22'
+updated_date: '2026-10-18 23:40'
 labels: []
 dependencies: []
 priority: low
@@ -30,3 +31,9 @@ From the JF-907 worker residuals (could not file from its worktree). THREE same-
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+GOAL PROGRESS 2026-10-19 01:40: the HANDLER-layer fr battery ran green 6/6 via the built-in simulator on minix (artist/favorites/random/film/album/playlist: real pipelines, correct directives, French speech; the playlist not-found is correct behavior for absent data). Combined with the model layer (11/11 bare forms green, live profile-nlu), the fr commands are verified on every layer under our control. Still Amazon-gated: the simulate-skill e2e battery (router 0/3 all night, per-call class, opened 09:45 yesterday) and the wrapper composed forms (trainer bad basin, 6 builds, catalog hypothesis refuted). Retry cadence: every heartbeat.
+<!-- SECTION:NOTES:END -->
