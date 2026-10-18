@@ -18,6 +18,22 @@ Saying "resume" now continues what you last listened to on that device, music, p
 
 Shuffle, repeat and loop now confirm out loud when they take effect (before: silence that looked like nothing happened). Shuffle can be asked in Italian ("mescola la coda"), German ("Zufallswiedergabe aktivieren") and French ("mélange la file d'attente").
 
+## A loop that actually loops
+
+Asking to loop now repeats the track you are listening to, every time, for real: the repeat setting survives track changes and long playback sessions (a server-side timer used to silently reset it within a second). To repeat the whole queue instead, say it explicitly ("repeat the queue", "ripeti la coda", "Wiederhole die Warteschlange", "répète la file d'attente"): the queue-repeat phrasing works in all 17 languages, and loop or shuffle asked on an idle device now explains that nothing is playing instead of refusing oddly.
+
+## Photos on Echo Show
+
+Photo libraries join the party: "show my photos" or "show my vacation photos" starts a full-screen slideshow on Echo Show devices, advancing on its own with your library's pictures.
+
+## Films by name, skips everywhere
+
+Asking for a film by its title in one shot ("metti il film barbie", "spiele den film matrix") now reaches the film instead of being captured as a song request, and the skip-forward and skip-back phrasings work in every language the skill speaks, not just a few.
+
+## When unsure, it asks
+
+If your request is ambiguous ("musica si nora jones" among ten artists containing Jones), the skill now lists the candidates and lets you pick with yes and no, instead of silently playing one of them. The same honest ask replaces several old silent misses where your library contained a near-match that was never what you meant.
+
 ## Radio that does not restart your song
 
 "Play similar tracks" now starts a different track instead of restarting the one you are halfway through. When a queue ends, autoplay keeps the music going with similar material from your library.
