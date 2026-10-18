@@ -192,7 +192,6 @@ intents:
       # the smoke one-shot composes 'de mettre le film X'; the bare
       # 'mets le film {title}' row above is its imperative twin).
       - De mettre le film {title}
-      - De regarder le film {title}
       - Je veux regarder le film {title}
       - Cherche le film {title}
     slots:
