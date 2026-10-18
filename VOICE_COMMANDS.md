@@ -654,7 +654,7 @@ Invocation name: **"jellyfin player"**
 | Play By Genre | `Joue de la musique {genre}` · `Joue du {genre}` · `Je veux écouter du {genre}` · `Mets du {genre}` · `Joue des chansons {genre}` |
 | Play Channel | `Chaîne {channel}` · `Lis la radio {channel}` · `Radio {channel}` |
 | Play Episode | `joue la saison {season_number} épisode {episode_number} de {series_name}` · `joue {series_name} saison {season_number} épisode {episode_number}` · `joue l'épisode {episode_number} de {series_name}` · `regarde la saison {season_number} épisode {episode_number} de {series_name}` · `De jouer la saison {season_number} épisode {episode_number} de {series_name}` · `De regarder la saison {season_number} épisode {episode_number} de {series_name}` |
-| Play Favorites | `Lis mes {media_type} préférés` · `Lis mes favoris` · `joue les favoris de {username}` · `joue {media_type} favoris de {username}` · `mets les favoris de {username}` · `écoute les favoris de {username}` |
+| Play Favorites | `Lis mes {media_type} préférés` · `Lis mes favoris` · `joue les favoris de {username}` · `joue {media_type} favoris de {username}` · `De lire mes favoris` · `mets les favoris de {username}` |
 | Play Last Added | `Lis les derniers {media_type} ajoutés` · `Lis les nouveaux médias` · `Lis les nouveautés {media_type}` |
 | Play Mood Music | `joue de la musique {mood}` · `joue quelque chose de {mood}` · `je veux de la musique {mood}` · `joue-moi quelque chose de {mood}` |
 | Play Next | `Lis {song} ensuite` · `Lis {song} de {musician} ensuite` · `Lis {song} après` · `Lis {song} de {musician} après` · `Je veux entendre {song} ensuite` · `Passe {song} ensuite` |
@@ -718,7 +718,7 @@ Invocation name: **"jellyfin player"**
 | Play By Genre | `Joue de la musique {genre}` · `Joue du {genre}` · `Je veux écouter du {genre}` · `Mets du {genre}` · `Joue des chansons {genre}` |
 | Play Channel | `Chaîne {channel}` · `Lis la radio {channel}` · `Radio {channel}` |
 | Play Episode | `joue la saison {season_number} épisode {episode_number} de {series_name}` · `joue {series_name} saison {season_number} épisode {episode_number}` · `joue l'épisode {episode_number} de {series_name}` · `regarde la saison {season_number} épisode {episode_number} de {series_name}` · `De jouer la saison {season_number} épisode {episode_number} de {series_name}` · `De regarder la saison {season_number} épisode {episode_number} de {series_name}` |
-| Play Favorites | `Lis mes {media_type} préférés` · `Lis mes favoris` · `joue les favoris de {username}` · `joue {media_type} favoris de {username}` · `mets les favoris de {username}` · `écoute les favoris de {username}` |
+| Play Favorites | `Lis mes {media_type} préférés` · `Lis mes favoris` · `joue les favoris de {username}` · `joue {media_type} favoris de {username}` · `De lire mes favoris` · `mets les favoris de {username}` |
 | Play Last Added | `Lis les derniers {media_type} ajoutés` · `Lis les nouveaux médias` · `Lis les nouveautés {media_type}` |
 | Play Mood Music | `joue de la musique {mood}` · `joue quelque chose de {mood}` · `je veux de la musique {mood}` · `joue-moi quelque chose de {mood}` |
 | Play Next | `Lis {song} ensuite` · `Lis {song} de {musician} ensuite` · `Lis {song} après` · `Lis {song} de {musician} après` · `Je veux entendre {song} ensuite` · `Passe {song} ensuite` |
