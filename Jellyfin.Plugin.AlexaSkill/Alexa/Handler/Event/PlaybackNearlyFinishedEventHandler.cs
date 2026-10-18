@@ -141,9 +141,19 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
         // JF-447 trust sweep), not the session PlayState: a device queue marked Shuffle
         // with a stale session PlayState could otherwise pass the gate and serve a
         // stale-order precomputed entry that the full resolution below would never
-        // produce. Repeat mode stays on the session PlayState because the resolution
-        // below reads the same source for it.
+        // produce. JF-906 moved the repeat mode onto the same queue-first footing
+        // (ProgressReporter.ResolveRepeatMode): a queue marked One/All must never
+        // admit a precomputed SEQUENTIAL successor through a session PlayState the
+        // server's progress-report timer wiped back to RepeatNone.
         var (resolvedOrder, resolvedReshuffled) = ProgressReporter.ResolvePlaybackOrder(session, context, _queueManager);
+
+        // The repeat resolution's coherence id: TOKEN-FIRST (the token names the
+        // stream actually finishing; the session item can lag), the session item
+        // as fallback, matching the codec discipline FindCurrentQueueIndex uses.
+        Guid? repeatCoherenceId = StreamTokenCodec.TryGetItemId(currentToken, out Guid repeatTokenId)
+            ? repeatTokenId
+            : session.FullNowPlayingItem?.Id;
+        var (resolvedRepeatMode, repeatSource) = ProgressReporter.ResolveRepeatMode(session, context.GetDeviceId(), _queueManager, repeatCoherenceId);
 
         // This fetch must run BEFORE the precompute cache-hit early return below:
         // placed after it, every cache-served NearlyFinished skips the fetch and the
@@ -151,7 +161,7 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
         await TryFetchContinuationBatch(session, context, cancellationToken).ConfigureAwait(false);
 
         if (_config.PreEnqueueOnStart
-            && (session.PlayState?.RepeatMode ?? RepeatMode.RepeatNone) == RepeatMode.RepeatNone
+            && resolvedRepeatMode == RepeatMode.RepeatNone
             && resolvedOrder == PlaybackOrder.Default)
         {
             if (NextTrackPrecomputeCache.TryGet(deviceId, currentToken ?? string.Empty,
@@ -192,12 +202,13 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
             }
         }
 
-        Guid? nextItemId = ResolveNextItemId(session, context);
+        Guid? nextItemId = ResolveNextItemId(session, context, resolvedRepeatMode);
 
         Logger.LogDebug(
-            "PlaybackNearlyFinished: resolved next item={NextItemId}, loop={LoopMode}, shuffle={Shuffle} (reshuffledQueue={Reshuffled})",
+            "PlaybackNearlyFinished: resolved next item={NextItemId}, loop={LoopMode} (repeatSource={RepeatSource}), shuffle={Shuffle} (reshuffledQueue={Reshuffled})",
             nextItemId,
-            session.PlayState?.RepeatMode ?? RepeatMode.RepeatNone,
+            resolvedRepeatMode,
+            RepeatSourceLabel(repeatSource),
             resolvedOrder,
             resolvedReshuffled);
 
@@ -320,10 +331,11 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
         AudioLaunchSource source = Launch.ResolveAudioLaunchSource(item, itemId, user, 0, ratePerMille: advanceRatePerMille);
 
         Logger.LogInformation(
-            "Pre-fetching next track for gapless playback: {ItemName} ({ItemId}), loop={LoopMode}, shuffle={Shuffle} (reshuffledQueue={Reshuffled})",
+            "Pre-fetching next track for gapless playback: {ItemName} ({ItemId}), loop={LoopMode} (repeatSource={RepeatSource}), shuffle={Shuffle} (reshuffledQueue={Reshuffled})",
             item.Name,
             itemId,
-            session.PlayState?.RepeatMode ?? RepeatMode.RepeatNone,
+            resolvedRepeatMode,
+            RepeatSourceLabel(repeatSource),
             resolvedOrder,
             resolvedReshuffled);
 
@@ -584,16 +596,34 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
     }
 
     /// <summary>
+    /// Renders <see cref="ProgressReporter.ResolveRepeatMode"/>'s source for the
+    /// resolution log lines (the JF-683 readable-log discipline: the triage line
+    /// names which store produced the mode, including the foreign-queue verdict).
+    /// </summary>
+    /// <param name="source">The resolver's reported source.</param>
+    /// <returns>The log label.</returns>
+    private static string RepeatSourceLabel(ProgressReporter.RepeatModeSource source) => source switch
+    {
+        ProgressReporter.RepeatModeSource.DeviceQueue => "deviceQueue",
+        ProgressReporter.RepeatModeSource.ForeignQueue => "foreignQueue(none)",
+        _ => "sessionPlayState",
+    };
+
+    /// <summary>
     /// Resolve the next item ID based on the current position in the queue,
-    /// taking loop and shuffle modes into account.
+    /// taking loop and shuffle modes into account. JF-906: the repeat mode is the
+    /// caller's queue-first resolution (<see cref="ProgressReporter.ResolveRepeatMode"/>,
+    /// hoisted before the precompute gate so the gate and this resolver share ONE
+    /// read), never a session PlayState read here: the server's progress-report
+    /// timer wipes that value back to the launch-time snapshot within ~1s of any
+    /// mid-track loop command (the device-verified JF-906 wipe).
     /// </summary>
     /// <param name="session">The current Jellyfin session with play state.</param>
     /// <param name="context">The Alexa context for current token.</param>
+    /// <param name="repeatMode">The queue-first resolved repeat mode.</param>
     /// <returns>The next item ID, or null if playback should end.</returns>
-    private Guid? ResolveNextItemId(SessionInfo session, Context context)
+    private Guid? ResolveNextItemId(SessionInfo session, Context context, RepeatMode repeatMode)
     {
-        RepeatMode repeatMode = session.PlayState?.RepeatMode ?? RepeatMode.RepeatNone;
-
         // playbackOrder + reshuffledQueue come from the authoritative per-device
         // queue (see ProgressReporter.ResolvePlaybackOrder, the shared home this
         // resolver's decision and PlaybackFinishedEventHandler's keep-alive arm both

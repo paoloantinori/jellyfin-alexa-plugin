@@ -345,6 +345,11 @@ public class PlaybackPositionProvenanceTests : PluginTestBase, IDisposable
         session.NowPlayingQueue = new List<QueueItem> { new() { Id = id } };
         _fx.LibraryManager.Setup(lm => lm.GetItemById(id)).Returns(Eac3Episode(id));
         _queueManager.SetQueue(DeviceId, new List<string> { id.ToString() }, 0);
+        // JF-906: SetQueue seeds the queue mode "None"; a repeat-one playback now
+        // reaches this shape only through the loop family's queue write, so the
+        // fixture sets the durable owner the same way, through the ONE vocabulary
+        // translation (the session value above is the dashboard copy).
+        _queueManager.SetRepeatMode(DeviceId, DeviceQueueManager.ToQueueRepeatModeString(RepeatMode.RepeatOne));
         _queueManager.RecordLaunchBase(DeviceId, id.ToString(), MinutesToMs(20), enqueued: false);
 
         var context = TestHelpers.CreateTestContext(DeviceId);
@@ -384,6 +389,11 @@ public class PlaybackPositionProvenanceTests : PluginTestBase, IDisposable
         session.NowPlayingQueue = new List<QueueItem> { new() { Id = id } };
         _fx.LibraryManager.Setup(lm => lm.GetItemById(id)).Returns(Eac3Episode(id));
         _queueManager.SetQueue(DeviceId, new List<string> { id.ToString() }, 0);
+        // JF-906 fixture coherence: same as the SameItemAdvance pin above, the
+        // repeat-one state is the queue's (the loop family's durable write, set
+        // through the ONE vocabulary translation), with the session value as the
+        // dashboard copy.
+        _queueManager.SetRepeatMode(DeviceId, DeviceQueueManager.ToQueueRepeatModeString(RepeatMode.RepeatOne));
         _queueManager.RecordLaunchBase(DeviceId, id.ToString(), MinutesToMs(20), enqueued: false);
 
         var context = TestHelpers.CreateTestContext(DeviceId);

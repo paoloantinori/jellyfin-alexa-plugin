@@ -125,8 +125,23 @@ public class PlaybackStartedEventHandler : BaseHandler
         {
             SessionId = session.Id,
             ItemId = startItemId,
-            PlaybackOrder = session.PlayState.PlaybackOrder,
-            RepeatMode = session.PlayState.RepeatMode,
+            // JF-906 belt (review round: both halves of the pair): the repeat mode
+            // AND the playback order ride the start report from the durable queue
+            // owners, never the session PlayState. OnPlaybackStart arms the
+            // server's StartAutomaticProgress 1-second timer with THIS report's
+            // snapshot (verified at v10.11.8/v12.0/v12.1), and that timer re-fires
+            // it into session.PlayState for the whole track: a start report built
+            // from the (wiped) session would re-wipe the dashboard every second and
+            // hand the displacement-restore report a stale snapshot. The
+            // queue-first reads keep the server view coherent with the resolvers'
+            // authority at every track boundary; the repeat leg carries the
+            // coherence verdict too, so a FOREIGN queue's stale mode is reported
+            // as RepeatNone instead of poisoning the session for the whole track.
+            PlaybackOrder = ProgressReporter.ResolvePlaybackOrder(
+                session, context, _queueManager ?? Plugin.Instance?.DeviceQueueManager).Order,
+            RepeatMode = ProgressReporter.ResolveRepeatMode(
+                session, deviceId, _queueManager ?? Plugin.Instance?.DeviceQueueManager,
+                startItemId != Guid.Empty ? startItemId : null).Mode,
             PositionTicks = startTicks,
             PlaybackStartTimeTicks = startTicks,
         };

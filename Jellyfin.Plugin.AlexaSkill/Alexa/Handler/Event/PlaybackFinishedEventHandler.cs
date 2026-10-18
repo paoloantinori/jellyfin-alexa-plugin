@@ -146,7 +146,16 @@ public class PlaybackFinishedEventHandler : BaseHandler
             if (!sleepExpired)
             {
                 finishedIndex = SessionQueue.IndexOfQueueItem(session, itemId);
-                bool loops = (session.PlayState?.RepeatMode ?? RepeatMode.RepeatNone) != RepeatMode.RepeatNone;
+
+                // JF-906: queue-first repeat read (the ONE resolver, same as
+                // NearlyFinished's resolution): the session PlayState copy is wiped
+                // back to the launch-time RepeatNone by the server's progress-report
+                // timer, and this keep-alive arm must agree with the resolver that
+                // is about to repeat the track, not with the wiped copy. The
+                // coherence id is this event's own parsed token (the finished
+                // stream; the codec handles composite sleep tokens).
+                bool loops = ProgressReporter.ResolveRepeatMode(session, deviceId, _queueManager, itemId != Guid.Empty ? itemId : null)
+                    .Mode != RepeatMode.RepeatNone;
 
                 // JF-691 (a): the mode-aware arm. NearlyFinished's random-pick
                 // admission guard is ONE shared predicate (ShuffleRandomPickApplies,
