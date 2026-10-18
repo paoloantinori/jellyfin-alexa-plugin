@@ -4,10 +4,10 @@ title: >-
   fr wrapper-tail rows don't match the JF-900 fallback composition (lire vs
   jouer): the smoke fallback one-shots misroute (artist stolen by
   QueryArtistLibrary, favorites/film Fallback)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-10-18 21:21'
-updated_date: '2026-10-18 21:21'
+updated_date: '2026-10-18 22:55'
 labels: []
 dependencies: []
 priority: high
@@ -32,3 +32,9 @@ GOAL-DRIVEN (maintainer /goal 2026-10-18: 'verifica il Francese, i comandi devon
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+EXECUTED on branch jf907 (9486b57a), merged 425a120c, deployed with fr rebuilds; PLUS the orchestrator's evidence-based REGARDER experiment reverted (abd36fa3, deployed, fr rebuilds re-run). MODEL-LAYER VERDICT (all live profile-nlu): the 11 BARE fr command forms route correctly (7/7 first battery + film 4/4: artist/favorites/song/random/video/album/playlist/film), the new De-tail rows are IN both models (get-interaction-model verified), and the COMPOSED wrapper routing is TRAINER-UNSTABLE tonight: content A (worker rows) read GREEN on its first build (artist/favorites/random), then read red 3/3-stable across the +regarder build, its identical-content rebuild, AND the revert rebuild (byte-equal to A) - a bad-basin trainer state that neither content variant nor identical rebuild recovers (the JF-770 sticky class, now observed for fr wrapper tails). The REGARDER twin was reverted because it correlated with the flip and fixed nothing (film composed stayed Fallback). fr-CA once needed the standard NEVER_BUILT retry (JF-513.2 poll-budget class; second attempt SUCCEEDED). REMAINING for the goal DoD: the e2e fr battery (primary path: open + bare, all-green at the model layer) awaits the Amazon router (rate 0/3-0/5 all night, per-call class); the battery runs the moment the rate clears. The film composed miss and the je-veux head are tracked in JF-908. gate-exempt: the worker's /simplify and code-review ran in its transcript and are recorded in 9486b57a (the dispatch and report are in this session's record); the orchestrator's two 2-row template reverts are the trivial class with validators PASS and the full suite run this session, justification in the revert commits.
+<!-- SECTION:FINAL_SUMMARY:END -->
