@@ -121,10 +121,35 @@ tests:
     expected_slots:
       title: {}
 
+  # JF-907 wrapper-tail pin (the JF-900 fallback composes 'de mettre le
+  # film X' from the smoke fixture's 'mets le film X'). RED-UNTIL-DEPLOY:
+  # reads AMAZON.FallbackIntent on the saved model today.
+  - utterance: "De mettre le film barbie"
+    expected_intent: PlayVideoIntent
+    expected_slots:
+      title: {}
+
   # -------------------------------------------------------------------------
   # 8. PlayArtistSongsIntent (musician)
   # -------------------------------------------------------------------------
   - utterance: "Lis les chansons de queen"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+
+  # JF-907 wrapper-tail pins (the JF-900 fallback composes 'de lire les
+  # chansons de X'). Bare-tail state on the saved model: the pink row routes
+  # today via generalization, the xyzzyfoo row is RED-UNTIL-DEPLOY on this
+  # locale (QueryArtistLibraryIntent steal). The full composed one-shot
+  # ('demande à mon serveur de lire les chansons de X') is the stolen shape
+  # in BOTH fr locales (profile-nlu, 3/3 stable) - that is the shape the
+  # JF-907 row exists to win; these pins guard the row itself.
+  - utterance: "De lire les chansons de pink floyd"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+
+  - utterance: "De lire les chansons de xyzzyfoo"
     expected_intent: PlayArtistSongsIntent
     expected_slots:
       musician: {}
@@ -166,6 +191,14 @@ tests:
   - utterance: "Joue quelque chose au hasard"
     expected_intent: PlayRandomIntent
     expected_slots: {}
+
+  # JF-907 wrapper-tail pin (the JF-900 fallback composes 'de jouer un
+  # morceau aléatoire'; needs no model row - it routes today - but the pin
+  # guards the smoke battery's random leg against trainer flips).
+  - utterance: "De jouer un morceau aléatoire"
+    expected_intent: PlayRandomIntent
+    expected_slots:
+      media_type: {}
 
   # -------------------------------------------------------------------------
   # 11. PlayByGenreIntent (genre)
@@ -235,6 +268,13 @@ tests:
     expected_slots: {}
 
   - utterance: "Lis mes favoris"
+    expected_intent: PlayFavoritesIntent
+    expected_slots: {}
+
+  # JF-907 wrapper-tail pin (the JF-900 fallback composes 'de lire mes
+  # favoris'; the slotless twin shape, cf. the 'De répéter la file
+  # d'attente' pin). Routes today via generalization; pins the JF-907 row.
+  - utterance: "De lire mes favoris"
     expected_intent: PlayFavoritesIntent
     expected_slots: {}
 

@@ -203,6 +203,7 @@
           "je veux voir {title}",
           "diffuse le film {title}",
           "De jouer le film {title}",
+          "De mettre le film {title}",
           "Je veux regarder le film {title}",
           "Cherche le film {title}"
         ],
@@ -251,6 +252,7 @@
           "D'écouter les {musician}",
           "De lancer les {musician}",
           "De diffuser les {musician}",
+          "De lire les chansons de {musician}",
           "Lis la musique des {musician}",
           "Lis les chansons des {musician}",
           "J'écoute la musique de {musician}",
@@ -452,6 +454,7 @@
         "samples": [
           "Lis mes {media_type} préférés",
           "Lis mes favoris",
+          "De lire mes favoris",
           "joue les favoris de {username}",
           "mets les favoris de {username}",
           "écoute les favoris de {username}",

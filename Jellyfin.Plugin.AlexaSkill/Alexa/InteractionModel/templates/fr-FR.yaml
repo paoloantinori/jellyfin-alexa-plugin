@@ -219,6 +219,10 @@ intents:
       - je veux voir {title}
       - diffuse le film {title}
       - De jouer le film {title}
+      # JF-907: the METTRE twin (the JF-900 fallback maps mets->mettre, so
+      # the smoke one-shot composes 'de mettre le film X'; the bare
+      # 'mets le film {title}' row above is its imperative twin).
+      - De mettre le film {title}
       - Je veux regarder le film {title}
       - Cherche le film {title}
     slots:
@@ -261,6 +265,12 @@ intents:
       - D'écouter les {musician}
       - De lancer les {musician}
       - De diffuser les {musician}
+      # JF-907: the LIRE twin of the 'Lis les chansons de' family above. The
+      # JF-900 fallback composes 'de lire les chansons de X'; without this
+      # row that one-shot is stolen by QueryArtistLibraryIntent (live steal
+      # 2026-10-17; profile-nlu reproduced it for the composed form in both
+      # locales).
+      - De lire les chansons de {musician}
       - Lis la musique des {musician}
       - Lis les chansons des {musician}
       - J'écoute la musique de {musician}
@@ -403,6 +413,10 @@ intents:
     samples:
       - Lis mes {media_type} préférés
       - Lis mes favoris
+      # JF-907: De-infinitive wrapper twin of the row above (the JF-900
+      # fallback composes 'de lire mes favoris'; the slotless twin shape is
+      # the proven full-form fix, cf. 'De répéter la file d'attente').
+      - De lire mes favoris
       - joue les favoris de {username}
       - mets les favoris de {username}
       - écoute les favoris de {username}

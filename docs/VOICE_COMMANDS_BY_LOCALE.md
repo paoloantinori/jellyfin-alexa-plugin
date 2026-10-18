@@ -5500,7 +5500,7 @@ Placeholder legend:
 | `<mots du titre de la chanson>` | `{titleKeywords}` |
 | `<nom d'utilisateur>` | `{username}` |
 
-Complete phrase list (473 phrases across 73 commands):
+Complete phrase list (476 phrases across 73 commands):
 
 #### Play music
 
@@ -5565,6 +5565,7 @@ Complete phrase list (473 phrases across 73 commands):
 - `D'écouter les <nom de l'artiste>`
 - `De lancer les <nom de l'artiste>`
 - `De diffuser les <nom de l'artiste>`
+- `De lire les chansons de <nom de l'artiste>`
 
 **Play by genre**
 
@@ -5661,6 +5662,7 @@ Complete phrase list (473 phrases across 73 commands):
 - `je veux voir <titre de la vidéo ou du film>`
 - `diffuse le film <titre de la vidéo ou du film>`
 - `De jouer le film <titre de la vidéo ou du film>`
+- `De mettre le film <titre de la vidéo ou du film>`
 - `Je veux regarder le film <titre de la vidéo ou du film>`
 - `Cherche le film <titre de la vidéo ou du film>`
 
@@ -5952,6 +5954,7 @@ Complete phrase list (473 phrases across 73 commands):
 
 - `Lis mes <type de média (musique, vidéo)> préférés`
 - `Lis mes favoris`
+- `De lire mes favoris`
 - `joue les favoris de <nom d'utilisateur>`
 - `mets les favoris de <nom d'utilisateur>`
 - `écoute les favoris de <nom d'utilisateur>`
@@ -6233,7 +6236,7 @@ Placeholder legend:
 | `<mots du titre de la chanson>` | `{titleKeywords}` |
 | `<nom d'utilisateur>` | `{username}` |
 
-Complete phrase list (485 phrases across 73 commands):
+Complete phrase list (488 phrases across 73 commands):
 
 #### Play music
 
@@ -6298,6 +6301,7 @@ Complete phrase list (485 phrases across 73 commands):
 - `D'écouter les <nom de l'artiste>`
 - `De lancer les <nom de l'artiste>`
 - `De diffuser les <nom de l'artiste>`
+- `De lire les chansons de <nom de l'artiste>`
 - `Lis la musique des <nom de l'artiste>`
 - `Lis les chansons des <nom de l'artiste>`
 - `J'écoute la musique de <nom de l'artiste>`
@@ -6402,6 +6406,7 @@ Complete phrase list (485 phrases across 73 commands):
 - `je veux voir <titre de la vidéo ou du film>`
 - `diffuse le film <titre de la vidéo ou du film>`
 - `De jouer le film <titre de la vidéo ou du film>`
+- `De mettre le film <titre de la vidéo ou du film>`
 - `Je veux regarder le film <titre de la vidéo ou du film>`
 - `Cherche le film <titre de la vidéo ou du film>`
 
@@ -6694,6 +6699,7 @@ Complete phrase list (485 phrases across 73 commands):
 
 - `Lis mes <type de média (musique, vidéo)> préférés`
 - `Lis mes favoris`
+- `De lire mes favoris`
 - `joue les favoris de <nom d'utilisateur>`
 - `mets les favoris de <nom d'utilisateur>`
 - `écoute les favoris de <nom d'utilisateur>`
