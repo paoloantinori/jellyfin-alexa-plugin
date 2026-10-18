@@ -569,6 +569,89 @@ public sealed class ProgressReporter
     }
 
     /// <summary>
+    /// Where <see cref="ResolveRepeatMode"/> got its answer: the coherent device
+    /// queue, the session PlayState fallback, or the FOREIGN-queue verdict (a
+    /// queue exists but belongs to a different playback).
+    /// </summary>
+    public enum RepeatModeSource
+    {
+        /// <summary>The per-device queue coherently contains the current item and owns the mode.</summary>
+        DeviceQueue,
+
+        /// <summary>No device queue exists (or the current item is unresolvable): the session PlayState decided.</summary>
+        SessionPlayState,
+
+        /// <summary>A device queue exists but does not contain the current item: it belongs to a
+        /// different (earlier) playback, so its mode does not govern this one and the answer is RepeatNone.</summary>
+        ForeignQueue,
+    }
+
+    /// <summary>
+    /// Resolves the effective repeat mode, queue-first (JF-906). The authoritative
+    /// source is the persisted per-device queue, written by
+    /// <see cref="ApplyRepeatModeAsync"/> through <see cref="DeviceQueueManager.SetRepeatMode"/>;
+    /// the Jellyfin session PlayState is only the fallback when no device queue
+    /// exists, and as a READ it is non-authoritative: the server's
+    /// SessionManager.UpdateNowPlayingItem overwrites
+    /// <c>session.PlayState.RepeatMode</c> from every playback progress report
+    /// (verified at tags v10.11.8/v12.0/v12.1, SessionManager.cs "session.PlayState.RepeatMode
+    /// = info.RepeatMode"), and OnPlaybackStart arms SessionInfo.StartAutomaticProgress,
+    /// a 1-second timer that re-fires the START-time report (RepeatMode captured
+    /// before any mid-track loop command, i.e. RepeatNone) for as long as the
+    /// stream plays. The JF-280 direct in-memory write therefore survives at most
+    /// ~1s into the next track, which is the device-verified wipe behind JF-906
+    /// ("attiva il loop" spoke repeat-one, the queue advanced at track end). The
+    /// displacement-stop restore report (PlaybackReportOrdering.RestoreCurrentStartAsync)
+    /// re-applies the same launch-time snapshot and is the second, narrower vector
+    /// of the same class. Every repeat-mode READ on the event paths routes through
+    /// this member so the write family and the read family cannot drift.
+    /// COHERENCE GATE (the code-review round's empirically probed leak): a
+    /// device queue governs ONLY the playback it coherently describes, i.e. its
+    /// membership contains the currently playing item (the same discipline as
+    /// <see cref="TryRehydrateSessionQueueFromDevice"/> and the JF-578 mirror
+    /// gate). Only some play paths populate the device queue (SetQueue census:
+    /// album, artist songs, cross-media, audiobooks, follow-me); PlaySong,
+    /// PlayRadio, favorites, random, recommend, genre, mood, last-added and
+    /// resume never do, so a looped playback leaves its mode behind on a queue
+    /// that a later single-song play must NOT inherit (it would re-enqueue that
+    /// song forever). A queue that exists without the current item is FOREIGN:
+    /// its mode is residue of another playback and the honest answer for this
+    /// one is RepeatNone (never the session's equally stale copy, which the
+    /// belt report would otherwise perpetuate server-side). The write side
+    /// keeps the two coherent: <see cref="ApplyRepeatModeAsync"/> seeds the
+    /// current item into an empty or incoherent queue before writing the mode,
+    /// so a loop set during a session-only playback governs that playback and
+    /// nothing later. KNOWN LIMIT: progressive-continuation tracks (appended to
+    /// the session queue only) are not members of the device queue, so a loop
+    /// set on the first page stops governing at the first continuation boundary;
+    /// that matches the pre-JF-906 behavior (the wiped session read RepeatNone
+    /// there too) and stays open for a future membership-mirror task.
+    /// </summary>
+    /// <param name="session">The current Jellyfin session (fallback source).</param>
+    /// <param name="deviceId">The Alexa device ID (the per-device queue key).</param>
+    /// <param name="queueManager">The caller's per-device queue manager, or null
+    /// (the PlayState fallback decides alone; the handlers' optional dependency).</param>
+    /// <param name="currentItemId">The currently playing item (token-parsed at the
+    /// callers), or null/empty when unresolvable (the session fallback decides,
+    /// the pre-JF-906 read).</param>
+    /// <returns>The resolved repeat mode and which source produced it.</returns>
+    public static (RepeatMode Mode, RepeatModeSource Source) ResolveRepeatMode(SessionInfo session, string deviceId, DeviceQueueManager? queueManager, Guid? currentItemId)
+    {
+        Playback.DeviceQueue? deviceQueue = deviceId.Length == 0 ? null : queueManager?.GetQueue(deviceId);
+        if (deviceQueue == null || currentItemId is not { } coherenceId || coherenceId == Guid.Empty)
+        {
+            return (session.PlayState?.RepeatMode ?? RepeatMode.RepeatNone, RepeatModeSource.SessionPlayState);
+        }
+
+        if (!queueManager!.IsItemQueued(deviceQueue, coherenceId.ToString()))
+        {
+            return (RepeatMode.RepeatNone, RepeatModeSource.ForeignQueue);
+        }
+
+        return (DeviceQueueManager.FromQueueRepeatModeString(deviceQueue.RepeatMode), RepeatModeSource.DeviceQueue);
+    }
+
+    /// <summary>
     /// The ONE home of the shuffle random-pick admission guard (JF-691 code-review
     /// round): the exact condition <c>PlaybackNearlyFinishedEventHandler.ResolveNextItemId</c>
     /// random-picks a next track under (shuffle requested, queue NOT physically
@@ -733,19 +816,27 @@ public sealed class ProgressReporter
     /// <param name="itemId">The currently-playing item ID.</param>
     /// <param name="offsetMs">The current playback offset in milliseconds.</param>
     /// <param name="order">The playback order to report (Shuffle or Default).</param>
+    /// <param name="queueManager">The caller's per-device queue manager, or null to
+    /// fall back to <c>Plugin.Instance</c>'s (the same sourcing rule the loop write
+    /// uses, so a report can never read a different store than the write family;
+    /// JF-906 review finding).</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A task representing the async progress report.</returns>
-    public async Task ReportPlaybackProgress(SessionInfo session, string deviceId, Guid itemId, long offsetMs, PlaybackOrder order, CancellationToken cancellationToken)
+    public async Task ReportPlaybackProgress(SessionInfo session, string deviceId, Guid itemId, long offsetMs, PlaybackOrder order, DeviceQueueManager? queueManager, CancellationToken cancellationToken)
     {
         // JF-522: PlayState positions are item-absolute; the context-derived offset the
         // shuffle handlers pass composes with the playing stream's launch base (0 for
         // every non-transcode-routed queue, where this is a numeric no-op).
         long positionTicks = ComposeEventPositionTicks(deviceId, itemId, offsetMs, "PlaybackProgress");
+        // JF-906: the repeat mode rides the report from the durable queue owner
+        // (ResolveRepeatMode), not the session PlayState the report itself is about
+        // to overwrite server-side; a shuffle toggle during an active loop must not
+        // re-wipe the dashboard's repeat display back to the launch-time snapshot.
         PlaybackProgressInfo info = new PlaybackProgressInfo
         {
             SessionId = session.Id,
             ItemId = itemId,
-            RepeatMode = session.PlayState?.RepeatMode ?? RepeatMode.RepeatNone,
+            RepeatMode = ResolveRepeatMode(session, deviceId, queueManager ?? Plugin.Instance?.DeviceQueueManager, itemId != Guid.Empty ? itemId : null).Mode,
             PositionTicks = positionTicks,
             PlaybackOrder = order,
         };
@@ -937,6 +1028,39 @@ public sealed class ProgressReporter
         long positionTicks = ComposeEventPositionTicks(
             deviceId, itemId, requestState?.OffsetInMilliseconds ?? 0, "LoopMode", queueManager);
 
+        // JF-906: the per-device queue is the ONE durable owner of the repeat mode.
+        // The session PlayState write below is NON-AUTHORITATIVE dashboard display
+        // only (see the JF-280/JF-906 rationale under it): the server overwrites
+        // session.PlayState.RepeatMode from every progress report, and the
+        // start-report's 1-second automatic-progress timer re-fires the
+        // launch-time snapshot, so an in-memory write can never survive the
+        // track-end resolution window. SetRepeatMode persists (debounced to disk)
+        // and is the value PlaybackNearlyFinished's resolver reads queue-first
+        // (ProgressReporter.ResolveRepeatMode). The shuffle twin of this write is
+        // SetPlaybackOrder in ShuffleOnIntentHandler.
+        // COHERENCE (the review round's second probe): writing the mode onto an
+        // EMPTY queue would plant a durable mode-only artifact no later playback
+        // clears, and writing it onto a FOREIGN queue (an earlier playback's
+        // membership without the current item) would either leak the mode to that
+        // dead queue or, with the resolver's coherence gate, never govern this
+        // playback at all. So the write first makes the queue describe THIS
+        // playback: the current item is enqueued (the AfterCurrent-with-self
+        // fallback shape, documented on Enqueue: an unqueued current lands at the
+        // FRONT; an empty store is seeded with the single item) when it is not
+        // already a member, preserving every existing member (an AddToQueue seed
+        // survives), and only then does SetRepeatMode land on a coherent store.
+        DeviceQueueManager? queueWriter = queueManager ?? Plugin.Instance?.DeviceQueueManager;
+        if (!string.IsNullOrEmpty(deviceId) && queueWriter != null)
+        {
+            Playback.DeviceQueue? existing = queueWriter.GetQueue(deviceId!);
+            if (existing == null || !queueWriter.IsItemQueued(existing, itemId.ToString()))
+            {
+                queueWriter.Enqueue(deviceId!, itemId, DeviceQueueManager.QueueInsertPlacement.AfterCurrent, currentItemId: itemId);
+            }
+
+            queueWriter.SetRepeatMode(deviceId!, DeviceQueueManager.ToQueueRepeatModeString(mode));
+        }
+
         // Live behavioral test 2026-09-23 (JF-280): the session-report write does NOT
         // reach our Alexa session's PlayState on Jellyfin 12.1 (the JF-581 write-loss
         // class - verified live: RepeatNone still read back minutes after LoopAllOn),
@@ -944,6 +1068,12 @@ public sealed class ProgressReporter
         // RepeatMode, so the loop never repeated. Write the mode DIRECTLY into the
         // in-memory truth the resolver reads, then fire the report for dashboard sync
         // (best-effort, same discipline as the JF-581 direct UserData write).
+        // JF-906 correction: the resolver now reads the QUEUE first (see above), and
+        // this session write survives at most ~1s into playback anyway (the server's
+        // StartAutomaticProgress timer re-reports the launch-time snapshot; verified
+        // at v10.11.8/v12.0/v12.1 - SessionManager.UpdateNowPlayingItem sets
+        // session.PlayState.RepeatMode from every report). Kept for the immediate
+        // dashboard echo of the command, never read as an authority.
         session.PlayState ??= new PlayerStateInfo();
         session.PlayState.RepeatMode = mode;
 

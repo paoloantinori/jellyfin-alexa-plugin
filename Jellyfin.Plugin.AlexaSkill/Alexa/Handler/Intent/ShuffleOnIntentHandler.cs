@@ -93,7 +93,7 @@ public class ShuffleOnIntentHandler : BaseHandler
         // Keep Jellyfin's session PlayState in sync (shown in the dashboard UI).
         if (tokenValid)
         {
-            await Progress.ReportPlaybackProgress(session, deviceId, currentId, requestState?.OffsetInMilliseconds ?? 0, PlaybackOrder.Shuffle, cancellationToken).ConfigureAwait(false);
+            await Progress.ReportPlaybackProgress(session, deviceId, currentId, requestState?.OffsetInMilliseconds ?? 0, PlaybackOrder.Shuffle, _queueManager, cancellationToken).ConfigureAwait(false);
         }
 
         // Authoritative plugin-side state: persisted per-device, read by the resolver.

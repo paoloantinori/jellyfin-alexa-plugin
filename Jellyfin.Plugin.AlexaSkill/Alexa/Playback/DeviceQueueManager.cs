@@ -4,7 +4,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using Jellyfin.Data.Enums;
+using Jellyfin.Database.Implementations.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
+using MediaBrowser.Model.Session;
 using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
@@ -177,6 +180,40 @@ public sealed class DeviceQueueManager : IDisposable
     {
         return _queues.TryGetValue(deviceId, out DeviceQueue? queue) ? queue : null;
     }
+
+    /// <summary>
+    /// The ONE enum-to-string translation for this manager's repeat-mode
+    /// vocabulary ("None"/"One"/"All", the strings <see cref="SetQueue"/>,
+    /// <see cref="SetRepeatMode"/> and <see cref="Advance"/> read and write),
+    /// defined beside the vocabulary so a future mode addition cannot miss the
+    /// mapping. The loop write (ProgressReporter.ApplyRepeatModeAsync) and every
+    /// repeat read (ProgressReporter.ResolveRepeatMode) translate through here.
+    /// </summary>
+    /// <param name="mode">The repeat mode to translate.</param>
+    /// <returns>The queue's repeat-mode string.</returns>
+    internal static string ToQueueRepeatModeString(RepeatMode mode) => mode switch
+    {
+        RepeatMode.RepeatOne => "One",
+        RepeatMode.RepeatAll => "All",
+        _ => "None",
+    };
+
+    /// <summary>
+    /// The ONE string-to-enum translation back from this manager's repeat-mode
+    /// vocabulary; unknown or legacy values read as
+    /// <see cref="RepeatMode.RepeatNone"/> (the
+    /// conservative direction: an unreadable mode advances the queue instead of
+    /// looping it forever). <see cref="Advance"/> compares through this helper
+    /// so the comparison and the translation cannot drift apart.
+    /// </summary>
+    /// <param name="queueRepeatMode">The queue's repeat-mode string.</param>
+    /// <returns>The parsed repeat mode.</returns>
+    internal static RepeatMode FromQueueRepeatModeString(string? queueRepeatMode) => queueRepeatMode switch
+    {
+        "One" => RepeatMode.RepeatOne,
+        "All" => RepeatMode.RepeatAll,
+        _ => RepeatMode.RepeatNone,
+    };
 
     /// <summary>
     /// JF-568: which directive route carried a recorded last play. The route, not
@@ -1869,8 +1906,12 @@ public sealed class DeviceQueueManager : IDisposable
 
         int fromIndex = queue.CurrentIndex;
 
+        // The mode parses through the ONE vocabulary translation so the compare
+        // and every other read/write of the repeat mode cannot drift apart (JF-906).
+        RepeatMode queueRepeatMode = FromQueueRepeatModeString(queue.RepeatMode);
+
         // RepeatOne: stay on same track
-        if (string.Equals(queue.RepeatMode, "One", StringComparison.Ordinal))
+        if (queueRepeatMode == RepeatMode.RepeatOne)
         {
             _logger.LogDebug("Advance: device {DeviceId} RepeatOne — staying at index {Index}, item={ItemId}", deviceId, fromIndex, queue.ItemIds[fromIndex]);
             return queue.ItemIds[queue.CurrentIndex];
@@ -1881,7 +1922,7 @@ public sealed class DeviceQueueManager : IDisposable
         // Wrap around for RepeatAll
         if (nextIndex >= queue.ItemIds.Count)
         {
-            if (string.Equals(queue.RepeatMode, "All", StringComparison.Ordinal))
+            if (queueRepeatMode == RepeatMode.RepeatAll)
             {
                 nextIndex = 0;
             }
