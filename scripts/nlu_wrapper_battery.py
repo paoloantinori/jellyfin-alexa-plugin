@@ -114,6 +114,16 @@ BATTERY: dict[str, list[tuple[str, str, str]]] = {
         # the connector-residue twin (the wrapper's "que" may ride into the
         # payload; see the es-ES fixture comment for the open verification)
         ("profile", "que reproduzca the bear temporada uno episodio tres", "PlayEpisodeIntent"),
+        # JF-877 (2026-10-20): the es composed skip wrappers, SIMULATE rows
+        # (the JF-551 que+subjunctive wrapper; profile-nlu 2026-10-20 00:25,
+        # skill 33dfacd5, read BOTH composed one-shots FallbackIntent with
+        # the CORRECT invocation name, while the bare "salta hacia atras"
+        # routes). Red until the DLL embeds the "que salte" rows and the es
+        # models are rebuilt; simulate rows exercise the invocation
+        # consumption that profile-nlu cannot. The amount row keeps the
+        # base rows' direction-first slot order.
+        ("simulate", "pide a mi colección que salte hacia atrás", "SkipForwardBackIntent"),
+        ("simulate", "pide a mi colección que salte hacia atrás treinta segundos", "SkipForwardBackIntent"),
     ],
     "es-MX": [
         ("profile", "reproduzca the bear temporada uno episodio tres", "PlayEpisodeIntent"),
@@ -131,6 +141,18 @@ BATTERY: dict[str, list[tuple[str, str, str]]] = {
     "fr-FR": [
         ("simulate", "demande à mon serveur de sauter en arrière", "SkipForwardBackIntent"),
         ("simulate", "demande à mon serveur de sauter en avant de trente secondes", "SkipForwardBackIntent"),
+    ],
+    # JF-877 (2026-10-20): the nl composed skip wrappers, SIMULATE rows (the
+    # om-te wrapper; profile-nlu 2026-10-20 00:25, skill 33dfacd5, read BOTH
+    # composed one-shots FallbackIntent with the CORRECT invocation name,
+    # while the bare "spring 30 seconden vooruit" routes). Red until the DLL
+    # embeds the "om ... te springen" rows and the nl model is rebuilt. The
+    # amount row uses the word-form number: this locale's profile-nlu fails
+    # DIGIT delivery into AMAZON.NUMBER slots (the fixture-documented quirk),
+    # so the digit phrasing is not asserted here.
+    "nl-NL": [
+        ("simulate", "vraag mijn collectie om vooruit te springen", "SkipForwardBackIntent"),
+        ("simulate", "vraag mijn collectie om dertig seconden vooruit te springen", "SkipForwardBackIntent"),
     ],
 }
 

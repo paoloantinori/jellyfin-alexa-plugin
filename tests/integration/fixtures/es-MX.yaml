@@ -1,5 +1,5 @@
 locale: es-MX
-invocation_name: jellyfin player
+invocation_name: mi colección
 tests:
   # -------------------------------------------------------------------------
   # 1. LoopSongOnIntent (no slots)
@@ -461,6 +461,30 @@ tests:
       seek_unit: {}
 
   - utterance: "salta atrás 30 segundos"
+    expected_intent: SkipForwardBackIntent
+    expected_slots:
+      seek_direction: {}
+      seek_amount: {}
+      seek_unit: {}
+
+  # JF-877 wrapper-tail pins (the es-ES block verbatim: the rows are
+  # identical in all three es templates and the models rebuild together;
+  # no locale-specific probe exists for this locale, so the pins inherit
+  # the es-ES RED-UNTIL-DEPLOY baseline, profile-nlu 2026-10-20 00:25,
+  # skill 33dfacd5, both composed forms FallbackIntent there).
+  - utterance: "pide a mi colección que salte hacia atrás"
+    expected_intent: SkipForwardBackIntent
+    expected_slots:
+      seek_direction: {}
+
+  - utterance: "pide a mi colección que salte hacia atrás treinta segundos"
+    expected_intent: SkipForwardBackIntent
+    expected_slots:
+      seek_direction: {}
+      seek_amount: {}
+      seek_unit: {}
+
+  - utterance: "pide a mi colección que salte hacia atrás 30 segundos"
     expected_intent: SkipForwardBackIntent
     expected_slots:
       seek_direction: {}

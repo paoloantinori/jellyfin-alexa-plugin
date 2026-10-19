@@ -1,5 +1,5 @@
 locale: nl-NL
-invocation_name: jellyfin player
+invocation_name: mijn collectie
 tests:
   # JF-400: nl-NL had no NLU fixture file; seeded (probe-verified 2026-08-29 against the
   # live model) with the JF-414 indefinite album-by-artist forms. All three route to
@@ -90,6 +90,29 @@ tests:
       seek_unit: {}
 
   - utterance: "ga dertig seconden terug"
+    expected_intent: SkipForwardBackIntent
+    expected_slots:
+      seek_direction: {}
+      seek_amount: {}
+      seek_unit: {}
+
+  # JF-877 wrapper-tail pins (the it-IT/fr composed-one-shot pin precedents;
+  # the nl wrapper is "vraag {inv} om + te-infinitive", the om-te tail rides
+  # BEFORE the te-infinitive inside the construction). RED-UNTIL-DEPLOY:
+  # profile-nlu 2026-10-20 00:25 (skill 33dfacd5, the CORRECT invocation
+  # name) read BOTH composed forms AMAZON.FallbackIntent on this locale
+  # (the bare 'spring 30 seconden vooruit' routes); green only once the
+  # rebuilt model carries the om-te rows. NO digit twin here (a deliberate
+  # divergence from the fr F4 shape): this locale's profile-nlu fails DIGIT
+  # delivery into AMAZON.NUMBER slots (the pre-existing quirk documented
+  # above), so a digit pin would be structurally red, not a regression
+  # marker; the word form is the reliable amount carrier.
+  - utterance: "vraag mijn collectie om vooruit te springen"
+    expected_intent: SkipForwardBackIntent
+    expected_slots:
+      seek_direction: {}
+
+  - utterance: "vraag mijn collectie om dertig seconden vooruit te springen"
     expected_intent: SkipForwardBackIntent
     expected_slots:
       seek_direction: {}

@@ -332,11 +332,42 @@ intents:
   # default-forward twin is deliberately OMITTED: Dutch needs the separable
   # direction particle to sound complete ("spring 30 seconden" zonder vooruit
   # klinkt afgebroken), so a direction-less row would only harvest misalignments.
+  # JF-877 (2026-10-20): the om-te wrapper-tail twins (this locale's wrapper
+  # convention: the PlayPodcast "om ... af te spelen" and JF-904 "om de
+  # wachtrij te herhalen" rows; the nl one-shot wrapper is "vraag mijn
+  # collectie om + te-infinitive" and the om rides into the payload, the
+  # same connector-residue class as the es que / fr de / it di). Live
+  # probe (profile-nlu 2026-10-20 00:25, skill 33dfacd5, the CORRECT
+  # invocation name): the composed wrapper "vraag mijn collectie om
+  # vooruit te springen" read AMAZON.FallbackIntent and so did its amount
+  # form "vraag mijn collectie om 30 seconden vooruit te springen" (BOTH
+  # condemned, unlike fr where the amount form already routed); the bare
+  # "spring 30 seconden vooruit" routes. Four rows, BOTH delivery shapes
+  # (every sibling leg anchors both): the om-carrying twins (the connector
+  # rides into the payload, the it di / fr de / es que residue class) and
+  # the om-less te twins (the invocation frame may consume the om with
+  # "vraag ... om"; the es strippage precedent, and the fr F1 lesson:
+  # unanchored payload variants ride trainer generalization that flips
+  # red). Inside the om-te tail the
+  # direction particle rides BEFORE the te-infinitive (separable-verb
+  # mechanics, "vooruit te springen"), unlike the bare rows where it
+  # rides the tail; the amount row keeps the base rows'
+  # amount-unit-direction order with "te springen" appended. The
+  # JF-869/JF-875 rules above still bind: no bare direction-only row, no
+  # direction-literal row, no new slot.
   - name: SkipForwardBackIntent
     samples:
       - spring {seek_direction}
       - spring {seek_amount} {seek_unit} {seek_direction}
       - ga {seek_amount} {seek_unit} {seek_direction}
+      # JF-877: the om-carrying wrapper twins, one per composed shape
+      # (both were probe-condemned, so both get their explicit row).
+      - om {seek_direction} te springen
+      - om {seek_amount} {seek_unit} {seek_direction} te springen
+      # The om-less te twins: the same tails minus the connector, for the
+      # delivery shape where the invocation frame consumes the om.
+      - '{seek_direction} te springen'
+      - '{seek_amount} {seek_unit} {seek_direction} te springen'
     slots:
       - name: seek_direction
         type: SeekDirection

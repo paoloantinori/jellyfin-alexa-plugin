@@ -1,5 +1,5 @@
 locale: es-US
-invocation_name: jellyfin player
+invocation_name: mi colección
 tests:
   # JF-414: es-US had no NLU fixture file at all while its siblings es-ES and es-MX
   # did (review finding 2026-08-29); seeded with the indefinite album-by-artist form
@@ -200,6 +200,36 @@ tests:
   # "salta atrás {n}" combination leaves seek_direction UNFILLED on this
   # locale's trainer (es-ES/es-MX bind it green), so it is deliberately NOT
   # pinned; "retrocede {n} segundos" above is the reliable back carrier here.
+
+  # JF-877 wrapper-tail pins (the es-ES block, ADAPTED: this locale's
+  # trainer drops seek_direction on the atrás combinations per the NOTE
+  # above, so the pins ride the PROVEN carrier here, the plain adelante
+  # value (code-review: hacia adelante is a brand-new synonym with zero
+  # probe history on this quirky trainer; the model still carries the
+  # hacia synonyms, the pins assert the canonical delivery). The rows are
+  # identical in all three es templates and the models rebuild together,
+  # so the pins inherit the es-ES RED-UNTIL-DEPLOY baseline, profile-nlu
+  # 2026-10-20 00:25, skill 33dfacd5, both composed forms FallbackIntent
+  # there).
+  - utterance: "pide a mi colección que salte adelante"
+    expected_intent: SkipForwardBackIntent
+    expected_slots:
+      seek_direction: {}
+
+  - utterance: "pide a mi colección que salte adelante treinta segundos"
+    expected_intent: SkipForwardBackIntent
+    expected_slots:
+      seek_direction: {}
+      seek_amount: {}
+      seek_unit: {}
+
+  - utterance: "pide a mi colección que salte adelante 30 segundos"
+    expected_intent: SkipForwardBackIntent
+    expected_slots:
+      seek_direction: {}
+      seek_amount: {}
+      seek_unit: {}
+
   # Transport steal guard (pre-existing vendor routing).
   - utterance: "siguiente canción"
     expected_intent: ShowMoreIntent

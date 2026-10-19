@@ -351,7 +351,11 @@
         "samples": [
           "spring {seek_direction}",
           "spring {seek_amount} {seek_unit} {seek_direction}",
-          "ga {seek_amount} {seek_unit} {seek_direction}"
+          "ga {seek_amount} {seek_unit} {seek_direction}",
+          "om {seek_direction} te springen",
+          "om {seek_amount} {seek_unit} {seek_direction} te springen",
+          "{seek_direction} te springen",
+          "{seek_amount} {seek_unit} {seek_direction} te springen"
         ],
         "slots": [
           {
