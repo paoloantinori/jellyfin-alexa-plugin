@@ -6236,7 +6236,7 @@ Placeholder legend:
 | `<mots du titre de la chanson>` | `{titleKeywords}` |
 | `<nom d'utilisateur>` | `{username}` |
 
-Complete phrase list (488 phrases across 73 commands):
+Complete phrase list (489 phrases across 73 commands):
 
 #### Play music
 
@@ -6244,6 +6244,7 @@ Complete phrase list (488 phrases across 73 commands):
 
 - `Lis <titre de la chanson>`
 - `Lis la chanson <titre de la chanson>`
+- `Joue la chanson <titre de la chanson>`
 - `Lis chanson <titre de la chanson>`
 - `Lis <titre de la chanson> de <nom de l'artiste>`
 - `Lis la chanson <titre de la chanson> de <nom de l'artiste>`

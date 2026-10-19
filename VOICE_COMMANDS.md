@@ -727,7 +727,7 @@ Invocation name: **"jellyfin player"**
 | Play Podcast | `joue le podcast {podcast_name}` · `écoute le podcast {podcast_name}` · `lance le podcast {podcast_name}` · `joue podcast {podcast_name}` · `écoute le dernier épisode de {podcast_name}` · `je veux écouter le podcast {podcast_name}` |
 | Play Radio | `Lis la radio` · `Lis la station de radio {station}` · `Démarre la radio` · `Lis le mode radio` · `Lis de la musique similaire` · `Lis des chansons similaires` |
 | Play Random | `Joue un {media_type} aléatoire` · `Joue quelque chose au hasard` · `Joue un {media_type} aléatoire de {genre}` · `Joue des {media_type} au hasard` · `Lance un {media_type} aléatoire` · `Surprends-moi avec des {media_type}` |
-| Play Song | `Lis {song}` · `Lis {song} de {musician}` · `Lis la chanson {song}` · `Lis chanson {song}` · `Lis la chanson {song} de {musician}` · `Écoute {song}` |
+| Play Song | `Lis {song}` · `Lis {song} de {musician}` · `Lis la chanson {song}` · `Joue la chanson {song}` · `Lis chanson {song}` · `Lis la chanson {song} de {musician}` |
 | Play Video | `Lis la vidéo {title}` · `Je veux regarder {title}` · `On regarde {title}` · `Je voudrais voir {title}` · `montre-moi {title}` · `peux-tu me montrer {title}` |
 | Query Artist Library | `Quelles chansons avons-nous de {musician}` · `Quels {query_type} avons-nous de {musician}` · `Quels titres avons-nous de {musician}` · `Quels albums avons-nous de {musician}` · `Quels disques avons-nous de {musician}` · `Qu'avons-nous de {musician}` |
 | Query Recently Added | `quoi de neuf` · `qu'est-ce qui a été ajouté récemment` · `montre-moi les nouveautés` · `y a-t-il du nouveau` · `quels sont les derniers ajouts` · `quoi de neuf dans ma bibliothèque` |
