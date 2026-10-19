@@ -497,13 +497,16 @@ internal static class DisambiguationHelper
     /// Ordinal word stems per rank (1st..4th) across the supported locales (JF-396).
     /// Substring match, so gendered variants ("segunda"/"segundo") share a stem where
     /// possible; "quarto" (it) and "cuarto"/"quarta" (es/pt) are listed separately.
+    /// JF-909: the Italian FEMININE forms (prima/seconda/terza/quarta) are listed
+    /// explicitly; the user refers to "la canzone" (feminine) when picking a song,
+    /// and the pre-JF-909 table only had the masculine, so "la prima" fell through.
     /// </summary>
     private static readonly string[][] OrdinalStemsByRank = new[]
     {
-        new[] { "first", "primo", "erste", "premier", "primera", "primeira" },
-        new[] { "second", "secondo", "zweite", "deuxième", "segund", "tweede" },
-        new[] { "third", "terzo", "dritte", "troisième", "tercer", "terceir", "derde" },
-        new[] { "fourth", "quarto", "cuarto", "quarta", "vierte", "quatrième", "vierde" }
+        new[] { "first", "primo", "prima", "erste", "premier", "primera", "primeira" },
+        new[] { "second", "secondo", "seconda", "zweite", "deuxième", "segund", "tweede" },
+        new[] { "third", "terzo", "terza", "dritte", "troisième", "tercer", "terceir", "derde" },
+        new[] { "fourth", "quarto", "quarta", "cuarto", "vierte", "quatrième", "vierde" }
     };
 
     /// <summary>
@@ -574,6 +577,16 @@ internal static class DisambiguationHelper
             return num - 1;
         }
 
+        // 1b. JF-909: the ASR's digit-ordinal rendering ("la 1a" for the spoken
+        // "il primo", a gender-swapped article+digit+suffix shape no word stem can
+        // match). Strip leading articles and trailing ordinal suffixes (a/o and their
+        // typographic forms), then parse the surviving digit under the same 1-4 cap.
+        int? digitOrdinal = TryParseDigitOrdinal(trimmed);
+        if (digitOrdinal.HasValue)
+        {
+            return digitOrdinal;
+        }
+
         // 2. SINGLE-token cardinal ("two", "dos", "dois") or ordinal word ("second",
         // "segunda"): a lone pick word is a rank, never a title.
         if (tokens.Length == 1)
@@ -597,6 +610,39 @@ internal static class DisambiguationHelper
 
         // 4. Ordinal phrases LAST: "the second one", "il primo", "le deuxième".
         return TryParseOrdinalStem(trimmed);
+    }
+
+    /// <summary>
+    /// Parse the ASR's digit-ordinal rendering of a spoken ordinal pick ("la 1a" for
+    /// the spoken "il primo"; JF-909 device evidence: the ASR gender-swapped and
+    /// digit-rendered the answer, so no word stem could match). Accepts an optional
+    /// leading article, a digit 1-4, and an optional ordinal suffix (a/o and their
+    /// typographic forms). Returns the 0-based rank, or null when the shape does not
+    /// fit.
+    /// </summary>
+    private static int? TryParseDigitOrdinal(string input)
+    {
+        string lower = input.ToLowerInvariant().Trim();
+
+        // Strip a leading article (it/en/es/pt/de/fr/nl pickers' articles).
+        string[] articles = { "la ", "il ", "lo ", "le ", "l'", "the ", "el ", "la", "der ", "die ", "das " };
+        foreach (string article in articles)
+        {
+            if (lower.StartsWith(article, StringComparison.Ordinal))
+            {
+                lower = lower[article.Length..].Trim();
+                break;
+            }
+        }
+
+        // Strip trailing ordinal suffixes (a/o for gender, plus typographic forms).
+        char[] suffixes = { 'a', 'o', 'ª', 'º', '°' };
+        if (lower.Length > 1 && suffixes.Contains(lower[^1]))
+        {
+            lower = lower[..^1];
+        }
+
+        return int.TryParse(lower, out int rank) && rank >= 1 && rank <= 4 ? rank - 1 : null;
     }
 
     /// <summary>

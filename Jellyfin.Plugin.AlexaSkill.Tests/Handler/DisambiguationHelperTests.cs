@@ -595,4 +595,38 @@ public class DisambiguationHelperTests
         var result2 = DisambiguationHelper.ResolvePick("second chance", reordered, "en-US");
         Assert.Equal(0, result2); // the title, wherever it sits
     }
+
+    // JF-909: the Italian feminine ordinals and the ASR's digit-ordinal rendering
+    // ("la 1a" for the spoken "il primo"; device evidence 2026-10-19, corr 9941f5d3).
+    [Theory]
+    [InlineData("la prima", 0)]
+    [InlineData("il primo", 0)]
+    [InlineData("la 1a", 0)]
+    [InlineData("il 1o", 0)]
+    [InlineData("la 1", 0)]
+    [InlineData("la seconda", 1)]
+    [InlineData("il secondo", 1)]
+    [InlineData("la 2a", 1)]
+    [InlineData("la terza", 2)]
+    [InlineData("la 3a", 2)]
+    [InlineData("la quarta", 3)]
+    [InlineData("la 4a", 3)]
+    [InlineData("1", 0)]
+    [InlineData("2", 1)]
+    public void JF909_OrdinalWordAndDigitForms_ResolveAsRanks(string input, int expectedRank)
+    {
+        var candidates = new List<string> { "The Idiot Kings", "I'm Livin' on Baby Food", "Third Wheel", "Fourth Street" };
+        var result = DisambiguationHelper.ResolvePick(input, candidates, "it-IT");
+        Assert.Equal(expectedRank, result);
+    }
+
+    [Fact]
+    public void JF909_TitleContainingPrima_StillMatchesAsTitle()
+    {
+        // The title-before-ordinal order must hold: a candidate TITLE containing
+        // "prima" wins over the rank the stem would otherwise assign.
+        var candidates = new List<string> { "Prima Donna", "Other Song" };
+        var result = DisambiguationHelper.ResolvePick("prima donna", candidates, "it-IT");
+        Assert.Equal(0, result); // the title
+    }
 }
