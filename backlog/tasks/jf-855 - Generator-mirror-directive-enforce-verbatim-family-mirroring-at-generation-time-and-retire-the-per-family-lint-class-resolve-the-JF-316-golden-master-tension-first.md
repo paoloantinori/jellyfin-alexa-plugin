@@ -7,7 +7,7 @@ title: >-
 status: Done
 assignee: []
 created_date: '2026-10-09 23:04'
-updated_date: '2026-10-13 08:35'
+updated_date: '2026-10-19 23:14'
 labels:
   - tooling
   - nlu
@@ -45,6 +45,8 @@ The deeper fix: a template-side mirror/include directive in generate_interaction
 
 <!-- SECTION:NOTES:BEGIN -->
 MAINTAINER DECISION (2026-10-12 06:55, chat): DEFERRED. JF-844 resolved handler-side (not model-side), so the mirror's value is limited to retiring the es-trio lint class. The verbatim golden-master architecture (JF-316) is the maintainer's deliberate choice; the lint works and costs little. Revisit only if a second cross-locale mirror case emerges.
+
+DATA POINT 2026-10-20 01:15 (orchestrator, from the JF-877 es/nl lane's /simplify battery; two agents converged): the SkipForwardBack wrapper-tail rows landed hand-duplicated across the es trio (es-ES owns the probe narrative; es-MX/es-US carry ~25-line hand-copied blocks that hand-assert 'the rows are byte-identical in all three es templates', the exact invariant the mirror directive enforces at generation time; PlayEpisodeIntent in the same two files already uses mirror). The conversion was judged output-neutral (rows and order match; models would regenerate byte-identically) but SKIPPED mid-lane to avoid fragmenting this parked question (the fr leg hand-duplicated the same hour for the same reason). When this task un-parks: the SkipForwardBack family in es-MX/es-US is a ready-made first conversion candidate, and the SeekDirection type synonyms stay per-locale regardless (mirror covers intent samples only, types have no mirror path).
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
