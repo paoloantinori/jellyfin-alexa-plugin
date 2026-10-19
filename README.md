@@ -25,11 +25,11 @@ Play music, videos, playlists, search your library, manage favorites, and more �
 
 <br/>
 
-<i>Fork of the <a href="https://github.com/infinityofspace/jellyfin-alexa-plugin">original project by infinityofspace</a>, migrated to Jellyfin 10.11.x with additional features and bug fixes.</i>
+<i>Fork of the <a href="https://github.com/infinityofspace/jellyfin-alexa-plugin">original project by infinityofspace</a>, with additional features and bug fixes.</i>
 
 <br/>
 
-⚠️ _Alpha software: features may change between releases. Always back up your configuration before updating._
+_Now at version 1.0: works on both Jellyfin 10.11 and Jellyfin 12. Back up your configuration before major updates._
 
 </div>
 
@@ -42,13 +42,13 @@ Play music, videos, playlists, search your library, manage favorites, and more �
 <td width="50%">
 
 ### 🎵 Music & Audio
-Play songs, albums, artists, audiobooks, podcasts, and playlists. Conversational song search with multi-turn dialog. Phonetic matching for accented speech. AutoPlay radio mode when the queue ends.
+Play songs, albums, artists, audiobooks, podcasts, and playlists. Conversational song search with multi-turn dialog. Phonetic matching for accented speech. AutoPlay radio mode when the queue ends. Reliable loop and shuffle controls that confirm out loud.
 
 </td>
 <td width="50%">
 
 ### 📺 Video & TV
-Play movies, TV episodes, and channels. Resume playback with three-tier position fallback. APL visual carousel with tappable image cards on Echo Show devices.
+Play movies, TV episodes, and channels. Resume playback with three-tier position fallback. APL visual carousel with tappable image cards on Echo Show devices. Photo slideshows from your photo libraries.
 
 </td>
 </tr>
@@ -122,9 +122,11 @@ See the [FAQ](#faq) for details and workarounds on each of these.
 ### 🎵 Playback & queue
 - **Broad media support**: play songs, albums, artists, videos, TV episodes, audiobooks, podcasts, channels, and playlists — both audio (AudioPlayer) and video launching
 - **Queue management**: add to queue, play next, clear/list queue, shuffle, repeat, start over
+- **Reliable loop and shuffle**: loop repeats the current track (or the whole queue with an explicit phrase); shuffle reshuffles and restores; both confirm out loud; disabling the loop stops a pending repeat
 - **Radio mode**: a radio station based on your library, with on/off toggle
 - **Sleep timer**: stop playback after a specified duration
 - **Music delivery choice** (per-user): on Echo Show, choose the seek-bar VideoApp view or plain instant AudioPlayer playback
+- **Photo slideshows**: "show my photos" on Echo Show starts a full-screen slideshow from your photo libraries
 - **Now-playing announce**: optional spoken announcement ("Now playing X") when content launches. Separate toggles for video/book launches (default on) and music plays (opt-in)
 
 ### 🔍 Search & discovery
@@ -175,7 +177,7 @@ See the [FAQ](#faq) for details and workarounds on each of these.
 
 Before you begin, you need:
 
-1. **Jellyfin 10.11.x** server (earlier versions are not supported)
+1. **Jellyfin 10.11.x or 12.x** server (earlier versions are not supported; the plugin catalog picks the right build for your server automatically)
 2. **Publicly accessible HTTPS URL** for your Jellyfin server with a valid SSL certificate
    - Options: wildcard certificate, trusted CA certificate, or self-signed certificate
    - Your server must be reachable from the internet (Amazon's servers need to reach it)
@@ -462,7 +464,7 @@ A Jellyfin server update, especially a major one (10.11 to 12.0 for example), ca
 
 The fix is to link the account again: open the Jellyfin dashboard, go to **Plugins > Alexa Skill**, open your user's settings and run the account linking again (the same flow as the initial setup), then try the skill.
 
-Depending on your plugin version you will hear one of two things when this happens: releases up to 0.12.1.0 answer with the generic "having trouble" message above; newer releases detect the dead link and say so out loud (*"the link to your Jellyfin server stopped working; open the Alexa skill settings page and link your account again"*). Either way the remedy is the same re-link.
+The skill detects the dead link and says so out loud (*"the link to your Jellyfin server stopped working; open the Alexa skill settings page and link your account again"*). The remedy is the same re-link.
 
 If the skill still fails after re-linking, look at the Jellyfin log right after a failed request: the plugin logs each request's handling quite verbosely (search for `Jellyfin.Plugin.AlexaSkill`), and those lines show exactly where it stops. Paste them if you open an issue.
 

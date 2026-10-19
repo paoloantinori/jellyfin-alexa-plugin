@@ -10,6 +10,7 @@ That file has the full mandatory checklist. Key rules that keep getting violated
 4. **VERIFY config survived** after deploy. Restore from backup if lost.
 5. **NEVER delete skills** — SMAPI skill deletion is irreversible. NEVER run `ask smapi delete-skill`. A project hook blocks it. If cleanup is needed, ask the user to delete manually.
 6. **Use `$JELLYFIN_URL`** (public URL) for E2E tests, NOT localhost (that's minix-only).
+7. **RE-DISCOVER the plugin dir on EVERY deploy**: `ssh minix "podman exec jellyfin ls /config/data/plugins/" | grep -E 'AlexaSkill_[0-9]' | tail -1`. The catalog auto-update installs the official release into the current versioned dir overnight, displacing dev DLLs; a hardcoded path from a previous session deploys into a dead dir while rebuilds silently use the release DLL. Check the loaded-assembly log line before diagnosing stable-red model readings as trainer state.
 
 ## E2E Tests (SMAPI simulate-skill)
 
