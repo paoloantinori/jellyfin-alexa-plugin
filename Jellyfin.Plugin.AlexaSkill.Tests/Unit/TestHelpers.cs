@@ -556,12 +556,28 @@ internal static class TestHelpers
     /// shared-first-word catalog-synonym shape, live: raw "pink" resolving to
     /// [P!nk, Pink Floyd]). The single-value <see cref="ResolvedSlot"/> shape
     /// cannot express it; this builder mirrors its construction otherwise.
+    /// Delegates to <see cref="ResolvedSlotMultiValueNamed"/> (the ONE
+    /// construction body) on the musician slot the JF-690 suites exercise.
     /// </summary>
     /// <param name="rawValue">The raw spoken slot value.</param>
     /// <param name="canonicalValues">The matched canonical names, rank #1 first.</param>
     internal static Slot ResolvedSlotMultiValue(string rawValue, params string[] canonicalValues)
+        => ResolvedSlotMultiValueNamed(rawValue, "musician", canonicalValues);
+
+    /// <summary>
+    /// JF-877: the slot-named form of <see cref="ResolvedSlotMultiValue"/> (the
+    /// movie multi-value ER gate's shape: raw «il gruffalò» on the movie slot
+    /// resolving to [Il Gruffalò e la sua piccolina, Il Gruffalò]). A DISTINCT
+    /// NAME, not an overload: an additional (rawValue, slotName, params)
+    /// overload would capture existing (rawValue, value, value) calls in
+    /// normal form and silently rebind them.
+    /// </summary>
+    /// <param name="rawValue">The raw spoken slot value.</param>
+    /// <param name="slotName">The slot's name (e.g. "movie").</param>
+    /// <param name="canonicalValues">The matched canonical names, rank #1 first.</param>
+    internal static Slot ResolvedSlotMultiValueNamed(string rawValue, string slotName, params string[] canonicalValues)
     {
-        var slot = new Slot { Name = "musician", Value = rawValue };
+        var slot = new Slot { Name = slotName, Value = rawValue };
         slot.Resolution = new Resolution
         {
             Authorities = new[]
@@ -595,6 +611,29 @@ internal static class TestHelpers
             ["song"] = new Slot { Name = "song", Value = song },
             ["musician"] = musicianSlot
         };
+        return new IntentRequest { Intent = intent, Locale = locale, RequestId = "test-req" };
+    }
+
+    /// <summary>
+    /// JF-877: the ONE PlayMovieIntent request builder (the JF-715 hoist
+    /// pattern, on the second private copy): the movie slot on the wire shape.
+    /// A null slot lands as no entry (the absent-slot legs); the PlayVideo
+    /// sibling suite's private builder repoints here as it is touched, no bulk
+    /// migration (the CreateMovie policy).
+    /// </summary>
+    /// <param name="movieSlot">The movie slot (any ER shape).</param>
+    /// <param name="locale">The request locale, defaulting to it-IT: PlayMovieIntent
+    /// ships it-IT only (JF-874), so the gate suite exercises the locale strings
+    /// the device actually speaks (code-review F5, 2026-10-19).</param>
+    /// <returns>The intent request.</returns>
+    internal static IntentRequest CreatePlayMovieIntent(Slot? movieSlot, string locale = "it-IT")
+    {
+        var intent = new Intent { Name = IntentNames.PlayMovie };
+        if (movieSlot != null)
+        {
+            intent.Slots = new Dictionary<string, Slot> { ["movie"] = movieSlot };
+        }
+
         return new IntentRequest { Intent = intent, Locale = locale, RequestId = "test-req" };
     }
 

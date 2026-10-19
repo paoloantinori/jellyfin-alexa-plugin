@@ -131,9 +131,12 @@ public class PlayVideoIntentHandler : BaseHandler
         // read takes the ER authority's rank-1 value only, so a multi-value
         // match (a partial-word synonym shared by two movies, reachable since
         // JF-874 widened PartialNameSynonyms to Movie) auto-plays Amazon's
-        // first pick with no disambiguation; the artist path's
-        // MultiValueErDisambiguation wiring is the tracked follow-up shape
-        // (JF-702 carries the residual-site ledger).
+        // first pick with no disambiguation; that residual is CLOSED since
+        // JF-877 by the multi-value gate below (the artist path's
+        // MultiValueErDisambiguation wiring, movie leg), which asks on two or
+        // more distinct library movies. This rank-1 read stays the fallback
+        // for every closed-gate leg (JF-702 carries the artist-path
+        // residual-site ledger).
         string? rawTitleFill = isPlayMovie ? null : GetSlotValue(intentRequest, "title");
         string? titleQuery = isPlayMovie
             ? Util.SlotValueHelper.GetCanonicalValue(intentRequest, IntentNames.Slots.Movie) ?? rawMovieFill
@@ -176,20 +179,66 @@ public class PlayVideoIntentHandler : BaseHandler
             return userError;
         }
 
-        var videoSearchQuery = new InternalItemsQuery()
+        // JF-877 (the JF-690 artist gate's movie leg): the MovieTitle catalog's
+        // partial-name synonyms (widened to Movie in JF-874) make a spoken token
+        // ER-match SEVERAL movie entries when two movies share a first
+        // substantive word (live it-IT 2026-10-19: 'il film gruffalò' returned
+        // rank-1 'Il Gruffalò e la sua piccolina', rank-2 'Il Gruffalò', and
+        // the rank-1-only read above auto-played the sequel). Resolve EVERY ER
+        // canonical against the movie library and, on TWO OR MORE distinct
+        // movies, ask which one instead of silently playing Amazon's pick;
+        // ALWAYS ask (the artist path's JF-885 rank-1 dominance bypass is
+        // deliberately not ported: Amazon ranks the sequel first, a 2s confirm
+        // beats a wrong evening film). A collapse to ONE distinct movie adopts
+        // the survivor (a stale rank-1 canonical then plays the real movie
+        // instead of answering not-found with the survivor sitting resolved);
+        // every closed-gate leg (fewer than two ER values, zero resolves)
+        // keeps the existing chain below byte-identical.
+        List<BaseItem>? erMovies = isPlayMovie
+            ? await MultiValueErDisambiguation.ResolveErMovieCandidatesAsync(
+                intentRequest, user, jellyfinUser!, _libraryManager, Logger, cancellationToken).ConfigureAwait(false)
+            : null;
+        if (erMovies is { Count: >= 2 })
         {
-            User = jellyfinUser,
-            Recursive = true,
-            SearchTerm = titleQuery,
-            IncludeItemTypes = new[] { BaseItemKind.Movie, BaseItemKind.Episode },
-            DtoOptions = new DtoOptions(true)
-        };
-        ApplyLibraryFilter(videoSearchQuery, user, _libraryManager);
+            Logger.LogInformation(
+                "PlayMovie: the movie slot's multi-value ER resolved to {Count} distinct library movies ({Names}); asking which to play (JF-877)",
+                erMovies.Count,
+                string.Join(", ", erMovies.Select(v => v.Name)));
+            var matches = erMovies
+                .Take(DisambiguationHelper.FirstMatchStateCap)
+                .Select(v => (v.Id, v.Name, (string?)Launch.GetImageUrl(v.Id.ToString("N"), user)))
+                .ToList();
+            return DisambiguationHelper.AskFirstMatch(matches, DisambiguationHelper.MediaTypeVideo, locale, context);
+        }
 
-        IReadOnlyList<BaseItem> videos = await RetryAsync(
-            () => _libraryManager.GetItemList(videoSearchQuery),
-            "GetVideos",
-            cancellationToken).ConfigureAwait(false);
+        IReadOnlyList<BaseItem> videos;
+        if (erMovies is { Count: 1 })
+        {
+            // The gate's collapse survivor IS the exact-name evidence the search
+            // chain approximates, so every tier below (raw query, stripped
+            // retry, fuzzy) is stood down on this leg.
+            Logger.LogInformation(
+                "PlayMovie: the movie slot's multi-value ER collapsed to the single library movie '{Movie}'; playing it (JF-877)",
+                erMovies[0].Name);
+            videos = erMovies;
+        }
+        else
+        {
+            var videoSearchQuery = new InternalItemsQuery()
+            {
+                User = jellyfinUser,
+                Recursive = true,
+                SearchTerm = titleQuery,
+                IncludeItemTypes = new[] { BaseItemKind.Movie, BaseItemKind.Episode },
+                DtoOptions = new DtoOptions(true)
+            };
+            ApplyLibraryFilter(videoSearchQuery, user, _libraryManager);
+
+            videos = await RetryAsync(
+                () => _libraryManager.GetItemList(videoSearchQuery),
+                "GetVideos",
+                cancellationToken).ConfigureAwait(false);
+        }
 
         if (videos.Count == 0)
         {
@@ -304,7 +353,7 @@ public class PlayVideoIntentHandler : BaseHandler
             }
             else
             {
-                var matches = videos.Take(3).Select(v => (v.Id, v.Name, (string?)Launch.GetImageUrl(v.Id.ToString("N"), user))).ToList();
+                var matches = videos.Take(DisambiguationHelper.FirstMatchStateCap).Select(v => (v.Id, v.Name, (string?)Launch.GetImageUrl(v.Id.ToString("N"), user))).ToList();
                 return DisambiguationHelper.AskFirstMatch(matches, DisambiguationHelper.MediaTypeVideo, locale, context);
             }
         }
