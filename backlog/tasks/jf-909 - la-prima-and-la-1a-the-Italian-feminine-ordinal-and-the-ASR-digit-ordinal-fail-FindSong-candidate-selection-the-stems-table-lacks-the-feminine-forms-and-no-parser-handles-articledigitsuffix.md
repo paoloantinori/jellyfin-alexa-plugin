@@ -4,10 +4,10 @@ title: >-
   'la prima' and 'la 1a' (the Italian feminine ordinal and the ASR
   digit-ordinal) fail FindSong candidate selection: the stems table lacks the
   feminine forms and no parser handles article+digit+suffix
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-10-19 12:45'
-updated_date: '2026-10-19 12:46'
+updated_date: '2026-10-19 13:00'
 labels: []
 dependencies: []
 priority: medium
@@ -38,3 +38,9 @@ DEVICE EVIDENCE 2026-10-19 14:37 (Paolo's loop-test round, minix logs): during F
 <!-- SECTION:NOTES:BEGIN -->
 MAINTAINER CORRECTION 2026-10-19 ~14:4x: Paolo actually answered 'il primo' (masculine, which IS in the stems table) - the ASR produced 'la 1a' anyway (a GENDER-SWAPPED digit-ordinal rendering). This makes the digit-ordinal parser the PRIMARY fix (the ASR's digit rendering cannot be predicted from what the user said); the feminine word forms remain worth adding for the word-form transcription path. The fix is the same: DisambiguationHelper needs both the word stems AND the digit-ordinal shape.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+EXECUTED inline (trivial class: 4 stems-table strings + 1 bounded parser + 15-test battery), committed af229cd3, pushed, DEPLOYED to minix AlexaSkill_1.0.0.0 (md5 3720b860 active, TryParseDigitOrdinal verified in the running DLL via strings, config survived). THE FIX: (1) the Italian feminine ordinals (prima/seconda/terza/quarta) join OrdinalStemsByRank so the WORD form 'la prima' resolves to rank 0; (2) the new TryParseDigitOrdinal handles the ASR's DIGIT-ordinal rendering (the device evidence: Paolo said 'il primo', the ASR produced 'la 1a' - a gender-swapped article+digit+suffix shape no word stem can match): strips the leading article (la/il/lo/le/l'/the/el/der/die/das), strips the trailing ordinal suffix (a/o/ª/º/°), parses the surviving digit under the same 1-4 cap. Placement: between the direct-digit check and the single-token check (a digit-ordinal is unambiguously a rank, never a title, so it runs BEFORE title matching - unlike word ordinals which run AFTER). No-regression: the title-before-ordinal order for WORD forms holds (pinned: 'prima donna' still matches the candidate title). Suite: 6065/6065 BOTH TFMs (6050 + 15 new). gate-exempt: trivial class, justified in the commit.
+<!-- SECTION:FINAL_SUMMARY:END -->
