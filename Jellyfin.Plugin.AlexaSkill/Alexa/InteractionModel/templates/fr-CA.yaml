@@ -326,6 +326,13 @@ intents:
       - '{seek_direction} de {seek_amount} {seek_unit}'
       - sauter {seek_direction}
       - sauter {seek_direction} de {seek_amount} {seek_unit}
+      # The prefixed wrapper twin, the it-IT 'di saltare {seek_direction}'
+      # precedent verbatim: the composed one-shot's "de sauter ..." tail
+      # aligns on an EXPLICIT row (it-IT live A/B: the bare-infinitive twins
+      # alone left the wrapper on trainer generalization, which flipped red;
+      # code-review F1 2026-10-20). Direction-only, mirroring it-IT: the
+      # amount shape stays on the bare-infinitive twin above.
+      - de sauter {seek_direction}
     slots:
       - name: seek_direction
         type: SeekDirection

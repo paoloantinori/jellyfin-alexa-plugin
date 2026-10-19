@@ -5500,7 +5500,7 @@ Placeholder legend:
 | `<mots du titre de la chanson>` | `{titleKeywords}` |
 | `<nom d'utilisateur>` | `{username}` |
 
-Complete phrase list (478 phrases across 73 commands):
+Complete phrase list (479 phrases across 73 commands):
 
 #### Play music
 
@@ -6132,6 +6132,7 @@ Complete phrase list (478 phrases across 73 commands):
 - `<en avant ou en arrière> de <quantité> <secondes ou minutes>`
 - `sauter <en avant ou en arrière>`
 - `sauter <en avant ou en arrière> de <quantité> <secondes ou minutes>`
+- `de sauter <en avant ou en arrière>`
 
 **Change the playback speed**
 
@@ -6238,7 +6239,7 @@ Placeholder legend:
 | `<mots du titre de la chanson>` | `{titleKeywords}` |
 | `<nom d'utilisateur>` | `{username}` |
 
-Complete phrase list (491 phrases across 73 commands):
+Complete phrase list (492 phrases across 73 commands):
 
 #### Play music
 
@@ -6882,6 +6883,7 @@ Complete phrase list (491 phrases across 73 commands):
 - `<en avant ou en arrière> de <quantité> <secondes ou minutes>`
 - `sauter <en avant ou en arrière>`
 - `sauter <en avant ou en arrière> de <quantité> <secondes ou minutes>`
+- `de sauter <en avant ou en arrière>`
 
 **Change the playback speed**
 

@@ -517,6 +517,16 @@ tests:
       seek_direction: {}
       seek_amount: {}
       seek_unit: {}
+
+  # The JF-844 digit-delivery twin for the amount wrapper (the ASR renders
+  # numbers as digits often enough that a generalized alignment can empty
+  # seek_amount; code-review F4 2026-10-20).
+  - utterance: "demande à mon serveur de sauter en avant de 30 secondes"
+    expected_intent: SkipForwardBackIntent
+    expected_slots:
+      seek_direction: {}
+      seek_amount: {}
+      seek_unit: {}
   # Transport steal guard (pre-existing vendor routing).
   - utterance: "chanson suivante"
     expected_intent: ShowMoreIntent

@@ -121,6 +121,17 @@ BATTERY: dict[str, list[tuple[str, str, str]]] = {
     "es-US": [
         ("profile", "reproduzca the bear temporada uno episodio tres", "PlayEpisodeIntent"),
     ],
+    # JF-877 (2026-10-20): the fr composed skip wrappers, SIMULATE rows (the
+    # gap lives at the invocation layer: the bare payloads "sauter en arriere"
+    # and "sauter en avant de trente secondes" already route on profile-nlu,
+    # but the composed one-shots read FallbackIntent pre-deploy). Red until
+    # the DLL embeds the "de sauter {seek_direction}" row and the fr models
+    # are rebuilt; simulate rows exercise the invocation consumption that
+    # profile-nlu cannot.
+    "fr-FR": [
+        ("simulate", "demande à mon serveur de sauter en arrière", "SkipForwardBackIntent"),
+        ("simulate", "demande à mon serveur de sauter en avant de trente secondes", "SkipForwardBackIntent"),
+    ],
 }
 
 # The simulate-outage control: a one-shot that has routed on-device every time
