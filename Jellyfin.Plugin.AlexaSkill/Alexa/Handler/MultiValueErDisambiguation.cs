@@ -719,8 +719,27 @@ internal static class MultiValueErDisambiguation
 
         List<BaseItem> resolved = new();
         HashSet<Guid> seen = new();
+
+        // ONE wall-clock budget across the whole loop, not a fresh
+        // AlexaRequestTimeoutMs per canonical (simplify battery 2026-10-19: a
+        // miss-heavy or all-stale canonical list could otherwise stack up to
+        // N x 6s of retry budgets on the play hot path before the chain's own
+        // query runs). Each canonical pays only the REMAINING budget (the
+        // JF-576 remainder pattern); once spent, the loop stops, keeping
+        // whatever resolved: an ask (>=2) or the collapse (==1) still serve,
+        // and the zero-resolve tail degrades to the caller's chain.
+        var gateDeadline = System.Diagnostics.Stopwatch.StartNew();
         foreach (string canonical in candidates)
         {
+            if (gateDeadline.ElapsedMilliseconds >= RetryHelper.AlexaRequestTimeoutMs)
+            {
+                logger.LogDebug(
+                    "MultiValueEr: movie gate budget exhausted after {Resolved} resolved of {Count} canonicals; proceeding with what resolved (JF-877)",
+                    resolved.Count,
+                    candidates.Count);
+                break;
+            }
+
             // The handler's own search shape, Movie-only (the MovieTitle catalog
             // type syncs movies). The canonical feeds the query VERBATIM: the
             // JF-659 no-romanization contract (a kana-named movie's canonical IS
@@ -739,6 +758,7 @@ internal static class MultiValueErDisambiguation
                 () => libraryManager.GetItemList(query),
                 logger,
                 "GetErMovieCandidates",
+                timeoutMs: (int)Math.Max(0, RetryHelper.AlexaRequestTimeoutMs - gateDeadline.ElapsedMilliseconds),
                 cancellationToken: cancellationToken).ConfigureAwait(false);
 
             BaseItem? exact = hits.FirstOrDefault(v => ArtistSearch.IsExactNameMatch(canonical, v.Name));
@@ -748,13 +768,12 @@ internal static class MultiValueErDisambiguation
 
                 // The consumer's ask state caps at FirstMatchStateCap, and any
                 // count >= 2 beyond the collapse questions asks identically
-                // (code-review JF-877: every canonical past the cap is a FRESH
-                // request-budgeted query the ask discards, so a franchise-sized
-                // ER list on a slow database could outrun Alexa's response
-                // window before the chain below even runs). Stopping here keeps
+                // (code-review JF-877: every canonical past the cap is a
+                // request-budgeted query the ask discards). Stopping here keeps
                 // the user-observable legs byte-identical (the ask stores the
-                // first cap candidates either way) while bounding the gate's
-                // wall time by the cap, not the canonical count.
+                // first cap candidates either way); the gate's WALL time is
+                // owned by the deadline above, this break only trims paid
+                // queries the ask would discard anyway.
                 if (resolved.Count >= DisambiguationHelper.FirstMatchStateCap)
                 {
                     break;

@@ -622,9 +622,11 @@ internal static class TestHelpers
     /// migration (the CreateMovie policy).
     /// </summary>
     /// <param name="movieSlot">The movie slot (any ER shape).</param>
-    /// <param name="locale">The request locale.</param>
+    /// <param name="locale">The request locale, defaulting to it-IT: PlayMovieIntent
+    /// ships it-IT only (JF-874), so the gate suite exercises the locale strings
+    /// the device actually speaks (code-review F5, 2026-10-19).</param>
     /// <returns>The intent request.</returns>
-    internal static IntentRequest CreatePlayMovieIntent(Slot? movieSlot, string locale = "en-US")
+    internal static IntentRequest CreatePlayMovieIntent(Slot? movieSlot, string locale = "it-IT")
     {
         var intent = new Intent { Name = IntentNames.PlayMovie };
         if (movieSlot != null)

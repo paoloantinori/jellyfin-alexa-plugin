@@ -212,7 +212,7 @@ public class PlayVideoIntentHandler : BaseHandler
         }
 
         IReadOnlyList<BaseItem> videos;
-        if (erMovies != null && erMovies.Count == 1)
+        if (erMovies is { Count: 1 })
         {
             // The gate's collapse survivor IS the exact-name evidence the search
             // chain approximates, so every tier below (raw query, stripped
