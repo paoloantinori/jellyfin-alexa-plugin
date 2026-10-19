@@ -1,5 +1,5 @@
 locale: fr-FR
-invocation_name: jellyfin player
+invocation_name: mon serveur
 tests:
   # -------------------------------------------------------------------------
   # 1. LoopAllOffIntent (no slots)
@@ -500,6 +500,24 @@ tests:
       seek_unit: {}
 
   - utterance: "saute en arrière de 30 secondes"
+    expected_intent: SkipForwardBackIntent
+    expected_slots:
+      seek_direction: {}
+      seek_amount: {}
+      seek_unit: {}
+
+  # JF-877 wrapper-tail pins (the it-IT 'chiedi a mia collezione di saltare
+  # avanti' pin precedent: the composed one-shot with the locale invocation
+  # name). The direction-only row is RED-UNTIL-DEPLOY: profile-nlu 2026-10-19
+  # 23:05 (skill 33dfacd5) read it AMAZON.FallbackIntent 3/3 on this locale
+  # (1/1 on fr-CA) against the JF-875-only model. The amount form already
+  # routed via trainer generalization; the JF-877 explicit twin pins it.
+  - utterance: "demande à mon serveur de sauter en arrière"
+    expected_intent: SkipForwardBackIntent
+    expected_slots:
+      seek_direction: {}
+
+  - utterance: "demande à mon serveur de sauter en avant de trente secondes"
     expected_intent: SkipForwardBackIntent
     expected_slots:
       seek_direction: {}

@@ -679,7 +679,7 @@ Invocation name: **"jellyfin player"**
 | Shuffle All Off | `désactive la lecture aléatoire` · `arrête la lecture aléatoire` |
 | Shuffle All On | `active la lecture aléatoire` · `mélange la file d'attente` · `lecture aléatoire` |
 | Shuffle Play | `lis la playlist {playlist} en mode aléatoire` · `mélange la playlist {playlist}` · `mets la playlist {playlist} en mode aléatoire` |
-| Skip Forward Back | `saute {seek_direction}` · `saute {seek_direction} de {seek_amount} {seek_unit}` · `{seek_direction} de {seek_amount} {seek_unit}` |
+| Skip Forward Back | `saute {seek_direction}` · `saute {seek_direction} de {seek_amount} {seek_unit}` · `{seek_direction} de {seek_amount} {seek_unit}` · `sauter {seek_direction}` · `sauter {seek_direction} de {seek_amount} {seek_unit}` |
 | Sleep Timer | `arrêter dans {sleep_duration}` · `minuterie {sleep_duration}` · `arrêter après {sleep_duration}` · `éteindre dans {sleep_duration}` |
 | Turn Radio Off | `Désactive le mode radio` · `Éteins le mode radio` · `Mode radio désactivé` · `Désactive la radio` · `Éteins la radio` · `Arrête le mode radio` |
 | Turn Radio On | `Active le mode radio` · `Allume le mode radio` · `Mode radio activé` · `Active la radio` · `Allume la radio` |
@@ -743,7 +743,7 @@ Invocation name: **"jellyfin player"**
 | Shuffle All Off | `désactive la lecture aléatoire` · `arrête la lecture aléatoire` |
 | Shuffle All On | `active la lecture aléatoire` · `mélange la file d'attente` · `mets en lecture aléatoire` · `lecture aléatoire` |
 | Shuffle Play | `lis la playlist {playlist} en mode aléatoire` · `mélange la playlist {playlist}` · `mets la playlist {playlist} en mode aléatoire` |
-| Skip Forward Back | `saute {seek_direction}` · `saute {seek_direction} de {seek_amount} {seek_unit}` · `{seek_direction} de {seek_amount} {seek_unit}` |
+| Skip Forward Back | `saute {seek_direction}` · `saute {seek_direction} de {seek_amount} {seek_unit}` · `{seek_direction} de {seek_amount} {seek_unit}` · `sauter {seek_direction}` · `sauter {seek_direction} de {seek_amount} {seek_unit}` |
 | Sleep Timer | `arrêter dans {sleep_duration}` · `minuterie {sleep_duration}` · `arrêter après {sleep_duration}` · `éteindre dans {sleep_duration}` |
 | Turn Radio Off | `Désactive le mode radio` · `Éteins le mode radio` · `Mode radio désactivé` · `Désactive la radio` · `Éteins la radio` · `Arrête le mode radio` |
 | Turn Radio On | `Active le mode radio` · `Allume le mode radio` · `Mode radio activé` · `Active la radio` · `Allume la radio` |
