@@ -3,7 +3,7 @@ id: JF-797
 title: >-
   JF-797 - the PlayBook normalization hardening residuals: the payload-kind
   gate, the lazy folder resolution, and the fresh-ask resume discriminator
-status: To Do
+status: Done
   JF-797 - the PlayBook normalization hardening residuals: the payload-kind gate, the
   lazy folder resolution, and the fresh-ask resume discriminator
 assignee: []
@@ -178,4 +178,7 @@ the algorithm itself is filed separately as JF-803; implement the discriminator 
 inside the lifted helper.
 
 JF-796 GATE-MARKER ADDENDUM (2026-10-07): item 3 gains the MASKING SHAPE - the deep-resolution gate keys on startIndex == 0, so a PLAYED PREFIX on page 1 (after-last-played at index > 0, ticks 0) suppresses the deep scan even when a deeper in-progress track exists beyond the page; resume lands at the shallow prefix position instead of the full-list answer. The JF-793 book twin's guard in AudiobookPlayResolver shares the shape, so the fix (deep-scan whenever the page yields ticks == 0 AND more pages remain, regardless of the prefix index) must land mirrored on both paths with pins on both. The JF-796 block comment documents only the unstarted-album trade; extend it when fixing.
+
+RESOLUTION RECORD (2026-10-19, orchestrator; the MCP index lost this file so the closure is a direct edit): RESOLVED-AS-ALREADY-SHIPPED (verified no-op re-dispatch). The coordinator dispatched this task believing it unstarted; the verification worker proved all three items were ALREADY IMPLEMENTED AND MERGED on main before dispatch - (1) the exhaustive payload-kind deny-list in AudiobookItems.IsBookDisambiguationPayload with denied-kind Theory pins in YesIntentHandlerTests, (2) the batched TryResolveBookFolder overload with the per-ask ParentId scratchpad, (3) MayHaveResumeRelevantUserDataAsync wired in both deep-resume heads with query-count pins - the six commits c8404ca9..f6adaf8e are MERGED ON MAIN (git branch --contains: main contains all six), with the JF-790/JF-803/JF-804/JF-812 follow-ups consuming the landed code on top. The verification worker ran one Release -warnaserror build of the full solution on the untouched tree: 0 warnings, 0 errors. Gate-exempt: no code was changed for this task in this session (the bookkeeping closure of a stale record, same class as the JF-329 no-op precedent commit 0d6669c5); the implementation's own gates ran in the original six commits' sessions (5484/5484 both TFMs at that era, /simplify + /code-review recorded above).
+
 <!-- SECTION:NOTES:END -->
