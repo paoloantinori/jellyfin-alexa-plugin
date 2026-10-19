@@ -312,26 +312,13 @@ intents:
   # The JF-869/JF-875 rules above still bind: no bare direction-only row,
   # no direction-literal row, no new slot.
   - name: SkipForwardBackIntent
-    samples:
-      - salta {seek_direction}
-      - salta {seek_direction} {seek_amount} {seek_unit}
-      - salta {seek_amount} {seek_unit}
-      - '{seek_direction} {seek_amount} {seek_unit}'
-      # JF-877: the bare SUBJUNCTIVE twins pin the wrapper tail when the
-      # connector residue is stripped (the reproduzca bare rows).
-      - salte {seek_direction}
-      - salte {seek_direction} {seek_amount} {seek_unit}
-      # The que connector-residue twins pin the composed one-shot itself
-      # (the wrapper's que rides into the payload, the "que reproduzca"
-      # precedent).
-      - que salte {seek_direction}
-      - que salte {seek_direction} {seek_amount} {seek_unit}
-      # The amount-first prefixed twin: the probe's own phrasing ("que
-      # salte 30 segundos hacia atrás"); unanchored, its nearest
-      # amount-first-shaped anchor is the direction-less base row, which
-      # delivers an EMPTY seek_direction and the handler's forward default
-      # seeks the wrong way (the JF-869 class).
-      - que salte {seek_amount} {seek_unit} {seek_direction}
+    # JF-877/JF-855: the family is a DECLARED MIRROR of es-ES (the rows
+    # were hand-identical across the trio at JF-877; the generator now
+    # enforces the identity). The per-family narrative (the JF-875 shape
+    # rules, the JF-877 probe map and the row-by-row rationale) lives in
+    # es-ES.yaml, which owns every row.
+    mirror:
+      locale: es-ES
     slots:
       - name: seek_direction
         type: SeekDirection

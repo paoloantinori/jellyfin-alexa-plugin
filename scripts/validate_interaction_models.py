@@ -695,6 +695,53 @@ def lint_fixture_carriers(all_models: dict[str, dict], fixtures_dir: Path = FIXT
     return warnings
 
 
+def lint_fixture_invocation_names(all_models: dict[str, dict], fixtures_dir: Path = FIXTURES_DIR) -> list[str] | None:
+    """WARNING lint: NLU fixture invocation_name headers drifting from the models.
+
+    The fixtures' invocation_name header feeds the simulate one-shot composer
+    (SmapiClient prefixes the locale's invocation pattern with it), so a stale
+    header false-reds every composed-wrapper row under any simulate run. The
+    drift class is real: JF-558 renamed the locales' invocation names on
+    2026-09-13 and the NLU fixture headers lagged a month (caught 2026-10-20,
+    the JF-877 es/nl lane). The models carry invocationName as a
+    machine-readable field, so the equality is exact, not heuristic. Custom
+    per-user invocation names are runtime config and never appear in either
+    place, so a mismatch is always drift.
+    """
+    warnings: list[str] = []
+    if not fixtures_dir.is_dir():
+        print("  SKIP: fixtures directory not found:", fixtures_dir)
+        return None
+    try:
+        import yaml
+    except ImportError:
+        print("  SKIP: PyYAML not installed, fixture lint not run")
+        return None
+
+    for locale, lm in sorted(all_models.items()):
+        fixture_path = fixtures_dir / f"{locale}.yaml"
+        if not fixture_path.is_file():
+            continue
+        try:
+            data = yaml.safe_load(fixture_path.read_text())
+        except yaml.YAMLError:
+            continue
+        if not isinstance(data, dict):
+            continue
+        header = data.get("invocation_name")
+        if not isinstance(header, str) or not header:
+            continue
+        model_name = lm.get("invocationName")
+        if isinstance(model_name, str) and header != model_name:
+            warnings.append(
+                f"  [{locale}] fixture invocation_name '{header}' != model "
+                f"invocationName '{model_name}' (stale header; the simulate "
+                f"composer would prefix composed one-shots with the wrong name)"
+            )
+
+    return warnings
+
+
 def lint_browse_category_ids(all_models: dict[str, dict]) -> list[str]:
     """WARNING lint: BrowseCategory slot-value ids drifting from the shared key space.
 
@@ -1432,6 +1479,16 @@ def main() -> int:
             "NLU fixture carrier lint",
             lambda: lint_fixture_carriers(all_models),
             "All linted fixture utterances match a current sample carrier",
+            all_warnings,
+        )
+
+    # Phase 3b: fixture invocation_name parity (JF-877 drift check; exact, not
+    # heuristic, but warning-class to match the fixture-lint contract)
+    if all_models:
+        run_warning_phase(
+            "Fixture invocation_name parity",
+            lambda: lint_fixture_invocation_names(all_models),
+            "Every fixture invocation_name matches its model's invocationName",
             all_warnings,
         )
 
