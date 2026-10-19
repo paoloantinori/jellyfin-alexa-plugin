@@ -309,11 +309,30 @@ intents:
   # default-forward twin is deliberately OMITTED: the direction phrase is
   # grammatical in French only with it ("saute 30 secondes" sans en avant
   # tronque), so a direction-less row would only harvest misalignments.
+  # JF-877 (2026-10-19): the bare-infinitive wrapper-tail twins at the tail of
+  # the sample list (the it-IT saltare precedent). Live probe (profile-nlu
+  # 2026-10-19 23:05, skill 33dfacd5): the composed direction-only wrapper
+  # "demande à mon serveur de sauter en arrière" read AMAZON.FallbackIntent
+  # 1/1 here (3/3 on fr-FR), the condemned row; the composed amount wrapper
+  # "demande à mon serveur de sauter en avant de trente secondes" already
+  # routes SkipForwardBackIntent via trainer generalization from the JF-875
+  # base rows, and its explicit twin pins that routing. The JF-869/JF-875
+  # rules above still bind: no bare direction-only row, no direction-literal
+  # row, no new slot.
   - name: SkipForwardBackIntent
     samples:
       - saute {seek_direction}
       - saute {seek_direction} de {seek_amount} {seek_unit}
       - '{seek_direction} de {seek_amount} {seek_unit}'
+      - sauter {seek_direction}
+      - sauter {seek_direction} de {seek_amount} {seek_unit}
+      # The prefixed wrapper twin, the it-IT 'di saltare {seek_direction}'
+      # precedent verbatim: the composed one-shot's "de sauter ..." tail
+      # aligns on an EXPLICIT row (it-IT live A/B: the bare-infinitive twins
+      # alone left the wrapper on trainer generalization, which flipped red;
+      # code-review F1 2026-10-20). Direction-only, mirroring it-IT: the
+      # amount shape stays on the bare-infinitive twin above.
+      - de sauter {seek_direction}
     slots:
       - name: seek_direction
         type: SeekDirection

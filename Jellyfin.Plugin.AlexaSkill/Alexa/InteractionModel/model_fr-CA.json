@@ -341,7 +341,10 @@
         "samples": [
           "saute {seek_direction}",
           "saute {seek_direction} de {seek_amount} {seek_unit}",
-          "{seek_direction} de {seek_amount} {seek_unit}"
+          "{seek_direction} de {seek_amount} {seek_unit}",
+          "sauter {seek_direction}",
+          "sauter {seek_direction} de {seek_amount} {seek_unit}",
+          "de sauter {seek_direction}"
         ],
         "slots": [
           {
