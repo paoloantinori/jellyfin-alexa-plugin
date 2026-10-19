@@ -165,6 +165,7 @@ intents:
     samples:
       - Lis {song}
       - Lis la chanson {song}
+      - Joue la chanson {song}
       - Lis chanson {song}
       - Lis {song} de {musician}
       - Lis la chanson {song} de {musician}
