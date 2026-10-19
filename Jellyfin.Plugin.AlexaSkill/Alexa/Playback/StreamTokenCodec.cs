@@ -182,4 +182,18 @@ internal static class StreamTokenCodec
         => TryGetItemId(token, out Guid tokenItem)
             && TryGetItemId(itemId, out Guid namedItem)
             && tokenItem == namedItem;
+
+    /// <summary>
+    /// The bare item-id form of a stream token (the JF-910 audit's ONE
+    /// canonicalizer): the parsed id when the token is bare or carries a KNOWN
+    /// suffix, the raw token otherwise (the unknown-suffix passthrough this
+    /// codec's guard dictates). For callers that adopt an AudioPlayer token as
+    /// an item id: a raw composite in a stream URL path is an unresolvable
+    /// Jellyfin route, and the launch mint can only stack a second suffix onto
+    /// it. The id renders in the dashed <c>ToString()</c> form.
+    /// </summary>
+    /// <param name="token">The raw stream token from the request context.</param>
+    /// <returns>The bare item id, or the raw token when unparseable (null stays null).</returns>
+    internal static string? CanonicalizeItemId(string? token)
+        => TryGetItemId(token, out Guid itemId) ? itemId.ToString() : token;
 }

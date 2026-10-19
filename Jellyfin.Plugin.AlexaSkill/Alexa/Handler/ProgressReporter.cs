@@ -1050,9 +1050,23 @@ public sealed class ProgressReporter
         // already a member, preserving every existing member (an AddToQueue seed
         // survives), and only then does SetRepeatMode land on a coherent store.
         DeviceQueueManager? queueWriter = queueManager ?? Plugin.Instance?.DeviceQueueManager;
+        bool pendingRepeatOnDevice = false;
         if (!string.IsNullOrEmpty(deviceId) && queueWriter != null)
         {
             Playback.DeviceQueue? existing = queueWriter.GetQueue(deviceId!);
+
+            // JF-910 snapshot, read BEFORE the Enqueue/SetRepeatMode writes below
+            // (the pre-write mode is one of the helper's legs): the 33s-remaining
+            // race shape, where NearlyFinished fired inside the ~30s pre-enqueue
+            // window, read RepeatMode=One, and enqueued the same track BEFORE the
+            // user finished saying LoopOff. Clearing the mode cannot remove an
+            // already-enqueued stream, so the directive at the tail is what
+            // actually retires the pending repeat. A LoopOff over an already-off
+            // loop stays a pure speech no-op (the pre-write mode leg).
+            pendingRepeatOnDevice =
+                mode == RepeatMode.RepeatNone
+                && DeviceQueueManager.HasPendingSameItemRepeat(existing, requestState?.Token);
+
             if (existing == null || !queueWriter.IsItemQueued(existing, itemId.ToString()))
             {
                 queueWriter.Enqueue(deviceId!, itemId, DeviceQueueManager.QueueInsertPlacement.AfterCurrent, currentItemId: itemId);
@@ -1105,7 +1119,29 @@ public sealed class ProgressReporter
             RepeatMode.RepeatOne => "RepeatSongEnabled",
             _ => "RepeatDisabled",
         };
-        return ResponseBuilder.Tell(ResponseStrings.Get(confirmKey, locale));
+        SkillResponse confirmation = ResponseBuilder.Tell(ResponseStrings.Get(confirmKey, locale));
+
+        // JF-910: retire the pending repeat the mode clear cannot reach. Amazon's
+        // queue is device-side state: an AudioPlayer.Play(ENQUEUE) already
+        // delivered is NOT undone by any plugin-side flag, so the LoopOff race
+        // (NearlyFinished pre-enqueued the same track seconds earlier) repeated
+        // the track after "Ripetizione disattivata". ClearQueue(CLEAR_ENQUEUED)
+        // removes ONLY the queued items, never the currently-playing stream, so
+        // the finishing track plays out to its end and playback stops there:
+        // exactly what disabling the loop asked for.
+        if (pendingRepeatOnDevice)
+        {
+            confirmation.Response.Directives.Add(new ClearQueueDirective
+            {
+                ClearBehavior = ClearBehavior.ClearEnqueued,
+            });
+            queueWriter?.ClearEnqueueRecord(deviceId!);
+            _logger.LogInformation(
+                "{Label}: a same-item repeat was already enqueued on the device for the current stream; issuing ClearQueue(CLEAR_ENQUEUED) beside the mode clear so the pending repeat never plays",
+                label);
+        }
+
+        return confirmation;
     }
 
     /// <summary>

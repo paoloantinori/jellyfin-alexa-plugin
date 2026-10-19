@@ -115,8 +115,13 @@ public class ResumeIntentHandler : BaseHandler
         }
 
         // Prefer AudioPlayer token (survives session cleanup after PlaybackStopped),
-        // fall back to session's now-playing item ID
-        string? item_id = context.AudioPlayer?.Token
+        // fall back to session's now-playing item ID. JF-910 audit: the token may be
+        // COMPOSITE (the JF-655 launch generation, the JF-447 sleep deadline), and
+        // adopting it RAW put the suffix into the tail's stream URL path and the
+        // launch mint, so it is canonicalized to the bare item id at this ONE intake
+        // (the codec's canonicalizer owns the rule); every compare in this file
+        // already goes through the codec.
+        string? item_id = StreamTokenCodec.CanonicalizeItemId(context.AudioPlayer?.Token)
             ?? session?.FullNowPlayingItem?.Id.ToString();
 
         int offset = 0;
