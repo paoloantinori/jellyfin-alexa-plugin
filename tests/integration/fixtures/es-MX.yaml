@@ -491,6 +491,17 @@ tests:
       seek_amount: {}
       seek_unit: {}
 
+  # The amount-first twin (the es-ES fourth pin, code-review round 3 F2: the
+  # probe's own phrasing "que salte 30 segundos hacia atrás"; unanchored, its
+  # nearest anchor is the direction-less base row, the JF-869 wrong-way class
+  # the amount-first template row re-anchors).
+  - utterance: "pide a mi colección que salte 30 segundos hacia atrás"
+    expected_intent: SkipForwardBackIntent
+    expected_slots:
+      seek_direction: {}
+      seek_amount: {}
+      seek_unit: {}
+
   # Transport steal guard.
   - utterance: "siguiente canción"
     expected_intent: AMAZON.NextIntent

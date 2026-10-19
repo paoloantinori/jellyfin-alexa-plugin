@@ -718,26 +718,44 @@ def lint_fixture_invocation_names(all_models: dict[str, dict], fixtures_dir: Pat
         print("  SKIP: PyYAML not installed, fixture lint not run")
         return None
 
-    for locale, lm in sorted(all_models.items()):
-        fixture_path = fixtures_dir / f"{locale}.yaml"
+    def _check(fixture_path: Path, locale: str, model_name: str | None,
+               required: bool) -> None:
         if not fixture_path.is_file():
-            continue
+            return
         try:
             data = yaml.safe_load(fixture_path.read_text())
         except yaml.YAMLError:
-            continue
+            return
         if not isinstance(data, dict):
-            continue
+            return
         header = data.get("invocation_name")
+        # Drift by DELETION must warn too (review round 3 F7): the composer
+        # silently degrades when the header vanishes, so absence is not a
+        # clean skip where the fixture family carries the field by convention.
         if not isinstance(header, str) or not header:
-            continue
-        model_name = lm.get("invocationName")
+            if required:
+                warnings.append(
+                    f"  [{locale}] {fixture_path.name}: invocation_name header "
+                    f"is missing or empty (the simulate composer needs it)"
+                )
+            return
         if isinstance(model_name, str) and header != model_name:
             warnings.append(
-                f"  [{locale}] fixture invocation_name '{header}' != model "
-                f"invocationName '{model_name}' (stale header; the simulate "
-                f"composer would prefix composed one-shots with the wrong name)"
+                f"  [{locale}] {fixture_path.name}: invocation_name '{header}' "
+                f"!= model invocationName '{model_name}' (stale header; the "
+                f"simulate composer would prefix composed one-shots with the "
+                f"wrong name)"
             )
+
+    for locale, lm in sorted(all_models.items()):
+        model_name = lm.get("invocationName")
+        # The NLU fixture: the header is part of the schema (all 17 carry it).
+        _check(fixtures_dir / f"{locale}.yaml", locale, model_name, required=True)
+        # Every e2e-family fixture for the locale (e2e_, e2e_smoke_,
+        # e2e_reliability_): the header feeds the same composer (review round
+        # 3 F4; all 20 carry it today).
+        for fixture_path in sorted(fixtures_dir.glob(f"e2e_*{locale}.yaml")):
+            _check(fixture_path, locale, model_name, required=True)
 
     return warnings
 

@@ -7,14 +7,23 @@ layers (verified live 2026-09-22):
 
 - "profile" rows carry NO invocation prefix. profile-nlu matches the raw text
   against the saved model, which is exactly right for these (bare infinitives,
-  imperative forms). The prefix words of a wrapper phrase are NOT model samples,
-  so feeding a prefixed phrase to profile-nlu fails BY DESIGN - never do that.
+  imperative forms, connector-residue payloads like "que reproduzca ...").
+  REFINED (JF-877, 2026-10-20): a prefixed phrase is NOT auto-fail either way -
+  profile-nlu routes it ONLY when an explicit wrapper-tail row anchors the tail
+  (the "de sauter"/"que salte"/"di saltare" twin class, live-verified fr
+  acceptance 2026-10-20); the fixture suite pins those composed forms as
+  profile rows deliberately. When adding a row, prefer the bare payload here
+  and pin the composed form in the fixtures.
 - "simulate" rows carry the full one-shot wrapper ("chiedi a mia collezione
   di ..."). Only the simulate pipeline models the invocation-matching layer
-  that strips the prefix. These rows run an evergreen control first; when the
-  control itself fails to invoke, the per-locale simulate outage (memory:
-  simulate_outage_per_locale; recurring 09-13/14/21-22) is active and the
-  wrapper rows SKIP with an OUTAGE marker (not FAIL).
+  that strips the prefix. These rows run a LOCALE evergreen control first
+  (EVERGREEN_CONTROLS); when the control itself fails to invoke, the
+  per-locale simulate outage (memory: simulate_outage_per_locale; recurring
+  09-13/14/21-22) is active and the wrapper rows SKIP with an OUTAGE marker
+  (not FAIL). A locale with simulate rows but no known evergreen control is a
+  configuration error (exit 2): es/nl one-shot wrappers are
+  invocation-layer-unreliable (SmapiClient.INVOCATION_PREFIX notes), so those
+  sections use profile rows instead.
 
 Any real FAIL means a template-twin bug: add the infinitive/wrapper twin to the
 locale's interaction-model template (JF-551 wrapper families, CLAUDE.md
@@ -114,16 +123,15 @@ BATTERY: dict[str, list[tuple[str, str, str]]] = {
         # the connector-residue twin (the wrapper's "que" may ride into the
         # payload; see the es-ES fixture comment for the open verification)
         ("profile", "que reproduzca the bear temporada uno episodio tres", "PlayEpisodeIntent"),
-        # JF-877 (2026-10-20): the es composed skip wrappers, SIMULATE rows
-        # (the JF-551 que+subjunctive wrapper; profile-nlu 2026-10-20 00:25,
-        # skill 33dfacd5, read BOTH composed one-shots FallbackIntent with
-        # the CORRECT invocation name, while the bare "salta hacia atras"
-        # routes). Red until the DLL embeds the "que salte" rows and the es
-        # models are rebuilt; simulate rows exercise the invocation
-        # consumption that profile-nlu cannot. The amount row keeps the
-        # base rows' direction-first slot order.
-        ("simulate", "pide a mi colección que salte hacia atrás", "SkipForwardBackIntent"),
-        ("simulate", "pide a mi colección que salte hacia atrás treinta segundos", "SkipForwardBackIntent"),
+        # JF-877 (2026-10-20): the es skip wrapper-tail rows, PROFILE payloads
+        # (the connector-residue "que salte" shape, this section's own
+        # convention: the es one-shot invocation layer is unreliable, so no
+        # simulate rows here - code-review round 3 F1). Pre-deploy these read
+        # no-selection against the JF-875-only model; the fixtures pin the
+        # COMPOSED "pide a mi colección ..." forms. The amount row uses the
+        # probe's own amount-first phrasing.
+        ("profile", "que salte hacia atrás", "SkipForwardBackIntent"),
+        ("profile", "que salte treinta segundos hacia atrás", "SkipForwardBackIntent"),
     ],
     "es-MX": [
         ("profile", "reproduzca the bear temporada uno episodio tres", "PlayEpisodeIntent"),
@@ -142,23 +150,32 @@ BATTERY: dict[str, list[tuple[str, str, str]]] = {
         ("simulate", "demande à mon serveur de sauter en arrière", "SkipForwardBackIntent"),
         ("simulate", "demande à mon serveur de sauter en avant de trente secondes", "SkipForwardBackIntent"),
     ],
-    # JF-877 (2026-10-20): the nl composed skip wrappers, SIMULATE rows (the
-    # om-te wrapper; profile-nlu 2026-10-20 00:25, skill 33dfacd5, read BOTH
-    # composed one-shots FallbackIntent with the CORRECT invocation name,
-    # while the bare "spring 30 seconden vooruit" routes). Red until the DLL
-    # embeds the "om ... te springen" rows and the nl model is rebuilt. The
-    # amount row uses the word-form number: this locale's profile-nlu fails
-    # DIGIT delivery into AMAZON.NUMBER slots (the fixture-documented quirk),
-    # so the digit phrasing is not asserted here.
+    # JF-877 (2026-10-20): the nl skip wrapper-tail rows, PROFILE payloads (the
+    # om-less te-springen twins; profile-nlu 2026-10-20 00:25, skill 33dfacd5,
+    # read BOTH composed one-shots FallbackIntent with the CORRECT invocation
+    # name, while the bare "spring 30 seconden vooruit" routes). PROFILE not
+    # simulate: the nl one-shot invocation layer is documented-unreliable
+    # (SmapiClient.INVOCATION_PREFIX notes), so no evergreen one-shot control
+    # exists for this locale (code-review round 3 F1); the fixtures pin the
+    # composed "vraag mijn collectie ..." forms. Word-form amount only: this
+    # locale's profile-nlu fails DIGIT delivery into AMAZON.NUMBER slots (the
+    # fixture-documented quirk).
     "nl-NL": [
-        ("simulate", "vraag mijn collectie om vooruit te springen", "SkipForwardBackIntent"),
-        ("simulate", "vraag mijn collectie om dertig seconden vooruit te springen", "SkipForwardBackIntent"),
+        ("profile", "vooruit te springen", "SkipForwardBackIntent"),
+        ("profile", "dertig seconden vooruit te springen", "SkipForwardBackIntent"),
     ],
 }
 
-# The simulate-outage control: a one-shot that has routed on-device every time
-# it was tried. When IT fails to invoke, simulate is down for the locale.
-EVERGREEN_CONTROL = "chiedi a mia collezione di suonare i radiohead"
+# The simulate-outage controls: per-locale one-shots that have routed
+# on-device/live every time they were tried (the it-IT phrase is the original
+# device-proven control; fr carries the JF-900 live-verified composition).
+# When a locale's control fails to invoke, simulate is down for THAT locale and
+# its simulate rows skip. A locale whose section carries simulate rows but has
+# no control here is a configuration error (exit 2), never a silent skip.
+EVERGREEN_CONTROLS = {
+    "it-IT": "chiedi a mia collezione di suonare i radiohead",
+    "fr-FR": "demande à mon serveur de lire mes favoris",
+}
 
 
 def _run_ask(args: list[str]) -> subprocess.CompletedProcess:
@@ -269,7 +286,14 @@ def main() -> int:
     simulate_rows = [row for row in phrases if row[0] == "simulate"]
     outage = False
     if simulate_rows:
-        control_invoked, _ = simulate_intent(skill_id, args.locale, EVERGREEN_CONTROL)
+        control_phrase = EVERGREEN_CONTROLS.get(args.locale)
+        if not control_phrase:
+            print(f"ERROR: {args.locale} carries simulate rows but no evergreen "
+                  "control is known for it (add one to EVERGREEN_CONTROLS or "
+                  "convert the rows to profile payloads); refusing to run them "
+                  "as silent skips")
+            return 2
+        control_invoked, _ = simulate_intent(skill_id, args.locale, control_phrase)
         outage = not control_invoked
         if outage:
             print(f"# OUTAGE: evergreen control failed to invoke; {len(simulate_rows)} "

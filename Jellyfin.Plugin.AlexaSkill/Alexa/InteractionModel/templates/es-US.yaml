@@ -294,19 +294,9 @@ intents:
   # The bare row carries the avanza/retrocede verb-direction synonyms (the
   # rewind-as-synonym mechanism); "salta {seek_amount} {seek_unit}" is the
   # direction-less default-forward row (the en "skip 30 seconds" shape).
-  # JF-877 (2026-10-20): the SUBJUNCTIVE wrapper-tail twins (this locale's
-  # wrapper convention is the JF-551 "que + subjunctive" connector, not the
-  # fr/it de/di + infinitive: the es one-shot wrapper is "pide a mi
-  # colección que salte ..."). Live probe (profile-nlu 2026-10-20 00:25,
-  # skill 33dfacd5, the CORRECT invocation name): the composed wrapper
-  # "pide a mi colección que salte hacia atrás" read AMAZON.FallbackIntent
-  # and so did its amount form (BOTH condemned, unlike fr where the amount
-  # form already routed); the bare "salta hacia atrás" routes (the probe
-  # ran on es-ES; the rows are byte-identical in all three es templates
-  # and the models rebuild together). Both composed shapes get their
-  # explicit row pair (the fr code-review F1 lesson: the bare twins alone
-  # leave the wrapper on trainer generalization that can flip red); the
-  # amount rows keep the JF-875 base rows' direction-first slot order.
+  # JF-877 (2026-10-20): the SUBJUNCTIVE wrapper-tail twins landed (the
+  # probe map and the row-by-row rationale live in es-ES.yaml, which owns
+  # every row since the JF-855 mirror conversion in the same round).
   # The JF-869/JF-875 rules above still bind: no bare direction-only row,
   # no direction-literal row, no new slot.
   - name: SkipForwardBackIntent
