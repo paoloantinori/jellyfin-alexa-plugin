@@ -42,8 +42,9 @@ internal static class SeekVocabulary
         "indietro",
         // de-DE
         "zurück", "rückwärts",
-        // es family + pt-BR (atrás shared)
-        "atrás", "retrocede",
+        // es family + pt-BR (atrás shared; "hacia atrás" joined in JF-877 as
+        // the raw-branch twin of the type synonym, the probes' phrasing)
+        "atrás", "retrocede", "hacia atrás",
         // fr family
         "en arrière", "recule",
         // hi-IN

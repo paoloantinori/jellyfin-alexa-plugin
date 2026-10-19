@@ -321,7 +321,12 @@
           "salta {seek_direction}",
           "salta {seek_direction} {seek_amount} {seek_unit}",
           "salta {seek_amount} {seek_unit}",
-          "{seek_direction} {seek_amount} {seek_unit}"
+          "{seek_direction} {seek_amount} {seek_unit}",
+          "salte {seek_direction}",
+          "salte {seek_direction} {seek_amount} {seek_unit}",
+          "que salte {seek_direction}",
+          "que salte {seek_direction} {seek_amount} {seek_unit}",
+          "que salte {seek_amount} {seek_unit} {seek_direction}"
         ],
         "slots": [
           {
@@ -1443,7 +1448,8 @@
             "name": {
               "value": "adelante",
               "synonyms": [
-                "avanza"
+                "avanza",
+                "hacia adelante"
               ]
             },
             "id": "forward"
@@ -1452,7 +1458,8 @@
             "name": {
               "value": "atrás",
               "synonyms": [
-                "retrocede"
+                "retrocede",
+                "hacia atrás"
               ]
             },
             "id": "back"

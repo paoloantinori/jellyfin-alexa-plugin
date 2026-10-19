@@ -1,5 +1,5 @@
 locale: ja-JP
-invocation_name: jellyfin player
+invocation_name: マイコレクション
 tests:
   # JF-400 completion: ja-JP was the last locale without an NLU fixture (vendor-disabled
   # until JF-513 declared it in the manifest). Seeded 2026-09-12, every entry

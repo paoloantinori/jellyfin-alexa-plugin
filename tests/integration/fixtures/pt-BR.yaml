@@ -1,5 +1,5 @@
 locale: pt-BR
-invocation_name: jellyfin player
+invocation_name: minha coleção
 tests:
   # JF-400: pt-BR had no NLU fixture file; seeded (probe-verified 2026-08-29 against the
   # pushed model) with the JF-414 indefinite album-by-artist forms plus a browse sanity

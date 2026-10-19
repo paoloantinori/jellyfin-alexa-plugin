@@ -1,5 +1,5 @@
 locale: es-ES
-invocation_name: jellyfin player
+invocation_name: mi colección
 tests:
   # -------------------------------------------------------------------------
   # 1. LoopSongOnIntent (no slots)
@@ -475,6 +475,49 @@ tests:
       seek_unit: {}
 
   - utterance: "salta atrás 30 segundos"
+    expected_intent: SkipForwardBackIntent
+    expected_slots:
+      seek_direction: {}
+      seek_amount: {}
+      seek_unit: {}
+
+  # JF-877 wrapper-tail pins (the it-IT 'chiedi a mia collezione di saltare
+  # avanti' and fr 'demande à mon serveur de sauter en arrière' pin
+  # precedents: the composed one-shot with the locale invocation name, the
+  # JF-551 que+subjunctive wrapper). RED-UNTIL-DEPLOY: profile-nlu
+  # 2026-10-20 00:25 (skill 33dfacd5, the CORRECT invocation name) read
+  # BOTH composed forms AMAZON.FallbackIntent on this locale (the bare
+  # 'salta hacia atrás' routes); green only once the rebuilt model carries
+  # the que salte rows. The amount pins keep the base rows' direction-first
+  # slot order (the probe's amount phrasing was amount-first, 'que salte 30
+  # segundos hacia atrás'; that order rides trainer generalization anchored
+  # by the four salte rows, the fr F1 mechanism in reverse).
+  - utterance: "pide a mi colección que salte hacia atrás"
+    expected_intent: SkipForwardBackIntent
+    expected_slots:
+      seek_direction: {}
+
+  - utterance: "pide a mi colección que salte hacia atrás treinta segundos"
+    expected_intent: SkipForwardBackIntent
+    expected_slots:
+      seek_direction: {}
+      seek_amount: {}
+      seek_unit: {}
+
+  # The JF-844 digit-delivery twin for the amount wrapper (the fr F4
+  # precedent; es digit delivery is proven green by the JF-875 pins above).
+  - utterance: "pide a mi colección que salte hacia atrás 30 segundos"
+    expected_intent: SkipForwardBackIntent
+    expected_slots:
+      seek_direction: {}
+      seek_amount: {}
+      seek_unit: {}
+
+  # The amount-first composed form, the probe's own phrasing (code-review:
+  # anchored on its explicit row since the direction-less base row is its
+  # nearest amount-first-shaped anchor and would deliver an empty
+  # seek_direction, the JF-869 wrong-way class).
+  - utterance: "pide a mi colección que salte 30 segundos hacia atrás"
     expected_intent: SkipForwardBackIntent
     expected_slots:
       seek_direction: {}

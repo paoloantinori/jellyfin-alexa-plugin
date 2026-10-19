@@ -294,12 +294,19 @@ intents:
   # The bare row carries the avanza/retrocede verb-direction synonyms (the
   # rewind-as-synonym mechanism); "salta {seek_amount} {seek_unit}" is the
   # direction-less default-forward row (the en "skip 30 seconds" shape).
+  # JF-877 (2026-10-20): the SUBJUNCTIVE wrapper-tail twins landed (the
+  # probe map and the row-by-row rationale live in es-ES.yaml, which owns
+  # every row since the JF-855 mirror conversion in the same round).
+  # The JF-869/JF-875 rules above still bind: no bare direction-only row,
+  # no direction-literal row, no new slot.
   - name: SkipForwardBackIntent
-    samples:
-      - salta {seek_direction}
-      - salta {seek_direction} {seek_amount} {seek_unit}
-      - salta {seek_amount} {seek_unit}
-      - '{seek_direction} {seek_amount} {seek_unit}'
+    # JF-877/JF-855: the family is a DECLARED MIRROR of es-ES (the rows
+    # were hand-identical across the trio at JF-877; the generator now
+    # enforces the identity). The per-family narrative (the JF-875 shape
+    # rules, the JF-877 probe map and the row-by-row rationale) lives in
+    # es-ES.yaml, which owns every row.
+    mirror:
+      locale: es-ES
     slots:
       - name: seek_direction
         type: SeekDirection
@@ -952,12 +959,15 @@ types:
   # fallback).
   SeekDirection:
     values:
+      # JF-877: the hacia-phrases ride as synonyms (the probes and the
+      # natural spoken forms say "hacia atrás"/"hacia adelante"; ER-native
+      # resolution + the SeekVocabulary raw branch both cover them).
       - value: adelante
         id: "forward"
-        synonyms: [avanza]
+        synonyms: [avanza, hacia adelante]
       - value: atrás
         id: "back"
-        synonyms: [retrocede]
+        synonyms: [retrocede, hacia atrás]
   SeekUnit:
     values:
       - value: segundos

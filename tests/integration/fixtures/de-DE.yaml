@@ -1,5 +1,5 @@
 locale: de-DE
-invocation_name: jellyfin player
+invocation_name: meine sammlung
 tests:
   # -------------------------------------------------------------------------
   # 1. LoopAllOffIntent (no slots)

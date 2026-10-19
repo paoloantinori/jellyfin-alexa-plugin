@@ -1,5 +1,5 @@
 locale: ar-SA
-invocation_name: jellyfin player
+invocation_name: مجموعتي
 tests:
   # JF-400: ar-SA had no NLU fixture file; seeded (probe-verified 2026-08-29 against the
   # live model) with the JF-414 indefinite album-by-artist form that routes reliably

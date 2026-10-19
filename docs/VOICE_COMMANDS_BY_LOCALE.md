@@ -674,7 +674,7 @@ Placeholder legend:
 | `<woorden uit de songtitel>` | `{titleKeywords}` |
 | `<gebruikersnaam>` | `{username}` |
 
-Complete phrase list (410 phrases across 69 commands):
+Complete phrase list (414 phrases across 69 commands):
 
 #### Play music
 
@@ -1226,6 +1226,10 @@ Complete phrase list (410 phrases across 69 commands):
 - `spring <vooruit of terug>`
 - `spring <aantal> <seconden of minuten> <vooruit of terug>`
 - `ga <aantal> <seconden of minuten> <vooruit of terug>`
+- `om <vooruit of terug> te springen`
+- `om <aantal> <seconden of minuten> <vooruit of terug> te springen`
+- `<vooruit of terug> te springen`
+- `<aantal> <seconden of minuten> <vooruit of terug> te springen`
 
 **Change the playback speed**
 
@@ -11580,7 +11584,7 @@ Placeholder legend:
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (477 phrases across 69 commands):
+Complete phrase list (482 phrases across 69 commands):
 
 #### Play music
 
@@ -12198,6 +12202,11 @@ Complete phrase list (477 phrases across 69 commands):
 - `salta <adelante o atrás> <cantidad> <segundos o minutos>`
 - `salta <cantidad> <segundos o minutos>`
 - `<adelante o atrás> <cantidad> <segundos o minutos>`
+- `salte <adelante o atrás>`
+- `salte <adelante o atrás> <cantidad> <segundos o minutos>`
+- `que salte <adelante o atrás>`
+- `que salte <adelante o atrás> <cantidad> <segundos o minutos>`
+- `que salte <cantidad> <segundos o minutos> <adelante o atrás>`
 
 **Change the playback speed**
 
@@ -12305,7 +12314,7 @@ Placeholder legend:
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (476 phrases across 69 commands):
+Complete phrase list (481 phrases across 69 commands):
 
 #### Play music
 
@@ -12923,6 +12932,11 @@ Complete phrase list (476 phrases across 69 commands):
 - `salta <adelante o atrás> <cantidad> <segundos o minutos>`
 - `salta <cantidad> <segundos o minutos>`
 - `<adelante o atrás> <cantidad> <segundos o minutos>`
+- `salte <adelante o atrás>`
+- `salte <adelante o atrás> <cantidad> <segundos o minutos>`
+- `que salte <adelante o atrás>`
+- `que salte <adelante o atrás> <cantidad> <segundos o minutos>`
+- `que salte <cantidad> <segundos o minutos> <adelante o atrás>`
 
 **Change the playback speed**
 
@@ -13029,7 +13043,7 @@ Placeholder legend:
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (466 phrases across 69 commands):
+Complete phrase list (471 phrases across 69 commands):
 
 #### Play music
 
@@ -13637,6 +13651,11 @@ Complete phrase list (466 phrases across 69 commands):
 - `salta <adelante o atrás> <cantidad> <segundos o minutos>`
 - `salta <cantidad> <segundos o minutos>`
 - `<adelante o atrás> <cantidad> <segundos o minutos>`
+- `salte <adelante o atrás>`
+- `salte <adelante o atrás> <cantidad> <segundos o minutos>`
+- `que salte <adelante o atrás>`
+- `que salte <adelante o atrás> <cantidad> <segundos o minutos>`
+- `que salte <cantidad> <segundos o minutos> <adelante o atrás>`
 
 **Change the playback speed**
 

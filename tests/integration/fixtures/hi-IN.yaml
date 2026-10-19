@@ -1,5 +1,5 @@
 locale: hi-IN
-invocation_name: jellyfin player
+invocation_name: मेरी कलेक्शन
 tests:
   # JF-400: hi-IN had no NLU fixture file; seeded (probe-verified 2026-08-29 against the
   # live model) with the JF-414 indefinite album-by-artist forms. Both route to
