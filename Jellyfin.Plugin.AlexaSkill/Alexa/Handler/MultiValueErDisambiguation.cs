@@ -8,9 +8,11 @@ using Alexa.NET;
 using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
+using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
+using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Querying;
@@ -58,6 +60,10 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// ARTIST-ONLY sibling (<see cref="TryArbitrateOrSearchArtistsAsync"/>), the
 /// same gate-consume shape for the handlers whose content input is the musician
 /// slot (PlayArtistSongs, QueryArtistLibrary, FindSong's two musician legs).
+/// JF-876/JF-877: and of the movie leg's canonical resolution
+/// (<see cref="ResolveErMovieCandidatesAsync"/>), the exact-library-name
+/// resolution the PlayMovie gate consumes (no index machinery: bounded
+/// per-canonical library reads; the ask/collapse decisions stay at the caller).
 /// </summary>
 internal static class MultiValueErDisambiguation
 {
@@ -654,6 +660,116 @@ internal static class MultiValueErDisambiguation
         }
 
         return rank1Artist;
+    }
+
+    /// <summary>
+    /// JF-876/JF-877: the movie leg of the multi-value ER gate, the resolver the
+    /// PlayMovie path consumes (the JF-690 artist shape WITHOUT its index
+    /// machinery: movies have no in-memory index, so the library is read
+    /// directly, bounded per canonical by the request budget the handler's own
+    /// search pays). PlayMovieIntent's MovieTitle catalog slot can ER-match
+    /// SEVERAL canonical values when two movies share a first substantive word
+    /// (PartialNameSynonyms widened to Movie in JF-874; live it-IT 2026-10-19:
+    /// «il film gruffalò» returned ER_SUCCESS [«Il Gruffalò e la sua
+    /// piccolina», «Il Gruffalò»], Amazon's rank-1 naming the SEQUEL), and the
+    /// plain rank-1 read silently auto-plays one of them. Every canonical is
+    /// an EXACT library name per the JF-659 contract, so each resolves through
+    /// the handler's own query shape (SearchTerm pre-filter scoped by the
+    /// user's library filter, Movie-only, then the shared exact-name predicate
+    /// <see cref="ArtistSearch.IsExactNameMatch"/>, the ONE definition
+    /// CrossMediaFallback's video candidates already share), DEDUPLICATED BY
+    /// RESOLVED ITEM ID, in Amazon's rank order (the winner-first order the
+    /// confirm leg's "yes" relies on). The list carries AT MOST
+    /// <see cref="DisambiguationHelper.FirstMatchStateCap"/> movies (the
+    /// consumer's ask-state cap; ranks past it are unreachable through the
+    /// yes/no cycle by the JF-735 verdict, so resolving them would only pay
+    /// discarded query budget). Deliberately NO fuzzy layer (unlike
+    /// <see cref="ArtistSearch.ResolveErCandidates"/>): the movie catalog
+    /// mints no phonetic-variant canonicals, and a near-miss canonical
+    /// resolving here could auto-play a movie the user never named. The ask
+    /// and collapse DECISIONS stay at the caller (the handler owns the
+    /// response shaping); the movie leg always asks on two or more distinct
+    /// movies, the artist JF-885 rank-1 dominance bypass is deliberately NOT
+    /// ported (maintainer call 2026-10-19: the live evidence shows Amazon
+    /// ranks the sequel first, a 2s confirm beats a wrong evening film).
+    /// </summary>
+    /// <param name="request">The intent request carrying the movie slot's ER.</param>
+    /// <param name="user">The plugin user (library scope resolution).</param>
+    /// <param name="jellyfinUser">The resolved Jellyfin user (the query's User scope).</param>
+    /// <param name="libraryManager">The library manager (the exact-name lookups).</param>
+    /// <param name="logger">The handler's logger (the gate logs its closed legs).</param>
+    /// <param name="cancellationToken">Request cancellation token.</param>
+    /// <returns>The distinct resolved movies in ER rank order (at most
+    /// <see cref="DisambiguationHelper.FirstMatchStateCap"/>); EMPTY on every
+    /// closed-gate leg (fewer than two ER values, or nothing resolves), so the
+    /// caller keeps its existing single-value path byte-identically.</returns>
+    internal static async Task<List<BaseItem>> ResolveErMovieCandidatesAsync(
+        IntentRequest request,
+        Entities.User user,
+        Jellyfin.Database.Implementations.Entities.User jellyfinUser,
+        ILibraryManager libraryManager,
+        ILogger logger,
+        CancellationToken cancellationToken)
+    {
+        IReadOnlyList<string> candidates = SlotValueHelper.GetCanonicalValues(request, IntentNames.Slots.Movie);
+        if (candidates.Count < 2)
+        {
+            return new List<BaseItem>();
+        }
+
+        List<BaseItem> resolved = new();
+        HashSet<Guid> seen = new();
+        foreach (string canonical in candidates)
+        {
+            // The handler's own search shape, Movie-only (the MovieTitle catalog
+            // type syncs movies). The canonical feeds the query VERBATIM: the
+            // JF-659 no-romanization contract (a kana-named movie's canonical IS
+            // kana and exact-self-matches its own name).
+            var query = new InternalItemsQuery
+            {
+                User = jellyfinUser,
+                Recursive = true,
+                SearchTerm = canonical,
+                IncludeItemTypes = new[] { BaseItemKind.Movie },
+                DtoOptions = new DtoOptions(true)
+            };
+            LibraryFilter.ApplyLibraryFilter(query, user, libraryManager, logger);
+
+            IReadOnlyList<BaseItem> hits = await RetryHelper.ExecuteWithRequestBudgetAsync(
+                () => libraryManager.GetItemList(query),
+                logger,
+                "GetErMovieCandidates",
+                cancellationToken: cancellationToken).ConfigureAwait(false);
+
+            BaseItem? exact = hits.FirstOrDefault(v => ArtistSearch.IsExactNameMatch(canonical, v.Name));
+            if (exact != null && seen.Add(exact.Id))
+            {
+                resolved.Add(exact);
+
+                // The consumer's ask state caps at FirstMatchStateCap, and any
+                // count >= 2 beyond the collapse questions asks identically
+                // (code-review JF-877: every canonical past the cap is a FRESH
+                // request-budgeted query the ask discards, so a franchise-sized
+                // ER list on a slow database could outrun Alexa's response
+                // window before the chain below even runs). Stopping here keeps
+                // the user-observable legs byte-identical (the ask stores the
+                // first cap candidates either way) while bounding the gate's
+                // wall time by the cap, not the canonical count.
+                if (resolved.Count >= DisambiguationHelper.FirstMatchStateCap)
+                {
+                    break;
+                }
+            }
+        }
+
+        if (resolved.Count == 0)
+        {
+            logger.LogDebug(
+                "MultiValueEr: {Count} ER values on the movie slot resolve to no library movie; proceeding on the single-value path (JF-877)",
+                candidates.Count);
+        }
+
+        return resolved;
     }
 
     /// <summary>

@@ -322,6 +322,15 @@ internal static class DisambiguationHelper
     /// multi-candidate callers additionally pre-truncate with their own
     /// Take(3) at the call site, so this cap is a backstop (the one
     /// untruncated caller: PlayPodcastIntentHandler's multi-candidate leg).
+    /// JF-877 re-weigh (the eleventh multi-candidate caller, PlayVideo's
+    /// movie multi-value ER gate): its list is EXACT library-name resolutions
+    /// (not NotFound-gated, the JF-690 artist-gate class), but it pre-truncates
+    /// at this cap mirroring the video family's own multi-result site, so the
+    /// cap remains the binding truncation for ranks 4+ of a same-first-word
+    /// movie family exactly as it already is for that sibling's search hits;
+    /// widening the movie gate to the AskMultipleArtists full-state shape
+    /// would be a new 17-locale prompt family, deliberately not taken (the
+    /// live evidence is a two-movie household).
     /// That caller census is ENFORCED by AskFirstMatchCallerCensusTests (the
     /// WarmingGateCoverageTests pattern): a new AskFirstMatch caller fails
     /// that test's roster until the census is re-weighed here. The two

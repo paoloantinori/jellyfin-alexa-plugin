@@ -34,7 +34,7 @@ public class AskFirstMatchCallerCensusTests
 {
     /// <summary>
     /// The expected AskFirstMatch call-site census: top-level declaring type
-    /// name to call-site count (13 sites, 10 types). The single-candidate
+    /// name to call-site count (14 sites, 10 types). The single-candidate
     /// downgrade sites (PlayArtistSongs' JF-377/JF-382 gate, PlayAlbum's
     /// JF-473 parity gate, PlayPodcast's JF-640 cross-type guard) and the
     /// multi-candidate sites are counted together; the per-site roles are
@@ -49,7 +49,7 @@ public class AskFirstMatchCallerCensusTests
         [nameof(SearchMediaIntentHandler)] = 1,
         [nameof(PlaySongIntentHandler)] = 1,
         [nameof(AddToQueueIntentHandler)] = 1,
-        [nameof(PlayVideoIntentHandler)] = 1,
+        [nameof(PlayVideoIntentHandler)] = 2,
         [nameof(PlayBookIntentHandler)] = 1,
         [nameof(PlayNextIntentHandler)] = 1
     };
