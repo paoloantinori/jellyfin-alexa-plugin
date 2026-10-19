@@ -150,13 +150,24 @@ public class LaunchRequestHandler : BaseHandler
         Request request, Context context, Entities.User user, SessionInfo session,
         string locale, CancellationToken cancellationToken)
     {
-        string itemId = context.AudioPlayer!.Token!;
+        string rawToken = context.AudioPlayer!.Token!;
         long offsetMs = context.AudioPlayer.OffsetInMilliseconds;
 
-        // Look up the item for its display name
+        // JF-910: the AudioPlayer token may be COMPOSITE (the JF-655 launch
+        // generation "{guid}|launch:n", the JF-447 sleep deadline
+        // "{guid}|sleep:t"), and a raw Guid.TryParse on that shape fails, so the
+        // offer spoke the UnknownMedia line over a resolvable item (live
+        // 2026-10-19, "The Idiot Kings" offered as "Contenuto sconosciuto" on a
+        // |launch:1 token). Parse through the ONE codec and hand the state the
+        // BARE id: the Yes-side confirm Guid-parses resume_state.ItemId and the
+        // offer's image URL interpolates it, so the suffix must not survive past
+        // this intake. An unparseable token keeps today's raw passthrough (the
+        // UnknownMedia offer shape).
         BaseItem? item = null;
-        if (Guid.TryParse(itemId, out Guid itemGuid))
+        string itemId = rawToken;
+        if (StreamTokenCodec.TryGetItemId(rawToken, out Guid itemGuid))
         {
+            itemId = itemGuid.ToString();
             item = await RetryAsync(
                 () => _libraryManager.GetItemById(itemGuid),
                 "LaunchResumeLookup",

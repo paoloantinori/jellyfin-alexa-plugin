@@ -513,6 +513,69 @@ public sealed class DeviceQueueManager : IDisposable
     }
 
     /// <summary>
+    /// JF-910 read side of the JF-691 enqueue record: whether a SAME-ITEM repeat
+    /// is still PENDING on the device, i.e. the loop-off race shape. True when a
+    /// loop mode is set on the queue, the record's after-token IS the given
+    /// current stream token (the enqueued follow-up was issued after the stream
+    /// the request context still echoes, so it has not started playing), and the
+    /// recorded next item names that same stream's item. The after-token compare
+    /// is Ordinal (stream identity: the record stores the raw
+    /// <c>ExpectedPreviousToken</c> twin) while the next-item compare goes
+    /// through the codec (item identity: a generation-suffixed enqueued token
+    /// still names its item); once the enqueued stream starts, the context token
+    /// no longer Ordinal-equals the record's after-token and this answers false.
+    /// A sequential advance to a DIFFERENT item never trips it. ACCEPTED
+    /// same-item shapes that do: RepeatAll over a single-item queue (the wrap
+    /// enqueues the only member) and a user-initiated same-item AddToQueue/PlayNext
+    /// issued while a loop is on; both are indistinguishable from the repeat
+    /// artifact and clearing them on LoopOff matches the user's ask.
+    /// Takes the CALLER'S queue snapshot: a LoopOff gate must pass the queue it
+    /// read BEFORE its SetRepeatMode write (the pre-write mode is one of the
+    /// legs), and re-fetching here could observe a SetQueue replacement between
+    /// the two reads (the torn-read window the rehydration helper documents).
+    /// </summary>
+    /// <param name="queue">The caller's pre-write queue snapshot (null answers false).</param>
+    /// <param name="currentStreamToken">The raw AudioPlayer token of the request context.</param>
+    /// <returns>True when a pending same-item repeat is recorded for the current stream.</returns>
+    internal static bool HasPendingSameItemRepeat(DeviceQueue? queue, string? currentStreamToken)
+        => queue != null
+            && FromQueueRepeatModeString(queue.RepeatMode) != RepeatMode.RepeatNone
+            && string.Equals(queue.LastEnqueueAfterToken, currentStreamToken, StringComparison.Ordinal)
+            && StreamTokenCodec.NamesItem(currentStreamToken, queue.LastEnqueueNextItemId);
+
+    /// <summary>
+    /// JF-910 retire side of the JF-691 enqueue record: the clear that must
+    /// accompany a ClearQueue(CLEAR_ENQUEUED) that removes a pending enqueue.
+    /// The record is the durable twin of a directive the device was told about;
+    /// once that directive's stream is retired device-side, the record describes
+    /// an enqueue that no longer exists, and its stale after-token would make
+    /// <c>PlaybackFinishedEventHandler.EnqueuedForThisBoundary</c> pass for the
+    /// finishing boundary (the keep-alive arm answers as if playback continued,
+    /// leaving the session open over a device that stopped). A null record is
+    /// the same state a device with no enqueue ever issued reads (the Finished
+    /// veto's deleted-successor shape).
+    /// </summary>
+    /// <param name="deviceId">The Alexa device ID (the device-store key).</param>
+    internal void ClearEnqueueRecord(string deviceId)
+    {
+        if (!_queues.TryGetValue(deviceId, out DeviceQueue? queue))
+        {
+            return;
+        }
+
+        if (queue.LastEnqueueAfterToken == null && queue.LastEnqueueNextItemId == null)
+        {
+            return;
+        }
+
+        queue.LastEnqueueAfterToken = null;
+        queue.LastEnqueueNextItemId = null;
+        SchedulePersistInternal(deviceId);
+
+        _logger.LogDebug("Cleared the enqueue record for device {DeviceId}", deviceId);
+    }
+
+    /// <summary>
     /// JF-655: marks the device as ACTIVELY playing AudioPlayer audio. Written by the
     /// <c>PlaybackStarted</c> event handler only: the Echo sending that event is the
     /// platform's own playback report, and no launch-site shortcut may set it (the

@@ -242,6 +242,74 @@ public class PauseResumeStateTests : PluginTestBase, IDisposable
         Assert.True(response.Response.ShouldEndSession);
     }
 
+    /// <summary>
+    /// JF-910 audit: a COMPOSITE AudioPlayer token (the JF-655 launch
+    /// generation "{guid}|launch:n"; the sleep form is the same codec family)
+    /// adopted RAW put the suffix into the tail's stream URL path (the pipe
+    /// survives unescaped, an unresolvable Jellyfin GUID route) and fed the
+    /// launch mint a composite it can only stack a second suffix onto. The
+    /// intake canonicalizes to the bare item id, so both the URL and the
+    /// minted replay token carry the clean id.
+    /// </summary>
+    [Fact]
+    public async Task ResumeIntent_CompositeLaunchToken_LaunchesBareItemId()
+    {
+        SeedTestItemInLibrary();
+        var handler = new ResumeIntentHandler(
+            _fx.SessionManager.Object, _fx.Config, _fx.LoggerFactory,
+            _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.UserDataManager.Object,
+            _queueManager);
+
+        var context = CreateContext(audioPlayerToken: TestItemId + "|launch:1", audioPlayerOffset: 10000);
+        var session = CreateSessionWithNowPlaying(TestItemId);
+
+        var response = await handler.HandleAsync(
+            new IntentRequest { Intent = new Intent { Name = "AMAZON.ResumeIntent" } },
+            context,
+            TestHelpers.CreateTestUser(),
+            session,
+            CancellationToken.None);
+
+        Assert.NotNull(response);
+        var launchDirective = Assert.Single(response.Response.Directives.OfType<AudioPlayerPlayDirective>());
+        Assert.Contains(TestItemId, launchDirective.AudioItem.Stream.Url, StringComparison.Ordinal);
+        Assert.DoesNotContain("|", launchDirective.AudioItem.Stream.Url, StringComparison.Ordinal);
+        Assert.Equal(TestItemId, launchDirective.AudioItem.Stream.Token);
+    }
+
+    /// <summary>
+    /// The intake's passthrough leg: an UNKNOWN suffix makes the token
+    /// unparseable by the codec's own guard (a future suffix owner must extend
+    /// the codec, not ad-hoc parse), and the intake keeps today's raw
+    /// passthrough for that shape rather than guessing. The pin documents the
+    /// degraded launch (the raw token rides the URL); it is the pre-JF-910
+    /// behavior, deliberately not "fixed" for tokens the codec cannot read.
+    /// </summary>
+    [Fact]
+    public async Task ResumeIntent_UnknownSuffixToken_PassesRawTokenThrough()
+    {
+        SeedTestItemInLibrary();
+        var handler = new ResumeIntentHandler(
+            _fx.SessionManager.Object, _fx.Config, _fx.LoggerFactory,
+            _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.UserDataManager.Object,
+            _queueManager);
+
+        string unparseableToken = TestItemId + "|bogus:x";
+        var context = CreateContext(audioPlayerToken: unparseableToken, audioPlayerOffset: 10000);
+        var session = CreateSessionWithNowPlaying(TestItemId);
+
+        var response = await handler.HandleAsync(
+            new IntentRequest { Intent = new Intent { Name = "AMAZON.ResumeIntent" } },
+            context,
+            TestHelpers.CreateTestUser(),
+            session,
+            CancellationToken.None);
+
+        Assert.NotNull(response);
+        var launchDirective = Assert.Single(response.Response.Directives.OfType<AudioPlayerPlayDirective>());
+        Assert.Contains(unparseableToken, launchDirective.AudioItem.Stream.Url, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task ResumeIntent_FallsBackToDeviceQueue_WhenContextOffsetIsZero()
     {

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using global::Alexa.NET;
@@ -322,6 +323,98 @@ public class ResumeOnRelaunchTests : PluginTestBase, IDisposable
         // Should use UnknownMedia fallback for the title
         string speech = TestHelpers.GetSpeechText(response);
         Assert.Contains("Unknown media", speech);
+    }
+
+    /// <summary>
+    /// JF-910: the resume offer parsed the raw AudioPlayer token with
+    /// Guid.TryParse, so a COMPOSITE token failed the parse and the offer spoke
+    /// the UnknownMedia line over a resolvable item (live 2026-10-19: "Stavi
+    /// ascoltando Contenuto sconosciuto" for The Idiot Kings, whose token
+    /// carried the JF-655 launch generation). The offer must resolve the item
+    /// through the codec AND store the BARE id in the resume state, or the
+    /// Yes-side confirm Guid-parse would answer MediaNotFound for the same
+    /// shape.
+    /// </summary>
+    [Fact]
+    public async Task LaunchRequest_WithCompositeLaunchToken_OffersItemNameNotUnknownMedia()
+    {
+        var itemId = Guid.NewGuid();
+        var item = new Audio
+        {
+            Name = "The Idiot Kings",
+            Id = itemId
+        };
+        _libraryManagerMock.Setup(l => l.GetItemById(itemId)).Returns(item);
+
+        var handler = CreateLaunchHandler();
+        var request = new LaunchRequest { Locale = "en-US" };
+        var context = CreateContextWithAudio(itemId + "|launch:1", 204000);
+        var session = CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        Assert.False(response.Response.ShouldEndSession);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("The Idiot Kings", speech);
+        Assert.DoesNotContain("Unknown media", speech);
+
+        // The stored state carries the bare id: the Yes-side Guid.TryParse of
+        // resume_state.itemId resolves the item instead of failing on the suffix.
+        Assert.NotNull(response.SessionAttributes);
+        Assert.True(response.SessionAttributes.ContainsKey("resume_state"));
+        string stateJson = response.SessionAttributes["resume_state"].ToString()!;
+        Assert.Contains($"\"itemId\":\"{itemId}\"", stateJson);
+        Assert.DoesNotContain("|launch:", stateJson);
+
+        // The full offer-to-confirm path: feeding the offer's own session
+        // attributes to the Yes-side confirm must launch the item (pre-fix, the
+        // state carried the composite token and this confirm answered
+        // MediaNotFound).
+        var yesRequest = new IntentRequest
+        {
+            Locale = "en-US",
+            Intent = new Intent { Name = "AMAZON.YesIntent" }
+        };
+        SkillResponse yesResponse = await CreateYesHandler().HandleAsync(
+            yesRequest, CreateContextWithoutAudio(), TestHelpers.CreateTestUser(), CreateSession(), response.SessionAttributes!, CancellationToken.None);
+        var playDirective = Assert.Single(yesResponse.Response.Directives.OfType<AudioPlayerPlayDirective>());
+        Assert.Equal(itemId.ToString(), playDirective.AudioItem.Stream.Token);
+    }
+
+    /// <summary>
+    /// The sleep-suffix twin of the JF-910 pin: the JF-447 sleep deadline form
+    /// ("{guid}|sleep:{ticks}") must resolve the same way (both suffixes are
+    /// one codec's, and the incident class is the raw parse, not either
+    /// suffix individually).
+    /// </summary>
+    [Fact]
+    public async Task LaunchRequest_WithCompositeSleepToken_OffersItemNameNotUnknownMedia()
+    {
+        var itemId = Guid.NewGuid();
+        var item = new Audio
+        {
+            Name = "Sleep Suffix Track",
+            Id = itemId
+        };
+        _libraryManagerMock.Setup(l => l.GetItemById(itemId)).Returns(item);
+
+        var handler = CreateLaunchHandler();
+        var request = new LaunchRequest { Locale = "en-US" };
+        var context = CreateContextWithAudio(itemId + "|sleep:" + DateTimeOffset.UtcNow.AddMinutes(30).Ticks, 30000);
+        var session = CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        Assert.False(response.Response.ShouldEndSession);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("Sleep Suffix Track", speech);
+        Assert.DoesNotContain("Unknown media", speech);
+
+        Assert.NotNull(response.SessionAttributes);
+        Assert.True(response.SessionAttributes.ContainsKey("resume_state"));
+        string stateJson = response.SessionAttributes["resume_state"].ToString()!;
+        Assert.Contains($"\"itemId\":\"{itemId}\"", stateJson);
+        Assert.DoesNotContain("|sleep:", stateJson);
     }
 
     [Fact]
