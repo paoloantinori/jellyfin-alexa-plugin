@@ -4,9 +4,10 @@ title: >-
   JF-915: the Nora Jones wrapper regression (mood-steal of 'mettere musica di X'
   ate the artist, 10-artist choice with Tom first) fixed by the four
   bare-infinitive musica rows
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-10-20 05:58'
+updated_date: '2026-10-20 08:14'
 labels: []
 dependencies: []
 priority: high
@@ -35,3 +36,9 @@ FIX (the JF-844 class, fourth occurrence): four bare-infinitive literal rows on 
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+SHIPPED AND VERIFIED 2026-10-20 10:0x. Fix: the four bare-infinitive musica rows on PlayArtistSongsIntent (16 samples via {artist_article}), committed cda7a124, CI+CodeQL green, deployed (md5 8fda8701, AlexaSkill_1.0.1.0), it-IT model rebuilt (SUCCEEDED; the endpoint's poll hung past 10min but the model PUT landed - live model verified 1685 samples with the rows). VERIFICATION (live, post-rebuild): the exact regression phrase 'chiedi a mia collezione di mettere musica di norah jones' delivers PlayArtistSongsIntent musician='norah jones' through FULL simulate (the invocation-consumption layer, the device path); the bare payload and the imperative form route identically; the sibling wrapper 'suonare musica dei pink floyd' routes (musician='P!nk floyd', the catalog phonetic anchor); the mood reverse guard 'mettere musica rilassante' stays PlayMoodMusic at the model layer (the earlier simulate 'failure' for it was probe-design error: bare payloads cannot select in simulate without an invocation). RESIDUALS: JF-916 (the h-dropped spelling 'nora jones' now selects NOTHING - the JF-684 catalog gate on off-catalog values; pre-fix it misselected mood and produced the wrong list; the fix is catalog-side h-drop variants on the next sync), JF-914 (en/de/fr wrapper-tail audit), JF-913 (the bare_infinitive vocabulary consolidation). The user-facing instruction: the correctly-spoken name now plays; the h-dropped spelling will answer nothing until JF-916 lands.
+<!-- SECTION:FINAL_SUMMARY:END -->
