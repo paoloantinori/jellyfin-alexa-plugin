@@ -14,18 +14,25 @@ vocabulary:
   # The BARE infinitive verb set for the JF-844-class literal wrapper-tail rows
   # (the trainer does not generalize the unanchored bare shape). "pleiare" is
   # deliberately EXCLUDED: it rides only the {imperative}/{infinitive} vocabulary
-  # products (per the established bare-infinitive set). Families with a DIFFERENT
-  # verb set (the film/series "mettere/guardare/vedere" and
-  # "riprodurre/mettere/guardare" forms) stay hand-written literals, NOT this key;
-  # so do 2-of-4 SUBSETS of this set (the decade "riprodurre/ascoltare musica
-  # degli anni", the radio "riprodurre/suonare la radio", the PlaySeries
-  # "riprodurre/mettere la serie" pairs): the product emits all four verbs and
-  # would change their content. Other bare rows on THIS FULL verb set (the
-  # PlaySong "{song} dopo" trio, the two PlayBook verb-x-noun quartets - which
-  # additionally need a noun-pair key this key cannot express - PlayPodcast's
-  # "il podcast" quartet, PlayMoodMusic's "musica {mood}" quartet, PlayRandom)
-  # also remain literal until each has its own byte-identity proof (JF-541
-  # discipline). PlayBook's leggere rows are a different verb and out of scope.
+  # products (per the established bare-infinitive set). Three classes of remaining
+  # bare-infinitive rows stay hand-written literals, NOT this key:
+  # 1. SUBSETS of the verb set (the product emits all four verbs and would change
+  #    their content): the decade "riprodurre/ascoltare musica degli anni" pair,
+  #    the radio "ascoltare/suonare la radio" pair, the PlayNextEpisode
+  #    "riprodurre/mettere la serie" pair, and the PlayNext "{song} dopo" trio
+  #    (riprodurre/suonare/mettere; NO ascoltare). NOTE the trio lives on
+  #    PlayNextIntent's explicit_intents section, where the generator copies
+  #    samples VERBATIM with no {ref} expansion: a braced row there would ship
+  #    the literal braces into the model.
+  # 2. CAPITALISED quartets in a different verb order (PlayPodcast's
+  #    "Riprodurre/Ascoltare/Suonare/Mettere il podcast", PlayMoodMusic's
+  #    "Suonare/Ascoltare/Riprodurre/Mettere musica {mood}", PlayRandom's): this
+  #    lowercase ordered key can never byte-identically produce them; converting
+  #    them needs a case/order decision that changes model content (the JF-541
+  #    forbidden shift), not a pending proof.
+  # 3. Families needing a richer key shape (the two PlayBook verb-x-noun
+  #    quartets; a noun-pair key this key cannot express; PlayBook's leggere
+  #    rows are a different verb entirely).
   bare_infinitive: [riprodurre, suonare, mettere, ascoltare]
 
   # Nouns MUST include the definite article Italians actually speak ("l'album",
