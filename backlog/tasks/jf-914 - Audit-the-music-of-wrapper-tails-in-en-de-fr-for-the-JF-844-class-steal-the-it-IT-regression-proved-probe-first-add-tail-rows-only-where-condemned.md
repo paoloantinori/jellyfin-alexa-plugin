@@ -3,10 +3,10 @@ id: JF-914
 title: >-
   Audit the music-of wrapper tails in en/de/fr for the JF-844-class steal the
   it-IT regression proved (probe-first; add tail rows only where condemned)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-20 05:57'
-updated_date: '2026-10-20 05:58'
+updated_date: '2026-10-20 10:57'
 labels: []
 dependencies: []
 priority: low
@@ -37,3 +37,9 @@ From the 2026-10-20 it-IT regression fix's code review (finding 4): the JF-844-c
 <!-- SECTION:NOTES:BEGIN -->
 CORRECTION (filing time): this task IS JF-914 (the MCP assigned the ID; the original title's 'JF-915' prefix was a manual numbering guess and is removed). The 'Sequenced after JF-914' sentence in the description should read 'Sequenced after JF-915 (the it-IT hotfix record)'.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+AUDIT COMPLETE 2026-10-20 12:5x, verdict: NO model rows needed in en-US, de-DE, or fr-FR; zero diff (the branch carries nothing; the task closes as an audit with negative results, all probe-proven). en-US: GREEN full-pipeline ("play music by" and "listen to music by" route PlayArtistSongs; the JF-875 note proven). fr-FR: model GREEN on profile-nlu for every composed form (mettre/lire + the norah spelling; the trainer generalizes even the bare forms); fr simulate is in the per-locale outage (the battery's own control fails) so the full-pipeline reading stays parked like the es-MX/es-US ones. de-DE: the bare payload routes on profile-nlu; the composed verb-tail fails at the documented de invocation layer (not the model). RESIDUALS FILED: the en "put on music by X" PlaySong steal (its own task, sample competition, NOT a wrapper gap); the de "nach + verb-tail" shape is model-unclaimed while the noun tail claims QueryArtistLibrary (re-probe only if the de invocation layer ever heals; recorded in the report). Gate-exempt: zero diff, audit-only.
+<!-- SECTION:FINAL_SUMMARY:END -->

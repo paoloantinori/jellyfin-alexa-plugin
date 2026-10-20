@@ -4,9 +4,10 @@ title: >-
   Catalog h-drop variants for English artist names: 'nora jones' selects nothing
   (the JF-915 residual; extend PhoneticSynonymGenerator, ride the next catalog
   sync)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-20 08:13'
+updated_date: '2026-10-20 12:33'
 labels: []
 dependencies: []
 priority: medium
@@ -31,3 +32,9 @@ Residual of JF-915 (the 2026-10-20 Nora Jones wrapper regression fix): the corre
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+SHIPPED 2026-10-20 14:2x. Merged 1cef2055 (worker a793765d + in-session rounds 6c2ca280, 6eaebf69), CI+CodeQL green, deployed (md5 53f5fcf4, AlexaSkill_1.0.1.0, config survived). The rule: word-FINAL h after a vowel drops in the Italian catalog synonym family ("Norah Jones" -> "Nora Jones"; word-initial h is the existing leading-h strip's job; "th" untouched), the append is budget-bounded mid-loop (the round-3 fix: my round-2 whole-block guard could not bound a multi-word append and the exit cap decided instead; on multi-h-word names the h-drop outranks the doubling family by position), and the policy test pins that the h-drop variant survives the cap on a heavy name. 19 new tests (6106 total). LIVE EFFECT: the catalog sync was manually triggered via the ScheduledTasks API right after the deploy; the 'nora jones' selection gate closes when the sync mints and pins the new catalog version (verify: profile-nlu 'mettere musica di nora jones' -> PlayArtistSongsIntent; the JF-684 live-effect path).
+<!-- SECTION:FINAL_SUMMARY:END -->
