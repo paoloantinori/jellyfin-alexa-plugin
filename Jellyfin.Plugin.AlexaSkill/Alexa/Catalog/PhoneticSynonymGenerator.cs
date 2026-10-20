@@ -312,29 +312,48 @@ public static class PhoneticSynonymGenerator
     internal static List<string> GetVelarStopVariants(string name)
     {
         var variants = new List<string>();
-        if (string.IsNullOrWhiteSpace(name)
-            || name.IndexOfAny(VelarStopLetters) < 0)
+        if (string.IsNullOrWhiteSpace(name))
         {
             return variants;
         }
 
-        string[] words = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        for (int w = 0; w < words.Length; w++)
-        {
-            if (!WordHasVelarStop(words[w]))
-            {
-                continue;
-            }
-
-            string prefix = w == 0 ? string.Empty : string.Join(' ', words, 0, w) + " ";
-            string suffix = w + 1 < words.Length ? " " + string.Join(' ', words, w + 1, words.Length - w - 1) : string.Empty;
-            AppendDistinct(variants, VelarStopWordVariants(words[w]).Select(v => prefix + v + suffix));
-        }
+        // No IndexOfAny(VelarStopLetters) pre-filter here: WholeNameVariants already
+        // rejects every name this check would, so the filter was a second source of
+        // truth for "has a velar" (round-2 simplification).
+        AppendDistinct(variants, WholeNameVariants(name, WordHasVelarStop, VelarStopWordVariants));
 
         return variants;
     }
 
-    private static readonly char[] VelarStopLetters = { 'c', 'C', 'k', 'K', 'q', 'Q' };
+    /// <summary>
+    /// The ONE whole-name variant splice shared by the per-word coverage families
+    /// (JF-379 velar, JF-916 h-drop): splits <paramref name="name"/> on spaces and, for
+    /// each word <paramref name="qualifies"/> accepts, yields the whole name with that
+    /// word replaced by each of <paramref name="transform"/>'s variants. Each iteration
+    /// rewrites a DIFFERENT word, so the caller's yielded variants are distinct by
+    /// construction; dedup against prior arms stays the caller's AppendDistinct job.
+    /// </summary>
+    private static IEnumerable<string> WholeNameVariants(
+        string name,
+        Func<string, bool> qualifies,
+        Func<string, IEnumerable<string>> transform)
+    {
+        string[] words = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        for (int w = 0; w < words.Length; w++)
+        {
+            if (!qualifies(words[w]))
+            {
+                continue;
+            }
+
+            foreach (string variant in transform(words[w]))
+            {
+                var rebuilt = (string[])words.Clone();
+                rebuilt[w] = variant;
+                yield return string.Join(' ', rebuilt);
+            }
+        }
+    }
 
     /// <summary>True when the word contains a velar-stop letter (see <see cref="IsVelarStopAt"/>).</summary>
     private static bool WordHasVelarStop(string word)
@@ -481,4 +500,75 @@ public static class PhoneticSynonymGenerator
     /// </summary>
     internal static void AddVelarStopVariants(List<string> results, string source)
         => AppendDistinct(results, GetVelarStopVariants(source));
+
+    // --- JF-916: English word-final silent-h drop ---
+    // Live evidence (2026-10-20, it-IT): "mettere musica di nora jones" (the h-dropped
+    // spelling of "Norah Jones") selected NO intent (the JF-684 catalog selection gate;
+    // a spoken value matching no catalog value or synonym suppresses intent selection)
+    // entirely. Italian has no /h/ phoneme, so a word-FINAL written h after a vowel is
+    // not heard: "Norah" is transcribed "Nora", "Sarah" as "Sara". Each variant is the
+    // WHOLE name with only that word changed ("Norah Jones" -> "Nora Jones", never a
+    // bare "Nora"); names with no h-final-vowel word yield nothing.
+    // SCOPE: word-final h only. Word-INITIAL h is a different (and already handled)
+    // shape: ItalianPhoneticSynonyms.TransformWord strips a leading h inside its own
+    // per-word transforms ("Heart" -> "eart"), so it needs no coverage variant here.
+    // Wired into ItalianPhoneticSynonyms ONLY: the device evidence is it-IT. The
+    // es/fr/pt Romance siblings also lack /h/, but no device capture attests the shape
+    // there (the JF-379 pan-Romance deferral discipline: no mirrored call sites on
+    // unproven evidence). German and Dutch are deliberately excluded on evidence
+    // discipline too (no device capture attests the shape), NOT because their
+    // orthography keeps this h: the rule fires on word-FINAL h after a vowel, and
+    // German's Dehnungs-h (Kuh, gehen) is silent exactly like Italian's rendering;
+    // the "Hannah keeps the initial aspiration" argument covers only word-INITIAL h,
+    // a shape this rule does not touch.
+    // The "th" digraph is untouched by construction: in "Thom"/"Smith" the h is not
+    // word-final after a vowel (it is internal, or preceded by a consonant), and "th"
+    // is a real phoneme with its own transform (th -> t).
+
+    /// <summary>
+    /// Returns h-drop coverage variants of a name: for each word ENDING in 'h' preceded
+    /// by a vowel, the same name with that word's trailing h removed. "Norah Jones"
+    /// yields ["Nora Jones"]; "Smith", "Thom" and h-less names yield nothing.
+    /// </summary>
+    /// <param name="name">The transformed (or original) name.</param>
+    /// <returns>Variants covering the Italian-locale silent word-final h.</returns>
+    internal static List<string> GetSilentHDropVariants(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return new List<string>();
+        }
+
+        return WholeNameVariants(
+            name,
+            WordEndsInVowelPlusH,
+            word => new[] { word[..^1] }).ToList();
+    }
+
+    /// <summary>True when the word ends in 'h' (either case) preceded by a vowel.</summary>
+    private static bool WordEndsInVowelPlusH(string word)
+        => word.Length > 2
+           && char.ToLowerInvariant(word[^1]) == 'h'
+           && IsVowel(char.ToLowerInvariant(word[^2]));
+
+    /// <summary>
+    /// The append-or-skip companion to <see cref="GetSilentHDropVariants"/>, budget-
+    /// bounded unlike <see cref="AddVelarStopVariants"/>: the rule emits one variant
+    /// per qualifying word, so the append stops the moment the cap is reached instead
+    /// of appending past it and letting the exit CappedDistinct truncate whichever
+    /// family appended last (code-review round 3 F1: a whole-block pre-check cannot
+    /// bound a multi-word append; this loop can).
+    /// </summary>
+    internal static void AddSilentHDropVariants(List<string> results, string source)
+    {
+        foreach (string variant in GetSilentHDropVariants(source))
+        {
+            if (results.Count >= PerNameVariantCap)
+            {
+                return;
+            }
+
+            AppendDistinct(results, new[] { variant });
+        }
+    }
 }
