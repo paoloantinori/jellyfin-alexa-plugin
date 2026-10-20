@@ -16,10 +16,15 @@ vocabulary:
   # deliberately EXCLUDED: it rides only the {imperative}/{infinitive} vocabulary
   # products (per the established bare-infinitive set). Families with a DIFFERENT
   # verb set (the film/series "mettere/guardare/vedere" and
-  # "riprodurre/mettere/guardare" forms) stay hand-written literals, NOT this key.
-  # Other bare rows on THIS same verb set (the PlaySong "{song} dopo" trio,
-  # the two PlayBook quartets, PlayPodcast, PlayMoodMusic, PlayRandom) also
-  # remain literal until each has its own byte-identity proof (JF-541
+  # "riprodurre/mettere/guardare" forms) stay hand-written literals, NOT this key;
+  # so do 2-of-4 SUBSETS of this set (the decade "riprodurre/ascoltare musica
+  # degli anni", the radio "riprodurre/suonare la radio", the PlaySeries
+  # "riprodurre/mettere la serie" pairs): the product emits all four verbs and
+  # would change their content. Other bare rows on THIS FULL verb set (the
+  # PlaySong "{song} dopo" trio, the two PlayBook verb-x-noun quartets - which
+  # additionally need a noun-pair key this key cannot express - PlayPodcast's
+  # "il podcast" quartet, PlayMoodMusic's "musica {mood}" quartet, PlayRandom)
+  # also remain literal until each has its own byte-identity proof (JF-541
   # discipline). PlayBook's leggere rows are a different verb and out of scope.
   bare_infinitive: [riprodurre, suonare, mettere, ascoltare]
 
