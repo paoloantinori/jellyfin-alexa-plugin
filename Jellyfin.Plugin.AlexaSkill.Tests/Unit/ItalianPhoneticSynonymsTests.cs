@@ -413,10 +413,15 @@ public class ItalianPhoneticSynonymsTests
     }
 
     [Fact]
-    public void Generate_HDrop_RespectsPerNameCap()
+    public void Generate_HDrop_HeavyName_HDropVariantSurvivesTheCap()
     {
-        // A heavy name (velar + h-drop + article) must never exceed the cap.
+        // The cap POLICY, not the mechanical bound (CappedDistinct guarantees the
+        // count; code-review round 3 F2): on a heavy name where the h-drop and the
+        // velar family compete, the h-drop variant (today's device-attested shape)
+        // must be IN the capped result, proving the budget-bounded append lets it
+        // land rather than being truncated by the exit cap.
         var result = ItalianPhoneticSynonyms.Generate("Norah Koop Smith Band");
+        Assert.Contains(result, s => s.Equals("Nora Koop Smith Band", StringComparison.OrdinalIgnoreCase));
         Assert.True(result.Count <= PhoneticSynonymGenerator.PerNameVariantCap,
             $"Expected at most {PhoneticSynonymGenerator.PerNameVariantCap} variants, got {result.Count}");
     }

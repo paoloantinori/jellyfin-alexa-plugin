@@ -503,8 +503,8 @@ public static class PhoneticSynonymGenerator
 
     // --- JF-916: English word-final silent-h drop ---
     // Live evidence (2026-10-20, it-IT): "mettere musica di nora jones" (the h-dropped
-    // spelling of "Norah Jones") selected NO intent - the JF-684 catalog selection gate:
-    // a spoken value matching no catalog value or synonym suppresses intent selection
+    // spelling of "Norah Jones") selected NO intent (the JF-684 catalog selection gate;
+    // a spoken value matching no catalog value or synonym suppresses intent selection)
     // entirely. Italian has no /h/ phoneme, so a word-FINAL written h after a vowel is
     // not heard: "Norah" is transcribed "Nora", "Sarah" as "Sara". Each variant is the
     // WHOLE name with only that word changed ("Norah Jones" -> "Nora Jones", never a
@@ -518,7 +518,7 @@ public static class PhoneticSynonymGenerator
     // unproven evidence). German and Dutch are deliberately excluded on evidence
     // discipline too (no device capture attests the shape), NOT because their
     // orthography keeps this h: the rule fires on word-FINAL h after a vowel, and
-    // German's Dehnungs-h (Kuh, gehen) is silent exactly like Italian's rendering -
+    // German's Dehnungs-h (Kuh, gehen) is silent exactly like Italian's rendering;
     // the "Hannah keeps the initial aspiration" argument covers only word-INITIAL h,
     // a shape this rule does not touch.
     // The "th" digraph is untouched by construction: in "Thom"/"Smith" the h is not
@@ -552,9 +552,23 @@ public static class PhoneticSynonymGenerator
            && IsVowel(char.ToLowerInvariant(word[^2]));
 
     /// <summary>
-    /// The append-or-skip companion to <see cref="GetSilentHDropVariants"/>, mirroring
-    /// <see cref="AddVelarStopVariants"/>: adds each variant not already present.
+    /// The append-or-skip companion to <see cref="GetSilentHDropVariants"/>, budget-
+    /// bounded unlike <see cref="AddVelarStopVariants"/>: the rule emits one variant
+    /// per qualifying word, so the append stops the moment the cap is reached instead
+    /// of appending past it and letting the exit CappedDistinct truncate whichever
+    /// family appended last (code-review round 3 F1: a whole-block pre-check cannot
+    /// bound a multi-word append; this loop can).
     /// </summary>
     internal static void AddSilentHDropVariants(List<string> results, string source)
-        => AppendDistinct(results, GetSilentHDropVariants(source));
+    {
+        foreach (string variant in GetSilentHDropVariants(source))
+        {
+            if (results.Count >= PerNameVariantCap)
+            {
+                return;
+            }
+
+            AppendDistinct(results, new[] { variant });
+        }
+    }
 }
