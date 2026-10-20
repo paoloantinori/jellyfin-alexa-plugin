@@ -1461,6 +1461,44 @@ tests:
     expected_slots:
       musician: {}
 
+  # 2026-10-20 regression (device corr 15656cee, simulate-reproduced): the
+  # one-shot "chiedi a mia collezione di mettere musica di Nora Jones"
+  # delivered PlayMoodMusicIntent mood='jones' (the invocation-consumed tail
+  # had no bare-infinitive row here; the mood side's "Mettere musica {mood}"
+  # won and the fill ate "di nora"). RED-UNTIL-DEPLOY for the four bare-
+  # infinitive musica rows (the JF-844 class, third occurrence); the bare
+  # payload pin below rides the same rows.
+  - utterance: "chiedi a mia collezione di mettere musica di nora jones"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+
+  - utterance: "mettere musica di nora jones"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+
+  # Sibling-surface pins (code-review F1): each of the 16 rows is individually
+  # load-bearing under documented trainer flips, so the verb surface (suonare)
+  # and the plural-article surface (dei) get one wrapper twin each beyond the
+  # incident's mettere/di pair.
+  - utterance: "chiedi a mia collezione di suonare musica dei pink floyd"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+
+  - utterance: "suonare musica dei pink floyd"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+
+  # The mood-side REVERSE guard (code-review F2): the incident verb mettere on
+  # a real mood word must stay on the mood intent against the new artist rows.
+  - utterance: "mettere musica rilassante"
+    expected_intent: PlayMoodMusicIntent
+    expected_slots:
+      mood: {}
+
   # "Riproduci" pattern with multi-word artist
   - utterance: "Riproduci una canzone dei ligabue"
     expected_intent: PlayArtistSongsIntent

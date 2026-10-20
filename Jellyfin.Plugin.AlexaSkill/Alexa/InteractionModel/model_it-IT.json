@@ -2073,7 +2073,23 @@
           "Di ascoltare la {musician}",
           "Di ascoltare i {musician}",
           "Di ascoltare gli {musician}",
-          "Di ascoltare le {musician}"
+          "Di ascoltare le {musician}",
+          "riprodurre musica di {musician}",
+          "riprodurre musica dei {musician}",
+          "riprodurre musica degli {musician}",
+          "riprodurre musica delle {musician}",
+          "suonare musica di {musician}",
+          "suonare musica dei {musician}",
+          "suonare musica degli {musician}",
+          "suonare musica delle {musician}",
+          "mettere musica di {musician}",
+          "mettere musica dei {musician}",
+          "mettere musica degli {musician}",
+          "mettere musica delle {musician}",
+          "ascoltare musica di {musician}",
+          "ascoltare musica dei {musician}",
+          "ascoltare musica degli {musician}",
+          "ascoltare musica delle {musician}"
         ],
         "slots": [
           {

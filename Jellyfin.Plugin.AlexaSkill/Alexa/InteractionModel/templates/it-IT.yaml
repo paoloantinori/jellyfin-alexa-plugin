@@ -1565,6 +1565,24 @@ templates:
       # NLU rejects the article.
       - "{imperative} {nominative_article} {musician}"
       - "{infinitive} {nominative_article} {musician}"
+      # 2026-10-20 regression (device corr 15656cee + simulate reproduction):
+      # the one-shot "chiedi a mia collezione di mettere musica di Nora Jones"
+      # delivered PlayMoodMusicIntent mood='jones' - the invocation-consumed
+      # tail "mettere musica di ..." has NO bare-infinitive row on this intent
+      # (the {infinitive} product is Di+verb only), so PlayMoodMusic's bare
+      # "Mettere musica {mood}" won the race and the statistical fill ate the
+      # "di nora" prefix, sending the mood-miss fallback to a bare-"jones"
+      # search (the 10-artist Jones disambiguation, Tom first). An identical-
+      # content rebuild flipped the steal to FallbackIntent without recovery
+      # (the escape hatch spent, 2026-10-20 08:2x). The JF-844 lesson, third
+      # occurrence (PlaySong noun-less, PlayEpisode numbers/series-first): the
+      # trainer does not generalize the unanchored bare shape; four literal
+      # rows, {artist_article} expands the article family (pleiare rides only
+      # the vocabulary products, per the established bare-infinitive set).
+      - riprodurre musica {artist_article} {musician}
+      - suonare musica {artist_article} {musician}
+      - mettere musica {artist_article} {musician}
+      - ascoltare musica {artist_article} {musician}
     slots:
       - name: musician
         type: JellyfinArtist
