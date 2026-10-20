@@ -406,4 +406,39 @@ public class PhoneticSynonymGeneratorTests
         var result = PhoneticSynonymGenerator.GenerateSynonyms("Motion Soul Coughing", "it-IT");
         Assert.Contains(result, s => s.Contains("Soul Coffin", StringComparison.OrdinalIgnoreCase));
     }
+
+    // --- JF-916: word-final silent-h drop (helper level) ---
+
+    [Fact]
+    public void GetSilentHDropVariants_VowelPlusH_DropsOnlyThatWord_JF916()
+    {
+        Assert.Equal(new[] { "Nora Jones" }, PhoneticSynonymGenerator.GetSilentHDropVariants("Norah Jones"));
+    }
+
+    [Fact]
+    public void GetSilentHDropVariants_MultipleHWords_OneVariantPerWord_JF916()
+    {
+        var result = PhoneticSynonymGenerator.GetSilentHDropVariants("Norah Sarah");
+        Assert.Contains("Nora Sarah", result);
+        Assert.Contains("Norah Sara", result);
+        Assert.Equal(2, result.Count);
+    }
+
+    [Theory]
+    [InlineData("Smith")]   // h after consonant
+    [InlineData("Thom")]    // h internal (th digraph)
+    [InlineData("Nirvana")] // no h
+    [InlineData("Ah")]      // too short (<= 2 chars)
+    [InlineData("")]
+    public void GetSilentHDropVariants_NonQualifyingNames_YieldNothing_JF916(string name)
+    {
+        Assert.Empty(PhoneticSynonymGenerator.GetSilentHDropVariants(name));
+    }
+
+    [Fact]
+    public void GenerateSynonyms_ItIT_NeverExceedsPerNameCap_JF916()
+    {
+        var result = PhoneticSynonymGenerator.GenerateSynonyms("Norah Jones", "it-IT");
+        Assert.True(result.Count <= PhoneticSynonymGenerator.PerNameVariantCap);
+    }
 }

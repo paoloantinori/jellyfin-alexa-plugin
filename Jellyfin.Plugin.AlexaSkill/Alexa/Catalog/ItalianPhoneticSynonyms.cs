@@ -61,6 +61,15 @@ public static class ItalianPhoneticSynonyms
             }
         }
 
+        // JF-916: word-final silent-h drop fires on its OWN condition (like the velar
+        // block below): "Norah Jones" has no -tion/-ing/sh/ph/ck/th transform, but the
+        // dropped-h spelling is the attested it-IT ASR capture ("nora jones" live:
+        // NO_SELECTION via the JF-684 catalog gate before this). Ranked ABOVE the
+        // doubling coverage (the attested capture outranks the speculative gemination).
+        // At this point results holds at most 3 variants, so the cap can never crowd
+        // the append out here (the velar block's guard below CAN fire: it appends last).
+        PhoneticSynonymGenerator.AddSilentHDropVariants(results, withoutThe);
+
         // JF-362 coverage: emit consonant-doubled variants (ASR often doubles single
         // intervocalic consonants in the Italian locale, e.g. "Cofin" -> "Coffin"). Coverage,
         // not precision — extra variants are harmless to entity resolution. Only when a

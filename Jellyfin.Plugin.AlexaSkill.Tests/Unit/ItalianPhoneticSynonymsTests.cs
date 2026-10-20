@@ -343,6 +343,107 @@ public class ItalianPhoneticSynonymsTests
         Assert.NotEmpty(result);
     }
 
+    // --- JF-916: word-final silent-h drop ---
+
+    [Fact]
+    public void Generate_WordFinalHAfterVowel_EmitsHDroppedVariant()
+    {
+        var result = ItalianPhoneticSynonyms.Generate("Norah Jones");
+        Assert.NotEmpty(result);
+        Assert.Contains(result, s => s.Equals("Nora Jones", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Generate_SingleWordFinalH_EmitsHDroppedVariant()
+    {
+        // "Norah" alone has no other transform; the h-drop fires on its own condition.
+        var result = ItalianPhoneticSynonyms.Generate("Norah");
+        Assert.NotEmpty(result);
+        Assert.Contains(result, s => s.Equals("Nora", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Generate_Sarah_EmitsSara()
+    {
+        var result = ItalianPhoneticSynonyms.Generate("Sarah");
+        Assert.NotEmpty(result);
+        Assert.Contains(result, s => s.Equals("Sara", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Generate_Hannah_EmitsHannaAndKeepsOriginalShapeFamily()
+    {
+        // "Hannah": the h-drop covers the word-final h ("Hanna"); the word-INITIAL h
+        // is handled by the existing leading-h strip ("Annah"). Both must be present.
+        var result = ItalianPhoneticSynonyms.Generate("Hannah");
+        Assert.Contains(result, s => s.Equals("Hanna", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(result, s => s.Equals("Annah", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Generate_HKeptSpellingStaysTheCatalogValue()
+    {
+        // The generator emits only VARIANTS; the h-kept spelling "Norah" survives as the
+        // catalog VALUE itself (CatalogValueFactory includes the item name), so the
+        // synonym list for "Norah" carries exactly the h-dropped variant.
+        var result = ItalianPhoneticSynonyms.Generate("Norah");
+        var expected = new[] { "Nora" };
+        Assert.Equal(expected, result);
+    }
+
+    [Fact]
+    public void Generate_HAfterConsonant_NotDropped()
+    {
+        // "Smith" ends in h preceded by 't' (a consonant): no h-drop. Its only variant
+        // is the existing th->t transform "Smit"; a bare "Smit"-from-h-drop is the same
+        // string, so use "Rush" (sh->sc gives "Rusc"; the h-drop would give "Rus").
+        var result = ItalianPhoneticSynonyms.Generate("Rush");
+        Assert.DoesNotContain(result, s => s.Equals("Rus", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(result, s => s.Equals("Rusc", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Generate_InternalHThDigraph_NotDropped()
+    {
+        // "Thom Yorke": th -> t yields "To Yorke"; a "Tho Yorke" h-drop must NOT exist
+        // (the h in "Thom" is word-internal after a consonant, and "th" is a real phoneme).
+        var result = ItalianPhoneticSynonyms.Generate("Thom Yorke");
+        Assert.Contains(result, s => s.Contains("tom Yorke", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(result, s => s.Contains("Tho Yorke", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Generate_HDrop_RespectsPerNameCap()
+    {
+        // A heavy name (velar + h-drop + article) must never exceed the cap.
+        var result = ItalianPhoneticSynonyms.Generate("Norah Koop Smith Band");
+        Assert.True(result.Count <= 5, $"Expected at most 5 variants, got {result.Count}");
+    }
+
+    [Fact]
+    public void Generate_HDrop_VariantsStayWithinSlotValueLimit()
+    {
+        // The 140-char slot cap is applied downstream (SlotValueHelper.Truncate in
+        // CatalogValueFactory); the generator must not be the thing that blows past it.
+        var result = ItalianPhoneticSynonyms.Generate("Norah Jones");
+        Assert.All(result, s => Assert.True(s.Length <= 140));
+    }
+
+    [Fact]
+    public void GenerateSynonyms_ItIT_HDropRidesTheDispatch()
+    {
+        var result = PhoneticSynonymGenerator.GenerateSynonyms("Norah Jones", "it-IT");
+        Assert.Contains(result, s => s.Equals("Nora Jones", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void GenerateSynonyms_DeDE_NoHDrop()
+    {
+        // German renders written h; the rule is deliberately not wired there.
+        var result = PhoneticSynonymGenerator.GenerateSynonyms("Norah Jones", "de-DE");
+        Assert.DoesNotContain(result, s => s.Equals("Nora Jones", StringComparison.OrdinalIgnoreCase));
+    }
+
     // --- Dispatch integration via PhoneticSynonymGenerator ---
 
     [Fact]
