@@ -417,7 +417,8 @@ public class ItalianPhoneticSynonymsTests
     {
         // A heavy name (velar + h-drop + article) must never exceed the cap.
         var result = ItalianPhoneticSynonyms.Generate("Norah Koop Smith Band");
-        Assert.True(result.Count <= 5, $"Expected at most 5 variants, got {result.Count}");
+        Assert.True(result.Count <= PhoneticSynonymGenerator.PerNameVariantCap,
+            $"Expected at most {PhoneticSynonymGenerator.PerNameVariantCap} variants, got {result.Count}");
     }
 
     [Fact]

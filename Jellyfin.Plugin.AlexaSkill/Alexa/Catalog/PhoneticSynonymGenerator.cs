@@ -312,12 +312,14 @@ public static class PhoneticSynonymGenerator
     internal static List<string> GetVelarStopVariants(string name)
     {
         var variants = new List<string>();
-        if (string.IsNullOrWhiteSpace(name)
-            || name.IndexOfAny(VelarStopLetters) < 0)
+        if (string.IsNullOrWhiteSpace(name))
         {
             return variants;
         }
 
+        // No IndexOfAny(VelarStopLetters) pre-filter here: WholeNameVariants already
+        // rejects every name this check would, so the filter was a second source of
+        // truth for "has a velar" (round-2 simplification).
         AppendDistinct(variants, WholeNameVariants(name, WordHasVelarStop, VelarStopWordVariants));
 
         return variants;
@@ -352,8 +354,6 @@ public static class PhoneticSynonymGenerator
             }
         }
     }
-
-    private static readonly char[] VelarStopLetters = { 'c', 'C', 'k', 'K', 'q', 'Q' };
 
     /// <summary>True when the word contains a velar-stop letter (see <see cref="IsVelarStopAt"/>).</summary>
     private static bool WordHasVelarStop(string word)
@@ -515,8 +515,12 @@ public static class PhoneticSynonymGenerator
     // Wired into ItalianPhoneticSynonyms ONLY: the device evidence is it-IT. The
     // es/fr/pt Romance siblings also lack /h/, but no device capture attests the shape
     // there (the JF-379 pan-Romance deferral discipline: no mirrored call sites on
-    // unproven evidence). German and Dutch render written h (de: "Hannah" keeps the
-    // initial aspiration; nl likewise), so they are deliberately excluded.
+    // unproven evidence). German and Dutch are deliberately excluded on evidence
+    // discipline too (no device capture attests the shape), NOT because their
+    // orthography keeps this h: the rule fires on word-FINAL h after a vowel, and
+    // German's Dehnungs-h (Kuh, gehen) is silent exactly like Italian's rendering -
+    // the "Hannah keeps the initial aspiration" argument covers only word-INITIAL h,
+    // a shape this rule does not touch.
     // The "th" digraph is untouched by construction: in "Thom"/"Smith" the h is not
     // word-final after a vowel (it is internal, or preceded by a consonant), and "th"
     // is a real phoneme with its own transform (th -> t).

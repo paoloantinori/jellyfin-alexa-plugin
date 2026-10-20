@@ -66,9 +66,14 @@ public static class ItalianPhoneticSynonyms
         // dropped-h spelling is the attested it-IT ASR capture ("nora jones" live:
         // NO_SELECTION via the JF-684 catalog gate before this). Ranked ABOVE the
         // doubling coverage (the attested capture outranks the speculative gemination).
-        // At this point results holds at most 3 variants, so the cap can never crowd
-        // the append out here (the velar block's guard below CAN fire: it appends last).
-        PhoneticSynonymGenerator.AddSilentHDropVariants(results, withoutThe);
+        // Skipped when the cap is already full, mirroring the velar guard below: the
+        // rule emits one variant PER qualifying word, so an unguarded multi-h-word
+        // name ("Norah Sarah Hannah") could fill the cap and crowd the device-captured
+        // doubling family out below.
+        if (results.Count < PhoneticSynonymGenerator.PerNameVariantCap)
+        {
+            PhoneticSynonymGenerator.AddSilentHDropVariants(results, withoutThe);
+        }
 
         // JF-362 coverage: emit consonant-doubled variants (ASR often doubles single
         // intervocalic consonants in the Italian locale, e.g. "Cofin" -> "Coffin"). Coverage,
