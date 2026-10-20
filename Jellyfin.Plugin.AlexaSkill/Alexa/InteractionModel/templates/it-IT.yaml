@@ -11,6 +11,29 @@ invocationName: mia collezione
 vocabulary:
   imperative: [Riproduci, Suona, Metti, Pleia, Ascolta]
   infinitive: [Di riprodurre, Di suonare, Di mettere, Di pleiare, Di ascoltare]
+  # The BARE infinitive verb set for the JF-844-class literal wrapper-tail rows
+  # (the trainer does not generalize the unanchored bare shape). "pleiare" is
+  # deliberately EXCLUDED: it rides only the {imperative}/{infinitive} vocabulary
+  # products (per the established bare-infinitive set). Three classes of remaining
+  # bare-infinitive rows stay hand-written literals, NOT this key:
+  # 1. SUBSETS of the verb set (the product emits all four verbs and would change
+  #    their content): the decade "riprodurre/ascoltare musica degli anni" pair,
+  #    the radio "ascoltare/suonare la radio" pair, the PlayNextEpisode
+  #    "riprodurre/mettere la serie" pair, and the PlayNext "{song} dopo" trio
+  #    (riprodurre/suonare/mettere; NO ascoltare). NOTE the trio lives on
+  #    PlayNextIntent's explicit_intents section, where the generator copies
+  #    samples VERBATIM with no {ref} expansion: a braced row there would ship
+  #    the literal braces into the model.
+  # 2. CAPITALISED quartets in a different verb order (PlayPodcast's
+  #    "Riprodurre/Ascoltare/Suonare/Mettere il podcast", PlayMoodMusic's
+  #    "Suonare/Ascoltare/Riprodurre/Mettere musica {mood}", PlayRandom's): this
+  #    lowercase ordered key can never byte-identically produce them; converting
+  #    them needs a case/order decision that changes model content (the JF-541
+  #    forbidden shift), not a pending proof.
+  # 3. Families needing a richer key shape (the two PlayBook verb-x-noun
+  #    quartets; a noun-pair key this key cannot express; PlayBook's leggere
+  #    rows are a different verb entirely).
+  bare_infinitive: [riprodurre, suonare, mettere, ascoltare]
 
   # Nouns MUST include the definite article Italians actually speak ("l'album",
   # "il disco", "il brano", ...). Bare nouns produce ungrammatical samples
@@ -1399,11 +1422,9 @@ templates:
       # magnolia») hit NO_SELECTION (the trainer does not generalize
       # riproduci->riprodurre for this shape, the aggiungere class); the noun-less
       # bare IMPERATIVE («riproduci magnolia») already routes. These are the
-      # wrapper twins for the one-shot remainder form.
-      - riprodurre {song}
-      - suonare {song}
-      - mettere {song}
-      - ascoltare {song}
+      # wrapper twins for the one-shot remainder form. JF-913: consolidated onto
+      # {bare_infinitive}.
+      - "{bare_infinitive} {song}"
     slots:
       - name: song
         type: AMAZON.MusicRecording
@@ -1576,13 +1597,9 @@ templates:
       # content rebuild flipped the steal to FallbackIntent without recovery
       # (the escape hatch spent, 2026-10-20 08:2x). The JF-844 lesson, third
       # occurrence (PlaySong noun-less, PlayEpisode numbers/series-first): the
-      # trainer does not generalize the unanchored bare shape; four literal
-      # rows, {artist_article} expands the article family (pleiare rides only
-      # the vocabulary products, per the established bare-infinitive set).
-      - riprodurre musica {artist_article} {musician}
-      - suonare musica {artist_article} {musician}
-      - mettere musica {artist_article} {musician}
-      - ascoltare musica {artist_article} {musician}
+      # trainer does not generalize the unanchored bare shape; literal rows via
+      # {bare_infinitive}, {artist_article} expands the article family.
+      - "{bare_infinitive} musica {artist_article} {musician}"
     slots:
       - name: musician
         type: JellyfinArtist
@@ -1632,13 +1649,9 @@ templates:
       # (the word form "stagione uno episodio tre" fills all slots). Same class
       # as the PlaySong noun-less bare infinitive (live battery 2026-09-24: the
       # trainer does not generalize riproduci->riprodurre for an unanchored
-      # shape): explicit rows give the trainer the alignment anchor. Four verbs,
-      # the PlaySong/PlayBook bare-infinitive set (pleiare rides only the
-      # vocabulary products).
-      - riprodurre la stagione {season_number} episodio {episode_number} di {series_name}
-      - suonare la stagione {season_number} episodio {episode_number} di {series_name}
-      - mettere la stagione {season_number} episodio {episode_number} di {series_name}
-      - ascoltare la stagione {season_number} episodio {episode_number} di {series_name}
+      # shape): explicit rows give the trainer the alignment anchor, via
+      # {bare_infinitive} (the PlaySong/PlayBook bare-infinitive set).
+      - "{bare_infinitive} la stagione {season_number} episodio {episode_number} di {series_name}"
       # JF-549: series-FIRST infinitive twin; the one-shot wrapper presents the
       # series up front and the series-last forms alone dropped series_name (live 2026-09-12).
       - "{infinitive} {series_name} stagione {season_number} episodio {episode_number}"
@@ -1646,12 +1659,8 @@ templates:
       # family, same JF-844 lesson as the numbers-first block above. Live model
       # post-JF-869 deploy: the NLU fixture "riprodurre breaking bad stagione
       # uno episodio tre" read FallbackIntent 3/3 (stable) while the Di-form
-      # alone covers the wrapper; the trainer does not generalize the unanchored
-      # bare shape. Four verbs, the established bare-infinitive set.
-      - riprodurre {series_name} stagione {season_number} episodio {episode_number}
-      - suonare {series_name} stagione {season_number} episodio {episode_number}
-      - mettere {series_name} stagione {season_number} episodio {episode_number}
-      - ascoltare {series_name} stagione {season_number} episodio {episode_number}
+      # alone covers the wrapper (same lesson as the numbers-first block above).
+      - "{bare_infinitive} {series_name} stagione {season_number} episodio {episode_number}"
       # JF-814: season-less family ("metti l'episodio 54 di sailor moon", the
       # 2026-10-08 incident phrase): the season-ed family above minus the season
       # clause; the handler elicits the missing season. The number slot is
