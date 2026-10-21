@@ -6,7 +6,7 @@ title: >-
 status: Done
 assignee: []
 created_date: '2026-10-20 10:55'
-updated_date: '2026-10-21 06:13'
+updated_date: '2026-10-21 08:08'
 labels: []
 dependencies: []
 priority: low
@@ -31,6 +31,12 @@ Residual from the JF-914 en/de/fr audit (2026-10-20, probe-proven stable 2/2): t
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+FINAL UPDATE 2026-10-21 (post classifier-outage resume): the pending e2e row re-run PASSED against the deployed final DLL (1 passed, the harness's 'put on music' fill now hits the observed table and the artist's AudioPlayer.Play asserts green); the close-out record committed and pushed (940d65b9, CI green). No caveats remain.
+<!-- SECTION:NOTES:END -->
 
 ## Final Summary
 
