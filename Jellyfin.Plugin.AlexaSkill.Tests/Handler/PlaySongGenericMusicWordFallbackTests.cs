@@ -122,6 +122,10 @@ public class PlaySongGenericMusicWordFallbackTests : PluginTestBase
             {
                 if (q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicArtist))
                     return new List<BaseItem> { new MusicArtist { Name = "Pink Floyd", Id = artistId } };
+                // The title search for the residue fill finds nothing (the
+                // incident shape: no song titled "on music"; review round 3 F3).
+                if (q.SearchTerm != null && q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Audio))
+                    return new List<BaseItem>();
                 if (q.ArtistIds != null && q.ArtistIds.Length > 0 && q.IncludeItemTypes != null && q.IncludeItemTypes.Contains(BaseItemKind.Audio))
                     return new List<BaseItem> { song1, song2 };
                 return new List<BaseItem>();
@@ -129,6 +133,7 @@ public class PlaySongGenericMusicWordFallbackTests : PluginTestBase
 
         var handler = CreateHandler();
         var request = CreateIntentWithBothSlots("on music", "pink floyd");
+        request.Locale = "en-US";
         var context = _fx.CreateContext();
         var user = _fx.CreateUser();
         var session = _fx.CreateSession();
@@ -140,6 +145,42 @@ public class PlaySongGenericMusicWordFallbackTests : PluginTestBase
         Assert.True(response.Response.ShouldEndSession);
         Assert.NotNull(session.NowPlayingQueue);
         Assert.Equal(2, session.NowPlayingQueue.Count);
+    }
+
+    [Fact]
+    public async Task UnobservedResidueFill_OnTrack_KeepsTheTitleSearch()
+    {
+        // JF-917 review round 3 F1: the bypass matches only the OBSERVED whole
+        // phrase; an "on <generic word>" TITLE ("On Track" by Tame Impala) must
+        // keep the normal title search, never the artist bypass.
+        var artistId = Guid.NewGuid();
+        var theSong = new Audio { Name = "On Track", Id = Guid.NewGuid() };
+
+        _fx.SetupUserMock();
+
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q =>
+            {
+                if (q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicArtist))
+                    return new List<BaseItem> { new MusicArtist { Name = "Tame Impala", Id = artistId } };
+                if (q.SearchTerm != null && q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Audio))
+                    return new List<BaseItem> { theSong };
+                return new List<BaseItem>();
+            });
+
+        var handler = CreateHandler();
+        var request = CreateIntentWithBothSlots("on track", "tame impala");
+        request.Locale = "en-US";
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        // The TITLE search found the song: the queue carries the song, not the
+        // artist's catalog (an artist bypass would enqueue many tracks).
+        Assert.NotNull(session.NowPlayingQueue);
+        Assert.Single(session.NowPlayingQueue);
     }
 
     [Fact]

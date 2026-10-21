@@ -167,8 +167,40 @@ internal static class MultiValueErDisambiguation
     {
         // When no article was stripped the probe returns the input unchanged, so
         // this single Contains covers the bare-word case too.
-        return GenericMusicWords.Contains(StripGenericMusicLeadingArticle(songQuery));
+        if (GenericMusicWords.Contains(StripGenericMusicLeadingArticle(songQuery)))
+        {
+            return true;
+        }
+
+        // JF-917 (2026-10-21): the OBSERVED wrapper-residue fills, matched as
+        // whole phrases. The one-shot wrapper's invocation consumption eats the
+        // verb of "put on" and can leave the particle in the slot: "ask
+        // jellyfin player to put on music by pink floyd" delivered song
+        // "on music" (live simulate 2026-10-20; the handler answered the honest
+        // not-found "couldn't find any songs with the name on music") and the
+        // generic-word bypass never fired. WHOLE-PHRASE matching is the load-
+        // bearing choice (code-review round 3 F1): stripping "on" generically
+        // would swallow the "on <generic word>" TITLE class ("On Track" by
+        // Tame Impala) into the artist bypass; the observed-evidence table
+        // (the JF-697 doctrine) keeps every unobserved shape, including "on
+        // some music"/"on the music" and the it "su" sibling ("metti su
+        // musica di X"), on the normal song path until a live capture
+        // condemns them. Membership-only: the song search keeps the raw value.
+        string? trimmedFill = songQuery?.Trim();
+        foreach (string fill in ObservedWrapperResidueFills)
+        {
+            if (string.Equals(trimmedFill, fill, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
+
+    // The observed whole-phrase wrapper residues; new shapes join on first
+    // live capture, never by derivation.
+    private static readonly string[] ObservedWrapperResidueFills = { "on music" };
 
     /// <summary>
     /// Strips ONE leading space-separated article from the query; returns the
@@ -179,38 +211,6 @@ internal static class MultiValueErDisambiguation
     /// JF-715: moved from PlaySongIntentHandler verbatim (the shared-home fold);
     /// private with its consumer since the fold.
     /// </summary>
-    // JF-917 (2026-10-21): the English WRAPPER-PARTICLE residue. The one-shot
-    // wrapper's invocation consumption eats the verb of "put on" and can leave
-    // the particle in the slot: "ask jellyfin player to put on music by pink
-    // floyd" delivered song "on music" (live simulate 2026-10-20; the handler
-    // answered the honest not-found "couldn't find any songs with the name on
-    // music") and the generic-word bypass never fired. Same single-cut,
-    // membership-only contract as the article strip: the song search keeps the
-    // raw value, and a real song titled "On Music" stays reachable through
-    // every non-generic phrasing (the accepted JF-697 tradeoff). English-only
-    // on observed evidence (the JF-697 doctrine): de/es verb-eaten residues
-    // arrive as bare generic nouns, it/fr are article-led and covered above;
-    // the expected-but-unobserved sibling is it "su" ("metti su musica di X"),
-    // which joins this table on its first live capture.
-    private static readonly string[] EnglishWrapperParticleResidues = { "on" };
-
-    /// <summary>Case-insensitive membership in one strippable-leading-word
-    /// table (the ONE comparison body for both the article and the residue
-    /// tables; the cut semantics live in the single return below, never
-    /// hand-synced per table).</summary>
-    private static bool LeadingWordMatches(string[] table, string word)
-    {
-        foreach (string entry in table)
-        {
-            if (string.Equals(entry, word, StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
     private static string StripGenericMusicLeadingArticle(string songQuery)
     {
         if (string.IsNullOrEmpty(songQuery))
@@ -223,10 +223,12 @@ internal static class MultiValueErDisambiguation
         if (space > 0)
         {
             string first = trimmed[..space];
-            if (LeadingWordMatches(GenericMusicLeadingArticles, first)
-                || LeadingWordMatches(EnglishWrapperParticleResidues, first))
+            foreach (string article in GenericMusicLeadingArticles)
             {
-                return trimmed[(space + 1)..].Trim();
+                if (string.Equals(first, article, StringComparison.OrdinalIgnoreCase))
+                {
+                    return trimmed[(space + 1)..].Trim();
+                }
             }
         }
 
