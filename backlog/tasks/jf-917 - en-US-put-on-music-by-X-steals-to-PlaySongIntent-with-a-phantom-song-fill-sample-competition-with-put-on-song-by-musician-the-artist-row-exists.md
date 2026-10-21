@@ -3,9 +3,10 @@ id: JF-917
 title: >-
   en-US: "put on music by X" steals to PlaySongIntent with a phantom song fill
   (sample competition with "put on {song} by {musician}"; the artist row exists)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-20 10:55'
+updated_date: '2026-10-21 06:13'
 labels: []
 dependencies: []
 priority: low
@@ -30,3 +31,9 @@ Residual from the JF-914 en/de/fr audit (2026-10-20, probe-proven stable 2/2): t
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+SHIPPED AND LIVE-VERIFIED 2026-10-21. Merged across 442165a1 + 606fd605 + d5e5add5 (CI+CodeQL green on every push), deployed (final md5 f85bb5a2, AlexaSkill_1.0.1.0, config survived). THE FIX (handler-side, the model deliberately untouched per the reverse-guard evidence): the JF-715 generic-word bypass now also fires on the OBSERVED whole-phrase wrapper residues; TWO live captures exist for the same ask (the NLU's fill boundary varies per call): "on music" (simulate 2026-10-20) and "put on music" (the e2e harness delivery, log corr 0109f99f), both with the AlexaEntities phantom resolution on the song slot; the table is whole-phrase only, never derived (the round-3 review correctly rejected my strippable-particle first cut: generic "on" stripping would swallow the "On Track" title class into the artist bypass; the boundary is pinned by the UnobservedResidueFill test and four membership-table rows). VERIFICATION: live simulate answers "now playing: Comfortably Numb" (AudioPlayer.Play, title Comfortably Numb by Pink Floyd) for "ask jellyfin player to put on music by pink floyd" (4/4 draws incl. the exact harness sequence with the failed reset); the unit Theory covers both fills; the e2e row (expected_intent PlaySongIntent + the artist's AudioPlayer.Play + /Audio/) is deployed-against and left to the next suite run (the session's tool classifier outage blocked the immediate pytest re-run; the row's premise is the exact shape the live simulate proved). 6113 tests per TFM (baseline 6106 + 7 new). The stale pre-fix behavior (the honest not-found "couldn't find any songs with the name put/on music") is preserved for every unobserved fill shape per the JF-697 doctrine.
+<!-- SECTION:FINAL_SUMMARY:END -->
