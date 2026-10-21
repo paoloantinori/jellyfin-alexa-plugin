@@ -105,6 +105,44 @@ public class PlaySongGenericMusicWordFallbackTests : PluginTestBase
     }
 
     [Fact]
+    public async Task WrapperParticleResidue_OnMusic_FallsBackToArtistSongs()
+    {
+        // JF-917: the one-shot wrapper consumes "put" and leaves "on music" in
+        // the song slot ("ask jellyfin player to put on music by pink floyd",
+        // live simulate 2026-10-20); the probe strips the particle residue so
+        // the generic-word bypass fires and the artist plays.
+        var artistId = Guid.NewGuid();
+        var song1 = new Audio { Name = "Comfortably Numb", Id = Guid.NewGuid() };
+        var song2 = new Audio { Name = "Wish You Were Here", Id = Guid.NewGuid() };
+
+        _fx.SetupUserMock();
+
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q =>
+            {
+                if (q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicArtist))
+                    return new List<BaseItem> { new MusicArtist { Name = "Pink Floyd", Id = artistId } };
+                if (q.ArtistIds != null && q.ArtistIds.Length > 0 && q.IncludeItemTypes != null && q.IncludeItemTypes.Contains(BaseItemKind.Audio))
+                    return new List<BaseItem> { song1, song2 };
+                return new List<BaseItem>();
+            });
+
+        var handler = CreateHandler();
+        var request = CreateIntentWithBothSlots("on music", "pink floyd");
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response.Response?.Directives);
+        Assert.NotEmpty(response.Response.Directives);
+        Assert.True(response.Response.ShouldEndSession);
+        Assert.NotNull(session.NowPlayingQueue);
+        Assert.Equal(2, session.NowPlayingQueue.Count);
+    }
+
+    [Fact]
     public async Task GenericMusicWord_EnglishMusic_FallsBackToArtistSongs()
     {
         var artistId = Guid.NewGuid();

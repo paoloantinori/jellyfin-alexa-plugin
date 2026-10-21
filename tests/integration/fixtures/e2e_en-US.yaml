@@ -13,6 +13,23 @@ tests:
       mood: {}
     expected_response_type: any
 
+  # JF-917 (2026-10-20 audit; fix 2026-10-21): the model selects PlaySongIntent
+  # for "put on music by X" (sample competition, the phantom MusicRecording
+  # fill) and the fix is HANDLER-side (the JF-715 generic-word bypass extended
+  # with the wrapper-particle residue: the one-shot consumes "put" and delivers
+  # song "on music", which the probe now strips to the generic word). The row
+  # pins the END-TO-END contract: the delivered intent stays PlaySongIntent,
+  # but the response is the ARTIST play (AudioPlayer.Play of Pink Floyd), not
+  # the honest not-found the pre-fix handler answered. RED-UNTIL-DEPLOY (the
+  # fix rides the DLL; verified live in simulate 2026-10-20 pre-fix).
+  - utterance: "ask jellyfin player to put on music by pink floyd"
+    expected_intent: PlaySongIntent
+    expected_slots: {}
+    expected_response_type: directive
+    expected_directive_type: "AudioPlayer.Play"
+    expected_end_session: true
+    expected_stream_url_contains: "/Audio/"
+
   # "play random rock songs" matches the literal (non-slotted) model sample:
   # NO slots are captured (the NLU fixture en-US.yaml documents the same
   # shape). JF-510 (2026-09-06): the previous genre/media_type slot pins were

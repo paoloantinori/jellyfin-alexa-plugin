@@ -179,6 +179,38 @@ internal static class MultiValueErDisambiguation
     /// JF-715: moved from PlaySongIntentHandler verbatim (the shared-home fold);
     /// private with its consumer since the fold.
     /// </summary>
+    // JF-917 (2026-10-21): the English WRAPPER-PARTICLE residue. The one-shot
+    // wrapper's invocation consumption eats the verb of "put on" and can leave
+    // the particle in the slot: "ask jellyfin player to put on music by pink
+    // floyd" delivered song "on music" (live simulate 2026-10-20; the handler
+    // answered the honest not-found "couldn't find any songs with the name on
+    // music") and the generic-word bypass never fired. Same single-cut,
+    // membership-only contract as the article strip: the song search keeps the
+    // raw value, and a real song titled "On Music" stays reachable through
+    // every non-generic phrasing (the accepted JF-697 tradeoff). English-only
+    // on observed evidence (the JF-697 doctrine): de/es verb-eaten residues
+    // arrive as bare generic nouns, it/fr are article-led and covered above;
+    // the expected-but-unobserved sibling is it "su" ("metti su musica di X"),
+    // which joins this table on its first live capture.
+    private static readonly string[] EnglishWrapperParticleResidues = { "on" };
+
+    /// <summary>Case-insensitive membership in one strippable-leading-word
+    /// table (the ONE comparison body for both the article and the residue
+    /// tables; the cut semantics live in the single return below, never
+    /// hand-synced per table).</summary>
+    private static bool LeadingWordMatches(string[] table, string word)
+    {
+        foreach (string entry in table)
+        {
+            if (string.Equals(entry, word, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private static string StripGenericMusicLeadingArticle(string songQuery)
     {
         if (string.IsNullOrEmpty(songQuery))
@@ -191,12 +223,10 @@ internal static class MultiValueErDisambiguation
         if (space > 0)
         {
             string first = trimmed[..space];
-            foreach (string article in GenericMusicLeadingArticles)
+            if (LeadingWordMatches(GenericMusicLeadingArticles, first)
+                || LeadingWordMatches(EnglishWrapperParticleResidues, first))
             {
-                if (string.Equals(first, article, StringComparison.OrdinalIgnoreCase))
-                {
-                    return trimmed[(space + 1)..].Trim();
-                }
+                return trimmed[(space + 1)..].Trim();
             }
         }
 
