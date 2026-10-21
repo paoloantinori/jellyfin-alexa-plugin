@@ -104,13 +104,16 @@ public class PlaySongGenericMusicWordFallbackTests : PluginTestBase
         Assert.Equal(2, session.NowPlayingQueue.Count);
     }
 
-    [Fact]
-    public async Task WrapperParticleResidue_OnMusic_FallsBackToArtistSongs()
+    [Theory]
+    [InlineData("on music")]        // simulate capture 2026-10-20
+    [InlineData("put on music")]    // e2e harness capture 2026-10-21 (corr 0109f99f)
+    public async Task WrapperResidue_Fills_FallBackToArtistSongs(string fill)
     {
-        // JF-917: the one-shot wrapper consumes "put" and leaves "on music" in
-        // the song slot ("ask jellyfin player to put on music by pink floyd",
-        // live simulate 2026-10-20); the probe strips the particle residue so
-        // the generic-word bypass fires and the artist plays.
+        // JF-917: the one-shot wrapper's fill boundary varies per call and has
+        // been captured as BOTH "on music" (simulate 2026-10-20) and the whole
+        // verb phrase "put on music" (e2e harness 2026-10-21, corr 0109f99f);
+        // the observed-fills table matches these whole phrases so the
+        // generic-word bypass fires and the artist plays.
         var artistId = Guid.NewGuid();
         var song1 = new Audio { Name = "Comfortably Numb", Id = Guid.NewGuid() };
         var song2 = new Audio { Name = "Wish You Were Here", Id = Guid.NewGuid() };
@@ -132,7 +135,7 @@ public class PlaySongGenericMusicWordFallbackTests : PluginTestBase
             });
 
         var handler = CreateHandler();
-        var request = CreateIntentWithBothSlots("on music", "pink floyd");
+        var request = CreateIntentWithBothSlots(fill, "pink floyd");
         request.Locale = "en-US";
         var context = _fx.CreateContext();
         var user = _fx.CreateUser();
@@ -500,6 +503,10 @@ public class PlaySongGenericMusicWordFallbackTests : PluginTestBase
     [InlineData("eine musik", true)]
     [InlineData("il brano", true)]
     [InlineData("musica", true)]
+    [InlineData("on music", true)]       // JF-917 observed wrapper residue
+    [InlineData("put on music", true)]   // JF-917 second observed fill (per-call variance)
+    [InlineData("on track", false)]      // JF-917 boundary: "on <generic>" TITLES never match (whole-phrase only)
+    [InlineData("on some music", false)] // JF-917 unobserved shape stays on the normal path
     [InlineData("la vie en rose", false)]
     [InlineData("a day in the life", false)]
     [InlineData("der hugenottenfestmarsch", false)]

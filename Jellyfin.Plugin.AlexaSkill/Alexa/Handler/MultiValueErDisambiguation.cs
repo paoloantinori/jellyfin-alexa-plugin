@@ -155,7 +155,9 @@ internal static class MultiValueErDisambiguation
     /// <summary>
     /// JF-697 membership test for the generic-music-word fallback gate: true when
     /// the song query is a generic music word either bare or after stripping one
-    /// leading article of the covered languages ("la musica" -> "musica").
+    /// leading article of the covered languages ("la musica" -> "musica"), OR
+    /// when it is one of the JF-917 observed whole-phrase wrapper residues
+    /// ("on music", "put on music"; matched whole, never by derivation).
     /// The song search itself keeps the raw slot value.
     /// JF-715: moved from PlaySongIntentHandler and made PRIVATE: every caller
     /// now goes through <see cref="IsGenericSongConstraint"/> (the ONE raw-slot
@@ -199,8 +201,12 @@ internal static class MultiValueErDisambiguation
     }
 
     // The observed whole-phrase wrapper residues; new shapes join on first
-    // live capture, never by derivation.
-    private static readonly string[] ObservedWrapperResidueFills = { "on music" };
+    // live capture, never by derivation. TWO captures exist for the same ask
+    // (the NLU's fill boundary varies per call): the verb-eaten "on music"
+    // (simulate 2026-10-20) and the whole-phrase "put on music" (the e2e
+    // harness's delivery 2026-10-21, log corr 0109f99f; both with musician
+    // filled and the AlexaEntities phantom resolution on the song slot).
+    private static readonly string[] ObservedWrapperResidueFills = { "on music", "put on music" };
 
     /// <summary>
     /// Strips ONE leading space-separated article from the query; returns the
@@ -363,7 +369,9 @@ internal static class MultiValueErDisambiguation
     /// </summary>
 
     /// <param name="rawSongSlot">The RAW song slot value (pre-normalization).</param>
-    /// <returns>True when the slot carries no song constraint worth preserving.</returns>
+    /// <returns>True when the slot carries no song constraint worth preserving
+    /// (a generic music word after article strip, or a JF-917 observed
+    /// whole-phrase wrapper residue; see <see cref="IsGenericMusicQuery"/>).</returns>
     internal static bool IsGenericSongConstraint(string? rawSongSlot)
     {
         if (string.IsNullOrWhiteSpace(rawSongSlot))

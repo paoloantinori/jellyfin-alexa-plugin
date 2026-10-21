@@ -16,8 +16,9 @@ tests:
   # JF-917 (2026-10-20 audit; fix 2026-10-21): the model selects PlaySongIntent
   # for "put on music by X" (sample competition, the phantom MusicRecording
   # fill) and the fix is HANDLER-side (the JF-715 generic-word bypass extended
-  # with the wrapper-particle residue: the one-shot consumes "put" and delivers
-  # song "on music", which the probe now strips to the generic word). The row
+  # with an observed-fills table: the wrapper's per-call fill boundary
+  # delivered both "on music" and the whole verb phrase "put on music", and
+  # the table matches those phrases whole, never by derivation). The row
   # pins the END-TO-END contract: the delivered intent stays PlaySongIntent,
   # but the response is the ARTIST play (AudioPlayer.Play of Pink Floyd), not
   # the honest not-found the pre-fix handler answered. RED-UNTIL-DEPLOY (the
