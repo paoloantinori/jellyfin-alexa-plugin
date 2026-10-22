@@ -6,6 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-10-19 20:54'
+updated_date: '2026-10-22 13:52'
 labels: []
 dependencies: []
 priority: low
@@ -34,3 +35,9 @@ Follow-up from the JF-876/JF-877 merge (a7a5c854, 2026-10-19 night; filed same-t
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+DEVICE ROUND 2026-10-22 15:31 (Paolo): 'chiedi a mia collezione di mettere il film gruffalò' PLAYED THE ORIGINAL DIRECTLY, no ask (corr 65abaa84). VERDICT: CORRECT BEHAVIOR, not a gate failure. The device delivered the OTHER JF-874 twin: PlayVideoIntent with free-text title='gruffalo' (no ER resolutions at all; the trainer coin-flip between the duplicated 'Di mettere il film' sample claims went to the free-text twin today), where the JF-876 ER gate does not exist by construction. On that path the exact search missed and HandleFuzzyMiss scored 'Il Gruffalo' 90, hitting the documented auto-play bar (>= 90, no qualifier) - it played the ORIGINAL, the film the name said. The ask (JF-876) remains SIMULATOR-VERIFIED for the catalog-twin delivery shape (the multi-value ER); a device confirmation of the ASK itself remains outstanding and not directly triggerable (it lands whenever the trainer awards the utterance to the PlayMovie twin). The test instruction for the device round promised the ask unconditionally - that was the error, corrected here: the ask is expected ONLY on the catalog-ER delivery.
+<!-- SECTION:NOTES:END -->
