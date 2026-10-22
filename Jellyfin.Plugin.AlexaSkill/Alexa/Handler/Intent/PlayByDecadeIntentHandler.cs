@@ -88,10 +88,26 @@ public class PlayByDecadeIntentHandler : BaseHandler
         string locale = GetLocale(request);
         IntentRequest intentRequest = (IntentRequest)request;
 
+        // The RAW spoken text: the user's words, for the not-found speech below
+        // (code-review round finding: speaking the resolved id would put the
+        // English token "80s" inside Hindi TTS for the very locale JF-399 fixes).
+        string? decadeSpoken = null;
+        // The parse input: the ER resolution id first, the raw spoken text only as
+        // the no-match fallback (the SeekVocabulary.Matches consuming pattern,
+        // JF-869; the genre slot below is canonical-first for the same reason).
+        // JF-399 / issue #39 (2026-10-22): the Decade type's ids are the stable
+        // cross-locale decades ("50s"/"2000s" in hi-IN/en-US/ar-SA, "1950" in
+        // it-IT) and every id shape parses through the numeric path below, so
+        // native VALUES (Devanagari, Arabic) and their synonyms resolve with zero
+        // per-locale tables here: hi-IN's swap and ar-SA's existing native values
+        // both ride this read.
         string? decadeSlot = null;
         if (intentRequest.Intent.Slots != null && intentRequest.Intent.Slots.TryGetValue("decade", out Slot? decadeSlotObj))
         {
-            decadeSlot = decadeSlotObj.Value;
+            decadeSpoken = decadeSlotObj.Value;
+            decadeSlot = SlotValueHelper.GetResolvedValue(decadeSlotObj) is { } decadeResolved
+                ? (decadeResolved.Id ?? decadeResolved.Name ?? decadeSlotObj.Value)
+                : decadeSlotObj.Value;
         }
 
         if (string.IsNullOrEmpty(decadeSlot))
@@ -164,7 +180,7 @@ public class PlayByDecadeIntentHandler : BaseHandler
 
         if (items.Count == 0)
         {
-            return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundDecade", locale, decadeSlot));
+            return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundDecade", locale, decadeSpoken ?? decadeSlot!));
         }
 
         List<QueueItem> queueItems = new List<QueueItem>();

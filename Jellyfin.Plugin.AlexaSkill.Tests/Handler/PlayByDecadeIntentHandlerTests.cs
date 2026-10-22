@@ -180,6 +180,37 @@ public class PlayByDecadeIntentHandlerTests : PluginTestBase
     }
 
     [Fact]
+    public async Task HandleAsync_ResolvedDecadeId_DrivesTheYears_NativeValues()
+    {
+        // JF-399 / issue #39: a native spoken value (hi-IN Devanagari, whose raw
+        // text cannot parse) resolves through the ER id ("80s") and drives the
+        // years; the same read carries ar-SA's Arabic values with no per-locale
+        // handler code.
+        var handler = CreateHandler();
+        var spoken = "\u0905\u0938\u094d\u0938\u0940 \u0915\u093e \u0926\u0936\u0915"; // the 80s native value
+        var request = CreateIntentRequest(decade: spoken);
+        request.Intent.Slots!["decade"] = TestHelpers.ResolvedSlot(
+            spoken, canonical: spoken, slotName: "decade", id: "80s");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SetupUserMock();
+
+        InternalItemsQuery? capturedQuery = null;
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Callback<InternalItemsQuery>(q => capturedQuery = q)
+            .Returns(new List<BaseItem> { new Audio { Name = "80s Song", Id = Guid.NewGuid() } });
+
+        await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(capturedQuery);
+        Assert.NotNull(capturedQuery!.Years);
+        Assert.Equal(1980, capturedQuery.Years[0]);
+        Assert.Equal(1989, capturedQuery.Years[^1]);
+    }
+
+    [Fact]
     public async Task HandleAsync_PassesYearsToQuery()
     {
         var handler = CreateHandler();
@@ -375,4 +406,5 @@ public class PlayByDecadeIntentHandlerTests : PluginTestBase
 
         Assert.False(vocabularyQueried);
     }
+
 }

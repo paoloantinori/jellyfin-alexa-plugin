@@ -1037,29 +1037,29 @@ types:
   Decade:
     values:
       - id: 50s
-        value: 50s
-        synonyms: [पचासवां दशक, '1950']
+        value: पचासवां दशक
+        synonyms: [50s, fifties, the fifties, '1950']
       - id: 60s
-        value: 60s
-        synonyms: [साठवां दशक, '1960']
+        value: साठवां दशक
+        synonyms: [60s, sixties, the sixties, '1960']
       - id: 70s
-        value: 70s
-        synonyms: [सत्तरवां दशक, '1970']
+        value: सत्तरवां दशक
+        synonyms: [70s, seventies, the seventies, '1970']
       - id: 80s
-        value: 80s
-        synonyms: [अस्सी का दशक, '1980']
+        value: अस्सी का दशक
+        synonyms: [80s, eighties, the eighties, '1980']
       - id: 90s
-        value: 90s
-        synonyms: [नब्बे का दशक, '1990']
+        value: नब्बे का दशक
+        synonyms: [90s, nineties, the nineties, '1990']
       - id: 2000s
-        value: 2000s
-        synonyms: [दो हज़ार, '2000']
+        value: दो हज़ार
+        synonyms: [2000s, two thousands, the 2000s, '2000']
       - id: 2010s
-        value: 2010s
-        synonyms: [दो हज़ार दस, '2010']
+        value: दो हज़ार दस
+        synonyms: [2010s, twenty tens, '2010']
       - id: 2020s
-        value: 2020s
-        synonyms: [दो हज़ार बीस, '2020']
+        value: दो हज़ार बीस
+        synonyms: [2020s, twenty twenties, '2020']
   AudiobookTitle:
     values:
       - value: ऑडियोबुक

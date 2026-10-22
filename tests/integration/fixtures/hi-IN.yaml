@@ -1,6 +1,13 @@
 locale: hi-IN
 invocation_name: मेरी कलेक्शन
 tests:
+
+  # JF-399 / issue #39: the Decade slot's NATIVE values (the handler resolves
+  # them through the ER id read; RED-UNTIL-DEPLOY until the hi-IN model rebuild).
+  - utterance: "अस्सी का दशक के गाने चलाओ"
+    expected_intent: PlayByDecadeIntent
+    expected_slots:
+      decade: {}
   # JF-400: hi-IN had no NLU fixture file; seeded (probe-verified 2026-08-29 against the
   # live model) with the JF-414 indefinite album-by-artist forms. Both route to
   # PlayAlbumIntent with the raw musician value preserved. Extend per the JF-400 program.
