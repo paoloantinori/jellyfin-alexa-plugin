@@ -1,7 +1,7 @@
 ---
 name: Alexa Skill
 guid: c5df7de0-8777-4b3c-a70d-5c3dae359c9e
-version: 1.0.1.0
+version: 1.0.2.0
 targetAbi: 10.11.0.0
 framework: net9.0
 overview: Alexa skill plugin for Jellyfin
@@ -20,4 +20,4 @@ artifacts:
   - Amazon.Lambda.Serialization.Json.dll
   - Jellyfin.Plugin.AlexaSkill.dll
   - Refit.dll
-changelog: "Loop now repeats the track you are listening to and the setting survives track changes; whole-queue repeat is available in all 17 languages. Adds photo slideshows on Echo Show, one-shot film requests by title, skip forward and back in every language, and honest which-did-you-mean questions for ambiguous artist requests. Pause and stop say what they actually stopped (music, book or video), asking for a film without a title now prompts for it, resume keeps offering the same item it will play, sleep timers confirm what they will really do, and shuffle, repeat and loop answer out loud when they take effect. Includes many reliability fixes around search, playback and session handling. 1.0.1 fixes: the loop now reliably repeats the current track (a server timer used to reset the repeat setting mid-song); disabling the loop stops a pending track repeat instead of letting it play; the resume offer on Echo Show shows the correct track name instead of unknown content; French one-shot commands route correctly; Italian ordinals ('la prima', 'la seconda') and their voice-transcribed forms are understood in song selection."
+changelog: "Movie titles shared by several films now ask which one you meant instead of silently playing the first match. Skip forward and back now work as one-shot commands in French, Spanish and Dutch. Fixed an Italian regression where asking to put on music by an artist offered a list of similarly named artists instead of playing them. Artist names heard without a silent letter (Norah heard as Nora) now resolve once your catalog resyncs. Asking to put on music by an artist in English no longer answers with a wrong song title. Decade requests now understand native Hindi values, and decade words in Arabic and Italian that never worked before now resolve. Includes further reliability fixes around search, playback and session handling."
