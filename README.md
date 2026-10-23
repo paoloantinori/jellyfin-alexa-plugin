@@ -290,7 +290,7 @@ The configuration page has two sections: global settings at the top (server addr
 3. Select the Jellyfin user from the dropdown
 4. **Save** to create the skill (a new user only persists the invocation name at first).
 5. Click a row (or its chevron) to **expand** it and reveal the per-user settings grouped into three panels:
-   - **Invocation & Libraries**: the invocation name (leave **empty** for locale defaults — Italian: "Mia Collezione"; all other locales: "Jellyfin Player" — or enter a custom two-or-more-word name that applies to **all** locales) plus the allowed-libraries picker. Saving a changed invocation name redeploys it to Amazon automatically (~15–30s); use **Reset** to return to locale defaults.
+   **Invocation & Libraries**: the invocation name (leave **empty** for locale defaults: Italian "Mia Collezione", German "Meine Sammlung", Spanish "Mi Colección", French "Mon Serveur", Portuguese "Minha Coleção", Dutch "Mijn Collectie"; English and the remaining locales use "Jellyfin Player". You can also enter a custom two-or-more-word name that applies to **all** locales) plus the allowed-libraries picker. Saving a changed invocation name redeploys it to Amazon automatically (~15–30s); use **Reset** to return to locale defaults. To see the live name for a locale, check the skill's Invocations page in the Amazon developer console.
    - **Search**: fuzzy match behavior, thresholds, and search response mode.
    - **Playback**: PostPlay behavior, music delivery (seek bar vs. raw stream), and announcement options.
 
@@ -334,6 +334,8 @@ The final step links your Jellyfin account to the Alexa skill:
 
 1. Open the **Alexa app** on your phone
 2. Go to **Skills & Games** and search for your skill's invocation name
+
+> **"Alexa, open <name>" says it is not supported on this device?** On some accounts and device generations, plain "open <name>" (German "öffne <Name>", Italian "apri <nome>") is treated as a request to launch an app, and custom skills lose out; the request never reaches the plugin. Say **"start the skill <name>"** (German "starte den Skill <Name>", Italian "avvia la skill <nome>") instead; that form reaches the skill reliably, and once a session is open, plain commands work.
 3. Or go directly to your skills at [alexa.amazon.com](https://alexa.amazon.com)
 4. Enable the skill — you'll be prompted to link your account
 5. Enter your **Jellyfin username and password** on the linking page
