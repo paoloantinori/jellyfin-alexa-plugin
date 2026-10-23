@@ -290,7 +290,10 @@ public static class CatalogSeedEnrichment
 
             // Artist seeds are catalog entries like library ones, so the shared
             // factory enriches them identically (JF-684 via the JF-689 factory).
-            payload.Values.Add(CatalogValueFactory.Create(type, StableSeedGuid(seed), seed, synonyms));
+            if (CatalogValueFactory.Create(type, StableSeedGuid(seed), seed, synonyms) is { } seedEntry)
+            {
+                payload.Values.Add(seedEntry);
+            }
         }
     }
 

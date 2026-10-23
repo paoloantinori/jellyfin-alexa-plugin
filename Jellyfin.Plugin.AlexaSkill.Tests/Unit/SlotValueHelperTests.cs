@@ -204,4 +204,37 @@ public class SlotValueHelperTests
 
         Assert.Empty(SlotValueHelper.GetCanonicalValues(request, "musician"));
     }
+
+    // Issue #41 (2026-10-23): Amazon rejects slot values carrying '*' with
+    // InvalidResponse "Invalid Slot Value" (live: every LaunchRequest failed on
+    // a library with the MusicBrainz name "*NSYNC"); the sanitize rides Truncate,
+    // the ONE preparation every catalog and dynamic-entity site calls.
+    [Theory]
+    [InlineData("*NSYNC", "NSYNC")]              // the live incident name
+    [InlineData("A*Teens", "A Teens")]           // the star becomes a space, not a glue
+    [InlineData("A*S*Y*S", "A S Y S")]
+    [InlineData("Normal Name", "Normal Name")]   // untouched when no rejected char
+    [InlineData("(həd) p.e.", "(həd) p.e.")]     // proven-passing punctuation preserved
+    [InlineData("\"Little\" Louie Vega & Marc Anthony", "\"Little\" Louie Vega & Marc Anthony")]
+    [InlineData("AC/DC", "AC/DC")]               // slash passes (not in the rejected set)
+    [InlineData("*", "")]                        // empty result: the sites skip the entry
+    [InlineData("A**B", "A B")]                  // star runs collapse (the gap-free pipeline)
+    [InlineData("A * Teens", "A Teens")]        // space-adjacent stars (review round 2: per-part trim)
+    public void Truncate_StripsRejectedSlotValueChars(string input, string expected)
+    {
+        Assert.Equal(expected, SlotValueHelper.Truncate(input));
+    }
+
+    [Fact]
+    public void Truncate_Sanitizes_BeforeCapping()
+    {
+        // A long name with stars: the cap applies to the SANITIZED text, so the
+        // result is at most 140 characters of clean value.
+        // 40 blocks of "aaa*a": 200 raw chars, 160 after the stars become
+        // single spaces, so the CAP genuinely fires on the sanitized text.
+        string longName = string.Concat(System.Linq.Enumerable.Repeat("aaa*a", 40));
+        string result = SlotValueHelper.Truncate(longName);
+        Assert.DoesNotContain('*', result);
+        Assert.True(result.Length <= SlotValueHelper.MaxSlotValueLength);
+    }
 }

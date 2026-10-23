@@ -518,10 +518,20 @@ public class DynamicEntityBuilder : IDisposable
                 continue;
             }
 
+            // Issue #41: the PREPARED display name gates the entry (a name that
+            // sanitizes to empty was only rejected characters); DistributeLastPlayed
+            // pushes this verbatim into the dynamic entities, where an empty value
+            // bricks the response exactly like the raw '*'.
+            string preparedDisplay = item.Name is null ? string.Empty : SlotValueHelper.Truncate(item.Name);
+            if (string.IsNullOrWhiteSpace(preparedDisplay))
+            {
+                continue;
+            }
+
             values.Add(new LastPlayedSlotValue
             {
                 Id = CatalogValue.FormatId(catalogType, item.Id),
-                DisplayName = SlotValueHelper.Truncate(item.Name),
+                DisplayName = preparedDisplay,
                 SlotTypeName = slotTypeName
             });
 
@@ -637,12 +647,17 @@ public class DynamicEntityBuilder : IDisposable
         string locale,
         ref int budget)
     {
-        if (string.IsNullOrWhiteSpace(item.Name) || budget <= 0)
+        // Issue #41: the PREPARED name gates the entry (a name that sanitizes
+        // to empty was only rejected characters): checked BEFORE the synonym
+        // generation so a dropped name pays nothing, and the empty result is
+        // never pushed (Amazon rejects it like the raw '*').
+        string preparedName = item.Name is null ? string.Empty : SlotValueHelper.Truncate(item.Name);
+        if (string.IsNullOrWhiteSpace(preparedName) || budget <= 0)
         {
             return budget > 0;
         }
 
-        var synonyms = PhoneticSynonymGenerator.GenerateSynonyms(item.Name, locale);
+        var synonyms = PhoneticSynonymGenerator.GenerateSynonyms(preparedName, locale);
 
         // JF-646 review: cap the ja dynamic arm BEFORE the cost arithmetic (the
         // kana forms are ordered first, so Take keeps them).
@@ -670,8 +685,11 @@ public class DynamicEntityBuilder : IDisposable
             Id = CatalogValue.FormatId(catalogType, item.Id),
             Name = new DynamicSlotValueName
             {
-                Value = SlotValueHelper.Truncate(item.Name),
-                Synonyms = synonyms.Count > 0 ? synonyms.Select(SlotValueHelper.Truncate).ToList() : null
+                Value = preparedName,
+                // Issue #41: a synonym that sanitizes to empty is dropped, not pushed.
+                Synonyms = synonyms.Count > 0
+                    ? synonyms.Select(SlotValueHelper.Truncate).Where(s => !string.IsNullOrWhiteSpace(s)).ToList()
+                    : null
             }
         });
 

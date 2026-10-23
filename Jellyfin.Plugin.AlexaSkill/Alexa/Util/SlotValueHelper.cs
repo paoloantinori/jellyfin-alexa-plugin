@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 
@@ -20,19 +21,48 @@ public static class SlotValueHelper
     public const int MaxSlotValueLength = 140;
 
     /// <summary>
-    /// Truncates a slot value to the Alexa maximum length, cutting at the last word boundary when possible.
+    /// Characters Amazon REJECTS inside slot values and synonyms. The whole
+    /// response fails with InvalidResponse "Invalid Slot Value" when one is
+    /// present (issue #41, live: every LaunchRequest on a library carrying the
+    /// MusicBrainz name '*NSYNC'). The set is EVIDENCE-BOUND, deliberately
+    /// minimal: '*' is the only proven rejection; the punctuation proven to
+    /// PASS (same library, same first-70 push: '!', '"', '&amp;', '(', ')', '.',
+    /// accented letters) is left untouched so names like '(həd) p.e.' keep
+    /// matching as they do today. Amazon documents no allowed-character list
+    /// for slot values (checked: the slot-type page, the dialog reference and
+    /// the model schema carry none), so new members join ONLY on a live
+    /// rejection report, never by speculation; over-stripping is cosmetic but
+    /// under-stripping bricks the skill for the affected library.
     /// </summary>
-    /// <param name="value">The slot value or synonym to truncate.</param>
-    /// <returns>The value unchanged if within limit, or truncated to at most 140 characters.</returns>
+    private static readonly char[] RejectedSlotValueChars = { '*' };
+
+    /// <summary>
+    /// Truncates a slot value to the Alexa maximum length, cutting at the last
+    /// word boundary when possible, AFTER stripping the characters Amazon
+    /// rejects (issue #41): the ONE slot-value text preparation every catalog
+    /// and dynamic-entity construction site already calls, so the sanitize and
+    /// the length cap cannot drift apart. May return an EMPTY string when the
+    /// value consisted only of rejected characters; the construction sites
+    /// skip such entries.
+    /// </summary>
+    /// <param name="value">The slot value or synonym to prepare.</param>
+    /// <returns>The sanitized value, truncated to at most 140 characters.</returns>
     public static string Truncate(string value)
     {
-        if (value.Length <= MaxSlotValueLength)
+        string sanitized = value.IndexOfAny(RejectedSlotValueChars) < 0
+            ? value
+            : string.Join(' ', value
+                .Split(RejectedSlotValueChars)
+                .Select(part => part.Trim())
+                .Where(part => part.Length > 0));
+
+        if (sanitized.Length <= MaxSlotValueLength)
         {
-            return value;
+            return sanitized;
         }
 
-        int cutAt = value.LastIndexOf(' ', MaxSlotValueLength - 1);
-        return cutAt > 0 ? value[..cutAt] : value[..MaxSlotValueLength];
+        int cutAt = sanitized.LastIndexOf(' ', MaxSlotValueLength - 1);
+        return cutAt > 0 ? sanitized[..cutAt] : sanitized[..MaxSlotValueLength];
     }
 
     /// <summary>

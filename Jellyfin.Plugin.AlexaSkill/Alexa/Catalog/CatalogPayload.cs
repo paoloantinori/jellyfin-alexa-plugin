@@ -57,7 +57,10 @@ public class CatalogPayload
             }
 
             List<string> synonyms = synonymGenerator(name, locale);
-            payload.Values.Add(CatalogValueFactory.Create(type, id, name, synonyms));
+            if (CatalogValueFactory.Create(type, id, name, synonyms) is { } catalogEntry)
+            {
+                payload.Values.Add(catalogEntry);
+            }
         }
 
         return payload;

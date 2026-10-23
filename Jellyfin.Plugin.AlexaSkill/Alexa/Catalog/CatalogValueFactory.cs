@@ -41,31 +41,39 @@ internal static class CatalogValueFactory
     /// enriched types the JF-684 append is verified structurally (see
     /// AssertPartialWordEnrichment), so a drifted enrichment path fails the sync
     /// loudly instead of regressing silently on-device.
-    /// BLANK-NAME CONTRACT BOUNDARY (JF-695): this factory deliberately does NOT
-    /// filter whitespace-only names; every CALLER owns that skip at its own
-    /// source (<see cref="CatalogPayload.FromItems"/> skips blank names,
-    /// CatalogSeedEnrichment.MergeSeeds skips blank seed values after truncation,
-    /// and LibrarySyncService pre-filters item names before the tuple feed). A
-    /// whitespace name reaching Create would ship a blank catalog entry silently
-    /// (PartialNameSynonyms.Generate returns null for it, so even the structural
-    /// guard stays quiet); a future third construction site must pre-filter the
-    /// same way, or decide the blank-name contract explicitly (skip vs reject)
-    /// in the same change that adds the site.
+    /// BLANK-NAME CONTRACT (JF-695, revised by issue #41): Create returns NULL
+    /// when the name sanitizes to whitespace (blank source names, and names
+    /// consisting only of Amazon-rejected characters; both callers skip nulls).
+    /// The pre-#41 caller-side skips stay as they were; the factory-level gate
+    /// is the defense that covers every future construction site automatically,
+    /// because a blank entry would ship silently otherwise (PartialNameSynonyms
+    /// .Generate returns null for it, so even the structural guard stays quiet).
     /// </summary>
     /// <param name="type">The catalog type the entry belongs to.</param>
     /// <param name="itemId">The Jellyfin item guid, or the deterministic seed guid.</param>
     /// <param name="name">The raw, untruncated display name.</param>
     /// <param name="synonyms">The generated synonym family; may be empty.</param>
     /// <returns>The enriched catalog entry.</returns>
-    internal static CatalogValue Create(CatalogType type, Guid itemId, string name, List<string> synonyms)
+    internal static CatalogValue? Create(CatalogType type, Guid itemId, string name, List<string> synonyms)
     {
+        // Issue #41: a name that sanitizes to EMPTY (only rejected characters)
+        // produces no catalog entry at all; the callers skip nulls.
+        string prepared = SlotValueHelper.Truncate(name);
+        if (string.IsNullOrWhiteSpace(prepared))
+        {
+            return null;
+        }
+
         var value = new CatalogValue
         {
             Id = CatalogValue.FormatId(type, itemId),
             Name = new CatalogValueName
             {
-                Value = SlotValueHelper.Truncate(name),
-                Synonyms = synonyms.Count > 0 ? synonyms.Select(SlotValueHelper.Truncate).ToList() : null
+                Value = prepared,
+                // Issue #41: a synonym that sanitizes to empty is dropped, not pushed.
+                Synonyms = synonyms.Count > 0
+                    ? synonyms.Select(SlotValueHelper.Truncate).Where(s => !string.IsNullOrWhiteSpace(s)).ToList()
+                    : null
             }
         };
 
