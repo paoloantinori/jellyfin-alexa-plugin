@@ -38,7 +38,8 @@ public class CatalogValueFactoryTests
 
         foreach (var (type, itemId, name, synonyms) in entries)
         {
-            CatalogValue built = CatalogValueFactory.Create(type, itemId, name, synonyms);
+            CatalogValue? built = CatalogValueFactory.Create(type, itemId, name, synonyms);
+            Assert.NotNull(built);
 
             string actual = JsonSerializer.Serialize(built);
             string expected = JsonSerializer.Serialize(LegacyConstruction(type, itemId, name, synonyms));

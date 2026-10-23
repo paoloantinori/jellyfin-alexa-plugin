@@ -33,8 +33,11 @@ public class CatalogPayloadTruncateToTests
         for (int i = 1; i <= tailCount; i++)
         {
             string name = i == tailCount && lastTailName != null ? lastTailName : $"Seed {i:D3}";
-            payload.Values.Add(CatalogValueFactory.Create(
-                CatalogType.Audiobook, Guid.NewGuid(), name, []));
+            if (CatalogValueFactory.Create(
+                    CatalogType.Audiobook, Guid.NewGuid(), name, []) is { } entry)
+            {
+                payload.Values.Add(entry);
+            }
         }
 
         return payload;
