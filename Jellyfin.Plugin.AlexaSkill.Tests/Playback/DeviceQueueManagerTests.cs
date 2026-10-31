@@ -2711,6 +2711,32 @@ public class DeviceQueueManagerTests : IDisposable
     }
 
     /// <summary>
+    /// JF-920: the compare-and-claim clear behind the fallback launch. Exactly
+    /// one concurrent duplicate wins the boundary: the first claim for the
+    /// matching after-token clears and returns true; a second claim for the same
+    /// boundary (the multi-fired duplicate) finds nothing and returns false; a
+    /// claim for a DIFFERENT boundary (the record was replaced meanwhile) also
+    /// loses.
+    /// </summary>
+    [Fact]
+    public void TryClaimEnqueueRecordForLaunch_ExactlyOneWinnerPerBoundary_JF920()
+    {
+        string after = Guid.NewGuid().ToString();
+        string next = Guid.NewGuid().ToString();
+        _manager.RecordEnqueue("dev", after, next);
+
+        Assert.True(_manager.TryClaimEnqueueRecordForLaunch("dev", after));
+        Assert.False(_manager.TryClaimEnqueueRecordForLaunch("dev", after));
+
+        // The record was replaced by a NEWER boundary meanwhile: the stale
+        // claim loses, and the newer boundary's record survives untouched.
+        string newerAfter = Guid.NewGuid().ToString();
+        _manager.RecordEnqueue("dev", newerAfter, next);
+        Assert.False(_manager.TryClaimEnqueueRecordForLaunch("dev", after));
+        Assert.Equal(newerAfter, _manager.GetQueue("dev")!.LastEnqueueAfterToken);
+    }
+
+    /// <summary>
     /// The bounded-sweep pin (the caps idiom): entries past the TTL are dropped
     /// by the next write once the map is over the cap, while the fresh entry
     /// survives. Seeds the cap pressure and the aging from the constants

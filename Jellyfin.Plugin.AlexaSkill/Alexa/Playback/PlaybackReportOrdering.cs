@@ -206,6 +206,29 @@ internal static class PlaybackReportOrdering
     }
 
     /// <summary>
+    /// JF-920: the item id of the device's most recent <c>PlaybackStarted</c>
+    /// report, or null when none was recorded in this process. The
+    /// ignored-ENQUEUE fallback on the Finished path reads this as its
+    /// "what did this device actually start" evidence: a device that honored the
+    /// NearlyFinished enqueue has moved past the FINISHING item by the time its
+    /// Finished is processed, while a device that dropped the enqueue still
+    /// names the finishing item. NEUTRAL SHAPES return null and are deliberately
+    /// NOT evidence: nothing recorded at all (the hermetic-test shape), and a
+    /// start recorded with an unparseable token (Guid.Empty), which
+    /// <see cref="ClassifyStop"/> neutralizes the same way so the two readers
+    /// of LastStart agree on what counts as a recorded start.
+    /// </summary>
+    /// <param name="deviceId">The Alexa device ID (the ordering state key; with JF-918 canonicalization the launch device's id).</param>
+    /// <returns>The last started item id, or null when no start (or only an empty-id start) was recorded.</returns>
+    internal static Guid? GetLastStartedItemId(string deviceId)
+        => Devices.TryGetValue(deviceId, out DeviceState? state)
+            && state.LastStart is { } marker
+            && marker.Info.ItemId is { } started
+            && started != Guid.Empty
+            ? started
+            : null;
+
+    /// <summary>
     /// The three-way classification behind <see cref="IsDisplacementStop"/>: same
     /// item or different item matters to the stop handler's position decision
     /// (round-3 review finding), while every displacement kind shares the

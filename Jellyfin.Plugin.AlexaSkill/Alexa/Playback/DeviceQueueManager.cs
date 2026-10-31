@@ -604,6 +604,39 @@ public sealed class DeviceQueueManager : IDisposable
             && StreamTokenCodec.NamesItem(currentStreamToken, queue.LastEnqueueNextItemId);
 
     /// <summary>
+    /// JF-920: the COMPARE-AND-CLAIM clear behind the Finished path's ignored-
+    /// ENQUEUE fallback. Amazon multi-fires terminal events (the same multi-fire
+    /// the JF-691 record doc names), and the fallback waits a multi-second grace
+    /// BEFORE launching, so two concurrent duplicate Finished events can both
+    /// pass their verdicts; an unconditional <see cref="ClearEnqueueRecord"/>
+    /// would then let both launch. The claim is atomic under
+    /// <see cref="_launchScopeLock"/>: it clears the record ONLY when the
+    /// record's after-token still names the caller's boundary, so exactly one
+    /// concurrent caller wins the boundary's fallback launch.
+    /// </summary>
+    /// <param name="deviceId">The device whose record is claimed.</param>
+    /// <param name="afterToken">The boundary's finished stream token the caller verified before its grace.</param>
+    /// <returns>True when the caller won the claim (the record named this boundary and is now cleared); false when another caller already claimed or replaced it.</returns>
+    internal bool TryClaimEnqueueRecordForLaunch(string deviceId, string afterToken)
+    {
+        lock (_launchScopeLock)
+        {
+            if (!_queues.TryGetValue(deviceId, out DeviceQueue? queue)
+                || !string.Equals(queue.LastEnqueueAfterToken, afterToken, StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            queue.LastEnqueueAfterToken = null;
+            queue.LastEnqueueNextItemId = null;
+        }
+
+        SchedulePersistInternal(deviceId);
+        _logger.LogDebug("Claimed the enqueue record for the fallback launch on device {DeviceId}", deviceId);
+        return true;
+    }
+
+    /// <summary>
     /// JF-910 retire side of the JF-691 enqueue record: the clear that must
     /// accompany a ClearQueue(CLEAR_ENQUEUED) that removes a pending enqueue.
     /// The record is the durable twin of a directive the device was told about;
