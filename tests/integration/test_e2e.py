@@ -23,6 +23,7 @@ from smapi_client import (
     SmapiClient,
     SmapiError,
     SmapiSelectionLostError,
+    SmapiServerError,
     SmapiUnexpectedError,
 )
 # JF-897: import the alarm class from the shared module, NOT from conftest:
@@ -31,6 +32,13 @@ from smapi_client import (
 # raised (a different module's class object) and every timeout would fail
 # raw instead of going through the JF-893 skip decision.
 from smapi_timeouts import _TimeoutError
+
+# JF-919: the shared fixture loader, for the routing-control phrase map.
+# Importing from conftest is safe here despite the JF-897 caution above:
+# that caution is about exception-class identity inside except clauses,
+# and a loader function plus a Path constant carry no identity-sensitive
+# semantics.
+from conftest import FIXTURES_DIR, load_locale_fixtures
 
 logger = logging.getLogger("e2e.test")
 
@@ -82,6 +90,183 @@ _reset_initialized: set[str] = set()
 # JF-899: the per-call selection-loss class deliberately does NOT flag
 # here (rationale on _fallback_open_to_one_shot).
 _open_outage_locales: set[str] = set()
+
+# JF-919 (research 2026-10-31, claudedocs/research_simulate-skill-locale-outage):
+# locales whose ROUTING CONTROL failed in this process. The simulate-skill
+# service has recurring outages in its skill-ROUTING layer (selection lost
+# while profile-nlu stays green), which can go TOTAL (it-IT evergreen
+# included) as cumulative simulation volume grows. A locale marked here has
+# every simulate-based case skipped with an OUTAGE marker for the rest of
+# the run instead of burning the full battery (~20s per case) against a
+# dead service and reporting mass reds that look like product bugs.
+# RELATION to JF-899 (do not "fix" either direction): JF-899 refuses to
+# flag a locale when a MID-BATTERY open loses selection once, because the
+# per-call class recovers in minutes and foreclosing rows turns
+# recoverable cases red. This gate marks ONLY on a DEDICATED control that
+# failed TWICE (one 3s-spaced retry), i.e. a correlated loss the per-call
+# class does not produce; the two policies sample different events.
+# Process-local and one-way, like _open_outage_locales above (no xdist
+# today; a future xdist run would re-probe per worker and lose the
+# cross-worker marker, the same accepted limitation documented there).
+_locale_outage: set[str] = set()
+
+# Locales whose routing control already PASSED in this process: the
+# control costs the locale's open plus its conditional close (roughly two
+# simulations per locale per run on the healthy path), so it runs once
+# and every later test rides the verdict. One-way by design: a mid-run
+# degradation after a passed control is the JF-899 per-call class, which
+# the battery's own fallbacks (open fallback, JF-893 slow-service skips)
+# handle exactly as before this gate existed.
+_locale_control_passed: set[str] = set()
+
+# Lazy cache for {locale: open_utterance} built from the smoke fixtures:
+# the JF-511-verified per-locale open phrases. Deliberately NOT a one-shot
+# composition: JF-511 measured the invocation-prefixed one-shot as
+# unroutable in the de/fr/es marketplaces even when the service is healthy,
+# so a one-shot control would false-positive there. The open phrase is the
+# one shape verified live for every locale before authoring.
+_locale_open_phrases: dict[str, str] | None = None
+
+
+def _routing_control_phrases() -> dict[str, str]:
+    """Load {locale: open_utterance} from the e2e_smoke_*.yaml fixtures.
+
+    Rides the shared conftest loader (each parsed case carries its file's
+    open_utterance); a locale without a smoke fixture simply has no
+    control and is never gated (fail-open; behavior unchanged for it).
+    """
+    global _locale_open_phrases
+    if _locale_open_phrases is None:
+        phrases: dict[str, str] = {}
+        for case in load_locale_fixtures(
+            FIXTURES_DIR, prefix="e2e_smoke_", exclude_prefixes=()
+        ):
+            locale = case.get("locale")
+            open_utterance = case.get("open_utterance")
+            if isinstance(locale, str) and isinstance(open_utterance, str) and open_utterance:
+                phrases[locale] = open_utterance
+        _locale_open_phrases = phrases
+    return _locale_open_phrases
+
+
+def _ensure_locale_routable(skill_id: str, locale: str, delay: float) -> None:
+    """JF-919: gate a locale's simulate battery on a routing control.
+
+    One control simulation per locale per run (the locale's own verified
+    open phrase, loaded by _routing_control_phrases). A control that fails
+    TWICE with the outage classes (SmapiSelectionLostError or
+    SmapiUnexpectedError; one retry because the class is per-call
+    intermittent, research 2026-10-17) marks the locale OUTAGE: this and
+    every later case in the locale skips immediately, the marker surfaces
+    once in the warnings summary, and the run stops spending simulations
+    against the dead service.
+
+    Verdicts other than the outage mark are fail-open, each with a reason:
+    - a passing control is CLOSED again through _ensure_session_closed
+      before returning: the control open elicits (Dialog.ElicitSlot), and
+      the gate runs inside the test body where the autouse reset has
+      already fired, so an unclosed control session would capture the
+      current test's first simulation into the elicited slot (the
+      hijack class the reset policy exists for; quality review JF-919
+      finding 1). This close is the second of the two healthy-path
+      simulations the control costs per locale.
+    - SmapiServerError, a converted sustained 429 (SmapiClient re-raises
+      those as a plain SmapiError whose message says 'Rate limited'), and
+      a SUCCESSFUL simulation that never invoked the skill (the
+      empty-skillExecutionInfo artifact) are INCONCLUSIVE: no verdict is
+      cached, so the next test re-probes (a throttled or degraded control
+      must not pass the locale for the whole run; code review JF-919).
+    - any other SmapiError passes the control fail-open with the dialog
+      assumed open, and the battery surfaces the condition exactly as
+      before this gate existed.
+    - a locale with no control phrase is never gated.
+    The per-test alarm is deliberately NOT caught here: it is one-shot, so
+    swallowing it would leave the rest of the test unprotected (code
+    review JF-919); it propagates to the _smapi_test_timeout fixture,
+    whose failure message names the --smapi-timeout lever. In a slow
+    service regime the first gated test of a locale carries the control's
+    two simulations inside its alarm budget, so such runs may need a
+    higher --smapi-timeout (accepted cost, tracked on JF-919).
+    """
+    if locale in _locale_outage:
+        pytest.skip(
+            f"simulate OUTAGE ({locale}): routing control failed earlier in "
+            f"this run; locale battery skipped (JF-919)"
+        )
+    if locale in _locale_control_passed:
+        return
+    open_utterance = _routing_control_phrases().get(locale)
+    if not open_utterance:
+        return
+    client = SmapiClient(
+        skill_id=skill_id, locale=locale, delay=delay, invocation_name=""
+    )
+    logger.info("OUTAGE CONTROL [%s] (%s)", open_utterance, locale)
+    response: dict | None = None
+    try:
+        try:
+            response = client.simulate(open_utterance)
+        except (SmapiSelectionLostError, SmapiUnexpectedError):
+            time.sleep(3.0)
+            response = client.simulate(open_utterance)
+    except (SmapiSelectionLostError, SmapiUnexpectedError) as exc:
+        _locale_outage.add(locale)
+        warnings.warn(
+            f"SIMULATE OUTAGE ({locale}): routing control failed twice "
+            f"({type(exc).__name__}); this locale's battery is skipped for "
+            f"the run (JF-919, research 2026-10-31)"
+        )
+        pytest.skip(
+            f"simulate OUTAGE ({locale}): routing control failed twice "
+            f"({type(exc).__name__}); locale battery skipped (JF-919)"
+        )
+    except SmapiServerError as exc:
+        logger.warning(
+            "OUTAGE CONTROL (%s): inconclusive (%s); the next test re-probes",
+            locale, type(exc).__name__,
+        )
+        return
+    except SmapiError as exc:
+        if "rate limited" in str(exc).lower():
+            # Sustained 429s are converted to a plain SmapiError by the
+            # client's own retry exhaustion: throttling says nothing about
+            # routing health, so stay inconclusive and let the next test
+            # re-probe once the budget clears.
+            logger.warning(
+                "OUTAGE CONTROL (%s): inconclusive (sustained rate limit); "
+                "the next test re-probes",
+                locale,
+            )
+            return
+        # A non-outage platform error says nothing about routing health:
+        # fail open, assume the dialog open (the house convention after a
+        # failed simulation), and let the battery surface it exactly as
+        # before this gate existed.
+        logger.warning(
+            "OUTAGE CONTROL (%s): fail-open (%s); battery runs ungated",
+            locale, type(exc).__name__,
+        )
+        _open_sessions.add(locale)
+        _locale_control_passed.add(locale)
+        return
+    if response is not None:
+        if _extract_response_body(_extract_skill_response(response)) is None:
+            # SUCCESSFUL without invoking the skill: the documented
+            # empty-invocation artifact, not a routing verdict.
+            logger.warning(
+                "OUTAGE CONTROL (%s): inconclusive (simulation succeeded "
+                "without invoking the skill); the next test re-probes",
+                locale,
+            )
+            return
+        _record_session_state(locale, response)
+        if locale in _open_sessions:
+            # Close the eliciting control session HERE: the gate runs inside
+            # the test body, after the autouse reset already fired, so this
+            # close (not the next test's) must neutralize the control's own
+            # open (quality review JF-919 finding 1).
+            _ensure_session_closed(skill_id, locale, delay)
+    _locale_control_passed.add(locale)
 
 
 def _request_locale(request: pytest.FixtureRequest) -> str:
@@ -181,7 +366,7 @@ def _reset_simulation_session(dry_run, skill_id, smapi_delay, request):
 
 
 @pytest.mark.e2e
-def test_e2e_full_chain(dry_run, e2e_fixture, e2e_smapi_client, jellyfin_client):
+def test_e2e_full_chain(dry_run, skill_id, smapi_delay, e2e_fixture, e2e_smapi_client, jellyfin_client):
     """Full-chain test: utterance -> NLU -> skill -> response + side effects."""
     utterance = e2e_fixture["utterance"]
     expected_intent = e2e_fixture["expected_intent"]
@@ -226,6 +411,10 @@ def test_e2e_full_chain(dry_run, e2e_fixture, e2e_smapi_client, jellyfin_client)
     # Skipping is only legitimate with a reason that names the evidence.
     if skip_reason:
         pytest.skip(f"'{utterance}' ({locale}): {skip_reason}")
+
+    # JF-919: one routing control per locale per run; an OUTAGE-marked locale
+    # skips the battery instead of burning it against the dead service.
+    _ensure_locale_routable(skill_id, locale, smapi_delay)
 
     logger.info(
         "E2E [%s] (%s) expecting %s (response: %s)",
@@ -820,7 +1009,7 @@ def _exit_reliability_on_timeout(
 
 @pytest.mark.e2e
 def test_e2e_reliability(
-    dry_run, reliability_fixture, reliability_smapi_client,
+    dry_run, skill_id, smapi_delay, reliability_fixture, reliability_smapi_client,
     reliability_session_reset, jellyfin_client,
 ):
     """Run each intent multiple times, tracking timing to detect intermittent hangs.
@@ -839,6 +1028,9 @@ def test_e2e_reliability(
     if dry_run:
         assert utterance, f"Empty utterance in {reliability_fixture.get('source', '?')}"
         pytest.skip("dry-run mode: reliability simulation skipped")
+
+    # JF-919: routing control gate (OUTAGE-marked locale skips the battery).
+    _ensure_locale_routable(skill_id, locale, smapi_delay)
 
     logger.info(
         "RELIABILITY [%s] (%s) x%d iterations, expecting %s",
@@ -1018,6 +1210,9 @@ def test_e2e_fast_mode(
 
     if jellyfin_client is None:
         pytest.skip("Jellyfin E2E parameters not configured")
+
+    # JF-919: routing control gate (OUTAGE-marked locale skips the battery).
+    _ensure_locale_routable(skill_id, locale, smapi_delay)
 
     # Switch user to Fast mode
     logger.info("FAST MODE: setting user %s to Fast mode", jellyfin_client.user_id)
@@ -1218,6 +1413,15 @@ def test_e2e_smoke_two_step(
     # asserted today. Skipping costs no SMAPI call.
     if skip_reason:
         pytest.skip(f"'{utterance}' ({locale}): {skip_reason}")
+
+    # JF-919: routing control gate. The control IS this locale's own open
+    # phrase, and it closes itself when it elicits, so on the healthy path
+    # the locale's battery pays roughly two extra simulations per run
+    # (control open + conditional close); the smoke open below then runs as
+    # before. On the outage path every case in the locale skips before its
+    # open+retry pair, and the marker lands in the warnings summary once
+    # per locale.
+    _ensure_locale_routable(skill_id, locale, smapi_delay)
 
     client = SmapiClient(
         skill_id=skill_id, locale=locale, delay=smapi_delay, invocation_name=""
