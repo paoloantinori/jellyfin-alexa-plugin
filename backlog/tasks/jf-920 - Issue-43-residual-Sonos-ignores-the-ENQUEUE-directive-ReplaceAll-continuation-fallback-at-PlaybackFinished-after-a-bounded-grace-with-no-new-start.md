@@ -4,10 +4,10 @@ title: >-
   Issue #43 residual: Sonos ignores the ENQUEUE directive; ReplaceAll
   continuation fallback at PlaybackFinished after a bounded grace with no new
   start
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-10-31 14:05'
-updated_date: '2026-10-31 14:53'
+updated_date: '2026-10-31 15:17'
 labels: []
 dependencies: []
 references:
@@ -26,6 +26,29 @@ INTERPRETATION: the platform's AVS implementation on the Sonos ignores (or drops
 FIX DESIGN (works for both hypotheses, no config, no regression on Echo): in PlaybackFinishedEventHandler's existing keep-alive arm (the "playback continues (index=N of M)" branch, which already knows the JF-691 EnqueuedForThisBoundary verdict), detect the IGNORED-ENQUEUE shape: the boundary has our enqueue record AND the enqueued item never started (no PlaybackStarted for it per the ordering/active evidence: PlaybackReportOrdering's LastStart still names the finishing token, and/or the JF-655 active flag never moved). When detected, respond with AudioPlayer.Play REPLACE_ALL of the next queue item instead of the keep-alive (event responses may carry AudioPlayer.Play per the JF-299 contract). Cost on such devices: a sub-second gap per track (gapless lost; acceptable vs stopping). Echo safety: on real Echos the enqueued stream starts at the boundary, so Started(new) is in the ordering state by the time Finished(old) is processed (or within ms); the verdict is only taken when the enqueued item NEVER started, so the byte-identical keep-alive stays for every started-enqueue shape. Named residual, accepted: an Echo race where Started(new) is delayed multi-second after Finished(old) would restart the next track from 0 once (not a documented ordering shape; the documented displacement ordering is Started(new) BEFORE Stopped/Finished(old)).
 <!-- SECTION:DESCRIPTION:END -->
 
+## Definition of Done
+<!-- DOD:BEGIN -->
+- [x] #1 dotnet build passes with 0 errors
+- [x] #2 dotnet test passes
+- [x] #3 No new compiler warnings introduced
+- [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
+- [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
+- [ ] #6 NLU test fixtures updated if interaction model changed
+- [ ] #7 E2E test added for new intent or handler logic
+- [ ] #8 Locale response strings added to all 17 locales
+- [x] #9 /simplify passed (no blocking cleanups remaining)
+- [x] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
+<!-- DOD:END -->
+
+## Acceptance Criteria
+<!-- AC:BEGIN -->
+- [x] #1 When the boundary carries our enqueue record and no new stream starts within the bounded grace after the finished one, the handler responds with AudioPlayer.Play ReplaceAll of the enqueued item (pinned by the Sonos-drop test paying the full grace)
+- [x] #2 A healthy Echo whose enqueued stream's Started lands mid-grace keeps the byte-identical keep-alive (the decisive regression pin against the refuted instant-verdict design)
+- [x] #3 A last start naming an unrelated item never triggers the fallback (no hijack of the user's replacement playback)
+- [x] #4 Exactly one concurrent duplicate Finished wins the fallback launch (the compare-and-claim clear, pinned at the manager level)
+- [x] #5 The fallback never switches delivery to VideoApp.Launch (the delegation-gate mirror keeps native-controls devices on the keep-alive)
+<!-- AC:END -->
+
 ## Implementation Plan
 
 <!-- SECTION:PLAN:BEGIN -->
@@ -34,16 +57,14 @@ IMPLEMENTED (2026-10-31): PlaybackReportOrdering gains the internal accessor Get
 2026-10-31 REVIEW ROUNDS (supersedes the first plan note's instant-verdict description): /simplify battery applied (Guid.Empty neutrality in GetLastStartedItemId; the accessor doc now describes the neutral shapes). code-review high round 1 found the CRITICAL instant-verdict flaw: the repo's own JF-683 live evidence is that a healthy Echo's Finished arrives DURING the ~1s inter-track gap BEFORE the enqueued stream starts, so last-started==finishing at that instant on every healthy device; the instant design fired ReplaceAll at every Echo boundary (destroying gapless everywhere). REDESIGN: no instant verdict exists; the handler now WAITS a bounded grace (EnqueueHonorGraceMs=2000, poll 250ms; fast-path exit when the last start already moved; cancellation ends the wait HONORED): an Echo's Started(new) lands mid-grace (byte-identical keep-alive), a dropping Sonos never starts anything (ReplaceAll of the enqueued item). Repeat-one and any same-item enqueue are EXCLUDED on purpose (the item-id signal cannot see a same-item restart, and a bare-token same-item ReplaceAll would reopen the JF-655 nonce window): repeat-one on dropping devices keeps pre-JF-920 behavior, with the StartMarker generation named as the future seam. Other applied findings: clear-before-build (concurrent duplicate Finished double-launch), libraryManager threading into the builder (the VideoApp delegation's concat climb), the test-comment hyphen, the mock-preamble hoist. Tests now 4 pins (Sonos drop paying the full 2s grace; the decisive mid-grace Started regression pin; the already-started fast path; the unrelated-item hijack). Build 0 warnings both TFMs; suite 6141/6141 per TFM. Honest cost statement: every natural Echo track boundary now answers its Finished ack up to ~1s later (an event ack carries no speech and the enqueued stream is already starting device-side; well under the 6s budget).
 <!-- SECTION:PLAN:END -->
 
-## Definition of Done
-<!-- DOD:BEGIN -->
-- [ ] #1 dotnet build passes with 0 errors
-- [ ] #2 dotnet test passes
-- [ ] #3 No new compiler warnings introduced
-- [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
-- [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
-- [ ] #6 NLU test fixtures updated if interaction model changed
-- [ ] #7 E2E test added for new intent or handler logic
-- [ ] #8 Locale response strings added to all 17 locales
-- [ ] #9 /simplify passed (no blocking cleanups remaining)
-- [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
-<!-- DOD:END -->
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-10-31 SHIPPED: commit 6285495d on main, pushed. Deployed to minix per checklist (config survived Users=1, active DLL md5 e6ce8636 matches local build, play-path simulator regression clean, ZERO spurious alias/fallback lines). Fresh dev build run 41213736037 for the reporter (link delivery pre-authorized by the approved reply's promise). CI of the push under watch.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Ignored-ENQUEUE fallback shipped for issue #43's residual (the Sonos runtime drops the ENQUEUE playBehavior): the Finished handler's JF-691 keep-alive arm waits a 3s grace for a new start (no instant verdict exists: the JF-683 evidence shows healthy Echos answer Finished inside the inter-track gap before the enqueued stream starts) and, when nothing starts, launches the enqueued item directly with ReplaceAll (AudioPlayer-shaped, rate-continuing, compare-and-claim guarded against duplicate terminal events, VideoApp-delegation mirrored off). Repeat-one is the documented uncovered shape (the generation-carrying StartMarker is the future seam). Commit 6285495d on main, CI green, deployed and regression-verified on minix, dev build artifact 13047446663 delivered to the reporter (issuecomment-6545271867). DoD #4/#5/#6/#8 N/A (no session attributes, HttpClient, model, or locale strings touched). Issue #43 stays open awaiting the reporter's second on-device test; on confirmation, close the issue and ride both fixes (JF-918 + JF-920) in the next release.
+<!-- SECTION:FINAL_SUMMARY:END -->
