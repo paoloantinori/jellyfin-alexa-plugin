@@ -6,7 +6,7 @@ title: >-
 status: Done
 assignee: []
 created_date: '2026-10-31 06:44'
-updated_date: '2026-10-31 09:38'
+updated_date: '2026-10-31 12:04'
 labels: []
 dependencies: []
 references:
@@ -70,6 +70,8 @@ Live verification plan: minix deploy (deploy checklist), regression check via si
 2026-10-31 SHIPPED: commit 8940aa62 on main, pushed. Deployed to minix per checklist (config survived, active DLL md5 match, simulator intent + play-path regression clean, ZERO spurious alias log lines on normal traffic). Dev build for the reporter: run 41186010950. GitHub reply drafted (unslopped, /tmp/issue43_reply_draft.md), awaiting maintainer approval to post (AC #5).
 
 2026-10-31 CI + DEV BUILD: ci.yml on 8940aa62 completed/success (all 6 validators + build-and-test green on the runner). Dev build completed/success, artifact AlexaSkill_1.0.2.1-1793436442-dev (id 13036794418) linked in the reply draft. Remaining: maintainer approval to post the issue reply, then reporter device validation.
+
+2026-10-31 LIVE-NETWORK VALIDATION (maintainer request): full simulator battery green on the deployed DLL (play/next/pause/resume/random/search/query all coherent); logs clean, ZERO alias lines; full E2E suite it-IT green on the live endpoint through the new funnel (full_chain, reliability, smoke, fast: all intents correct; 2 single-utterance flakes re-verified healthy via profile-nlu: PlayNextEpisodeIntent and FindSongByArtistIntent both resolve). The 69-72 non-it E2E reds (both runs, incl. en-US) are the documented recurring Amazon simulate skill-selection instability (memory: simulate_outage_per_locale): the failures are 'did not resolve to any intent' in the SIMULATION layer, while profile-nlu on the SAME utterances resolves the right intents on fr-FR and en-US, and the live fr-FR model keeps its catalog wiring (valueSupplier intact) - layers our deploy cannot reach (no model change shipped; CI validators green on unchanged models). No regression from the fix on the household network.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
