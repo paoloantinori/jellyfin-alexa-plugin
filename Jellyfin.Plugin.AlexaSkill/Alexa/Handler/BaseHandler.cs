@@ -258,6 +258,18 @@ public abstract class BaseHandler
     /// <returns>The skill response to the request.</returns>
     public async Task<SkillResponse> HandleRequestAsync(Request request, Context context, AlexaSession? alexaSession, CancellationToken cancellationToken = default)
     {
+        // JF-918 (upstream issue #43): canonicalize the split-device identity BEFORE
+        // any per-device state is resolved (the session lookup below, the JF-327
+        // device library binding, every handler's context.GetDeviceId() read). On
+        // hardware whose voice endpoint and playback endpoint are different Alexa
+        // deviceIds (Sonos Era with Alexa built-in), AudioPlayer events arrive from
+        // the playback endpoint while the queue/session live under the voice
+        // endpoint that launched the stream; reassigning the context's device id to
+        // the launch device makes every downstream consumer agree on one identity.
+        // The gate lives in DeviceQueueManager.ResolveDeviceAlias; a null manager
+        // (test host without the plugin startup) leaves the request untouched.
+        CanonicalizeSplitDeviceIdentity(request, context);
+
         // Voice-based identification takes priority over account linking so multi-user
         // households get the right library automatically when speaker recognition is active.
         string? personId = context.System?.Person?.PersonId;
@@ -334,6 +346,57 @@ public abstract class BaseHandler
             Plugin.Instance?.CircuitBreaker.RecordFailure(serverUrl, Logger);
             throw;
         }
+    }
+
+    /// <summary>
+    /// JF-918 (upstream issue #43): canonicalizes the request's device id when the
+    /// request comes from a device whose identity the household splits (a playback
+    /// endpoint reporting AudioPlayer events for a stream the voice endpoint's
+    /// directive launched; the Sonos Era shape). CONTROL-SHAPED requests only:
+    /// AudioPlayer events (which carry their own authoritative token) and
+    /// PlaybackController tap commands (whose context playback state names the
+    /// stream they control). Intents are deliberately NOT canonicalized (code-review
+    /// JF-918 finding 1): a play intent CREATES per-device state, an intent's
+    /// context token is the lagging echo of whatever the group is playing, and the
+    /// split itself never needs intent aliasing (the voice endpoint is the queue
+    /// owner there). When the alias fires, the context's
+    /// <c>System.Device.DeviceID</c> is REASSIGNED in place so every downstream
+    /// per-device read (this funnel's session lookup, the JF-327 binding, all
+    /// <see cref="Util.AlexaContextExtensions.GetDeviceId"/> and direct DeviceID
+    /// consumers in the handlers) resolves the launch device's state; the physical
+    /// sender survives in the controller's pre-funnel [diag] line and this method's
+    /// own log line. No-op when the gate refuses (same device, unknown token, or a
+    /// requester holding any per-device state of its own), which is every
+    /// single-device Echo and every real second device in a household.
+    /// </summary>
+    /// <param name="request">The skill request (AudioPlayer events carry their own token).</param>
+    /// <param name="context">The request context whose device id may be canonicalized.</param>
+    private void CanonicalizeSplitDeviceIdentity(Request request, Context context)
+    {
+        // Control-shaped traffic only: events and tap commands, never intents.
+        if (request is not (AudioPlayerRequest or PlaybackControllerRequest))
+        {
+            return;
+        }
+
+        DeviceQueueManager? queueManager = Plugin.Instance?.DeviceQueueManager;
+        string rawDeviceId = context.GetDeviceId();
+        if (queueManager == null || string.IsNullOrEmpty(rawDeviceId))
+        {
+            return;
+        }
+
+        string? streamToken = request is AudioPlayerRequest audioEvent ? audioEvent.Token : context.AudioPlayer?.Token;
+        string canonicalDeviceId = queueManager.ResolveDeviceAlias(rawDeviceId, streamToken);
+        if (string.Equals(canonicalDeviceId, rawDeviceId, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        Logger.LogInformation(
+            "Split-device identity canonicalized: request device {EventDevice} reports the stream launched by {LaunchDevice}; all per-device state for this request resolves under the launch device (JF-918, issue #43)",
+            rawDeviceId, canonicalDeviceId);
+        context.System!.Device!.DeviceID = canonicalDeviceId;
     }
 
     /// <summary>

@@ -77,6 +77,66 @@ public sealed class DeviceQueueManager : IDisposable
     private readonly ConcurrentDictionary<string, VideoAudioStreamLedgerLink> _videoAudioStreamLinks = new(StringComparer.Ordinal);
 
     /// <summary>
+    /// JF-918 (upstream issue #43): the stream-launch ownership index (item key
+    /// "N" -&gt; the device whose AudioPlayer.Play directive created the stream),
+    /// the join key that attributes an AudioPlayer EVENT to the device that
+    /// launched the stream it reports. On hardware whose voice endpoint and
+    /// playback endpoint are two different Alexa deviceIds (Sonos Era with
+    /// Alexa built-in; multi-room group coordinators), intents arrive from the
+    /// voice device while playback events arrive from the playback endpoint,
+    /// and every per-device store keyed by the RAW event deviceId (the Jellyfin
+    /// session the funnel resolves, this manager's queues, repeat/shuffle/
+    /// launch scopes) would read an empty second identity instead of the
+    /// launching device's state: album playback dies after every track. The
+    /// ONE writer is <see cref="RecordLaunchBase"/> (every AudioPlayer.Play
+    /// directive, ReplaceAll AND Enqueue, passes through it at the launch
+    /// chokepoint; the Enqueue leg is what keeps the index alive across track
+    /// boundaries, since track 2+ of a queue is enqueued by the event path, not
+    /// launched by an intent); the ONE reader is <see cref="ResolveDeviceAlias"/>.
+    /// In-memory by design, the JF-655 flag's freshness rule: a restart-persisted
+    /// index would let a fresh process attribute events to a launch it never
+    /// served, so a restart mid-playback leaves events unaliased (pre-fix
+    /// behavior) until the next launch re-arms the entry. BOUNDED: the write
+    /// path opportunistically drops entries older than
+    /// <see cref="StreamOwnerTtl"/> once over <see cref="MaxStreamOwnerEntries"/>
+    /// (a full sweep needs no lock; the values are immutable records and a
+    /// concurrent reader can see either the live or the swept state, never a
+    /// torn one). <see cref="Clear(string)"/> reclaims every entry a cleared
+    /// device owns (the JF-739/JF-858 side-map discipline).
+    /// </summary>
+    private readonly ConcurrentDictionary<string, StreamLaunchOwner> _streamLaunchOwners = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// JF-918: one ownership entry: the launching device and when the directive
+    /// was issued (the TTL stamp the bounded sweep reads).
+    /// </summary>
+    /// <param name="DeviceId">The device whose directive launched the stream.</param>
+    /// <param name="WrittenAt">When the directive was issued.</param>
+    private sealed record StreamLaunchOwner(string DeviceId, DateTimeOffset WrittenAt);
+
+    /// <summary>
+    /// JF-918: how old an ownership entry may be before the bounded sweep may
+    /// drop it. Staleness is hygiene, not correctness (a REAL second device
+    /// playing the same item re-points the entry at itself with its own launch,
+    /// and <see cref="ResolveDeviceAlias"/>'s own-state gate independently
+    /// refuses to re-attribute any device that holds queue or ledger state);
+    /// the TTL only bounds the map's size for households that launch many items
+    /// across many devices. Internal for the InternalsVisibleTo test seam (the
+    /// caps idiom): the TTL-sweep pin seeds its boundary from this constant so
+    /// a change cannot silently degrade it to vacuous green.
+    /// </summary>
+    internal static readonly TimeSpan StreamOwnerTtl = TimeSpan.FromHours(24);
+
+    /// <summary>
+    /// JF-918: the ownership index's soft cap. Over it, the write path sweeps
+    /// expired entries; none expired means the map transiently over-runs the
+    /// cap (the JF-723 over-cap tolerance class) rather than blocking the
+    /// directive-time write. Internal for the InternalsVisibleTo test seam (the
+    /// caps idiom), same as <see cref="MaxLaunchBaseEntries"/>.
+    /// </summary>
+    internal const int MaxStreamOwnerEntries = 512;
+
+    /// <summary>
     /// JF-522: the launch-scope maps are the first per-item stores with writers on TWO
     /// threads (the request pipeline records at directive time; the AudioPlayer event
     /// thread promotes at PlaybackStarted), so unlike the sibling stores their
@@ -830,6 +890,17 @@ public sealed class DeviceQueueManager : IDisposable
         }
 
         string key = parsedItemId.ToString("N");
+
+        // JF-918: the ownership write sits BEFORE the lock and before the
+        // unchanged-value short-circuits below: every directive (a fresh launch
+        // AND an identical re-issue) must stamp this device as the stream's
+        // owner, or a short-circuited repeat directive would leave a previous
+        // device's stale entry attracting the events for the stream it no
+        // longer owns. No queue is created here (an unattributed-device guard:
+        // GetOrCreateQueue would synthesize an empty queue entry and poison
+        // ResolveDeviceAlias's own-state gate against the very alias it grants).
+        StampStreamOwner(key, deviceId);
+
         lock (_launchScopeLock)
         {
             DeviceQueue queue = GetOrCreateQueue(deviceId);
@@ -1010,6 +1081,110 @@ public sealed class DeviceQueueManager : IDisposable
                 ? (scope.BaseMs, scope.RatePerMille)
                 : (null, null);
         }
+    }
+
+    /// <summary>
+    /// JF-918 write side: stamps a device as the owner of the stream its
+    /// AudioPlayer.Play directive just created, and opportunistically bounds the
+    /// map (expired entries first; over-cap tolerance when all entries are
+    /// fresh). LAST-WRITE-WINS is the intended semantics: a second device
+    /// launching the SAME item re-points the entry at itself, exactly what the
+    /// displaced-device events need to NOT be re-attributed (their own ledger
+    /// and queue state independently refuse the alias too; see
+    /// <see cref="ResolveDeviceAlias"/>).
+    /// </summary>
+    /// <param name="key">The item key in "N" form (the codec-parsed directive item).</param>
+    /// <param name="deviceId">The device issuing the directive.</param>
+    private void StampStreamOwner(string key, string deviceId)
+    {
+        if (string.IsNullOrEmpty(deviceId))
+        {
+            return;
+        }
+
+        _streamLaunchOwners[key] = new StreamLaunchOwner(deviceId, Time.GetUtcNow());
+
+        if (_streamLaunchOwners.Count <= MaxStreamOwnerEntries)
+        {
+            return;
+        }
+
+        DateTimeOffset now = Time.GetUtcNow();
+        foreach (KeyValuePair<string, StreamLaunchOwner> entry in _streamLaunchOwners)
+        {
+            if (now - entry.Value.WrittenAt >= StreamOwnerTtl)
+            {
+                _streamLaunchOwners.TryRemove(new KeyValuePair<string, StreamLaunchOwner>(entry.Key, entry.Value));
+            }
+        }
+    }
+
+    /// <summary>
+    /// JF-918 read side (upstream issue #43): given the deviceId a request
+    /// CARRIES and the stream token it references, return the deviceId that
+    /// should own the request's per-device state. On hardware whose voice
+    /// endpoint and playback endpoint are different Alexa deviceIds (Sonos Era
+    /// with Alexa built-in), AudioPlayer events arrive from the playback
+    /// endpoint while the queue, session, repeat mode, and launch scopes all
+    /// live under the voice endpoint that launched the stream; resolving this
+    /// alias at the request funnel lets the event read the launching device's
+    /// state (album auto-advance, loop, positions) instead of a freshly created
+    /// empty identity. Callers restrict this to CONTROL-shaped requests
+    /// (AudioPlayer events, PlaybackController tap commands): an intent can
+    /// CREATE per-device state, and aliasing a state-creating request onto the
+    /// launch device would let a lagging context token overwrite the live
+    /// queue (code-review JF-918 finding 1).
+    /// The alias grants ONLY when BOTH of these hold (the gate, each leg
+    /// independently load-bearing):
+    /// 1. the token parses (through <see cref="StreamTokenCodec"/>, composite
+    ///    sleep/launch tokens included) to an item with a LIVE ownership entry
+    ///    naming a DIFFERENT device;
+    /// 2. the requesting device is COMPLETELY stateless: no queue items AND an
+    ///    empty last-played ledger. This is the durable shape of the playback
+    ///    endpoint (it never issues directives or intents, so no launch write
+    ///    ever lands under its id), and any prior launch makes a device real:
+    ///    its ledger is a single last-played slot, so a ledger that merely
+    ///    "does not name this item" could advance away and strand the
+    ///    protection (code-review JF-918 finding 2). A pre-fix empty-queue
+    ///    file with empty ledger (old event-side writes) still qualifies.
+    /// Failure of either leg returns the requester's own id unchanged, which
+    /// is exactly today's single-device behavior. ACCEPTED RESIDUAL: a user
+    /// clearing a real device's queue mid-playback (Clear removes the whole
+    /// queue object including its ledger) momentarily returns it to the
+    /// stateless shape; the same-seconds cross-device same-item launch that
+    /// would then misattribute one in-flight event is the same accepted race
+    /// window class the JF-858 link reclaim documents.
+    /// </summary>
+    /// <param name="requestDeviceId">The raw deviceId from the request context.</param>
+    /// <param name="streamToken">The AudioPlayer stream token the request references (the event's own token, or the context playback state's).</param>
+    /// <returns>The canonical deviceId for per-device state: the launching device when aliased, otherwise the requester's own id.</returns>
+    public string ResolveDeviceAlias(string requestDeviceId, string? streamToken)
+    {
+        if (string.IsNullOrEmpty(requestDeviceId)
+            || string.IsNullOrEmpty(streamToken)
+            || !StreamTokenCodec.TryGetItemId(streamToken, out Guid parsedItemId))
+        {
+            return requestDeviceId;
+        }
+
+        string key = parsedItemId.ToString("N");
+        if (!_streamLaunchOwners.TryGetValue(key, out StreamLaunchOwner? owner)
+            || string.Equals(owner.DeviceId, requestDeviceId, StringComparison.Ordinal))
+        {
+            return requestDeviceId;
+        }
+
+        // The stateless gate: any queue item or any ledger entry makes the
+        // requester a real playback device that owns streams under its own id.
+        if (_queues.TryGetValue(requestDeviceId, out DeviceQueue? ownQueue)
+            && (ownQueue.ItemIds.Count > 0 || !string.IsNullOrEmpty(ownQueue.LastPlayedItemId)))
+        {
+            return requestDeviceId;
+        }
+
+        // No per-event log here (JF-683 one-line discipline): the funnel's single
+        // Information line covers exactly this request set.
+        return owner.DeviceId;
     }
 
     /// <summary>
@@ -2174,6 +2349,20 @@ public sealed class DeviceQueueManager : IDisposable
         // dead key); Clear stays the ONE home that reclaims every such map, so the
         // next side map cannot miss it (the JF-739 class).
         _videoAudioStreamLinks.TryRemove(deviceId, out _);
+
+        // JF-918: the ownership index is the third device-related side map (an
+        // ITEM-keyed map whose ENTRIES a device owns). A reset device must stop
+        // attracting foreign events: without this sweep, a stale entry would keep
+        // aliasing playback-endpoint events to a queue that no longer exists (the
+        // alias would resolve to a GetOrCreateQueue-synthesized empty queue, the
+        // exact broken shape the fix exists to close).
+        foreach (KeyValuePair<string, StreamLaunchOwner> entry in _streamLaunchOwners)
+        {
+            if (string.Equals(entry.Value.DeviceId, deviceId, StringComparison.Ordinal))
+            {
+                _streamLaunchOwners.TryRemove(new KeyValuePair<string, StreamLaunchOwner>(entry.Key, entry.Value));
+            }
+        }
 
         _queues.TryRemove(deviceId, out _);
 

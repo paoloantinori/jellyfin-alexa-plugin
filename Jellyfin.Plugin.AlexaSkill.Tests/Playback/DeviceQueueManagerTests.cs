@@ -2565,4 +2565,178 @@ public class DeviceQueueManagerTests : IDisposable
             DeviceQueueManager.LastPlayedStampRefreshInterval < DeviceQueueManager.LastPlayedRecencyWindow,
             "the refresh interval must stay strictly under the recency window (a live stream's stamp never ages past interval + one segment cadence)");
     }
+
+    // =====================================================================
+    // Stream-launch ownership + event-device alias (JF-918, upstream issue #43)
+    // =====================================================================
+
+    /// <summary>
+    /// The Sonos shape (issue #43): intents arrive from the voice endpoint
+    /// ("voice-dev") and AudioPlayer events from a second playback endpoint
+    /// ("playback-dev") that holds no state of its own. The alias must attribute
+    /// the event to the device whose directive launched the stream. Also pins
+    /// the UPGRADE shape: a pre-fix empty queue file for the playback endpoint
+    /// (old event-side writes; no items, no ledger) must not disqualify it.
+    /// </summary>
+    [Fact]
+    public void ResolveDeviceAlias_ForeignTokenNoOwnState_ReturnsLaunchDevice_JF918()
+    {
+        string item1 = Guid.NewGuid().ToString();
+        string item2 = Guid.NewGuid().ToString();
+        _manager.SetQueue("voice-dev", new List<string> { item1, item2 }, currentIndex: 0);
+        _manager.RecordLaunchBase("voice-dev", item1, 0, enqueued: false);
+
+        // The pre-fix on-disk shape: an empty queue entry for the event device.
+        _manager.GetOrCreateQueue("playback-dev");
+        Assert.Empty(_manager.GetQueue("playback-dev")!.ItemIds);
+
+        string alias = _manager.ResolveDeviceAlias("playback-dev", item1);
+
+        Assert.Equal("voice-dev", alias);
+    }
+
+    /// <summary>
+    /// The multi-Echo household guard: a REAL device that has its own queue must
+    /// never be re-attributed to another device, even when the token names an
+    /// item another device launched. The shared item is launched by echo1 ONLY:
+    /// stamping it from echo2 too would short-circuit on owner==requester and
+    /// leave the queue leg untested (code-review JF-918 finding 3).
+    /// </summary>
+    [Fact]
+    public void ResolveDeviceAlias_RequesterOwnsAQueue_ReturnsSelf_JF918()
+    {
+        string sharedItem = Guid.NewGuid().ToString();
+        _manager.SetQueue("echo1", new List<string> { sharedItem }, currentIndex: 0);
+        _manager.RecordLaunchBase("echo1", sharedItem, 0, enqueued: false);
+        _manager.SetQueue("echo2", new List<string> { Guid.NewGuid().ToString() }, currentIndex: 0);
+
+        string alias = _manager.ResolveDeviceAlias("echo2", sharedItem);
+
+        Assert.Equal("echo2", alias);
+    }
+
+    /// <summary>
+    /// The single-song displacement guard: a real device that EVER launched
+    /// anything holds a non-empty ledger, which keeps it owning its own late
+    /// terminal events even after the ledger advances past the token's item
+    /// (the single-slot transience that motivated the ledger-EMPTY gate leg;
+    /// code-review JF-918 finding 2).
+    /// </summary>
+    [Fact]
+    public void ResolveDeviceAlias_RequesterHoldsALedger_ReturnsSelf_JF918()
+    {
+        string item = Guid.NewGuid().ToString();
+        string otherItem = Guid.NewGuid().ToString();
+        _manager.RecordLastPlayed("echo1", otherItem, DeviceQueueManager.LaunchRoute.Audio);
+        _manager.RecordLaunchBase("echo2", item, 0, enqueued: false);
+
+        string alias = _manager.ResolveDeviceAlias("echo1", item);
+
+        Assert.Equal("echo1", alias);
+    }
+
+    /// <summary>
+    /// No token, an unparsable token, or a token nobody launched: the requester
+    /// is returned unchanged. An empty requester id is also returned unchanged.
+    /// </summary>
+    [Fact]
+    public void ResolveDeviceAlias_UnknownOrMissingSignals_ReturnsSelf_JF918()
+    {
+        string item = Guid.NewGuid().ToString();
+        _manager.SetQueue("voice-dev", new List<string> { item }, currentIndex: 0);
+        _manager.RecordLaunchBase("voice-dev", item, 0, enqueued: false);
+
+        Assert.Equal("playback-dev", _manager.ResolveDeviceAlias("playback-dev", null));
+        Assert.Equal("playback-dev", _manager.ResolveDeviceAlias("playback-dev", string.Empty));
+        Assert.Equal("playback-dev", _manager.ResolveDeviceAlias("playback-dev", "not-a-guid"));
+        Assert.Equal("playback-dev", _manager.ResolveDeviceAlias("playback-dev", Guid.NewGuid().ToString()));
+        Assert.Equal(string.Empty, _manager.ResolveDeviceAlias(string.Empty, item));
+    }
+
+    /// <summary>
+    /// Ownership is written on EVERY AudioPlayer.Play directive, Enqueue
+    /// included (RecordLaunchBase fires for both behaviors at the launch
+    /// chokepoint). Without the Enqueue leg the alias would die at the track-1
+    /// to track-2 boundary: track 2's stream was enqueued by the event path,
+    /// not launched by an intent. Also pins the unchanged-value short-circuit
+    /// re-stamping ownership (a repeated identical directive refreshes it).
+    /// </summary>
+    [Fact]
+    public void ResolveDeviceAlias_EnqueuedDirectiveAndReissue_KeepOwnershipFresh_JF918()
+    {
+        string item1 = Guid.NewGuid().ToString();
+        string item2 = Guid.NewGuid().ToString();
+        _manager.SetQueue("voice-dev", new List<string> { item1, item2 }, currentIndex: 0);
+        _manager.RecordLaunchBase("voice-dev", item1, 0, enqueued: false);
+        _manager.RecordLaunchBase("voice-dev", item1, 0, enqueued: false);
+
+        _manager.RecordLaunchBase("voice-dev", item2, 0, enqueued: true);
+
+        Assert.Equal("voice-dev", _manager.ResolveDeviceAlias("playback-dev", item1));
+        Assert.Equal("voice-dev", _manager.ResolveDeviceAlias("playback-dev", item2));
+    }
+
+    /// <summary>
+    /// A composite sleep token ("{guid}|sleep:{ticks}") names the same item
+    /// through the shared codec; the alias must resolve it like the bare id
+    /// (a raw Guid.TryParse would strand every sleep-scoped stream).
+    /// </summary>
+    [Fact]
+    public void ResolveDeviceAlias_CompositeSleepToken_ResolvesThroughCodec_JF918()
+    {
+        string item = Guid.NewGuid().ToString();
+        _manager.SetQueue("voice-dev", new List<string> { item }, currentIndex: 0);
+        _manager.RecordLaunchBase("voice-dev", item, 0, enqueued: false);
+
+        string alias = _manager.ResolveDeviceAlias("playback-dev", item + "|sleep:900000000");
+
+        Assert.Equal("voice-dev", alias);
+    }
+
+    /// <summary>
+    /// Clear is the canonical reclaim for every device-keyed side map (the
+    /// JF-739/JF-858 discipline): resetting the launch device must drop its
+    /// ownership entries too, so a reset device stops attracting foreign events.
+    /// </summary>
+    [Fact]
+    public void Clear_SweepsStreamOwnershipOfClearedDevice_JF918()
+    {
+        string item = Guid.NewGuid().ToString();
+        _manager.SetQueue("voice-dev", new List<string> { item }, currentIndex: 0);
+        _manager.RecordLaunchBase("voice-dev", item, 0, enqueued: false);
+
+        _manager.Clear("voice-dev");
+
+        Assert.Equal("playback-dev", _manager.ResolveDeviceAlias("playback-dev", item));
+    }
+
+    /// <summary>
+    /// The bounded-sweep pin (the caps idiom): entries past the TTL are dropped
+    /// by the next write once the map is over the cap, while the fresh entry
+    /// survives. Seeds the cap pressure and the aging from the constants
+    /// themselves so a cap or TTL change cannot silently degrade the pin.
+    /// </summary>
+    [Fact]
+    public void StampStreamOwner_TtlSweepAtCapPressure_DropsExpiredKeepsFresh_JF918()
+    {
+        var fakeTime = new FakeTimeProvider(DateTimeOffset.UtcNow);
+        _manager.SetTimeForTest(fakeTime);
+        string staleItem = Guid.NewGuid().ToString();
+        _manager.SetQueue("voice-dev", new List<string> { staleItem }, currentIndex: 0);
+        _manager.RecordLaunchBase("voice-dev", staleItem, 0, enqueued: false);
+
+        // Age the stale entry past the TTL, then push the map over the cap so
+        // the next write's sweep actually runs.
+        fakeTime.Advance(DeviceQueueManager.StreamOwnerTtl + TimeSpan.FromMinutes(1));
+        for (int i = 0; i < DeviceQueueManager.MaxStreamOwnerEntries; i++)
+        {
+            _manager.RecordLaunchBase("filler-dev", Guid.NewGuid().ToString(), 0, enqueued: false);
+        }
+
+        string freshItem = Guid.NewGuid().ToString();
+        _manager.RecordLaunchBase("voice-dev", freshItem, 0, enqueued: false);
+
+        Assert.Equal("playback-dev", _manager.ResolveDeviceAlias("playback-dev", staleItem));
+        Assert.Equal("voice-dev", _manager.ResolveDeviceAlias("playback-dev", freshItem));
+    }
 }
