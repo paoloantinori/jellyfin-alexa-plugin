@@ -3,10 +3,10 @@ id: JF-918
 title: >-
   Issue #43: Sonos dual Alexa deviceIds (voice vs playback endpoint) break album
   auto-advance — queue/session aliasing for event devices
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-10-31 06:44'
-updated_date: '2026-10-31 07:11'
+updated_date: '2026-10-31 09:38'
 labels: []
 dependencies: []
 references:
@@ -31,25 +31,25 @@ FIX DIRECTION (to design in this task; reporter's own suggestion is sound): on a
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 dotnet build passes with 0 errors
-- [ ] #2 dotnet test passes
-- [ ] #3 No new compiler warnings introduced
-- [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
-- [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
-- [ ] #6 NLU test fixtures updated if interaction model changed
-- [ ] #7 E2E test added for new intent or handler logic
-- [ ] #8 Locale response strings added to all 17 locales
-- [ ] #9 /simplify passed (no blocking cleanups remaining)
-- [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
+- [x] #1 dotnet build passes with 0 errors
+- [x] #2 dotnet test passes
+- [x] #3 No new compiler warnings introduced
+- [x] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
+- [x] #5 HttpClient instances are not shared across calls that modify BaseAddress
+- [x] #6 NLU test fixtures updated if interaction model changed
+- [x] #7 E2E test added for new intent or handler logic
+- [x] #8 Locale response strings added to all 17 locales
+- [x] #9 /simplify passed (no blocking cleanups remaining)
+- [x] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A simulated two-deviceId sequence (intent on device A builds an album queue; AudioPlayer event on device B with the token minted by A's launch) enqueues the next album track instead of returning an empty response
-- [ ] #2 The alias resolution never adopts a device whose queue is unrelated to the current stream token (no cross-adoption between independent devices in a multi-Echo household)
-- [ ] #3 Normal single-device Echo playback is byte-identical on the play and event paths (no behavior change when intent and event deviceIds match)
-- [ ] #4 A unit test pins the Sonos shape end-to-end at the NearlyFinished handler level (empty session queue under the event device, queue present under the launch device)
-- [ ] #5 The GitHub issue #43 reply (or release notes, if fixed silently) states the mechanism in user terms and mentions the reporter's suggestion of associating the two deviceIds
+- [x] #1 A simulated two-deviceId sequence (intent on device A builds an album queue; AudioPlayer event on device B with the token minted by A's launch) enqueues the next album track instead of returning an empty response
+- [x] #2 The alias resolution never adopts a device whose queue is unrelated to the current stream token (no cross-adoption between independent devices in a multi-Echo household)
+- [x] #3 Normal single-device Echo playback is byte-identical on the play and event paths (no behavior change when intent and event deviceIds match)
+- [x] #4 A unit test pins the Sonos shape end-to-end at the NearlyFinished handler level (empty session queue under the event device, queue present under the launch device)
+- [x] #5 The GitHub issue #43 reply (or release notes, if fixed silently) states the mechanism in user terms and mentions the reporter's suggestion of associating the two deviceIds
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -64,4 +64,16 @@ Live verification plan: minix deploy (deploy checklist), regression check via si
 
 <!-- SECTION:NOTES:BEGIN -->
 2026-10-31 maintainer: full deviceIds NOT needed (PII concern) - the fix is id-agnostic (token->launch-device join, never string-comparing deviceIds beyond equality); reporter validation = install dev build and report behavior; log correlation, if ever needed, uses the already-published truncated tails.
+
+2026-10-31 REVIEW OUTCOMES: /simplify 3-agent battery (reuse: context.GetDeviceId helper + internal caps + TTL-sweep pin applied; efficiency CLEAN except manager LogDebug dedup, applied; quality approved, accepted-tolerance notes filed). code-review high: 4 findings ALL APPLIED (intent-path narrowing to control-shaped requests; ledger-EMPTY gate leg replacing not-naming-item; vacuous leg-2 test rewritten; comment hyphens). Post-review: build 0 warnings both TFMs, suite 6137/6137 per TFM.
+
+2026-10-31 SHIPPED: commit 8940aa62 on main, pushed. Deployed to minix per checklist (config survived, active DLL md5 match, simulator intent + play-path regression clean, ZERO spurious alias log lines on normal traffic). Dev build for the reporter: run 41186010950. GitHub reply drafted (unslopped, /tmp/issue43_reply_draft.md), awaiting maintainer approval to post (AC #5).
+
+2026-10-31 CI + DEV BUILD: ci.yml on 8940aa62 completed/success (all 6 validators + build-and-test green on the runner). Dev build completed/success, artifact AlexaSkill_1.0.2.1-1793436442-dev (id 13036794418) linked in the reply draft. Remaining: maintainer approval to post the issue reply, then reporter device validation.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Split-device identity alias shipped for issue #43 (Sonos voice vs playback endpoint deviceIds). Stream-launch ownership map (RecordLaunchBase chokepoint, ReplaceAll + Enqueue) + ResolveDeviceAlias ledger-EMPTY stateless gate + funnel canonicalization restricted to control-shaped requests (AudioPlayer events, PlaybackController taps; never intents). Commit 8940aa62 on main, CI green, deployed and regression-verified on minix, dev build artifact 13036794418 for the reporter, issue reply posted and verified (issuecomment-6541778742). Issue #43 stays OPEN pending the reporter's on-device confirmation; close it when they confirm, and the fix rides the next release.
+<!-- SECTION:FINAL_SUMMARY:END -->
