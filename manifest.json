@@ -442,19 +442,19 @@
             },
             {
                 "version": "1.0.2.2",
-                "checksum": "placeholder",
+                "checksum": "51e3712234ef6e47407f33089230457c",
                 "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/1.0.2.2/AlexaSkill_1.0.2.2.net10.zip",
-                "changelog": "placeholder",
+                "changelog": "Playback queues now follow a speaker that sends its voice commands and its playback events under two different Alexa device identities (Sonos speakers with built-in Alexa do this): album and playlist continuation, loop mode and transport controls resolve against the right queue again, with tap controls included. Also fixed a locale bug that could corrupt audiobook resume playlists on machines with a comma-decimal language setting. Network note: if a speaker stopped streaming after your router or firewall changed, check that it can still reach the Jellyfin server on port 443; a household incident on Oct 27 was exactly that, not the plugin.",
                 "targetAbi": "12.0.0.0",
-                "timestamp": "2026-10-31 00:00:00"
+                "timestamp": "2026-10-31 21:15:31"
             },
             {
                 "version": "1.0.2.2",
-                "checksum": "placeholder",
+                "checksum": "b81c84506333f2cc21245bc858adcc3c",
                 "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/1.0.2.2/AlexaSkill_1.0.2.2.zip",
-                "changelog": "placeholder",
+                "changelog": "Playback queues now follow a speaker that sends its voice commands and its playback events under two different Alexa device identities (Sonos speakers with built-in Alexa do this): album and playlist continuation, loop mode and transport controls resolve against the right queue again, with tap controls included. Also fixed a locale bug that could corrupt audiobook resume playlists on machines with a comma-decimal language setting. Network note: if a speaker stopped streaming after your router or firewall changed, check that it can still reach the Jellyfin server on port 443; a household incident on Oct 27 was exactly that, not the plugin.",
                 "targetAbi": "10.11.0.0",
-                "timestamp": "2026-10-31 00:00:00"
+                "timestamp": "2026-10-31 21:15:31"
             }
         ]
     }
