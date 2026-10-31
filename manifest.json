@@ -439,6 +439,22 @@
                 "changelog": "Fixed a bug where artist or item names containing characters Amazon rejects in slot values (such as the asterisk in *NSYNC) made every skill response fail, leaving the skill unable to open at all. Names are now cleaned before being sent to Alexa, and items whose names clean to nothing are skipped. Also corrected the README's list of default invocation names (German, Spanish, French, Portuguese and Dutch each have a native default) and documented the reliable skill-opening phrasing when plain open is intercepted.",
                 "targetAbi": "10.11.0.0",
                 "timestamp": "2026-10-23 15:16:03"
+            },
+            {
+                "version": "1.0.2.2",
+                "checksum": "placeholder",
+                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/1.0.2.2/AlexaSkill_1.0.2.2.net10.zip",
+                "changelog": "placeholder",
+                "targetAbi": "12.0.0.0",
+                "timestamp": "2026-10-31 00:00:00"
+            },
+            {
+                "version": "1.0.2.2",
+                "checksum": "placeholder",
+                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/1.0.2.2/AlexaSkill_1.0.2.2.zip",
+                "changelog": "placeholder",
+                "targetAbi": "10.11.0.0",
+                "timestamp": "2026-10-31 00:00:00"
             }
         ]
     }
