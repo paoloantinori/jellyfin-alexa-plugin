@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Xunit;
 
@@ -260,6 +261,28 @@ seg_0004.ts
         string result = AudiobookPlaylistBuilder.BuildStartHintPlaylist(BasePlaylist, startTicks);
 
         Assert.Contains("#EXT-X-START:TIME-OFFSET=12.346,PRECISE=YES", result);
+    }
+
+    // JF-922 (reported on issue #43): on a comma-decimal locale the F3 format used
+    // the current culture and emitted "30,000" into the HLS attribute, breaking
+    // the tag on fr/de machines. The offset must be culture-invariant: pin it
+    // under a real comma-decimal culture, not just the CI's en-US default.
+    [Fact]
+    public void BuildStartHintPlaylist_CommaDecimalCulture_KeepsInvariantDot_JF922()
+    {
+        var previous = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = new CultureInfo("fr-FR");
+            long startTicks = 30 * TicksPerSecond;
+            string result = AudiobookPlaylistBuilder.BuildStartHintPlaylist(BasePlaylist, startTicks);
+
+            Assert.Contains("#EXT-X-START:TIME-OFFSET=30.000,PRECISE=YES", result);
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = previous;
+        }
     }
 
     [Fact]

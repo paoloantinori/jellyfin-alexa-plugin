@@ -76,7 +76,10 @@ public static class AudiobookPlaylistBuilder
     internal static string BuildStartHintPlaylist(string basePlaylist, long startTicks)
     {
         double seconds = startTicks / (double)TimeSpan.TicksPerSecond;
-        string startTag = $"#EXT-X-START:TIME-OFFSET={seconds:F3},PRECISE=YES";
+        // JF-922: the HLS attribute grammar requires a DOT decimal separator; F3 on
+        // its own honors the current culture and emits a comma on fr/de locales,
+        // which broke the tag on comma-decimal machines (reported on issue #43).
+        string startTag = string.Create(CultureInfo.InvariantCulture, $"#EXT-X-START:TIME-OFFSET={seconds:F3},PRECISE=YES");
 
         string[] lines = basePlaylist.Split('\n');
         var output = new StringBuilder(basePlaylist.Length + startTag.Length + 2);
