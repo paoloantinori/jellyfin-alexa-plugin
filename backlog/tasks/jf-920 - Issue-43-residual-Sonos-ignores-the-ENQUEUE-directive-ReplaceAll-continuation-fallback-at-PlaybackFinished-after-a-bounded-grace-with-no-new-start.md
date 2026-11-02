@@ -7,7 +7,7 @@ title: >-
 status: Done
 assignee: []
 created_date: '2026-10-31 14:05'
-updated_date: '2026-10-31 15:17'
+updated_date: '2026-10-31 20:35'
 labels: []
 dependencies: []
 references:
@@ -61,6 +61,8 @@ IMPLEMENTED (2026-10-31): PlaybackReportOrdering gains the internal accessor Get
 
 <!-- SECTION:NOTES:BEGIN -->
 2026-10-31 SHIPPED: commit 6285495d on main, pushed. Deployed to minix per checklist (config survived Users=1, active DLL md5 e6ce8636 matches local build, play-path simulator regression clean, ZERO spurious alias/fallback lines). Fresh dev build run 41213736037 for the reporter (link delivery pre-authorized by the approved reply's promise). CI of the push under watch.
+
+2026-10-31 18:59 REPORTER FIELD TEST (issue comment, decisive): the fallback FIRED as designed on the Sonos (3s grace, then the direct Play) but Amazon REJECTED the response server-side before it reached the device: InvalidResponse category=SkillError 'The skill's response must not contain more than 0 AudioPlayer.Play directive(s) for this request type'. CORRECTED CONTRACT: PlaybackFinished responses accept only Stop/ClearQueue (zero Play directives); the 'event handlers may return AudioPlayer.Play' JF-299 reading does NOT hold for Finished. CONSEQUENCE: as shipped, on any enqueue-dropping device the fallback produces an InvalidResponse error at every track boundary (harmful: error accumulation). DECISIVE CONTROL EXPERIMENT (reporter): his own self-hosted Python skill chained tracks on the SAME Era 100 via the SAME ENQUEUE mechanism until July 2026 and no longer chains, with byte-identical requests/responses: the change is Sonos/Amazon-side. The AudioPlayer route on this speaker is a dead end; the reporter validated a UPnP path on-device (Sonos native queue: AddURIToQueue + SetAVTransportURI x-rincon-queue + Play; pause/next/previous/resume native; opt-in speaker IP; AudioPlayer fallback on UPnP failure) and proposes developing it in his fork and opening a PR. NEXT ACTIONS (maintainer gate): JF-920 must NOT ride a release as-is (revert from main or default-off gate, decision pending Paolo); JF-918 stays (canonicalization independently confirmed working by the reporter's logs). Bonus finding filed as JF-922 (InvariantCulture offset formatting).
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
