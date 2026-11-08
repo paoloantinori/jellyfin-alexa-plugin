@@ -81,7 +81,7 @@
   "SearchingMedia": "音楽を検索中...",
   "DisambiguatePrompt": "複数の結果が見つかりました。{0} を聴きますか？",
   "DisambiguateNext": "{0} はいかがですか？",
-  "DisambiguateMultipleArtists": "{0}人のアーティストが見つかりました：{1}。最初のアーティストを再生しますか？次へ進むには「いいえ」と言ってください。",
+  "DisambiguateMultipleArtists": "{0}人のアーティストが見つかりました：{1}。最初のアーティストを再生しますか？他のアーティストを聞くには「いいえ」と言ってください。",
   "DisambiguatePromptSsml": "複数の結果が見つかりました。<break time=\"200ms\"/>{0} を聴きますか？",
   "DisambiguateNextSsml": "<break time=\"150ms\"/>{0} はいかがですか？",
   "NoMoreMatches": "申し訳ありませんが、これ以上の結果はありません。",

@@ -43,7 +43,7 @@
   "DidNotCatchSleepTimer": "How long should I set the sleep timer for? Say for example five minutes, thirty seconds, or half an hour.",
   "DidNotCatchVideoTitle": "I didn't catch the video title. Please try again.",
   "DisambiguateNext": "How about {0}?",
-  "DisambiguateMultipleArtists": "I found {0} artists: {1}. Shall I play the first one? Say no for the next.",
+  "DisambiguateMultipleArtists": "I found {0} artists: {1}. Shall I play the first one? Say no to hear the others.",
   "DisambiguateNextSsml": "How about <break time=\"150ms\"/>{0}?",
   "DisambiguatePrompt": "I found multiple matches. Would you like to hear {0}?",
   "DisambiguatePromptSsml": "I found multiple matches.<break time=\"200ms\"/>Would you like to hear {0}?",

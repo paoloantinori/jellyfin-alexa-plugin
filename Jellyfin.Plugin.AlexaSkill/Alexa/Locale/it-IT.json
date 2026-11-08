@@ -81,7 +81,7 @@
   "SearchingMedia": "Ricerca dei tuoi contenuti in corso...",
   "DisambiguatePrompt": "Ho trovato più risultati. Ti piacerebbe ascoltare {0}?",
   "DisambiguateNext": "Che ne dici di {0}?",
-  "DisambiguateMultipleArtists": "Ho trovato {0} artisti: {1}. Vuoi il primo? Di' no per il successivo.",
+  "DisambiguateMultipleArtists": "Ho trovato {0} artisti: {1}. Vuoi il primo? Di' no per sentire gli altri.",
   "DisambiguatePromptSsml": "Ho trovato più risultati.<break time=\"200ms\"/>Ti piacerebbe ascoltare {0}?",
   "DisambiguateNextSsml": "Che ne dici di <break time=\"150ms\"/>{0}?",
   "NoMoreMatches": "Spiacente, non ci sono altri risultati.",

@@ -81,7 +81,7 @@
   "SearchingMedia": "جاري البحث عن الموسيقى...",
   "DisambiguatePrompt": "وجدت عدة نتائج. هل تريد الاستماع إلى {0}؟",
   "DisambiguateNext": "ما رأيك بـ {0}؟",
-  "DisambiguateMultipleArtists": "وجدت عدة فنانين: {1}. عددهم {0}. هل أشغّل الأول؟ قل لا للتالي.",
+  "DisambiguateMultipleArtists": "وجدت عدة فنانين: {1}. عددهم {0}. هل أشغّل الأول؟ قل لا لسماع الباقين.",
   "DisambiguatePromptSsml": "وجدت عدة نتائج.<break time=\"200ms\"/>هل تريد الاستماع إلى {0}؟",
   "DisambiguateNextSsml": "ما رأيك بـ <break time=\"150ms\"/>{0}؟",
   "NoMoreMatches": "عذراً، لا توجد نتائج أخرى.",

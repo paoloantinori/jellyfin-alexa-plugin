@@ -81,7 +81,7 @@
   "SearchingMedia": "Procurando sua música...",
   "DisambiguatePrompt": "Encontrei vários resultados. Gostaria de ouvir {0}?",
   "DisambiguateNext": "Que tal {0}?",
-  "DisambiguateMultipleArtists": "Encontrei {0} artistas: {1}. Quer que eu toque o primeiro? Diga não para o próximo.",
+  "DisambiguateMultipleArtists": "Encontrei {0} artistas: {1}. Quer que eu toque o primeiro? Diga não para ouvir os outros.",
   "DisambiguatePromptSsml": "Encontrei vários resultados.<break time=\"200ms\"/>Gostaria de ouvir {0}?",
   "DisambiguateNextSsml": "Que tal <break time=\"150ms\"/>{0}?",
   "NoMoreMatches": "Desculpe, não há mais resultados.",

@@ -81,7 +81,7 @@
   "SearchingMedia": "Suche nach deiner Musik...",
   "DisambiguatePrompt": "Ich habe mehrere Treffer gefunden. Moechtest du {0} hoeren?",
   "DisambiguateNext": "Wie waere es mit {0}?",
-  "DisambiguateMultipleArtists": "Ich habe {0} Künstler gefunden: {1}. Soll ich den ersten abspielen? Sag nein für den nächsten.",
+  "DisambiguateMultipleArtists": "Ich habe {0} Künstler gefunden: {1}. Soll ich den ersten abspielen? Sag nein, um die anderen zu hören.",
   "DisambiguatePromptSsml": "Ich habe mehrere Treffer gefunden.<break time=\"200ms\"/>Moechtest du {0} hoeren?",
   "DisambiguateNextSsml": "Wie waere es mit <break time=\"150ms\"/>{0}?",
   "NoMoreMatches": "Entschuldigung, es gibt keine weiteren Treffer.",
