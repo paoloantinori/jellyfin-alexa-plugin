@@ -558,3 +558,6 @@ tests:
     expected_intent: ShowLyricsIntent
     expected_slots: {}
 
+  - utterance: "lee la letra"
+    expected_intent: ShowLyricsIntent
+    expected_slots: {}

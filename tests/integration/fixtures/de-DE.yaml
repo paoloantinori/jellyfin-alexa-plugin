@@ -537,3 +537,6 @@ tests:
     expected_intent: ShowLyricsIntent
     expected_slots: {}
 
+  - utterance: "zeig mir den Songtext"
+    expected_intent: ShowLyricsIntent
+    expected_slots: {}

@@ -545,3 +545,6 @@ tests:
     expected_intent: ShowLyricsIntent
     expected_slots: {}
 
+  - utterance: "lis les paroles"
+    expected_intent: ShowLyricsIntent
+    expected_slots: {}

@@ -198,3 +198,6 @@ tests:
     expected_intent: ShowLyricsIntent
     expected_slots: {}
 
+  - utterance: "歌詞を見せて"
+    expected_intent: ShowLyricsIntent
+    expected_slots: {}

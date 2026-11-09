@@ -1955,6 +1955,9 @@ tests:
     expected_intent: ShowLyricsIntent
     expected_slots: {}
 
+  - utterance: "leggi i testi"
+    expected_intent: ShowLyricsIntent
+    expected_slots: {}
   - utterance: "leggi il testo"
     expected_intent: ShowLyricsIntent
     expected_slots: {}

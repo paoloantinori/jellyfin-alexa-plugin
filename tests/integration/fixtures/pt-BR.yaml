@@ -94,3 +94,6 @@ tests:
     expected_intent: ShowLyricsIntent
     expected_slots: {}
 
+  - utterance: "leia a letra"
+    expected_intent: ShowLyricsIntent
+    expected_slots: {}
