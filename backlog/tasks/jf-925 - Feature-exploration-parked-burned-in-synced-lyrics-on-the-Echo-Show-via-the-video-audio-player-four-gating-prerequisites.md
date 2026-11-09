@@ -6,7 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-11-08 17:10'
-updated_date: '2026-11-09 06:00'
+updated_date: '2026-11-09 06:23'
 labels: []
 dependencies: []
 priority: low
@@ -54,4 +54,6 @@ Verify prerequisites (esp. 1) before any design work; each is probe-checked with
 
 <!-- SECTION:NOTES:BEGIN -->
 2026-11-09 SPIKE COMPLETE (worktree jf925-lyrics-spike, commit on that branch; scripts + report in claudedocs/spike_jf-925_lyrics_2026-11-09.md): the two hardest prerequisites are now PROVEN or dissolved. (1) ffmpeg: static johnvansickle build (libass, subtitles filter) works on the minix HOST: 1-2s encode per song, 8-10MB/track, exact 10s-segment HLS shape; remaining integration = mounting the binary into the lscr.io container (minix_ansible_config decision), NOT an image fork. (2) synced lyrics: the library ALREADY has real .lrc sidecars (Goshen 24/24 and Vagabond 33/33 lines served with Start ticks; 12.4 DTO field is Start, not StartPositionTicks; Santa Fe oddity: lrc on disk but serves 0 lines, unfollowed). Plugin can also WRITE lyrics: POST /Audio/{id}/Lyrics?fileName=x.lrc raw text body (fileName is a QUERY param per v12.4 source) = 200; DELETE = 204; both exercised and reverted on The Peacock. (4) burn-in sync VISUALLY verified: frames at known timestamps show exactly the right line, on synthetic AND organic lrc. REVISED GATES: only issue #40 (un-park video-audio music) + the container ffmpeg mount remain. Spike artifacts kept on minix ~/lyrics-spike (~40MB) for the future feature.
+
+2026-11-09 CORRECTION (maintainer's N100 recollection was right): the container's REAL ffmpeg is jellyfin-ffmpeg 8.1.3-Jellyfin at /usr/lib/jellyfin-ffmpeg/ffmpeg (not on PATH; my earlier 'container ffmpeg lacks libass' was a botched probe: no ffmpeg on PATH, the filter grep counted empty output). It has libass+freetype+fribidi+harfbuzz (subtitles/ass/drawtext filters all present) PLUS the full N100 stack (VA-API, QSV/libvpl, Vulkan, DRM, /dev/dri/renderD128 mounted). PROVEN with the production binary: the Goshen organic-lrc burn-in re-run INSIDE the container reproduces the identical correct frame (right line at t=40s, 1s encode, 20 segments). PREREQUISITE 1 IS FULLY SATISFIED BY THE EXISTING BINARY: no static ffmpeg, no container mount needed. The johnvansickle static (used host-side in the first spike) runs on N100 but is INFERIOR (no VA-API/QSV: replacing the jellyfin-ffmpeg build with it would break hardware transcoding); it is NOT needed and should not be mounted. THE ONLY REMAINING GATE is issue #40 (un-park the video-audio music path). Spike artifacts on minix ~/lyrics-spike remain; container temp files cleaned.
 <!-- SECTION:NOTES:END -->
