@@ -102,6 +102,54 @@ public class LyricsAssBuilderTests
         Assert.DoesNotContain("-1:-", script, StringComparison.Ordinal);
     }
 
+    // The newline-flattening half of Escape (code-review JF-926 round-2 finding 2):
+    // it was the ONLY escaping the device-verified spike exercised, yet no pin.
+    // A raw break inside the Events section would land the lyric tail on a
+    // non-Dialogue line that libass silently skips.
+    [Fact]
+    public void TryBuild_EmbeddedLineBreaks_FlattenToSpaces()
+    {
+        bool ok = LyricsAssBuilder.TryBuild(
+            new List<LyricLine> { Line("two\r\nword line", 0), Line("b", 9_000_0000) },
+            out string? script);
+
+        Assert.True(ok);
+        Assert.Contains("Dialogue: 0,0:00:00.00,0:00:09.00,Lyric,two  word line", script, StringComparison.Ordinal);
+    }
+
+    // libass backslash specials (code-review JF-926 round-2 finding 1): outside
+    // override blocks the parser turns \N into a hard break, \n into a soft break,
+    // \h into a non-breaking space. Karaoke-LRC lines carry literal \N splits;
+    // all three flatten to spaces like any other break (the one-event-per-line
+    // policy); any other backslash renders literally and stays untouched.
+    [Fact]
+    public void TryBuild_LibassBackslashSpecials_FlattenToSpaces()
+    {
+        bool ok = LyricsAssBuilder.TryBuild(
+            new List<LyricLine> { Line("Back\\Nto back\\na\\hb\\keep", 0), Line("b", 9_000_0000) },
+            out string? script);
+
+        Assert.True(ok);
+        Assert.Contains("Dialogue: 0,0:00:00.00,0:00:09.00,Lyric,Back to back a b\\keep", script, StringComparison.Ordinal);
+    }
+
+    // The duplicate-Start tie (code-review JF-926 round-2 finding 4): both lines
+    // share a tick (the negative-clamp shape clamps two offset lines to 0); the
+    // EARLIER line gets a zero-length window so the LATER duplicate wins the
+    // visible render. OrderBy is stable, so the behavior is deterministic; this
+    // pins it so a future de-dup or re-window cannot change it silently.
+    [Fact]
+    public void TryBuild_DuplicateStart_EarlierLineGetsZeroWindow_LaterWins()
+    {
+        bool ok = LyricsAssBuilder.TryBuild(
+            new List<LyricLine> { Line("first", 0), Line("second", 0), Line("third", 9_000_0000) },
+            out string? script);
+
+        Assert.True(ok);
+        Assert.Contains("Dialogue: 0,0:00:00.00,0:00:00.00,Lyric,first", script, StringComparison.Ordinal);
+        Assert.Contains("Dialogue: 0,0:00:00.00,0:00:09.00,Lyric,second", script, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void TryBuild_HourRolloverTimestamp_RendersInvariantly()
     {

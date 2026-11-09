@@ -26,7 +26,8 @@ public static class LyricsAssBuilder
     /// <summary>
     /// The spike-verified ASS header + style, byte-identical to the render that
     /// produced the verified frames (crf28 1fps black 1280x720). Keep in sync with
-    /// the spike report claudedocs/spike_jf-925_lyrics_2026-11-09.md.
+    /// the spike report claudedocs/spike_jf-925_lyrics_2026-11-09.md on the
+    /// preserved branch worktree-jf925-lyrics-spike (the report is not on main).
     /// </summary>
     private const string HeaderAndStyle =
         "[Script Info]\nScriptType: v4.00+\nPlayResX: 1280\nPlayResY: 720\n\n"
@@ -117,9 +118,15 @@ public static class LyricsAssBuilder
 
     /// <summary>
     /// ASS dialogue text escaping: line breaks become spaces (one event per line;
-    /// a lone carriage return too, so old-Mac endings do not merge adjacent words)
-    /// and braces are the ASS override-tag delimiters, so they are balanced-disabled
-    /// with a backslash (a stray brace pair would swallow visible text as a tag).
+    /// a lone carriage return too, so old-Mac endings do not merge adjacent words),
+    /// braces are the ASS override-tag delimiters so they are balanced-disabled
+    /// with a backslash (a stray brace pair would swallow visible text as a tag),
+    /// and libass's backslash specials are flattened to spaces: outside override
+    /// blocks the parser turns a literal \N into a hard break, \n into a soft
+    /// break, and \h into a non-breaking space (ass_get_next_char, the parser the
+    /// production jellyfin-ffmpeg uses), so karaoke-LRC \N splits and stray \n
+    /// would silently reformat the line. Any OTHER backslash renders literally
+    /// (the parser only reacts to those three sequences) and is left untouched.
     /// Commas need no escaping: the Events Format declares Text as the LAST field,
     /// so a conforming parser takes the entire line remainder as the text.
     /// </summary>
@@ -129,5 +136,8 @@ public static class LyricsAssBuilder
         => text.Replace("\r", " ", StringComparison.Ordinal)
             .Replace("\n", " ", StringComparison.Ordinal)
             .Replace("{", "\\{", StringComparison.Ordinal)
-            .Replace("}", "\\}", StringComparison.Ordinal);
+            .Replace("}", "\\}", StringComparison.Ordinal)
+            .Replace("\\N", " ", StringComparison.Ordinal)
+            .Replace("\\n", " ", StringComparison.Ordinal)
+            .Replace("\\h", " ", StringComparison.Ordinal);
 }
