@@ -92,6 +92,12 @@ vocabulary:
   artist_media_prep: [by, from]
   artist_carrier_en: [the band, the artist, the singer]
 intents:
+  - name: ShowLyricsIntent
+    samples:
+      - show the lyrics
+      - show lyrics
+      - read the lyrics
+      - display the lyrics
   - name: QueryRecentlyAddedIntent
     samples:
       - what's new

@@ -435,6 +435,21 @@ public sealed class PlaybackLaunchBuilder
     }
 
     /// <summary>
+    /// JF-926: the ONE burned-in lyrics HLS URL builder (the route/token-shape
+    /// convention: every plugin endpoint URL builder lives here, a route or token
+    /// change lands once). The signed token follows the family contract; the
+    /// endpoint itself re-validates item-scoped.
+    /// </summary>
+    /// <param name="itemId">Id of the song whose lyrics view is launched.</param>
+    /// <param name="user">The launching plugin user (whose library scope the token carries).</param>
+    /// <returns>URL to the lyrics HLS endpoint.</returns>
+    internal string GetLyricsStreamUrl(string itemId, Entities.User? user)
+    {
+        string token = StreamTokenHelper.MintScoped(itemId, _config.StreamTokenSecret, Util.LibraryFilter.GetAllowedLibraryIds(user));
+        return new Uri(new Uri(_config.ServerAddress), $"alexaskill/api/video-audio/lyrics/{itemId}/stream.m3u8?token={token}").ToString();
+    }
+
+    /// <summary>
     /// Get the PLAYBACK-SPEED atempo HLS URL (JF-636): the item's audio
     /// time-stretched server-side (<c>ffmpeg -af atempo</c>, pitch-preserving)
     /// for the AudioPlayer path, which has no native rate control (the same

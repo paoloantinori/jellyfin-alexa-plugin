@@ -118,6 +118,9 @@ internal static class IntentNames
     public const string ShowMore = "ShowMoreIntent";
     public const string FindSongIntent = "FindSongIntent";
     public const string FindSongByArtistIntent = "FindSongByArtistIntent";
+
+    /// <summary>JF-926: the opt-in burned-in lyrics view (option 3 of the JF-925 decision).</summary>
+    public const string ShowLyricsIntent = "ShowLyricsIntent";
     public const string SetPlaybackSpeed = "SetPlaybackSpeedIntent";
     public const string ShowPhotoAlbum = "ShowPhotoAlbumIntent";
 

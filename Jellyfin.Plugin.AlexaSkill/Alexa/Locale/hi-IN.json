@@ -324,5 +324,7 @@
   "NoPhotosFound": "आपकी लाइब्रेरी में कोई फ़ोटो नहीं मिली।",
   "ShowingPhotoAlbum": "{1} की {0} फ़ोटो दिखा रहा हूँ।",
   "ShowingRecentPhotos": "आपकी {0} सबसे हाल की फ़ोटो दिखा रहा हूँ।",
-  "RecentPhotosTitle": "हाल की फ़ोटो"
+  "RecentPhotosTitle": "हाल की फ़ोटो",
+  "ShowLyricsLaunching": "{0} के बोल यहाँ हैं।",
+  "LyricsNoSynced": "इस गाने के बोल समय के साथ चिह्नित नहीं हैं, मैं इन्हें सिंक नहीं कर सकता।"
 }

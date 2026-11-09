@@ -324,5 +324,7 @@
   "NoPhotosFound": "لم أجد أي صور في مكتبتك.",
   "ShowingPhotoAlbum": "أعرض {0} صور من {1}.",
   "ShowingRecentPhotos": "أعرض أحدث {0} صور لك.",
-  "RecentPhotosTitle": "أحدث الصور"
+  "RecentPhotosTitle": "أحدث الصور",
+  "ShowLyricsLaunching": "إليك كلمات {0}.",
+  "LyricsNoSynced": "لا توجد كلمات مُزامَنة بالوقت لهذه الأغنية، لا يمكنني مزامنتها."
 }

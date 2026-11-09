@@ -72,6 +72,11 @@
 # values.
 invocationName: meine sammlung
 intents:
+  - name: ShowLyricsIntent
+    samples:
+      - zeig den Songtext
+      - zeig mir den Songtext
+      - Songtext anzeigen
   - name: QueryRecentlyAddedIntent
     samples:
       - was ist neu

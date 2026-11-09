@@ -124,6 +124,10 @@
 #   residual).
 invocationName: マイコレクション
 intents:
+  - name: ShowLyricsIntent
+    samples:
+      - 歌詞を表示して
+      - 歌詞を見せて
   - name: QueryRecentlyAddedIntent
     samples:
       - 新着はある

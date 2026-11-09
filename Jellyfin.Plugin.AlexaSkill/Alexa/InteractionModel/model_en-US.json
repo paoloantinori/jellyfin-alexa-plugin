@@ -3,6 +3,15 @@
     "invocationName": "jellyfin player",
     "intents": [
       {
+        "name": "ShowLyricsIntent",
+        "samples": [
+          "show the lyrics",
+          "show lyrics",
+          "read the lyrics",
+          "display the lyrics"
+        ]
+      },
+      {
         "name": "QueryRecentlyAddedIntent",
         "samples": [
           "what's new",

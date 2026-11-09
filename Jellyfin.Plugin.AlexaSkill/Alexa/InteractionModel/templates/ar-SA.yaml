@@ -94,6 +94,10 @@
 # values.
 invocationName: مجموعتي
 intents:
+  - name: ShowLyricsIntent
+    samples:
+      - اعرض كلمات الأغنية
+      - أظهر كلمات الأغنية
   - name: QueryRecentlyAddedIntent
     samples:
       - ما الجديد

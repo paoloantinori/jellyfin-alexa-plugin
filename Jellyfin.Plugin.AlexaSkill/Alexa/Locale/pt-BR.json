@@ -324,5 +324,7 @@
   "NoPhotosFound": "Não encontrei fotos na sua biblioteca.",
   "ShowingPhotoAlbum": "Mostrando {0} fotos de {1}.",
   "ShowingRecentPhotos": "Mostrando suas {0} fotos mais recentes.",
-  "RecentPhotosTitle": "Fotos recentes"
+  "RecentPhotosTitle": "Fotos recentes",
+  "ShowLyricsLaunching": "Aqui está a letra de {0}.",
+  "LyricsNoSynced": "Esta música não tem letra com marcação de tempo, não consigo sincronizar."
 }

@@ -3,6 +3,14 @@
     "invocationName": "mijn collectie",
     "intents": [
       {
+        "name": "ShowLyricsIntent",
+        "samples": [
+          "laat de tekst zien",
+          "toon de songtekst",
+          "lees de tekst voor"
+        ]
+      },
+      {
         "name": "QueryRecentlyAddedIntent",
         "samples": [
           "wat is er nieuw",

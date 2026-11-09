@@ -3,6 +3,13 @@
     "invocationName": "मेरी कलेक्शन",
     "intents": [
       {
+        "name": "ShowLyricsIntent",
+        "samples": [
+          "बोल दिखाओ",
+          "गाने के बोल दिखाओ"
+        ]
+      },
+      {
         "name": "QueryRecentlyAddedIntent",
         "samples": [
           "क्या नया है",

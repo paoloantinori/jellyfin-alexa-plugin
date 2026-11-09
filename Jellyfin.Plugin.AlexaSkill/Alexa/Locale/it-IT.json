@@ -324,5 +324,7 @@
   "NoPhotosFound": "Non ho trovato foto nella tua libreria.",
   "ShowingPhotoAlbum": "Sto mostrando {0} foto dell'album {1}.",
   "ShowingRecentPhotos": "Sto mostrando le tue {0} foto più recenti.",
-  "RecentPhotosTitle": "Foto recenti"
+  "RecentPhotosTitle": "Foto recenti",
+  "ShowLyricsLaunching": "Ecco il testo di {0}.",
+  "LyricsNoSynced": "Questo brano non ha un testo con i tempi, non riesco a sincronizzarlo."
 }

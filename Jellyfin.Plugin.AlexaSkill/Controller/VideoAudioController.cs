@@ -4,7 +4,9 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Globalization;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Data.Enums;
@@ -37,6 +39,7 @@ public class VideoAudioController : ControllerBase
 {
     private readonly ILibraryManager _libraryManager;
     private readonly IMediaEncoder _mediaEncoder;
+    private readonly MediaBrowser.Controller.Lyrics.ILyricManager? _lyricManager;
     private readonly IMediaSourceManager? _mediaSourceManager;
     private readonly VideoAudioCache _cache;
     private readonly ILogger<VideoAudioController> _logger;
@@ -63,6 +66,17 @@ public class VideoAudioController : ControllerBase
     /// for the generation rule, JF-665/JF-669).
     /// </summary>
     private static readonly ConcurrentDictionary<string, ActiveEncodeGenerations> _activeAudiobookEncodes = new();
+
+    /// <summary>
+    /// JF-926: per-directory serialize slots for the lyrics renders. Two concurrent
+    /// first-fetches for the same lyrics generation would otherwise both run ffmpeg
+    /// into the SAME generation directory (the encode gate caps concurrency
+    /// globally but does not serialize same-dir writers), corrupting the segments.
+    /// Keyed by the full HLS dir path; entries live for the process lifetime
+    /// (bounded by distinct lyric renders, same growth class as the generation
+    /// map's documented bound).
+    /// </summary>
+    private static readonly ConcurrentDictionary<string, SemaphoreSlim> _lyricsRenderSlots = new();
 
     /// <summary>
     /// JF-636: live ffmpeg processes of the audio-speed variant, keyed by its
@@ -279,10 +293,12 @@ public class VideoAudioController : ControllerBase
         IMediaEncoder mediaEncoder,
         VideoAudioCache cache,
         ILoggerFactory loggerFactory,
-        IMediaSourceManager? mediaSourceManager)
+        IMediaSourceManager? mediaSourceManager,
+        MediaBrowser.Controller.Lyrics.ILyricManager? lyricManager = null)
     {
         _libraryManager = libraryManager;
         _mediaEncoder = mediaEncoder;
+        _lyricManager = lyricManager;
         _mediaSourceManager = mediaSourceManager;
         _cache = cache;
         _logger = loggerFactory.CreateLogger<VideoAudioController>();
@@ -4641,6 +4657,203 @@ public class VideoAudioController : ControllerBase
         return PhysicalFile(segmentPath, "video/mp2t", enableRangeProcessing: true);
 #pragma warning restore CA3003
     }
+
+    /// <summary>
+    /// JF-926: the burned-in lyrics HLS playlist. Serves the current song as a
+    /// one-track video-audio HLS stream whose frames carry the synced lyrics burned
+    /// in by libass (the option-3 lyrics view launched by ShowLyricsIntentHandler).
+    /// First fetch encodes (gated on the shared encode semaphore, output in the
+    /// video-audio cache under <c>{itemId}_lyrics_{hash}</c>); later fetches serve
+    /// the cached playlist. The hash rides the directory name, so an edited lyric
+    /// file produces a fresh render deterministically.
+    /// </summary>
+    /// <param name="itemId">The Jellyfin song item ID.</param>
+    /// <param name="token">The signed stream token minted by the ShowLyrics launch.</param>
+    /// <param name="cancellationToken">The request cancellation token.</param>
+    /// <returns>The HLS playlist, or an error status (404 song/lyrics, 503 ffmpeg).</returns>
+    [HttpGet("lyrics/{itemId}/stream.m3u8")]
+    public async Task<ActionResult> StreamLyricsHls(
+        [FromRoute] string itemId,
+        [FromQuery] string? token,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(itemId) || !Guid.TryParse(itemId, out Guid itemGuid))
+        {
+            return BadRequest(new { error = "Invalid itemId format" });
+        }
+
+        ActionResult? tokenError = ValidateStreamToken(itemId, out _);
+        if (tokenError != null)
+        {
+            return tokenError;
+        }
+
+        string ffmpeg = ResolveFfmpegPath();
+        if (string.IsNullOrEmpty(ffmpeg))
+        {
+            _logger.LogError("VideoAudio lyrics HLS: ffmpeg not available");
+            return StatusCode(503, new { error = "ffmpeg is not available on this server" });
+        }
+
+        // The item GUID is validated above and the directory/hash derive from it and
+        // from server-owned content (the same shape the sibling pragma pairs cover).
+#pragma warning disable CA3003 // paths derive from GUID-parsed itemId + plugin-owned cache dir
+
+        if (_lyricManager == null)
+        {
+            return NotFound(new { error = "Lyrics are not available on this server" });
+        }
+
+        if (_libraryManager.GetItemById(itemGuid) is not MediaBrowser.Controller.Entities.Audio.Audio song)
+        {
+            return NotFound(new { error = "Song not found" });
+        }
+
+        MediaBrowser.Model.Lyrics.LyricDto? lyrics;
+        try
+        {
+            lyrics = await _lyricManager.GetLyricsAsync(song, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return StatusCode(499, new { error = "Client closed request" });
+        }
+
+        if (lyrics?.Lyrics is not { } lyricLines
+            || !Alexa.Playback.LyricsAssBuilder.TryBuild(lyricLines, out string? assScript)
+            || assScript == null)
+        {
+            _logger.LogWarning("VideoAudio lyrics HLS: no SYNCED lyrics for song {SongName}", song.Name);
+            return NotFound(new { error = "No synced lyrics for this song" });
+        }
+
+        string? mediaPath = ResolveMediaPath(song);
+        if (mediaPath == null || !System.IO.File.Exists(mediaPath))
+        {
+            _logger.LogWarning("VideoAudio lyrics HLS: song {SongName} has no local media file to render", song.Name);
+            return NotFound(new { error = "Song has no local media file" });
+        }
+
+        // The ass content hashes into the directory generation: an edited lyric file
+        // deterministically produces a fresh render (the art-ticks slot doubles as
+        // the hash carrier; the N-form id keeps FindSegmentPath's prefix scan working).
+        string assHash = Convert.ToHexString(
+            System.Security.Cryptography.SHA256.HashData(
+                System.Text.Encoding.UTF8.GetBytes(assScript)))[..16];
+        string itemIdKey = itemGuid.ToString("N");
+        string hlsDir = _cache.GetHlsDirectoryPath(itemIdKey, unchecked((long)ulong.Parse(assHash, System.Globalization.NumberStyles.HexNumber, CultureInfo.InvariantCulture)));
+        string playlistPath = Path.Combine(hlsDir, "stream.m3u8");
+        string assPath = Path.Combine(hlsDir, "lyrics.ass");
+
+        Directory.CreateDirectory(hlsDir);
+        _cache.RegisterHlsDirectoryPath(itemIdKey, unchecked((long)ulong.Parse(assHash, System.Globalization.NumberStyles.HexNumber, CultureInfo.InvariantCulture)), hlsDir);
+
+        if (!System.IO.File.Exists(playlistPath))
+        {
+            long runtimeTicks = song.RunTimeTicks ?? 0;
+            // The argument list mirrors the JF-925 spike render (the device-verified
+            // burn-in): 1fps black video + audio copy + libass burn + 10s HLS segments.
+            var ffmpegArgs = new List<string>
+            {
+                "-i", mediaPath,
+                "-f", "lavfi", "-i", "color=c=black:s=1280x720:r=1",
+                "-map", "0:a", "-map", "1:v",
+                "-c:a", "copy",
+                "-c:v", "libx264", "-tune", "stillimage", "-preset", "ultrafast", "-crf", "28",
+                "-pix_fmt", "yuv420p", "-g", "1",
+                "-vf", $"subtitles='{EscapeFfmpegFilterPath(assPath)}'",
+                "-shortest",
+                "-f", "hls", "-hls_time", "10", "-hls_segment_type", "mpegts", "-hls_list_size", "0",
+                "-hls_segment_filename", System.IO.Path.Combine(hlsDir, "seg_%04d.ts"),
+                playlistPath,
+            };
+
+            // JF-926: the per-directory serialize slot closes the concurrent
+            // first-fetch race (two Shows asking at once would both encode into the
+            // same generation dir); the slot is held for the whole encode.
+            var lyricsRenderSlot = _lyricsRenderSlots.GetOrAdd(hlsDir, _ => new SemaphoreSlim(1, 1));
+            await lyricsRenderSlot.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                var ffmpegProcess = await StartFfmpegProcessGatedAsync(
+                    ffmpeg,
+                    ffmpegArgs,
+                    EstimateEncodeBytes(runtimeTicks),
+                    hlsDir,
+                    cancellationToken: cancellationToken).ConfigureAwait(false);
+
+                // Wait for the FIRST SEGMENT (not the playlist header: ffmpeg writes
+                // that at startup with zero segments; serving it would hand the
+                // player an empty listing) and map a startup failure to 500.
+                string firstSegment = Path.Combine(hlsDir, "seg_0000.ts");
+                for (int i = 0; i < 1000; i++)
+                {
+                    if (System.IO.File.Exists(firstSegment))
+                    {
+                        break;
+                    }
+
+                    if (ffmpegProcess.HasExited)
+                    {
+                        _logger.LogError("VideoAudio lyrics HLS: ffmpeg exited {ExitCode} before the first segment for {SongName}", ffmpegProcess.ExitCode, song.Name);
+                        return StatusCode(500, new { error = "Lyrics render failed" });
+                    }
+
+                    await Task.Delay(10, cancellationToken).ConfigureAwait(false);
+                }
+            }
+            finally
+            {
+                lyricsRenderSlot.Release();
+            }
+        }
+
+        // Serve the cached playlist with the token riding every segment line, and
+        // rewrite bare segment URIs onto the generic segment route (the {guid}_lyrics_
+        // {hash} directory resolves through FindSegmentPath's prefix scan).
+        string playlist = await System.IO.File.ReadAllTextAsync(playlistPath, cancellationToken).ConfigureAwait(false);
+        string tokenValue = HttpContext.Request.Query["token"].ToString();
+        var lines = playlist.Split('\n');
+        for (int i = 0; i < lines.Length; i++)
+        {
+            string line = lines[i].TrimEnd('\r');
+            if (Alexa.Playback.AudiobookPlaylistBuilder.IsSegmentUriLine(line) && !line.Contains("?token=", StringComparison.Ordinal))
+            {
+                lines[i] = $"/alexaskill/api/video-audio/{itemIdKey}/segments/" + line.TrimStart('/');
+            }
+        }
+
+        string rewritten = string.Join('\n', lines);
+        // The launch URL always carries the token (ShowLyricsIntentHandler mints it
+        // with the song id); a null query token means the route validation above
+        // already passed with it absent, so serve the playlist unchanged (the
+        // degenerate shape).
+        string rideToken = string.IsNullOrEmpty(tokenValue) ? string.Empty : tokenValue;
+        return Content(RewritePlaylistWithToken(rewritten, rideToken), "application/vnd.apple.mpegurl");
+#pragma warning restore CA3003 // paths derive from GUID-parsed itemId + plugin-owned cache dir
+    }
+
+    /// <summary>
+    /// Mirror of the builder's native-controls delegation gate for the lyrics
+    /// endpoint's subtitle filter argument: quote the ass path so filter parsing
+    /// survives a data dir containing spaces, and strip any single quotes (the
+    /// ffmpeg filter parser cannot escape them inside quoted filter values; the
+    /// cache path is plugin-owned, so apostrophes are exotic).
+    /// </summary>
+    /// <param name="assPath">The ass file path inside the plugin cache.</param>
+    /// <returns>The filter-argument-safe path.</returns>
+    private static string EscapeFfmpegFilterPath(string assPath)
+        => "'" + assPath.Replace("'", string.Empty, StringComparison.Ordinal) + "'";
+
+    /// <summary>
+    /// The container/host media path for the song: the item's own Path when it is
+    /// a real file (the direct-play shape the audiobook endpoint reads), null
+    /// otherwise (streaming/remote sources cannot be burned-in rendered).
+    /// </summary>
+    /// <param name="song">The song item.</param>
+    /// <returns>The local file path, or null when the item has none.</returns>
+    private static string? ResolveMediaPath(MediaBrowser.Controller.Entities.Audio.Audio song)
+        => System.IO.File.Exists(song.Path) ? song.Path : null;
 
     /// <summary>
     /// Parse the segment number out of a <c>seg_NNN[N].ts</c> name. Shared by the

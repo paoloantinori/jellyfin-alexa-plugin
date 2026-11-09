@@ -46,6 +46,11 @@
 # values.
 invocationName: mon serveur
 intents:
+  - name: ShowLyricsIntent
+    samples:
+      - affiche les paroles
+      - montre les paroles
+      - lis les paroles
   - name: QueryRecentlyAddedIntent
     samples:
       - quoi de neuf

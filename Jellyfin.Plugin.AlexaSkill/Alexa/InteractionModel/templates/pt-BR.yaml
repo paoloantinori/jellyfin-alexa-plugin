@@ -76,6 +76,11 @@
 # values.
 invocationName: minha coleção
 intents:
+  - name: ShowLyricsIntent
+    samples:
+      - mostra a letra
+      - exibe a letra
+      - leia a letra
   - name: QueryRecentlyAddedIntent
     samples:
       - o que há de novo

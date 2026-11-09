@@ -48,6 +48,16 @@
         "name": "AMAZON.RepeatIntent"
       },
       {
+        "name": "ShowLyricsIntent",
+        "samples": [
+          "mostra i testi",
+          "mostra il testo",
+          "leggi i testi",
+          "leggi il testo",
+          "vedi i testi"
+        ]
+      },
+      {
         "name": "SetPlaybackSpeedIntent",
         "samples": [
           "a velocità {speed}",

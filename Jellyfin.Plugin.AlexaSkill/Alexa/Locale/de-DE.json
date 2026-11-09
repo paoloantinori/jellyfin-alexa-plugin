@@ -324,5 +324,7 @@
   "NoPhotosFound": "Ich konnte keine Fotos in deiner Mediathek finden.",
   "ShowingPhotoAlbum": "Ich zeige {0} Fotos aus {1}.",
   "ShowingRecentPhotos": "Ich zeige deine {0} neuesten Fotos.",
-  "RecentPhotosTitle": "Neueste Fotos"
+  "RecentPhotosTitle": "Neueste Fotos",
+  "ShowLyricsLaunching": "Hier ist der Text von {0}.",
+  "LyricsNoSynced": "Dieses Lied hat keinen zeitlich markierten Text, ich kann ihn nicht synchronisieren."
 }

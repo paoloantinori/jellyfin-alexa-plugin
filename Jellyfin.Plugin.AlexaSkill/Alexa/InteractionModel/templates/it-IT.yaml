@@ -83,6 +83,13 @@ static_intents:
 # Intents with explicit samples (not generated from templates).
 # Each has a "samples" list and optional "slots" list.
 explicit_intents:
+  ShowLyricsIntent:
+    samples:
+      - mostra i testi
+      - mostra il testo
+      - leggi i testi
+      - leggi il testo
+      - vedi i testi
   SetPlaybackSpeedIntent:
     samples:
       - a velocità {speed}

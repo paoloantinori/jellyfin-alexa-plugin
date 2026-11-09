@@ -324,5 +324,7 @@
   "NoPhotosFound": "ライブラリに写真が見つかりませんでした。",
   "ShowingPhotoAlbum": "{1} の写真を {0} 枚表示しています。",
   "ShowingRecentPhotos": "最近の写真を {0} 枚表示しています。",
-  "RecentPhotosTitle": "最近の写真"
+  "RecentPhotosTitle": "最近の写真",
+  "ShowLyricsLaunching": "{0} の歌詞を表示します。",
+  "LyricsNoSynced": "この曲にはタイムスタンプ付きの歌詞がないため、同期できません。"
 }
