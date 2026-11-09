@@ -1,5 +1,4 @@
 using System;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Alexa.NET;
@@ -46,7 +45,7 @@ public class ShowLyricsIntentHandler : BaseHandler
     /// <param name="sessionManager">Instance of the <see cref="ISessionManager"/> interface.</param>
     /// <param name="config">The plugin configuration.</param>
     /// <param name="libraryManager">Instance of the <see cref="ILibraryManager"/> interface.</param>
-    /// <param name="lyricManager">The server's lyric manager (synced lrc sidecars); optional because older hosts may not register it, in which case every ask answers the no-synced tell.</param>
+    /// <param name="lyricManager">The server's lyric manager (synced lrc sidecars). DI-REQUIRED on the handler (both shipping hosts register ILyricManager, so construction always resolves); the endpoint independently answers its own 404 when the manager is absent server-side.</param>
     /// <param name="loggerFactory">Logger factory.</param>
     public ShowLyricsIntentHandler(
         ISessionManager sessionManager,
@@ -125,10 +124,13 @@ public class ShowLyricsIntentHandler : BaseHandler
             return ResponseBuilder.Tell(ResponseStrings.Get("LyricsNoSynced", locale));
         }
 
+        // The synced gate IS the endpoint's: LyricsAssBuilder.TryBuild is the ONE
+        // definition of "renderable synced lyrics" (>=2 non-blank synced lines), so
+        // gating on it here guarantees the launch URL's endpoint accepts what the
+        // announce already promised (no hand-rolled near-copy to drift).
         var lyricLines = lyrics?.Lyrics;
         if (lyricLines is null
-            || lyricLines.Count < 2
-            || lyricLines.All(l => l.Start is null))
+            || !Alexa.Playback.LyricsAssBuilder.TryBuild(lyricLines, out _))
         {
             Logger.LogInformation("ShowLyricsIntent: no SYNCED lyrics for {SongName} (lines: {LineCount})", song.Name, lyricLines?.Count ?? 0);
             return ResponseBuilder.Tell(ResponseStrings.Get("LyricsNoSynced", locale));

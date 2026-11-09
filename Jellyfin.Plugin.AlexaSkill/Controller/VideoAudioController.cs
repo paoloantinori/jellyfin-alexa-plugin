@@ -68,13 +68,15 @@ public class VideoAudioController : ControllerBase
     private static readonly ConcurrentDictionary<string, ActiveEncodeGenerations> _activeAudiobookEncodes = new();
 
     /// <summary>
-    /// JF-926: per-directory serialize slots for the lyrics renders. Two concurrent
-    /// first-fetches for the same lyrics generation would otherwise both run ffmpeg
-    /// into the SAME generation directory (the encode gate caps concurrency
+    /// JF-926: per-song serialize slots for the lyrics renders. Two concurrent
+    /// first-fetches for the same song's lyrics would otherwise both run ffmpeg
+    /// into the song's generation directory (the encode gate caps concurrency
     /// globally but does not serialize same-dir writers), corrupting the segments.
-    /// Keyed by the full HLS dir path; entries live for the process lifetime
-    /// (bounded by distinct lyric renders, same growth class as the generation
-    /// map's documented bound).
+    /// Keyed by the lyrics VARIANT cache key (one entry per song, never per lyric
+    /// generation: an edited lyric file mints a new hash-dir but serializing the
+    /// cross-generation first fetches of one song is the more conservative
+    /// mutual exclusion); entries live for the process lifetime, bounded by
+    /// distinct songs whose lyrics were ever shown.
     /// </summary>
     private static readonly ConcurrentDictionary<string, SemaphoreSlim> _lyricsRenderSlots = new();
 
@@ -4663,9 +4665,10 @@ public class VideoAudioController : ControllerBase
     /// one-track video-audio HLS stream whose frames carry the synced lyrics burned
     /// in by libass (the option-3 lyrics view launched by ShowLyricsIntentHandler).
     /// First fetch encodes (gated on the shared encode semaphore, output in the
-    /// video-audio cache under <c>{itemId}_lyrics_{hash}</c>); later fetches serve
-    /// the cached playlist. The hash rides the directory name, so an edited lyric
-    /// file produces a fresh render deterministically.
+    /// video-audio cache under <c>{itemId}-lyrics_{hash}</c>, the variant cache key
+    /// disjoint from the plain video-audio generation); later fetches serve the
+    /// cached playlist. The hash rides the directory name, so an edited lyric file
+    /// produces a fresh render deterministically.
     /// </summary>
     /// <param name="itemId">The Jellyfin song item ID.</param>
     /// <param name="token">The signed stream token minted by the ShowLyrics launch.</param>
@@ -4736,101 +4739,205 @@ public class VideoAudioController : ControllerBase
 
         // The ass content hashes into the directory generation: an edited lyric file
         // deterministically produces a fresh render (the art-ticks slot doubles as
-        // the hash carrier; the N-form id keeps FindSegmentPath's prefix scan working).
+        // the hash carrier). The LYRICS-SPECIFIC cache key (the JF-636 speed-variant
+        // precedent) keeps this render's directory and registration disjoint from
+        // the same song's plain video-audio generation: sharing the bare item key
+        // would overwrite the plain path's registered directory and the restart
+        // scan would then pick between the two by recency alone.
         string assHash = Convert.ToHexString(
             System.Security.Cryptography.SHA256.HashData(
                 System.Text.Encoding.UTF8.GetBytes(assScript)))[..16];
-        string itemIdKey = itemGuid.ToString("N");
-        string hlsDir = _cache.GetHlsDirectoryPath(itemIdKey, unchecked((long)ulong.Parse(assHash, System.Globalization.NumberStyles.HexNumber, CultureInfo.InvariantCulture)));
+        long assHashTicks = unchecked((long)ulong.Parse(assHash, System.Globalization.NumberStyles.HexNumber, CultureInfo.InvariantCulture));
+        string lyricsCacheKey = LyricsCacheKey(itemId);
+        string hlsDir = _cache.GetHlsDirectoryPath(lyricsCacheKey, assHashTicks);
         string playlistPath = Path.Combine(hlsDir, "stream.m3u8");
         string assPath = Path.Combine(hlsDir, "lyrics.ass");
 
         Directory.CreateDirectory(hlsDir);
-        _cache.RegisterHlsDirectoryPath(itemIdKey, unchecked((long)ulong.Parse(assHash, System.Globalization.NumberStyles.HexNumber, CultureInfo.InvariantCulture)), hlsDir);
+        _cache.RegisterHlsDirectoryPath(lyricsCacheKey, assHashTicks, hlsDir);
 
-        if (!System.IO.File.Exists(playlistPath))
+        // JF-926: the per-song serialize slot closes the concurrent first-fetch
+        // race (two Shows asking at once, or the Echo's rapid playlist double
+        // fetch, would otherwise both run/serve against the same song's
+        // generation directory). The serve-or-encode verdict sits INSIDE the slot
+        // (the family lock-wraps-probe ordering): ffmpeg creates stream.m3u8 at
+        // startup with zero segments, so an existence probe outside the slot would
+        // serve a bypasser the header-only file mid-encode. The verdict is
+        // existence PLUS the VOD tail (<see cref="HlsEndList"/>): this path only
+        // ever serves completed renders, so a live or crashed encode's partial
+        // playlist never serves; it falls to the encode branch and is rewritten.
+        var lyricsRenderSlot = _lyricsRenderSlots.GetOrAdd(lyricsCacheKey, _ => new SemaphoreSlim(1, 1));
+        await lyricsRenderSlot.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
         {
-            long runtimeTicks = song.RunTimeTicks ?? 0;
+            if (await IsCompletedVodPlaylistAsync(playlistPath, cancellationToken).ConfigureAwait(false))
+            {
+                return await ServePlaylistWithTokenAsync(playlistPath, token).ConfigureAwait(false);
+            }
+
+            // The PROACTIVE copy-vs-transcode decision (the single-item path's
+            // rule): copy only the mpegts-muxable codecs (mp3/aac), AAC-transcode
+            // everything else INCLUDING the unknown-codec shape, so no render
+            // wastes an encode on a copy ffmpeg cannot mux.
+            string[] audioArgs = BuildAudioCodecArgs(ResolveSourceAudioCodec(song));
+            // The base URL makes ffmpeg write ABSOLUTE segment URIs onto the lyrics
+            // segment route itself, so serving needs only the token tail.
+            string hlsBaseUrl = $"/alexaskill/api/video-audio/lyrics/{itemId}/segments/";
+
             // The argument list mirrors the JF-925 spike render (the device-verified
-            // burn-in): 1fps black video + audio copy + libass burn + 10s HLS segments.
+            // burn-in): 1fps black video + libass burn + 10s HLS segments. A whole
+            // song encodes in 1-2s, so the endpoint serves the COMPLETE VOD playlist
+            // (every segment on disk) rather than racing the encode like the
+            // progressive paths: the audiobook precedent, minus its length.
             var ffmpegArgs = new List<string>
             {
                 "-i", mediaPath,
                 "-f", "lavfi", "-i", "color=c=black:s=1280x720:r=1",
                 "-map", "0:a", "-map", "1:v",
-                "-c:a", "copy",
+            };
+            ffmpegArgs.AddRange(audioArgs);
+            ffmpegArgs.AddRange(new[]
+            {
                 "-c:v", "libx264", "-tune", "stillimage", "-preset", "ultrafast", "-crf", "28",
                 "-pix_fmt", "yuv420p", "-g", "1",
                 "-vf", $"subtitles='{EscapeFfmpegFilterPath(assPath)}'",
                 "-shortest",
                 "-f", "hls", "-hls_time", "10", "-hls_segment_type", "mpegts", "-hls_list_size", "0",
+                "-hls_base_url", hlsBaseUrl,
                 "-hls_segment_filename", System.IO.Path.Combine(hlsDir, "seg_%04d.ts"),
                 playlistPath,
-            };
+            });
 
-            // JF-926: the per-directory serialize slot closes the concurrent
-            // first-fetch race (two Shows asking at once would both encode into the
-            // same generation dir); the slot is held for the whole encode.
-            var lyricsRenderSlot = _lyricsRenderSlots.GetOrAdd(hlsDir, _ => new SemaphoreSlim(1, 1));
-            await lyricsRenderSlot.WaitAsync(cancellationToken).ConfigureAwait(false);
-            try
+            // The ass script is written INSIDE the serialized region (before the
+            // ffmpeg spawn): the subtitles filter reads it at init, so a missing
+            // file would fail every first fetch before the first segment.
+            await System.IO.File.WriteAllTextAsync(assPath, assScript, cancellationToken).ConfigureAwait(false);
+
+            Process ffmpegProcess = await StartFfmpegProcessGatedAsync(
+                ffmpeg,
+                ffmpegArgs,
+                EstimateEncodeBytes(song.RunTimeTicks ?? 0),
+                hlsDir,
+                cancellationToken: cancellationToken).ConfigureAwait(false);
+
+            // Wait for the encode to COMPLETE (clean exit + ENDLIST written): the
+            // served playlist is the full VOD listing, so every segment it names
+            // exists on disk before the device can ask for one. A nonzero exit may
+            // leave a PARTIAL playlist; it must not serve.
+            bool completed = false;
+            for (int i = 0; i < 600; i++) // up to ~60s, songs encode in 1-2s
             {
-                var ffmpegProcess = await StartFfmpegProcessGatedAsync(
-                    ffmpeg,
-                    ffmpegArgs,
-                    EstimateEncodeBytes(runtimeTicks),
-                    hlsDir,
-                    cancellationToken: cancellationToken).ConfigureAwait(false);
-
-                // Wait for the FIRST SEGMENT (not the playlist header: ffmpeg writes
-                // that at startup with zero segments; serving it would hand the
-                // player an empty listing) and map a startup failure to 500.
-                string firstSegment = Path.Combine(hlsDir, "seg_0000.ts");
-                for (int i = 0; i < 1000; i++)
+                if (ffmpegProcess.HasExited)
                 {
-                    if (System.IO.File.Exists(firstSegment))
-                    {
-                        break;
-                    }
-
-                    if (ffmpegProcess.HasExited)
-                    {
-                        _logger.LogError("VideoAudio lyrics HLS: ffmpeg exited {ExitCode} before the first segment for {SongName}", ffmpegProcess.ExitCode, song.Name);
-                        return StatusCode(500, new { error = "Lyrics render failed" });
-                    }
-
-                    await Task.Delay(10, cancellationToken).ConfigureAwait(false);
+                    completed = ffmpegProcess.ExitCode == 0
+                        && await IsCompletedVodPlaylistAsync(playlistPath, cancellationToken).ConfigureAwait(false);
+                    break;
                 }
+
+                await Task.Delay(100, cancellationToken).ConfigureAwait(false);
             }
-            finally
+
+            if (!completed)
             {
-                lyricsRenderSlot.Release();
+                if (ffmpegProcess.HasExited)
+                {
+                    _logger.LogError("VideoAudio lyrics HLS: ffmpeg exited {ExitCode} without a complete playlist for {SongName}", ffmpegProcess.ExitCode, song.Name);
+                }
+                else
+                {
+                    _logger.LogError("VideoAudio lyrics HLS: lyrics render for {SongName} did not complete within the wait budget", song.Name);
+                }
+
+                TryKillLiveProcess(
+                    ffmpegProcess,
+                    "VideoAudio lyrics HLS: stopping the stalled lyrics encode for {SongName}",
+                    song.Name);
+                _cache.DeleteHlsEncodeDebris(hlsDir);
+                return StatusCode(500, new { error = "Lyrics render failed" });
             }
         }
-
-        // Serve the cached playlist with the token riding every segment line, and
-        // rewrite bare segment URIs onto the generic segment route (the {guid}_lyrics_
-        // {hash} directory resolves through FindSegmentPath's prefix scan).
-        string playlist = await System.IO.File.ReadAllTextAsync(playlistPath, cancellationToken).ConfigureAwait(false);
-        string tokenValue = HttpContext.Request.Query["token"].ToString();
-        var lines = playlist.Split('\n');
-        for (int i = 0; i < lines.Length; i++)
+        finally
         {
-            string line = lines[i].TrimEnd('\r');
-            if (Alexa.Playback.AudiobookPlaylistBuilder.IsSegmentUriLine(line) && !line.Contains("?token=", StringComparison.Ordinal))
-            {
-                lines[i] = $"/alexaskill/api/video-audio/{itemIdKey}/segments/" + line.TrimStart('/');
-            }
+            lyricsRenderSlot.Release();
         }
 
-        string rewritten = string.Join('\n', lines);
-        // The launch URL always carries the token (ShowLyricsIntentHandler mints it
-        // with the song id); a null query token means the route validation above
-        // already passed with it absent, so serve the playlist unchanged (the
-        // degenerate shape).
-        string rideToken = string.IsNullOrEmpty(tokenValue) ? string.Empty : tokenValue;
-        return Content(RewritePlaylistWithToken(rewritten, rideToken), "application/vnd.apple.mpegurl");
+        return await ServePlaylistWithTokenAsync(playlistPath, token).ConfigureAwait(false);
 #pragma warning restore CA3003 // paths derive from GUID-parsed itemId + plugin-owned cache dir
+    }
+
+    /// <summary>
+    /// The lyrics render's completed-VOD verdict: the playlist EXISTS and carries
+    /// the <c>#EXT-X-ENDLIST</c> tail. The lyrics path only ever serves completed
+    /// renders (unlike the progressive paths, which serve live event playlists),
+    /// so a missing, live, or crash-truncated playlist is uniformly "not done".
+    /// </summary>
+    /// <param name="playlistPath">The cached playlist file path.</param>
+    /// <param name="cancellationToken">The request cancellation token.</param>
+    /// <returns>True only when the playlist is a completed VOD listing.</returns>
+    private static async Task<bool> IsCompletedVodPlaylistAsync(string playlistPath, CancellationToken cancellationToken)
+    {
+#pragma warning disable CA3003 // playlistPath derives from GUID-parsed itemId + plugin-owned cache dir
+        if (!System.IO.File.Exists(playlistPath))
+        {
+            return false;
+        }
+
+        try
+        {
+            string content = await System.IO.File.ReadAllTextAsync(playlistPath, cancellationToken).ConfigureAwait(false);
+            return content.Contains(HlsEndList, StringComparison.Ordinal);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+#pragma warning restore CA3003 // playlistPath derives from GUID-parsed itemId + plugin-owned cache dir
+    }
+
+    /// <summary>
+    /// The lyrics render's cache key: the GUID-validated route item id (D-form,
+    /// the exact string the minted token HMACs) plus the <c>-lyrics</c> variant
+    /// suffix, the JF-636 speed-variant key shape. Distinct from the bare item
+    /// key the plain video-audio path registers, so a lyrics render never
+    /// displaces the same song's plain generation (in-memory map or restart scan).
+    /// </summary>
+    /// <param name="itemId">The GUID-validated route item id (D-form).</param>
+    /// <returns>The variant cache key string.</returns>
+    internal static string LyricsCacheKey(string itemId) => $"{itemId}-lyrics";
+
+    /// <summary>
+    /// Serve one lyrics SEGMENT: the lyrics render's own segment route (JF-926),
+    /// carrying the same D-form itemId the launch minted the token over so the
+    /// HMAC validates, and resolving the directory through the lyrics variant
+    /// cache key (the plain route's bare-item key is deliberately disjoint).
+    /// </summary>
+    /// <param name="itemId">The Jellyfin song item ID.</param>
+    /// <param name="segmentName">The segment file name (e.g. "seg_0000.ts").</param>
+    /// <returns>The segment file, or 404.</returns>
+    [HttpGet("lyrics/{itemId}/segments/{segmentName}")]
+    [AllowAnonymous]
+    public ActionResult GetLyricsSegment(string itemId, string segmentName)
+    {
+        ActionResult? routeError = ValidateSignedRoute(itemId);
+        if (routeError != null)
+        {
+            return routeError;
+        }
+
+        if (!VideoAudioCache.IsValidSegmentName(segmentName))
+        {
+            return BadRequest(new { error = "Invalid segment name" });
+        }
+
+        string? segmentPath = _cache.FindSegmentPath(LyricsCacheKey(itemId), segmentName);
+        if (segmentPath == null)
+        {
+            return NotFound(new { error = "Segment not found" });
+        }
+
+#pragma warning disable CA3003 // segmentPath resolved via GUID-validated itemId + strict segment name pattern upstream
+        return PhysicalFile(segmentPath, "video/mp2t", enableRangeProcessing: true);
+#pragma warning restore CA3003
     }
 
     /// <summary>

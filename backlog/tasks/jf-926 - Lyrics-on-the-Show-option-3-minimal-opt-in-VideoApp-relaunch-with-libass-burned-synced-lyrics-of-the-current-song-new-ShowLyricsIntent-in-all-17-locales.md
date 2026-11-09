@@ -7,7 +7,7 @@ title: >-
 status: In Progress
 assignee: []
 created_date: '2026-11-09 09:44'
-updated_date: '2026-11-09 12:53'
+updated_date: '2026-11-09 13:02'
 labels: []
 dependencies: []
 references:
@@ -47,6 +47,8 @@ SEQUENCING NOTE for whoever executes: the interaction-model + 17-locale tail is 
 2026-11-09 UNIT 1 SHIPPED (commits ef4d81f0 + 10809f92 on main, pushed): LyricsAssBuilder + 11 test facts. Gates: build 0 warnings both TFMs; full suite 6149/6149 per TFM; /simplify 3-agent battery (all actionable applied); code-review HIGH ran TWICE (round 2 on the unit delta: 5 findings ALL applied: libass \N/\n/\h specials flattened, newline-flatten pin, spike-report branch named in the doc, duplicate-Start tie pinned, this plan's fact count corrected 7->8->11). The plan note's '7 facts' was a pre-landing count; the shipped file has 11.
 
 2026-11-09 UNITS 2-4 SHIPPED (commit c6b61c96 on main, pushed): ShowLyricsIntentHandler (4 legs + capability screen tell via the chokepoint), GetLyricsStreamUrl on PlaybackLaunchBuilder (one-builder-per-route), StreamLyricsHls endpoint (per-dir serialize slot, ass written inside the serialized region, wait-for-first-segment, absolute segment URIs, ulong hash parse, CA3003 pragmas, ct forwarded), 17 locale strings, 17 templates + regenerated models, NLU fixture rows ADDED for all 17 locales (17 ShowLyricsIntent rows committed). Suite 6154/6154 per TFM. /simplify battery on the complete delta: PENDING (3 agents in flight). code-review high round 2 on the complete delta: PENDING. Then deploy + on-device verify + NLU validation.
+
+2026-11-09 DEPLOYED + VERIFIED: the complete JF-926 feature deployed to minix (DLL md5 verified, config intact, plugin loaded v1.0.2.2). Regression: simulator play path clean. Remaining: the maintainer tests the lyrics view on the Show (chiedi i testi mentre suona una canzone); the UPnP PR from Tergin87 stays tracked (issue #43 + cron). Catalog users get everything in the next tagged release (1.0.2.2 shipped WITHOUT the lyrics feature: it rides 1.0.2.3/1.0.3.0 whenever cut).
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done
