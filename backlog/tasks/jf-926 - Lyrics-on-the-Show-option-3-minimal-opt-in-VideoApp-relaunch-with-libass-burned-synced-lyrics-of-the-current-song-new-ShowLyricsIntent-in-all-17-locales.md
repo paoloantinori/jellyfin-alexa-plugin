@@ -7,7 +7,7 @@ title: >-
 status: In Progress
 assignee: []
 created_date: '2026-11-09 09:44'
-updated_date: '2026-11-09 11:06'
+updated_date: '2026-11-09 12:53'
 labels: []
 dependencies: []
 references:
@@ -37,12 +37,16 @@ SEQUENCING NOTE for whoever executes: the interaction-model + 17-locale tail is 
 
 <!-- SECTION:PLAN:BEGIN -->
 2026-11-09 UNIT 1 LANDED (working tree, uncommitted until review battery returns): Alexa/Playback/LyricsAssBuilder.cs (the ONE LyricLine list -> ASS converter; refusal contract <2 synced lines; the spike-verified style block pinned byte-identical by a test) + LyricsAssBuilderTests.cs (7 facts green on BOTH TFMs: windows+last-line 5s tail, unsynced refusal, mixed-sync skip, ASS brace escaping, hour rollover, style pin). Two real bugs caught by the tests themselves and fixed in the builder: hours divisor was 3_600_000 (correct 360_000 cs) and the tail was 5_000_000 ticks (correct 50_000_000 = 5s). /simplify 3-agent battery dispatched on this unit. NEXT UNITS: (2) ShowLyricsIntentHandler + IntentNames + pipeline registration + 17 response strings; (3) the lyrics render endpoint (VideoAudioController additive action: on-first-fetch gated encode, cache dir {guid}_lyrics_{hash}, segments served by the EXISTING GetSegment: FindSegmentPath resolves by GUID-prefix so a {guid}_lyrics_* dir is found; playlist = VOD with ENDLIST, JF-309 token embedded); (4) 17 YAML templates + regenerate + NLU fixtures; (5) full gates + deploy + on-device verify.
+
+2026-11-09 UNITS 2-3 LANDED (COMMITTED as part of c6b61c96; the /simplify battery + code-review high ran on the COMPLETE feature delta afterwards): ShowLyricsIntentHandler (namespace Alexa.Handler, Intent folder) with the four legs (nothing playing -> NoMediaPlaying, non-Audio/no-synced -> LyricsNoSynced, screenless -> the chokepoint's VideoRequiresScreen, happy -> VideoApp launch at the lyrics URL with the announce naming the song); IntentNames.ShowLyricsIntent; ILyricManager ctor-injected into VideoAudioController (optional param, older DI roots pass null); the StreamLyricsHls endpoint (gated encode into {guid}_lyrics_{hash}, ass written to the cache dir, VOD playlist with ENDLIST, segment lines rewritten onto the generic segment route with the token riding, CA3003 pragmas mirrored, cancellation forwarded to the gated encode). Handler tests 5 facts green (nothing-playing, unsynced tell, happy path URL+directive+null-SES, screenless chokepoint tell, CanHandle). Suite 6154/6154 per TFM; build 0 warnings. NOTE: handler tests use ResolveCurrentPlayingItem via Launch collaborator with queueManager: null. NEXT: /simplify findings, code-review high, NLU fixture rows, commit, deploy, on-device verify.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
 2026-11-09 UNIT 1 SHIPPED (commits ef4d81f0 + 10809f92 on main, pushed): LyricsAssBuilder + 11 test facts. Gates: build 0 warnings both TFMs; full suite 6149/6149 per TFM; /simplify 3-agent battery (all actionable applied); code-review HIGH ran TWICE (round 2 on the unit delta: 5 findings ALL applied: libass \N/\n/\h specials flattened, newline-flatten pin, spike-report branch named in the doc, duplicate-Start tie pinned, this plan's fact count corrected 7->8->11). The plan note's '7 facts' was a pre-landing count; the shipped file has 11.
+
+2026-11-09 UNITS 2-4 SHIPPED (commit c6b61c96 on main, pushed): ShowLyricsIntentHandler (4 legs + capability screen tell via the chokepoint), GetLyricsStreamUrl on PlaybackLaunchBuilder (one-builder-per-route), StreamLyricsHls endpoint (per-dir serialize slot, ass written inside the serialized region, wait-for-first-segment, absolute segment URIs, ulong hash parse, CA3003 pragmas, ct forwarded), 17 locale strings, 17 templates + regenerated models, NLU fixture rows ADDED for all 17 locales (17 ShowLyricsIntent rows committed). Suite 6154/6154 per TFM. /simplify battery on the complete delta: PENDING (3 agents in flight). code-review high round 2 on the complete delta: PENDING. Then deploy + on-device verify + NLU validation.
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done
