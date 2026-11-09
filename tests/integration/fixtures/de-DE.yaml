@@ -529,3 +529,11 @@ tests:
   - utterance: "nächstes Lied"
     expected_intent: AMAZON.NextIntent
     expected_slots: {}
+
+  # -------------------------------------------------------------------------
+  # JF-926: the opt-in burned-in lyrics view (ShowLyricsIntentHandler).
+  # -------------------------------------------------------------------------
+  - utterance: "zeig den Songtext"
+    expected_intent: ShowLyricsIntent
+    expected_slots: {}
+

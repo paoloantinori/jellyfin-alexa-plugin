@@ -258,3 +258,11 @@ tests:
   - utterance: "कतार लूप करो"
     expected_intent: LoopAllOnIntent
     expected_slots: {}
+
+  # -------------------------------------------------------------------------
+  # JF-926: the opt-in burned-in lyrics view (ShowLyricsIntentHandler).
+  # -------------------------------------------------------------------------
+  - utterance: "गाने के बोल दिखाओ"
+    expected_intent: ShowLyricsIntent
+    expected_slots: {}
+

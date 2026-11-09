@@ -152,3 +152,11 @@ tests:
   - utterance: "om de wachtrij te herhalen"
     expected_intent: LoopAllOnIntent
     expected_slots: {}
+
+  # -------------------------------------------------------------------------
+  # JF-926: the opt-in burned-in lyrics view (ShowLyricsIntentHandler).
+  # -------------------------------------------------------------------------
+  - utterance: "toon de songtekst"
+    expected_intent: ShowLyricsIntent
+    expected_slots: {}
+

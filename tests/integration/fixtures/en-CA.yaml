@@ -439,3 +439,11 @@ tests:
   - utterance: "to repeat the queue"
     expected_intent: LoopAllOnIntent
     expected_slots: {}
+
+  # -------------------------------------------------------------------------
+  # JF-926: the opt-in burned-in lyrics view (ShowLyricsIntentHandler).
+  # -------------------------------------------------------------------------
+  - utterance: "show the lyrics"
+    expected_intent: ShowLyricsIntent
+    expected_slots: {}
+

@@ -537,3 +537,11 @@ tests:
   - utterance: "chanson suivante"
     expected_intent: ShowMoreIntent
     expected_slots: {}
+
+  # -------------------------------------------------------------------------
+  # JF-926: the opt-in burned-in lyrics view (ShowLyricsIntentHandler).
+  # -------------------------------------------------------------------------
+  - utterance: "affiche les paroles"
+    expected_intent: ShowLyricsIntent
+    expected_slots: {}
+

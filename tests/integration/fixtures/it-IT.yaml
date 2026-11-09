@@ -1947,3 +1947,15 @@ tests:
   - utterance: "mostrami le mie foto"
     expected_intent: ShowPhotoAlbumIntent
     expected_slots: {}
+
+  # -------------------------------------------------------------------------
+  # JF-926: the opt-in burned-in lyrics view (ShowLyricsIntentHandler).
+  # -------------------------------------------------------------------------
+  - utterance: "mostra i testi"
+    expected_intent: ShowLyricsIntent
+    expected_slots: {}
+
+  - utterance: "leggi il testo"
+    expected_intent: ShowLyricsIntent
+    expected_slots: {}
+

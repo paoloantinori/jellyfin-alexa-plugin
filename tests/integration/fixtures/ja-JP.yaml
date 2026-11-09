@@ -190,3 +190,11 @@ tests:
   - utterance: "キューをループして"
     expected_intent: LoopAllOnIntent
     expected_slots: {}
+
+  # -------------------------------------------------------------------------
+  # JF-926: the opt-in burned-in lyrics view (ShowLyricsIntentHandler).
+  # -------------------------------------------------------------------------
+  - utterance: "歌詞を表示して"
+    expected_intent: ShowLyricsIntent
+    expected_slots: {}
+
