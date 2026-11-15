@@ -1300,13 +1300,31 @@ public sealed class AlbumPlayService
         // and disagree with the stored order) is answered by REUSING the snapshot,
         // never re-deriving it.
         string deviceId = context.System.Device.DeviceID;
-        List<string> idList = playlistItems.Select(i => i.Id.ToString()).ToList();
         BaseItem? firstItem;
         Playback.PendingShuffledQueue? pendingShuffle = null;
 
         if (shuffle && queueManager != null)
         {
-            pendingShuffle = queueManager.DeriveShuffledQueue(idList, rng);
+            // JF-927 (issue #44): the shuffle snapshot derives from the FULL
+            // playlist, never the progressive window. The committed shuffled
+            // queue IS the whole play order; deriving from the window committed
+            // a five-song shuffle and let the continuation append every later
+            // track in SOURCE order, so "shuffle the playlist" played five
+            // random songs then the rest unshuffled.
+            // DEDUPED, first occurrence wins (review finding 1): the queue
+            // advance resolves the current item by FIRST-match index
+            // (SessionQueue.IndexOfQueueItem), so a duplicate id in the queue
+            // makes the second occurrence resolve to the first's position and
+            // cycles the inter-duplicate segment forever. Deduping matches the
+            // continuation family's own "already queued" semantics (the
+            // AppendUnseen/IdSet doctrine) and the pre-fix effective behavior
+            // for beyond-window copies, which the continuation path deduped.
+            var seenIds = new HashSet<Guid>();
+            List<string> fullIdList = allTracks
+                .Where(t => seenIds.Add(t.Id))
+                .Select(t => t.Id.ToString())
+                .ToList();
+            pendingShuffle = queueManager.DeriveShuffledQueue(fullIdList, rng);
             firstItem = libraryManager.GetItemById(Guid.Parse(pendingShuffle.FirstItemId));
         }
         else
@@ -1323,10 +1341,16 @@ public sealed class AlbumPlayService
 
         _logger.LogDebug(
             "PlayPlaylist: returning AudioPlayer, itemId={ItemId}, playlist='{PlaylistName}', queueSize={QueueSize}",
-            item_id, playlist.Name, queueItems.Count);
+            item_id, playlist.Name, pendingShuffle != null ? totalCount : queueItems.Count);
         SkillResponse response = _launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, _launch.GetStreamUrl(item_id, user), item_id, firstItem, user, context);
 
-        session.NowPlayingQueue = queueItems;  // ordered, so MirrorQueueToSession can read track metadata
+        // The ordered arm seeds the window items; the shuffle arm seeds metadata
+        // for the FULL list, so the mirror below preserves PlaylistItemId on
+        // every entry (the mirror's fresh-item branch would otherwise mint bare
+        // items for every track beyond the window; review finding 3).
+        session.NowPlayingQueue = pendingShuffle != null
+            ? allTracks.Select(t => new QueueItem { Id = t.Id, PlaylistItemId = playlist.Id.ToString() }).ToList()
+            : queueItems;
         session.FullNowPlayingItem = firstItem;
 
         if (pendingShuffle != null)
@@ -1356,13 +1380,21 @@ public sealed class AlbumPlayService
         }
         else
         {
-            queueManager?.SetQueue(deviceId, idList, 0);
+            queueManager?.SetQueue(deviceId, queueItems.Select(q => q.Id.ToString()).ToList(), 0);
         }
 
-        // Store continuation info so PlaybackNearlyFinished can fetch the rest
-        // (the ONE maybe-more decision; the playlist total is always real, so
-        // the two-int known-total form applies)
-        if (QueueContinuationFetcher.InitialPageHasMore(playlistItems.Count, totalCount))
+        // Continuation lifecycle (JF-927): this launch replaces the device queue
+        // wholesale in BOTH arms, so any stored continuation for this user/device
+        // is stale the moment the replacement lands. Remove it UNCONDITIONALLY
+        // (review finding 2: an ordered play of a playlist that fits one window
+        // previously left the earlier play's entry alive, and the JF-674 gate is
+        // subset-shaped, so a same-tracks playlist could append the OLD source's
+        // tail); then the ordered arm re-seeds from its own window edge. The
+        // shuffle arm never re-seeds: its committed queue is the FULL shuffled
+        // order, already complete, and a seeded continuation would append the
+        // source-order tail after it.
+        QueueContinuationStore.Remove(session.UserId, context.System.Device.DeviceID);
+        if (pendingShuffle == null && QueueContinuationFetcher.InitialPageHasMore(playlistItems.Count, totalCount))
         {
             QueueContinuationStore.Set(
                 session.UserId,
@@ -1378,10 +1410,8 @@ public sealed class AlbumPlayService
                     // Cache the resolved tracks so continuation batches slice this list
                     // instead of re-resolving every linked child on each PlaybackNearlyFinished.
                     CachedTracks = allTracks,
-                    // JF-674: bind the entry to THIS queue page. The shuffle arm
-                    // re-mirrors the session queue into the shuffled order right
-                    // above; the identity is set-shaped, so the ordered capture
-                    // validates against the shuffled install equally.
+                    // JF-674: bind the entry to THIS queue page: the ordered
+                    // capture validates against the ordered install.
                     MintedQueueItemIds = QueueContinuation.QueueIdsOf(queueItems)
                 });
         }

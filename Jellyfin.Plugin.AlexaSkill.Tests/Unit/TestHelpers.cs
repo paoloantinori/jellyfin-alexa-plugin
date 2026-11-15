@@ -1495,9 +1495,10 @@ internal static class TestHelpers
     internal static (Playlist Playlist, List<Audio> Tracks) SetupPlaylist(
         Mock<ILibraryManager> libraryManagerMock,
         Mock<IUserManager> userManagerMock,
-        string name = "road trip songs")
+        string name = "road trip songs",
+        int trackCount = 5)
     {
-        var tracks = Enumerable.Range(0, 5)
+        var tracks = Enumerable.Range(0, trackCount)
             .Select(i => new Audio { Id = Guid.NewGuid(), Name = $"Track {i}", Tags = Array.Empty<string>() })
             .ToList();
 

@@ -93,8 +93,8 @@ public class AlbumPlayServicePlaylistShuffleTests : PluginTestBase
     /// hoist of this class's former private copy: one exact server hit, LinkedChildren
     /// resolving through the stubbed BaseItem statics, the library mock answering ids).
     /// </summary>
-    private (Playlist Playlist, List<Audio> Tracks) SetupPlaylist(string name = "road trip songs")
-        => TestHelpers.SetupPlaylist(_libraryManagerMock, _userManagerMock, name);
+    private (Playlist Playlist, List<Audio> Tracks) SetupPlaylist(string name = "road trip songs", int trackCount = 5)
+        => TestHelpers.SetupPlaylist(_libraryManagerMock, _userManagerMock, name, trackCount);
 
     // ------------------------------------------------------------------
     // Refused shuffle start: the device queue stays untouched
@@ -211,6 +211,255 @@ public class AlbumPlayServicePlaylistShuffleTests : PluginTestBase
         // The builder's last-played ledger (written pre-commit on the swapped
         // manager) survives the queue replacement via CopySurvivingStores (JF-693).
         Assert.Equal(launched.ToString(), queueManager.GetLastPlayedItemId(deviceId));
+    }
+
+    // ------------------------------------------------------------------
+    // JF-927 (issue #44): the shuffle scope is the WHOLE playlist, not the
+    // progressive window
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public async Task PlaylistShuffle_BigPlaylist_ShufflesTheWholeListNotTheWindow()
+    {
+        using var statics = StubBaseItemStatics();
+        var (_, tracks) = SetupPlaylist(trackCount: 12);
+        var config = WorkingConfig();
+        AlbumPlayService svc = CreateService(config);
+
+        var session = TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
+        var context = TestHelpers.CreateTestContext("playlist-shuffle-biglist");
+        string deviceId = context.System.Device.DeviceID!;
+        List<string> orderedIds = tracks.Select(t => t.Id.ToString()).ToList();
+
+        using var queueManager = TestHelpers.CreateDeviceQueueManager("playlist-shuffle-biglist");
+        using var queueScope = TestHelpers.SwapPluginLedgerScope(config, _loggerFactory, queueManager, "playlist-shuffle-biglist");
+
+        SkillResponse response = await svc.BuildPlaylistPlayResponseAsync(
+            _libraryManagerMock.Object,
+            _userManagerMock.Object,
+            queueManager,
+            "road trip songs",
+            context,
+            TestHelpers.CreateTestUser(jellyfinToken: "tok"),
+            session,
+            "en-US",
+            shuffle: true,
+            new Random(42),
+            kanaOrigin: false,
+            CancellationToken.None);
+
+        DeviceQueue q = queueManager.GetQueue(deviceId)!;
+        Assert.NotNull(q);
+
+        // THE JF-927 bar: a 12-track playlist (window 5) commits a 12-entry
+        // shuffled queue. Pre-fix this read 5: the derive call reused the
+        // progressive window's idList, so only the first five songs ever
+        // shuffled and the continuation appended tracks 6..12 in source order.
+        Assert.Equal(12, q.ItemIds.Count);
+        Assert.Equal(orderedIds, q.OriginalItemIds);
+        Assert.Equal(new HashSet<string>(orderedIds), new HashSet<string>(q.ItemIds));
+        Assert.Equal("Shuffle", q.PlaybackOrder);
+
+        // The order must actually BE shuffled: a degenerate identity shuffle
+        // (Fisher-Yates broken to a no-op) would pass every assertion above.
+        // Seed 42 over 12 distinct ids is non-identity with overwhelming
+        // probability, so this pin is deterministic in practice.
+        Assert.NotEqual(orderedIds, q.ItemIds);
+
+        // The launch still builds from the snapshot's first item.
+        Guid launched = Guid.Parse(q.ItemIds[0]);
+        AudioPlayerPlayDirective? directive = TestHelpers.GetPlayDirective(response);
+        Assert.NotNull(directive);
+        Assert.Contains($"/Audio/{launched}/stream", directive.AudioItem.Stream.Url, StringComparison.Ordinal);
+
+        // The session mirror carries the FULL shuffled order.
+        Assert.Equal(12, session.NowPlayingQueue.Count);
+        Assert.Equal(launched, session.NowPlayingQueue[0].Id);
+
+        // The full queue is already complete: no continuation may be seeded for
+        // it (a seeded entry would append the source order's tail after the
+        // shuffled queue on PlaybackNearlyFinished).
+        Assert.Null(QueueContinuationStore.Get(session.UserId, deviceId));
+    }
+
+    [Fact]
+    public async Task PlaylistShuffle_BigPlaylist_ClearsStaleContinuationFromEarlierOrderedPlay()
+    {
+        using var statics = StubBaseItemStatics();
+        SetupPlaylist(trackCount: 12);
+        var config = WorkingConfig();
+        AlbumPlayService svc = CreateService(config);
+
+        var session = TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
+        var context = TestHelpers.CreateTestContext("playlist-shuffle-stale-cont");
+        string deviceId = context.System.Device.DeviceID!;
+
+        using var queueManager = TestHelpers.CreateDeviceQueueManager("playlist-shuffle-stale-cont");
+        using var queueScope = TestHelpers.SwapPluginLedgerScope(config, _loggerFactory, queueManager, "playlist-shuffle-stale-cont");
+
+        // A stale continuation left by an earlier ORDERED play of the same
+        // playlist on the same device: the shuffle launch replaces the queue
+        // wholesale, so the old entry's source-order tail must not survive to
+        // be appended after the shuffled queue.
+        QueueContinuationStore.Set(session.UserId, deviceId, new QueueContinuation
+        {
+            SourceType = "Playlist",
+            StartIndex = 5,
+            TotalCount = 12,
+        });
+
+        await svc.BuildPlaylistPlayResponseAsync(
+            _libraryManagerMock.Object,
+            _userManagerMock.Object,
+            queueManager,
+            "road trip songs",
+            context,
+            TestHelpers.CreateTestUser(jellyfinToken: "tok"),
+            session,
+            "en-US",
+            shuffle: true,
+            new Random(42),
+            kanaOrigin: false,
+            CancellationToken.None);
+
+        Assert.Null(QueueContinuationStore.Get(session.UserId, deviceId));
+    }
+
+    [Fact]
+    public async Task PlaylistOrdered_BigPlaylist_StillWindowsTheQueueAndSeedsContinuation()
+    {
+        using var statics = StubBaseItemStatics();
+        SetupPlaylist(trackCount: 12);
+        var config = WorkingConfig();
+        AlbumPlayService svc = CreateService(config);
+
+        var session = TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
+        var context = TestHelpers.CreateTestContext("playlist-ordered-biglist");
+        string deviceId = context.System.Device.DeviceID!;
+
+        using var queueManager = TestHelpers.CreateDeviceQueueManager("playlist-ordered-biglist");
+        using var queueScope = TestHelpers.SwapPluginLedgerScope(config, _loggerFactory, queueManager, "playlist-ordered-biglist");
+
+        await svc.BuildPlaylistPlayResponseAsync(
+            _libraryManagerMock.Object,
+            _userManagerMock.Object,
+            queueManager,
+            "road trip songs",
+            context,
+            TestHelpers.CreateTestUser(jellyfinToken: "tok"),
+            session,
+            "en-US",
+            shuffle: false,
+            new Random(42),
+            kanaOrigin: false,
+            CancellationToken.None);
+
+        // The ordered arm is UNCHANGED by JF-927: progressive window in the
+        // device queue, continuation seeded from the window edge.
+        DeviceQueue q = queueManager.GetQueue(deviceId)!;
+        Assert.NotNull(q);
+        Assert.Equal(5, q.ItemIds.Count);
+        Assert.Equal("Default", q.PlaybackOrder);
+        QueueContinuation? cont = QueueContinuationStore.Get(session.UserId, deviceId);
+        Assert.NotNull(cont);
+        Assert.Equal(5, cont.StartIndex);
+        Assert.Equal(12, cont.TotalCount);
+    }
+
+    [Fact]
+    public async Task PlaylistShuffle_DuplicateTrackInPlaylist_CommitsEachTrackOnce()
+    {
+        using var statics = StubBaseItemStatics();
+        var (playlist, tracks) = SetupPlaylist(trackCount: 6);
+        // The same track listed twice (PlaylistTrackResolver preserves
+        // duplicates verbatim): a duplicate id in the committed queue would
+        // make the first-match queue advance resolve the second occurrence to
+        // the first's position and cycle the inter-duplicate segment forever
+        // (review finding 1).
+        playlist.LinkedChildren = tracks
+            .Select(t => new LinkedChild { ItemId = t.Id })
+            .Append(new LinkedChild { ItemId = tracks[0].Id })
+            .ToArray();
+        var config = WorkingConfig();
+        AlbumPlayService svc = CreateService(config);
+
+        var session = TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
+        var context = TestHelpers.CreateTestContext("playlist-shuffle-dupe");
+        string deviceId = context.System.Device.DeviceID!;
+        List<string> distinctIds = tracks.Select(t => t.Id.ToString()).ToList();
+
+        using var queueManager = TestHelpers.CreateDeviceQueueManager("playlist-shuffle-dupe");
+        using var queueScope = TestHelpers.SwapPluginLedgerScope(config, _loggerFactory, queueManager, "playlist-shuffle-dupe");
+
+        await svc.BuildPlaylistPlayResponseAsync(
+            _libraryManagerMock.Object,
+            _userManagerMock.Object,
+            queueManager,
+            "road trip songs",
+            context,
+            TestHelpers.CreateTestUser(jellyfinToken: "tok"),
+            session,
+            "en-US",
+            shuffle: true,
+            new Random(42),
+            kanaOrigin: false,
+            CancellationToken.None);
+
+        DeviceQueue q = queueManager.GetQueue(deviceId)!;
+        Assert.NotNull(q);
+
+        // 7 linked children, 6 distinct tracks: the committed shuffle (and its
+        // original-order snapshot) carry each id exactly once.
+        Assert.Equal(6, q.ItemIds.Count);
+        Assert.Equal(distinctIds.Count, q.ItemIds.Distinct().Count());
+        Assert.Equal(new HashSet<string>(distinctIds), new HashSet<string>(q.ItemIds));
+        Assert.All(q.OriginalItemIds, id => Assert.Single(q.OriginalItemIds, o => o == id));
+    }
+
+    [Fact]
+    public async Task PlaylistOrdered_SmallPlaylist_ReplacingTheQueueDropsStaleContinuation()
+    {
+        using var statics = StubBaseItemStatics();
+        SetupPlaylist(trackCount: 3);
+        var config = WorkingConfig();
+        AlbumPlayService svc = CreateService(config);
+
+        var session = TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
+        var context = TestHelpers.CreateTestContext("playlist-ordered-small-stale");
+        string deviceId = context.System.Device.DeviceID!;
+
+        using var queueManager = TestHelpers.CreateDeviceQueueManager("playlist-ordered-small-stale");
+        using var queueScope = TestHelpers.SwapPluginLedgerScope(config, _loggerFactory, queueManager, "playlist-ordered-small-stale");
+
+        // A stale continuation from an EARLIER play of a bigger source: the
+        // small ordered launch replaces the device queue wholesale, so the old
+        // entry must not survive (the JF-674 gate is subset-shaped and cannot
+        // be relied on when the new queue happens to contain the minted ids;
+        // review finding 2).
+        QueueContinuationStore.Set(session.UserId, deviceId, new QueueContinuation
+        {
+            SourceType = "Playlist",
+            StartIndex = 5,
+            TotalCount = 12,
+        });
+
+        await svc.BuildPlaylistPlayResponseAsync(
+            _libraryManagerMock.Object,
+            _userManagerMock.Object,
+            queueManager,
+            "road trip songs",
+            context,
+            TestHelpers.CreateTestUser(jellyfinToken: "tok"),
+            session,
+            "en-US",
+            shuffle: false,
+            new Random(42),
+            kanaOrigin: false,
+            CancellationToken.None);
+
+        // 3 tracks fit one window (no InitialPageHasMore): nothing re-seeds,
+        // and the stale entry is gone rather than left to fire.
+        Assert.Null(QueueContinuationStore.Get(session.UserId, deviceId));
     }
 
     /// <summary>
