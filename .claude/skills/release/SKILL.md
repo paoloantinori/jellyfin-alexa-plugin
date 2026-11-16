@@ -90,6 +90,7 @@ grep '^version:' build.yaml
 dotnet build Jellyfin.Plugin.AlexaSkill.sln -c Release -warnaserror
 python3 scripts/validate_interaction_models.py
 python3 scripts/validate_versions.py   # MUST PASS: props == build.yaml == manifest latest
+python3 scripts/generate_voice_reference.py --check   # MUST PASS: release CI runs this; a new intent not in GROUPS fails the tag (1.1.0.0 first attempt)
 ```
 
 ### 4b. Run tests in a CI-matching container (REQUIRED before tagging)
