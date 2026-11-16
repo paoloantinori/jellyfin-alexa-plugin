@@ -6,6 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-10-31 16:37'
+updated_date: '2026-11-15 14:27'
 labels: []
 dependencies: []
 references:
@@ -35,3 +36,9 @@ Fix directions: (a) the random-play pool (and any music-shaped play path) must e
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-11-15 MECHANISM MAP COMPLETE (investigation agent + orchestrator's independent live probe). PREMISE CONFLICT, SURFACED: the typed music pool CANNOT admit the TvChannel. PlayRandomIntentHandler.cs:106-132 queries IncludeItemTypes=[Audio] exactly (the empty-types case is guarded by the JF-466 early Tell at 117-128, so no untyped query path exists in any 2026 binary); Jellyfin translates IncludeItemTypes to an exact Type-discriminator IN (verified at v10.11.8 + master source), and BaseItemKind.Audio never matches LiveTvChannel. ORCHESTRATOR LIVE PROBE (3 draws x 500, the plugin's exact query shape incl. SortBy=Random, on the live box): 500/500 Audio, zero news/channel items, every draw. The incident logs have rotated (only 2026-11-13+ survive), so the 2026-10-31 pick (corr 4937108b) cannot be re-derived; the entry route stays UNKNOWN (labeled: not reproducible against current code + server; a server-side hiccup that day, mid the VLAN-cut incident, cannot be ruled out). WHAT IS FULLY CODE-VERIFIED (the blast radius, independent of the entry route): (1) the else arm PlayRandomIntentHandler.cs:213-215 launches ANY non-Movie/Episode item via /Audio/{id}/stream?static=true, which for a live source serves an HLS manifest AudioPlayer cannot play; (2) the replay loop: PlaybackLaunchBuilder.cs:2636 RecordLastPlayed writes the ledger on every ReplaceAll build BEFORE any PlaybackStarted, nothing displaces it for a stream that never starts, LaunchRequestHandler.HandleSessionQueueResume (529-566) has NO kind gate and its ResolveAudioLaunchSource (3129-3147) only special-cases Movie/Episode, so the channel replays forever; IsVideoAppLaunchItem (599-602) DOES cover LiveTvChannel but only on the offer/divert paths (491-503), and no resume arm anywhere consults RunTimeTicks. FIX SURFACE (unchanged from the map): one shared predicate beside IsVideoAppLaunchItem (kind LiveTvChannel/LiveTvProgram OR RunTimeTicks null/<=0), consumed at (a) the PlayRandom pick site (skip-and-redraw) and (b) the audio-launch CHOKEPOINT (ResolveAudioLaunchSource or BuildAudioPlayerResponse's RecordLastPlayed), which covers every replay arm at once per the one-chokepoint doctrine; the pick-site guard additionally prevents the poisoning first play. DISPOSITION: fix justified as hardening against the documented masquerade class (PlayRadioIntentHandler.cs:229-230 records a LiveTvChannel persisting MediaType Audio when ChannelType is Radio), NOT as a fix of a reproduced pool bug; maintainer notified of the conflict before implementation.
+<!-- SECTION:NOTES:END -->

@@ -73,7 +73,7 @@ Placeholder legend:
 | `<كلمات من عنوان الأغنية>` | `{titleKeywords}` |
 | `<اسم المستخدم>` | `{username}` |
 
-Complete phrase list (352 phrases across 69 commands):
+Complete phrase list (354 phrases across 70 commands):
 
 #### Play music
 
@@ -496,6 +496,11 @@ Complete phrase list (352 phrases across 69 commands):
 - `ما <أغانٍ أو ألبومات> لدينا لـ <اسم الفنان>`
 - `أعرض <أغانٍ أو ألبومات> لـ <اسم الفنان>`
 
+**Show the lyrics of the current song**
+
+- `اعرض كلمات الأغنية`
+- `أظهر كلمات الأغنية`
+
 #### Browse and discover
 
 **Browse the library**
@@ -674,7 +679,7 @@ Placeholder legend:
 | `<woorden uit de songtitel>` | `{titleKeywords}` |
 | `<gebruikersnaam>` | `{username}` |
 
-Complete phrase list (414 phrases across 69 commands):
+Complete phrase list (417 phrases across 70 commands):
 
 #### Play music
 
@@ -1142,6 +1147,12 @@ Complete phrase list (414 phrases across 69 commands):
 - `welke <nummers of albums> hebben we van <naam van de artiest>`
 - `laat <nummers of albums> zien van <naam van de artiest>`
 
+**Show the lyrics of the current song**
+
+- `laat de tekst zien`
+- `toon de songtekst`
+- `lees de tekst voor`
+
 #### Browse and discover
 
 **Browse the library**
@@ -1336,7 +1347,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (513 phrases across 69 commands):
+Complete phrase list (516 phrases across 70 commands):
 
 #### Play music
 
@@ -1895,6 +1906,12 @@ Complete phrase list (513 phrases across 69 commands):
 - `what <tracks or albums> are available from <artist name>`
 - `show me <tracks or albums> by <artist name>`
 
+**Show the lyrics of the current song**
+
+- `show the lyrics`
+- `show lyrics`
+- `read the lyrics`
+
 #### Browse and discover
 
 **Browse the library**
@@ -2097,7 +2114,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (515 phrases across 69 commands):
+Complete phrase list (518 phrases across 70 commands):
 
 #### Play music
 
@@ -2662,6 +2679,12 @@ Complete phrase list (515 phrases across 69 commands):
 - `what <tracks or albums> are available from <artist name>`
 - `show me <tracks or albums> by <artist name>`
 
+**Show the lyrics of the current song**
+
+- `show the lyrics`
+- `show lyrics`
+- `read the lyrics`
+
 #### Browse and discover
 
 **Browse the library**
@@ -2860,7 +2883,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (602 phrases across 69 commands):
+Complete phrase list (605 phrases across 70 commands):
 
 #### Play music
 
@@ -3505,6 +3528,12 @@ Complete phrase list (602 phrases across 69 commands):
 - `what <tracks or albums> are available from <artist name>`
 - `show me <tracks or albums> by <artist name>`
 
+**Show the lyrics of the current song**
+
+- `show the lyrics`
+- `show lyrics`
+- `read the lyrics`
+
 #### Browse and discover
 
 **Browse the library**
@@ -3710,7 +3739,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (517 phrases across 69 commands):
+Complete phrase list (520 phrases across 70 commands):
 
 #### Play music
 
@@ -4275,6 +4304,12 @@ Complete phrase list (517 phrases across 69 commands):
 - `what <tracks or albums> are available from <artist name>`
 - `show me <tracks or albums> by <artist name>`
 
+**Show the lyrics of the current song**
+
+- `show the lyrics`
+- `show lyrics`
+- `read the lyrics`
+
 #### Browse and discover
 
 **Browse the library**
@@ -4479,7 +4514,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (774 phrases across 70 commands):
+Complete phrase list (778 phrases across 71 commands):
 
 #### Play music
 
@@ -5283,6 +5318,13 @@ Complete phrase list (774 phrases across 70 commands):
 - `what <tracks or albums> are available from <artist name>`
 - `show me <tracks or albums> by <artist name>`
 
+**Show the lyrics of the current song**
+
+- `show the lyrics`
+- `show lyrics`
+- `read the lyrics`
+- `display the lyrics`
+
 #### Browse and discover
 
 **Browse the library**
@@ -5504,7 +5546,7 @@ Placeholder legend:
 | `<mots du titre de la chanson>` | `{titleKeywords}` |
 | `<nom d'utilisateur>` | `{username}` |
 
-Complete phrase list (479 phrases across 73 commands):
+Complete phrase list (482 phrases across 74 commands):
 
 #### Play music
 
@@ -6056,6 +6098,12 @@ Complete phrase list (479 phrases across 73 commands):
 - `Quelles chansons y a-t-il de <nom de l'artiste>`
 - `Quels albums y a-t-il de <nom de l'artiste>`
 
+**Show the lyrics of the current song**
+
+- `affiche les paroles`
+- `montre les paroles`
+- `lis les paroles`
+
 #### Browse and discover
 
 **Browse the library**
@@ -6243,7 +6291,7 @@ Placeholder legend:
 | `<mots du titre de la chanson>` | `{titleKeywords}` |
 | `<nom d'utilisateur>` | `{username}` |
 
-Complete phrase list (492 phrases across 73 commands):
+Complete phrase list (495 phrases across 74 commands):
 
 #### Play music
 
@@ -6806,6 +6854,12 @@ Complete phrase list (492 phrases across 73 commands):
 - `Quelles chansons y a-t-il de <nom de l'artiste>`
 - `Quels albums y a-t-il de <nom de l'artiste>`
 
+**Show the lyrics of the current song**
+
+- `affiche les paroles`
+- `montre les paroles`
+- `lis les paroles`
+
 #### Browse and discover
 
 **Browse the library**
@@ -6995,7 +7049,7 @@ Placeholder legend:
 | `<Wörter aus dem Songtitel>` | `{titleKeywords}` |
 | `<Benutzername>` | `{username}` |
 
-Complete phrase list (489 phrases across 73 commands):
+Complete phrase list (492 phrases across 74 commands):
 
 #### Play music
 
@@ -7557,6 +7611,12 @@ Complete phrase list (489 phrases across 73 commands):
 - `Welche Titel gibt es von <Name des Künstlers>`
 - `Welche Alben gibt es von <Name des Künstlers>`
 
+**Show the lyrics of the current song**
+
+- `zeig den Songtext`
+- `zeig mir den Songtext`
+- `Songtext anzeigen`
+
 #### Browse and discover
 
 **Browse the library**
@@ -7745,7 +7805,7 @@ Placeholder legend:
 | `<गाने के नाम के शब्द>` | `{titleKeywords}` |
 | `<उपयोगकर्ता का नाम>` | `{username}` |
 
-Complete phrase list (388 phrases across 69 commands):
+Complete phrase list (390 phrases across 70 commands):
 
 #### Play music
 
@@ -8199,6 +8259,11 @@ Complete phrase list (388 phrases across 69 commands):
 - `<कलाकार का नाम> के <गाने या एल्बम> दिखाओ`
 - `<कलाकार का नाम> के कौन से <गाने या एल्बम> हैं`
 
+**Show the lyrics of the current song**
+
+- `बोल दिखाओ`
+- `गाने के बोल दिखाओ`
+
 #### Browse and discover
 
 **Browse the library**
@@ -8383,7 +8448,7 @@ Placeholder legend:
 | `<titolo del video o del film>` | `{title}` |
 | `<parole del titolo del brano>` | `{titleKeywords}` |
 
-Complete phrase list (1685 phrases across 74 commands):
+Complete phrase list (1690 phrases across 75 commands):
 
 #### Play music
 
@@ -10107,6 +10172,14 @@ Complete phrase list (1685 phrases across 74 commands):
 - `Che <brani o album> abbiamo di <nome dell'artista>`
 - `Mostra <brani o album> di <nome dell'artista>`
 
+**Show the lyrics of the current song**
+
+- `mostra i testi`
+- `mostra il testo`
+- `leggi i testi`
+- `leggi il testo`
+- `vedi i testi`
+
 #### Browse and discover
 
 **Browse the library**
@@ -10335,7 +10408,7 @@ Placeholder legend:
 | `<曲名のキーワード>` | `{titleKeywords}` |
 | `<ユーザー名>` | `{username}` |
 
-Complete phrase list (346 phrases across 69 commands):
+Complete phrase list (348 phrases across 70 commands):
 
 #### Play music
 
@@ -10751,6 +10824,11 @@ Complete phrase list (346 phrases across 69 commands):
 - `<アーティスト名> の <トラックまたはアルバム> を見せて`
 - `<アーティスト名> の <トラックまたはアルバム> は何がある`
 
+**Show the lyrics of the current song**
+
+- `歌詞を表示して`
+- `歌詞を見せて`
+
 #### Browse and discover
 
 **Browse the library**
@@ -10930,7 +11008,7 @@ Placeholder legend:
 | `<palavras do título da música>` | `{titleKeywords}` |
 | `<nome do usuário>` | `{username}` |
 
-Complete phrase list (422 phrases across 69 commands):
+Complete phrase list (425 phrases across 70 commands):
 
 #### Play music
 
@@ -11409,6 +11487,12 @@ Complete phrase list (422 phrases across 69 commands):
 - `quais <faixas ou álbuns> temos de <nome do artista>`
 - `mostrar <faixas ou álbuns> de <nome do artista>`
 
+**Show the lyrics of the current song**
+
+- `mostra a letra`
+- `exibe a letra`
+- `leia a letra`
+
 #### Browse and discover
 
 **Browse the library**
@@ -11600,7 +11684,7 @@ Placeholder legend:
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (482 phrases across 69 commands):
+Complete phrase list (485 phrases across 70 commands):
 
 #### Play music
 
@@ -12138,6 +12222,12 @@ Complete phrase list (482 phrases across 69 commands):
 - `Qué canciones hay de <nombre del artista>`
 - `Qué álbumes hay de <nombre del artista>`
 
+**Show the lyrics of the current song**
+
+- `muestra la letra`
+- `enséñame la letra`
+- `lee la letra`
+
 #### Browse and discover
 
 **Browse the library**
@@ -12330,7 +12420,7 @@ Placeholder legend:
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (481 phrases across 69 commands):
+Complete phrase list (484 phrases across 70 commands):
 
 #### Play music
 
@@ -12869,6 +12959,12 @@ Complete phrase list (481 phrases across 69 commands):
 - `Qué canciones hay de <nombre del artista>`
 - `Qué álbumes hay de <nombre del artista>`
 
+**Show the lyrics of the current song**
+
+- `muestra la letra`
+- `enséñame la letra`
+- `lee la letra`
+
 #### Browse and discover
 
 **Browse the library**
@@ -13059,7 +13155,7 @@ Placeholder legend:
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (471 phrases across 69 commands):
+Complete phrase list (474 phrases across 70 commands):
 
 #### Play music
 
@@ -13591,6 +13687,12 @@ Complete phrase list (471 phrases across 69 commands):
 - `Qué canciones hay de <nombre del artista>`
 - `Qué álbumes hay de <nombre del artista>`
 
+**Show the lyrics of the current song**
+
+- `muestra la letra`
+- `enséñame la letra`
+- `lee la letra`
+
 #### Browse and discover
 
 **Browse the library**
@@ -13781,6 +13883,7 @@ The body above is user-facing and never names intents or handlers. This table ma
 | Favorites | Rate what is playing | `RateItemIntent` |
 | Info and queries | Ask about what is playing | `MediaInfoIntent` |
 | Info and queries | Ask what the library has by an artist | `QueryArtistLibraryIntent` |
+| Info and queries | Show the lyrics of the current song | `ShowLyricsIntent` |
 | Browse and discover | Browse the library | `BrowseLibraryIntent` |
 | Browse and discover | Get a recommendation | `RecommendIntent` |
 | Browse and discover | Ask what is new | `QueryRecentlyAddedIntent` |

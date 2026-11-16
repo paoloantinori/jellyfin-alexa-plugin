@@ -67,6 +67,7 @@ Invocation name: **"jellyfin player"**
 | Search Media | `ابحث عن فيلم {query}` · `ابحث عن محتوى {query}` · `ابحث عن فيديو {query}` · `ابحث عن مسلسل {query}` · `جد فيلم {query}` · `جد محتوى {query}` |
 | Set Playback Speed | `بسرعة {speed}` · `السرعة {speed}` · `اجعل السرعة {speed}` |
 | Set Reminder | `ذكرني بعد {reminder_duration}` · `ذكرني الساعة {reminder_time}` · `اضبط منبها بعد {reminder_duration}` · `اضبط منبها الساعة {reminder_time}` |
+| Show Lyrics | `اعرض كلمات الأغنية` · `أظهر كلمات الأغنية` |
 | Show More | `أظهر المزيد` · `المزيد` · `الصفحة التالية` · `استمر` · `ماذا أيضا` · `المزيد من النتائج` |
 | Show Photo Album | `أرني صوري` · `أرني صور {photoAlbum}` · `اعرض صوري` · `اعرض صور {photoAlbum}` · `افتح صور {photoAlbum}` · `ابدأ عرض شرائح لصوري` |
 | Shuffle Play | `شغل قائمة التشغيل {playlist} بشكل عشوائي` · `اخلط قائمة التشغيل {playlist}` · `شغل قائمة التشغيل {playlist} في وضع الخلط` |
@@ -129,6 +130,7 @@ Invocation name: **"jellyfin player"**
 | Search Media | `Suche nach einem Film {query}` · `Suche nach einem Video {query}` · `Suche nach einer Serie {query}` · `Suche nach Inhalt {query}` · `Finde einen Film {query}` · `Finde einen Inhalt {query}` |
 | Set Playback Speed | `mit geschwindigkeit {speed}` · `geschwindigkeit {speed}` · `setze die geschwindigkeit auf {speed}` · `spiele mit geschwindigkeit {speed}` · `mach {speed}` |
 | Set Reminder | `erinnere mich in {reminder_duration}` · `erinnere mich um {reminder_time}` · `stelle eine erinnerung für {reminder_duration}` · `setze eine erinnerung auf {reminder_time}` |
+| Show Lyrics | `zeig den Songtext` · `zeig mir den Songtext` · `Songtext anzeigen` |
 | Show More | `zeig mehr` · `noch mehr` · `weiter` · `nächste seite` · `mehr ergebnisse` · `was gibt es noch` |
 | Show Photo Album | `zeig meine Fotos` · `zeig Fotos von {photoAlbum}` · `zeig mir meine Fotos` · `zeig die Fotos von {photoAlbum}` · `zeig mir Fotos von {photoAlbum}` · `zeig Fotos aus {photoAlbum}` |
 | Shuffle All Off | `zufallswiedergabe ausschalten` · `zufällige wiedergabe aus` |
@@ -191,6 +193,7 @@ Invocation name: **"jellyfin player"**
 | Search Media | `Search for a movie {query}` · `Search for content {query}` · `Find a movie {query}` · `Find content {query}` · `Look for a movie {query}` · `Look for content {query}` |
 | Set Playback Speed | `at speed {speed}` · `speed {speed}` · `set the speed to {speed}` · `set speed {speed}` · `play at speed {speed}` · `go {speed}` |
 | Set Reminder | `remind me in {reminder_duration}` · `remind me at {reminder_time}` · `set a reminder for {reminder_duration}` · `set a reminder for {reminder_time}` |
+| Show Lyrics | `show the lyrics` · `show lyrics` · `read the lyrics` |
 | Show More | `show more` · `next page` · `more results` · `see more` · `more` · `what else` |
 | Show Photo Album | `show my photos` · `show my {photoAlbum} photos` · `show me my photos` · `show photos of {photoAlbum}` · `show photos from {photoAlbum}` · `show me photos of {photoAlbum}` |
 | Shuffle Play | `shuffle the playlist {playlist}` · `play the playlist {playlist} in shuffle mode` · `play the playlist {playlist} on shuffle` · `play {playlist} shuffled` |
@@ -251,6 +254,7 @@ Invocation name: **"jellyfin player"**
 | Search Media | `Search for a movie {query}` · `Search for content {query}` · `Find a movie {query}` · `Find content {query}` · `Look for a movie {query}` · `Look for content {query}` |
 | Set Playback Speed | `at speed {speed}` · `speed {speed}` · `set the speed to {speed}` · `set speed {speed}` · `play at speed {speed}` · `go {speed}` |
 | Set Reminder | `remind me in {reminder_duration}` · `remind me at {reminder_time}` · `set a reminder for {reminder_duration}` · `set a reminder for {reminder_time}` |
+| Show Lyrics | `show the lyrics` · `show lyrics` · `read the lyrics` |
 | Show More | `show more` · `next page` · `more results` · `see more` · `more` · `what else` |
 | Show Photo Album | `show my photos` · `show my {photoAlbum} photos` · `show me my photos` · `show photos of {photoAlbum}` · `show photos from {photoAlbum}` · `show me photos of {photoAlbum}` |
 | Shuffle Play | `shuffle the playlist {playlist}` · `play the playlist {playlist} in shuffle mode` · `play the playlist {playlist} on shuffle` · `play {playlist} shuffled` |
@@ -311,6 +315,7 @@ Invocation name: **"jellyfin player"**
 | Search Media | `Search for a movie {query}` · `Search for content {query}` · `Find a movie {query}` · `Find content {query}` · `Look for a movie {query}` · `Look for content {query}` |
 | Set Playback Speed | `at speed {speed}` · `speed {speed}` · `set the speed to {speed}` · `set speed {speed}` · `play at speed {speed}` · `go {speed}` |
 | Set Reminder | `remind me in {reminder_duration}` · `remind me at {reminder_time}` · `set a reminder for {reminder_duration}` · `set a reminder for {reminder_time}` |
+| Show Lyrics | `show the lyrics` · `show lyrics` · `read the lyrics` |
 | Show More | `show more` · `next page` · `more results` · `see more` · `more` · `what else` |
 | Show Photo Album | `show my photos` · `show my {photoAlbum} photos` · `show me my photos` · `show photos of {photoAlbum}` · `show photos from {photoAlbum}` · `show me photos of {photoAlbum}` |
 | Shuffle Play | `shuffle the playlist {playlist}` · `play the playlist {playlist} in shuffle mode` · `play the playlist {playlist} on shuffle` · `play {playlist} shuffled` |
@@ -371,6 +376,7 @@ Invocation name: **"jellyfin player"**
 | Search Media | `Search for a movie {query}` · `Search for content {query}` · `Find a movie {query}` · `Find content {query}` · `Look for a movie {query}` · `Look for content {query}` |
 | Set Playback Speed | `at speed {speed}` · `speed {speed}` · `set the speed to {speed}` · `set speed {speed}` · `play at speed {speed}` · `go {speed}` |
 | Set Reminder | `remind me in {reminder_duration}` · `remind me at {reminder_time}` · `set a reminder for {reminder_duration}` · `set a reminder for {reminder_time}` |
+| Show Lyrics | `show the lyrics` · `show lyrics` · `read the lyrics` |
 | Show More | `show more` · `next page` · `more results` · `see more` · `more` · `what else` |
 | Show Photo Album | `show my photos` · `show my {photoAlbum} photos` · `show me my photos` · `show photos of {photoAlbum}` · `show photos from {photoAlbum}` · `show me photos of {photoAlbum}` |
 | Shuffle Play | `shuffle the playlist {playlist}` · `play the playlist {playlist} in shuffle mode` · `play the playlist {playlist} on shuffle` · `play {playlist} shuffled` |
@@ -432,6 +438,7 @@ Invocation name: **"jellyfin player"**
 | Search Media | `Search for a movie {query}` · `Search for content {query}` · `Find a movie {query}` · `Find content {query}` · `Look for a movie {query}` · `Look for content {query}` |
 | Set Playback Speed | `at speed {speed}` · `speed {speed}` · `set the speed to {speed}` · `set speed {speed}` · `play at speed {speed}` · `go {speed}` |
 | Set Reminder | `remind me in {reminder_duration}` · `remind me at {reminder_time}` · `set a reminder for {reminder_duration}` · `set a reminder for {reminder_time}` |
+| Show Lyrics | `show the lyrics` · `show lyrics` · `read the lyrics` · `display the lyrics` |
 | Show More | `show more` · `next page` · `more results` · `see more` · `more` · `what else` |
 | Show Photo Album | `show my photos` · `show my {photoAlbum} photos` · `show me my photos` · `show photos of {photoAlbum}` · `show photos from {photoAlbum}` · `show me photos of {photoAlbum}` |
 | Shuffle Play | `shuffle the playlist {playlist}` · `play the playlist {playlist} in shuffle mode` · `play the playlist {playlist} on shuffle` · `play {playlist} shuffled` |
@@ -492,6 +499,7 @@ Invocation name: **"jellyfin player"**
 | Search Media | `Busca una película {query}` · `Busca un video {query}` · `Busca una serie {query}` · `Busca contenido {query}` · `Encuentra una película {query}` · `Encuentra contenido {query}` |
 | Set Playback Speed | `a velocidad {speed}` · `velocidad {speed}` · `pon la velocidad en {speed}` · `reproduce a velocidad {speed}` · `pon {speed}` |
 | Set Reminder | `recuérdame en {reminder_duration}` · `recuérdame a las {reminder_time}` · `pon un recordatorio de {reminder_duration}` · `crea un recordatorio para las {reminder_time}` |
+| Show Lyrics | `muestra la letra` · `enséñame la letra` · `lee la letra` |
 | Show More | `mostrar más` · `más resultados` · `siguiente` · `continúa` · `qué más` · `ver más` |
 | Show Photo Album | `muestra mis fotos` · `muestra fotos de {photoAlbum}` · `muéstrame mis fotos` · `muestra las fotos de {photoAlbum}` · `muéstrame las fotos de {photoAlbum}` · `abre las fotos de {photoAlbum}` |
 | Shuffle Play | `reproduce la lista {playlist} en modo aleatorio` · `mezcla la lista {playlist}` · `reproduce la lista de reproducción {playlist} en modo aleatorio` |
@@ -552,6 +560,7 @@ Invocation name: **"jellyfin player"**
 | Search Media | `Busca una película {query}` · `Busca un video {query}` · `Busca una serie {query}` · `Busca contenido {query}` · `Encuentra una película {query}` · `Encuentra contenido {query}` |
 | Set Playback Speed | `a velocidad {speed}` · `velocidad {speed}` · `pon la velocidad en {speed}` · `reproduce a velocidad {speed}` · `pon {speed}` |
 | Set Reminder | `recuérdame en {reminder_duration}` · `recuérdame a las {reminder_time}` · `pon un recordatorio de {reminder_duration}` · `crea un recordatorio para las {reminder_time}` |
+| Show Lyrics | `muestra la letra` · `enséñame la letra` · `lee la letra` |
 | Show More | `mostrar más` · `más resultados` · `siguiente` · `continúa` · `qué más` · `ver más` |
 | Show Photo Album | `muestra mis fotos` · `muestra fotos de {photoAlbum}` · `muéstrame mis fotos` · `muestra las fotos de {photoAlbum}` · `muéstrame las fotos de {photoAlbum}` · `abre las fotos de {photoAlbum}` |
 | Shuffle Play | `reproduce la lista {playlist} en modo aleatorio` · `mezcla la lista {playlist}` · `reproduce la lista de reproducción {playlist} en modo aleatorio` |
@@ -612,6 +621,7 @@ Invocation name: **"jellyfin player"**
 | Search Media | `Busca una película {query}` · `Busca un video {query}` · `Busca una serie {query}` · `Busca contenido {query}` · `Encuentra una película {query}` · `Encuentra contenido {query}` |
 | Set Playback Speed | `a velocidad {speed}` · `velocidad {speed}` · `pon la velocidad en {speed}` · `reproduce a velocidad {speed}` · `pon {speed}` |
 | Set Reminder | `recuérdame en {reminder_duration}` · `recuérdame a las {reminder_time}` · `pon un recordatorio de {reminder_duration}` · `crea un recordatorio para las {reminder_time}` |
+| Show Lyrics | `muestra la letra` · `enséñame la letra` · `lee la letra` |
 | Show More | `mostrar más` · `más resultados` · `siguiente` · `continúa` · `qué más` · `ver más` |
 | Show Photo Album | `muestra mis fotos` · `muestra fotos de {photoAlbum}` · `muéstrame mis fotos` · `muestra las fotos de {photoAlbum}` · `muéstrame las fotos de {photoAlbum}` · `abre las fotos de {photoAlbum}` |
 | Shuffle Play | `reproduce la lista {playlist} en modo aleatorio` · `mezcla la lista {playlist}` · `reproduce la lista de reproducción {playlist} en modo aleatorio` |
@@ -674,6 +684,7 @@ Invocation name: **"jellyfin player"**
 | Search Media | `Cherche un film {query}` · `Cherche un contenu {query}` · `Cherche une série {query}` · `Cherche un vidéo {query}` · `Trouve un film {query}` · `Trouve un contenu {query}` |
 | Set Playback Speed | `à vitesse {speed}` · `vitesse {speed}` · `mets la vitesse à {speed}` · `lis à vitesse {speed}` · `mets {speed}` |
 | Set Reminder | `rappelle-moi dans {reminder_duration}` · `rappelle-moi à {reminder_time}` · `mets un rappel de {reminder_duration}` · `crée un rappel pour {reminder_time}` |
+| Show Lyrics | `affiche les paroles` · `montre les paroles` · `lis les paroles` |
 | Show More | `montre plus` · `encore` · `plus de résultats` · `continuer` · `suivant` · `quoi d'autre` |
 | Show Photo Album | `montre mes photos` · `montre les photos de {photoAlbum}` · `montre-moi mes photos` · `montre-moi les photos de {photoAlbum}` · `affiche les photos de {photoAlbum}` · `ouvre les photos de {photoAlbum}` |
 | Shuffle All Off | `désactive la lecture aléatoire` · `arrête la lecture aléatoire` |
@@ -738,6 +749,7 @@ Invocation name: **"jellyfin player"**
 | Search Media | `Cherche un film {query}` · `Cherche un contenu {query}` · `Cherche une série {query}` · `Cherche un vidéo {query}` · `Trouve un film {query}` · `Trouve un contenu {query}` |
 | Set Playback Speed | `à vitesse {speed}` · `vitesse {speed}` · `mets la vitesse à {speed}` · `lis à vitesse {speed}` · `mets {speed}` |
 | Set Reminder | `rappelle-moi dans {reminder_duration}` · `rappelle-moi à {reminder_time}` · `mets un rappel de {reminder_duration}` · `crée un rappel pour {reminder_time}` |
+| Show Lyrics | `affiche les paroles` · `montre les paroles` · `lis les paroles` |
 | Show More | `montre plus` · `encore` · `plus de résultats` · `continuer` · `suivant` · `quoi d'autre` |
 | Show Photo Album | `montre mes photos` · `montre les photos de {photoAlbum}` · `montre-moi mes photos` · `montre-moi les photos de {photoAlbum}` · `affiche les photos de {photoAlbum}` · `ouvre les photos de {photoAlbum}` |
 | Shuffle All Off | `désactive la lecture aléatoire` · `arrête la lecture aléatoire` |
@@ -800,6 +812,7 @@ Invocation name: **"jellyfin player"**
 | Search Media | `एक फिल्म {query} खोजो` · `कंटेंट {query} खोजो` · `एक वीडियो {query} खोजो` · `एक फिल्म {query} ढूंढो` · `कंटेंट {query} ढूंढो` · `एक वीडियो {query} ढूंढो` |
 | Set Playback Speed | `गति {speed}` · `गति {speed} पर` · `{speed} गति पर` · `{speed} करो` |
 | Set Reminder | `{reminder_duration} में मुझे याद दिलाओ` · `{reminder_time} पर मुझे याद दिलाओ` · `{reminder_duration} का रिमाइंडर सेट करो` · `{reminder_time} का रिमाइंडर सेट करो` |
+| Show Lyrics | `बोल दिखाओ` · `गाने के बोल दिखाओ` |
 | Show More | `और दिखाओ` · `अगला पेज` · `और` · `जारी रखो` · `आगे` · `क्या और है` |
 | Show Photo Album | `मेरी फ़ोटो दिखाओ` · `{photoAlbum} की फ़ोटो दिखाओ` · `मुझे मेरी फ़ोटो दिखाओ` · `{photoAlbum} की तस्वीरें दिखाओ` · `{photoAlbum} का फ़ोटो एल्बम दिखाओ` · `मेरी फ़ोटो की स्लाइडशो शुरू करो` |
 | Shuffle Play | `प्लेलिस्ट {playlist} शफल में चलाओ` · `प्लेलिस्ट {playlist} शफल करो` |
@@ -863,6 +876,7 @@ Invocation name: **"mia collezione"**
 | Search Media | `Cerca il contenuto {query}` · `Cerca un film {query}` · `Cerca un video {query}` · `Cerca una serie {query}` · `Cerca un audiolibro {query}` · `Trova il contenuto {query}` |
 | Set Playback Speed | `a velocità {speed}` · `velocità {speed}` · `imposta la velocità {speed}` · `metti la velocità {speed}` · `riproduci a velocità {speed}` · `vai {speed}` |
 | Set Reminder | `Ricordami tra {reminder_duration}` · `Ricordami alle {reminder_time}` · `Imposta un promemoria tra {reminder_duration}` · `Imposta un promemoria per le {reminder_time}` |
+| Show Lyrics | `mostra i testi` · `mostra il testo` · `leggi i testi` · `leggi il testo` · `vedi i testi` |
 | Show More | `mostra di più` · `altra pagina` · `più risultati` · `vedi altro` · `altro` · `cos'altro` |
 | Show Photo Album | `mostra le mie foto` · `mostra le foto di {photoAlbum}` · `mostrami le mie foto` · `mostra le mie foto di {photoAlbum}` · `mostrami le foto di {photoAlbum}` · `apri le foto di {photoAlbum}` |
 | Shuffle All Off | `Disattiva mescolamento` · `Disattiva il casuale` · `Disattiva il mescolamento` · `Ripristina l'ordine della coda` · `disattivare il mescolamento` · `Di disattivare il mescolamento` |
@@ -925,6 +939,7 @@ Invocation name: **"jellyfin player"**
 | Search Media | `映画 {query} を検索して` · `コンテンツ {query} を検索して` · `ビデオ {query} を検索して` · `映画 {query} を見つけて` · `コンテンツ {query} を見つけて` · `映画 {query} を探して` |
 | Set Playback Speed | `速度 {speed}` · `速度を {speed} にして` · `再生速度 {speed}` · `{speed} にして` |
 | Set Reminder | `{reminder_duration} 後にリマインドして` · `{reminder_time} にリマインドして` · `{reminder_duration} のリマインダーを設定して` · `{reminder_time} のリマインダーを設定して` |
+| Show Lyrics | `歌詞を表示して` · `歌詞を見せて` |
 | Show More | `もっと見せて` · `次のページ` · `もっと` · `続き` · `他に何がある` · `もっと結果` |
 | Show Photo Album | `写真を見せて` · `{photoAlbum} の写真を見せて` · `私の写真を見せて` · `{photoAlbum} のフォトアルバムを見せて` · `{photoAlbum} の写真を表示して` · `スライドショーを始めて` |
 | Shuffle Play | `プレイリスト {playlist} をシャッフルで再生して` · `シャッフルでプレイリスト {playlist} を再生して` |
@@ -985,6 +1000,7 @@ Invocation name: **"jellyfin player"**
 | Search Media | `zoek naar een film {query}` · `zoek naar content {query}` · `zoek naar een video {query}` · `zoek naar een serie {query}` · `vind een film {query}` · `vind content {query}` |
 | Set Playback Speed | `op snelheid {speed}` · `snelheid {speed}` · `zet de snelheid op {speed}` · `speel op snelheid {speed}` · `speel {speed}` |
 | Set Reminder | `herinner me over {reminder_duration}` · `herinner me om {reminder_time}` · `stel een herinnering in voor {reminder_duration}` · `zet een herinnering op {reminder_time}` |
+| Show Lyrics | `laat de tekst zien` · `toon de songtekst` · `lees de tekst voor` |
 | Show More | `toon meer` · `meer resultaten` · `volgende` · `doorgaan` · `wat nog meer` · `meer` |
 | Show Photo Album | `toon mijn foto's` · `toon foto's van {photoAlbum}` · `laat mijn foto's zien` · `toon de foto's van {photoAlbum}` · `laat de foto's van {photoAlbum} zien` · `open de foto's van {photoAlbum}` |
 | Shuffle Play | `speel de playlist {playlist} in willekeurige volgorde` · `shuffle de playlist {playlist}` |
@@ -1045,6 +1061,7 @@ Invocation name: **"jellyfin player"**
 | Search Media | `procurar um filme {query}` · `procurar conteúdo {query}` · `procurar um vídeo {query}` · `procurar uma série {query}` · `encontrar um filme {query}` · `encontrar conteúdo {query}` |
 | Set Playback Speed | `a velocidade {speed}` · `velocidade {speed}` · `põe a velocidade em {speed}` · `toca a velocidade {speed}` · `põe {speed}` |
 | Set Reminder | `me lembre em {reminder_duration}` · `me lembre às {reminder_time}` · `crie um lembrete de {reminder_duration}` · `crie um lembrete para as {reminder_time}` |
+| Show Lyrics | `mostra a letra` · `exibe a letra` · `leia a letra` |
 | Show More | `mostrar mais` · `mais resultados` · `próximo` · `continuar` · `o que mais` · `ver mais` |
 | Show Photo Album | `mostra minhas fotos` · `mostra fotos de {photoAlbum}` · `me mostra minhas fotos` · `mostra as fotos de {photoAlbum}` · `me mostra as fotos de {photoAlbum}` · `abre as fotos de {photoAlbum}` |
 | Shuffle Play | `toque a playlist {playlist} em modo aleatório` · `embaralhe a playlist {playlist}` |

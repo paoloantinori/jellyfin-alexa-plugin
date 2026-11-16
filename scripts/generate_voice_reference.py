@@ -161,6 +161,8 @@ GROUPS = [
     ("Info and queries", [
         ("MediaInfoIntent", "Ask about what is playing", False),
         ("QueryArtistLibraryIntent", "Ask what the library has by an artist", False),
+        # JF-926: the opt-in lyrics view (screen devices; needs synced lrc).
+        ("ShowLyricsIntent", "Show the lyrics of the current song", False),
     ]),
     ("Browse and discover", [
         ("BrowseLibraryIntent", "Browse the library", False),

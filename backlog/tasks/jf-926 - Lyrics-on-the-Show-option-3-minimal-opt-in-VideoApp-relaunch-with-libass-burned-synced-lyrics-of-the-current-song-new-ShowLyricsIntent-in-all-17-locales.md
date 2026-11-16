@@ -7,7 +7,7 @@ title: >-
 status: In Progress
 assignee: []
 created_date: '2026-11-09 09:44'
-updated_date: '2026-11-09 13:02'
+updated_date: '2026-11-09 19:41'
 labels: []
 dependencies: []
 references:
@@ -49,6 +49,10 @@ SEQUENCING NOTE for whoever executes: the interaction-model + 17-locale tail is 
 2026-11-09 UNITS 2-4 SHIPPED (commit c6b61c96 on main, pushed): ShowLyricsIntentHandler (4 legs + capability screen tell via the chokepoint), GetLyricsStreamUrl on PlaybackLaunchBuilder (one-builder-per-route), StreamLyricsHls endpoint (per-dir serialize slot, ass written inside the serialized region, wait-for-first-segment, absolute segment URIs, ulong hash parse, CA3003 pragmas, ct forwarded), 17 locale strings, 17 templates + regenerated models, NLU fixture rows ADDED for all 17 locales (17 ShowLyricsIntent rows committed). Suite 6154/6154 per TFM. /simplify battery on the complete delta: PENDING (3 agents in flight). code-review high round 2 on the complete delta: PENDING. Then deploy + on-device verify + NLU validation.
 
 2026-11-09 DEPLOYED + VERIFIED: the complete JF-926 feature deployed to minix (DLL md5 verified, config intact, plugin loaded v1.0.2.2). Regression: simulator play path clean. Remaining: the maintainer tests the lyrics view on the Show (chiedi i testi mentre suona una canzone); the UPnP PR from Tergin87 stays tracked (issue #43 + cron). Catalog users get everything in the next tagged release (1.0.2.2 shipped WITHOUT the lyrics feature: it rides 1.0.2.3/1.0.3.0 whenever cut).
+
+2026-11-09 CODE-REVIEW HIGH FIX ROUND (commit b6070c22, deployed+verified same day): the review on the complete feature delta found the lyrics endpoint DEAD ON ARRIVAL twice over: (1) the .ass script was never written to disk (ffmpeg subtitles filter failed at init, 500 on every first fetch); (2) segment URIs rode the generic segment route with the N-form guid while the minted token HMACs the D-form string (401 on every segment). Fixed at family depth: LyricsCacheKey "{itemId}-lyrics" (the JF-636 variant-key precedent, disjoint from the plain generation registration and the restart recency scan) + dedicated GetLyricsSegment route HMACing the same D-form id; ass written inside the per-song serialize slot; verdict INSIDE the slot upgraded to existence + #EXT-X-ENDLIST; proactive copy-vs-transcode via BuildAudioCodecArgs(ResolveSourceAudioCodec(song)) (reactive AAC retry deleted); -hls_base_url makes ffmpeg write absolute URIs; stalled-encode stop via TryKillLiveProcess + DeleteHlsEncodeDebris; serving via the family ServePlaylistWithTokenAsync; handler gates on LyricsAssBuilder.TryBuild itself. /simplify 4-agent battery applied (8 findings folded into family helpers, 2 documented skips). Suite 6154/6154 both TFMs; build 0 warnings. LIVE-VERIFIED on minix after deploy: playlist 200 (0.66s incl. first-fetch encode, ENDLIST, absolute URIs, token riding), segments 200 (h264+mp3, 463KB), no-token 401, frame luma YMAX=240 on black (lyrics burned in), config intact, DLL md5 match. Remaining: the maintainer's on-device Show test; catalog users get it in the next tagged release.
+
+2026-11-09 MODELS DEPLOYED + ROUTING LIVE: the morning deploy had pushed only the DLL; the live models still lacked the ShowLyrics rows (the device test would have failed at NLU). Full 17/17 rebuild via the plugin endpoint (all SUCCEEDED); live model verified carrying the rows (it-IT 5, hi-IN 2) and profile-nlu routing confirmed: it-IT 'mostra i testi' -> ShowLyricsIntent, hi-IN 'बोल दिखाओ' -> ShowLyricsIntent. The device test ('chiedi i testi' while a song plays) is now actually possible. Same rebuild doubled as JF-770's seventh-rebuild data point (anchor still Fallback 4/4, guards green).
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done
