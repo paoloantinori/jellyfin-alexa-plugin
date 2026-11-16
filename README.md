@@ -29,7 +29,7 @@ Play music, videos, playlists, search your library, manage favorites, and more �
 
 <br/>
 
-_Now at version 1.0: works on both Jellyfin 10.11 and Jellyfin 12. Back up your configuration before major updates._
+_Now at version 1.1: works on both Jellyfin 10.11 and Jellyfin 12. Back up your configuration before major updates._
 
 </div>
 
@@ -100,7 +100,7 @@ This plugin is developed with heavy AI assistance and human ownership: a coding 
 
 That is a deliberate choice for this project. The surface a change can break is unusually wide: 17 locale interaction models, two Jellyfin release lines (10.11 and 12), Amazon catalog-backed slot types that gate intent selection, and real-device speech recognition that hears Italian-accented English titles in ways no simulator reproduces. That matrix is too vast to validate the way a narrower domain could be.
 
-What keeps it honest is the verification bar: every change passes the automated test suite (5500+ tests across both target frameworks) and independent review gates, and behavior changes are verified against a real Echo device and the live Jellyfin server before release. The evidence behind the fixes, device logs, probe transcripts, and design decisions with their rationale, is public in the commit history and the task records. When the platform's documented behavior and the device disagree, the device wins, and the finding is recorded.
+What keeps it honest is the verification bar: every change passes the automated test suite (6100+ tests across both target frameworks) and independent review gates, and behavior changes are verified against a real Echo device and the live Jellyfin server before release. The evidence behind the fixes, device logs, probe transcripts, and design decisions with their rationale, is public in the commit history and the task records. When the platform's documented behavior and the device disagree, the device wins, and the finding is recorded.
 
 ### Migrating from the discontinued Plex Alexa skill?
 
@@ -156,6 +156,7 @@ See the [FAQ](#faq) for details and workarounds on each of these.
 - **PostPlay AutoPlay**: when a single song ends and the queue is empty, automatically enqueues similar tracks from your library (configurable per-user or globally)
 
 ### 📺 Echo Show & visuals
+- **Lyrics on screen**: while a song plays, say "show the lyrics" and the current song restarts on the Echo Show with its time-synced lyrics displayed over the music (works for songs that have a synced lyrics file on the server; the skill says so when there is none)
 - **Audiobook seek bar**: multi-chapter audiobooks on Echo Show get a full-book seek bar via HLS concat streaming, with accurate seeking across chapters
 - **APL visual carousel**: browse/search results displayed as tappable image cards on Echo Show devices, with album art and media thumbnails
 - **APL NowPlaying screen**: progress bar with elapsed/total time display on Echo Show devices during audio playback, plus an enriched companion app card showing song, artist, album, and track number
@@ -168,7 +169,7 @@ See the [FAQ](#faq) for details and workarounds on each of these.
 - **Custom interaction models**: deploy your own interaction model via URL for any locale
 
 ### 🌍 Languages
-- **17 locales across 11 languages** (58 intents each): English (5 variants), Spanish (3), French (2), German, Italian, Portuguese, Arabic, Dutch, Hindi, and Japanese
+- **17 locales across 11 languages** (59 custom intents each): English (5 variants), Spanish (3), French (2), German, Italian, Portuguese, Arabic, Dutch, Hindi, and Japanese
 
 ### 🔒 Security
 - **Signed stream tokens**: the video-audio streaming endpoints (used for audiobook HLS, single-song VideoApp, and seek-bar playback) are gated by signed, item-scoped HMAC tokens. Anyone who learns a Jellyfin item GUID cannot stream it without a valid token minted by the skill. Tokens expire after 10 hours.
@@ -210,10 +211,11 @@ Before you begin, you need:
 git clone https://github.com/paoloantinori/jellyfin-alexa-plugin.git
 cd jellyfin-alexa-plugin
 git checkout <version>      # use the latest release tag
-dotnet publish --configuration Release
+dotnet publish Jellyfin.Plugin.AlexaSkill/Jellyfin.Plugin.AlexaSkill.csproj --configuration Release -f net9.0
+dotnet publish Jellyfin.Plugin.AlexaSkill/Jellyfin.Plugin.AlexaSkill.csproj --configuration Release -f net10.0
 ```
 
-Copy the contents of `Jellyfin.Plugin.AlexaSkill/bin/Release/net9.0/publish/` to your Jellyfin `plugins/Jellyfin.Plugin.AlexaSkill/` folder, then restart Jellyfin.
+Copy the contents of the publish folder matching your server (net9.0 for Jellyfin 10.11, net10.0 for Jellyfin 12) to your Jellyfin `plugins/Jellyfin.Plugin.AlexaSkill/` folder, then restart Jellyfin. A solution-level `dotnet publish` without `-f` fails on this dual-target project.
 
 ## Development
 
@@ -441,7 +443,7 @@ The skill supports **17 locales** across **11 languages**, each with full custom
 | Spanish (Mexico) | es-MX | [`model_es-MX.json`](Jellyfin.Plugin.AlexaSkill/Alexa/InteractionModel/model_es-MX.json) |
 | Spanish (US) | es-US | [`model_es-US.json`](Jellyfin.Plugin.AlexaSkill/Alexa/InteractionModel/model_es-US.json) |
 
-Each JSON file contains all 58 intents with locale-specific sample utterances. To see the complete list of voice commands for any language, open the corresponding interaction model file and look at the `samples` arrays within each intent.
+Each JSON file contains all 59 custom intents with locale-specific sample utterances. To see the complete list of voice commands for any language, open the corresponding interaction model file and look at the `samples` arrays within each intent.
 
 For a formatted reference of all voice commands by language, see [VOICE_COMMANDS.md](VOICE_COMMANDS.md). The complete, generated per-locale reference (every sample of every intent, regenerated from the models by `scripts/generate_voice_reference.py`) is [docs/VOICE_COMMANDS_BY_LOCALE.md](docs/VOICE_COMMANDS_BY_LOCALE.md).
 
@@ -584,7 +586,7 @@ That is the intended behavior, not a stuck queue: when you ask for an artist wit
 
 ### Alexa found multiple artists: how do I choose one?
 
-When several artists plausibly match what you said, the skill lists them and asks about the **first** one (for example: *"I found multiple artists: P!nk, Pink Floyd. Shall I play the first one? Say no for the next."*). Say **yes** (or "play it") to play the first artist; say **no** to move to the next name; say **no** past the last one for a clean "no more matches". You can also just say the artist's name again with a carrier word (*"play the band Pink Floyd"*) to route unambiguously.
+When several artists plausibly match what you said, the skill lists them and asks about the **first** one (for example: *"I found multiple artists: P!nk, Pink Floyd. Shall I play the first one? Say no to hear the others."*). Say **yes** (or "play it") to play the first artist; say **no** to move to the next name; say **no** past the last one for a clean "no more matches". You can also just say the artist's name again with a carrier word (*"play the band Pink Floyd"*) to route unambiguously.
 
 ### Why does the skill say it is still preparing right after a restart?
 

@@ -15,7 +15,7 @@ C# Jellyfin plugin exposing an Alexa skill for media playback, search, and libra
 
 ```bash
 dotnet build Jellyfin.Plugin.AlexaSkill.sln
-dotnet test Jellyfin.Plugin.AlexaSkill.Tests          # ~2800 unit tests
+dotnet test Jellyfin.Plugin.AlexaSkill.Tests          # ~6150 unit tests per TFM
 python3 scripts/validate_interaction_models.py        # Check all 17 models (JSON, slots, drift)
 python3 scripts/validate_locales.py                   # Check locale key coverage (baseline-aware)
 python3 scripts/validate_versions.py                  # Check version consistency across files
@@ -92,7 +92,7 @@ GitHub Actions runs the validation/build pipeline on **push to main**, PRs to ma
 
 Plugin source lives under `Jellyfin.Plugin.AlexaSkill/` (the C# project root) — all `Alexa/`, `Configuration/`, and `Controller/` paths below are relative to it. Repo-root paths (`docs/`, `tests/`, `scripts/`, `Directory.Build.props`) have no prefix.
 
-- `Jellyfin.Plugin.AlexaSkill/Alexa/Handler/Intent/` - 61 intent handlers (one per intent, inherit `BaseHandler`)
+- `Jellyfin.Plugin.AlexaSkill/Alexa/Handler/Intent/` - 68 intent handlers (one per intent, inherit `BaseHandler`)
 - `Jellyfin.Plugin.AlexaSkill/Alexa/Handler/BaseHandler.cs` — shared utilities: `HandleFuzzyMiss`, `RetryAsync`, stream URLs, library filters; the search/fuzzy-recall machinery (`FuzzyMatch`, `FuzzyMatchPhonetic`, `SearchItemsFuzzyAsync`, `GetArtistSongsAsync`, ...) lives on the `Search` / SearchService collaborator since JF-315 batch 6
 - `Jellyfin.Plugin.AlexaSkill/Alexa/InteractionModel/` — 17 per-locale interaction model JSONs (`model_*.json`), generated from templates in `Alexa/InteractionModel/templates/`
 - `Jellyfin.Plugin.AlexaSkill/Alexa/Locale/` — Response strings: keys in `ResponseStrings.cs`, values in 17 `<locale>.json` files
@@ -106,7 +106,7 @@ Plugin source lives under `Jellyfin.Plugin.AlexaSkill/` (the C# project root) �
 - `Jellyfin.Plugin.AlexaSkill/Alexa/DynamicEntities/` — Dynamic entity slot updates via SMAPI
 - `Jellyfin.Plugin.AlexaSkill/Alexa/Interface/` — Alexa interface capability detection (APL support, etc.)
 - `Jellyfin.Plugin.AlexaSkill/Alexa/Music/` — Music-specific data models and helpers
-- `Jellyfin.Plugin.AlexaSkill/Alexa/Playback/` — Playback state and progressive queue management
+- `Jellyfin.Plugin.AlexaSkill/Alexa/Playback/`: Playback state and progressive queue management; `LyricsAssBuilder.cs` is the ONE LyricLine→ASS converter behind the opt-in lyrics view (ShowLyricsIntent, JF-926: refuses under two synced lines; the handler and the lyrics HLS endpoint both gate on `TryBuild`, the single definition of "synced enough")
 - `Jellyfin.Plugin.AlexaSkill/Alexa/Util/` — Shared utility classes
 - `Jellyfin.Plugin.AlexaSkill/Alexa/ArtistIndexService.cs` — In-memory artist index with event-driven refresh
 - `Jellyfin.Plugin.AlexaSkill/Alexa/CircuitBreaker.cs` — Circuit breaker for external API resilience
@@ -328,6 +328,8 @@ NLU test fixtures in `tests/integration/fixtures/<locale>.yaml`. NLU tests use t
 
 ## Key Gotchas
 
+- **Playlist shuffle scope (JF-927, issue #44)**: the shuffle arm of `AlbumPlayService.BuildPlaylistPlayResponseAsync` derives its snapshot from the FULL track list, deduped first-occurrence (`PlaylistTrackResolver` preserves duplicates verbatim, and the queue advance resolves the current item by FIRST-match index in `SessionQueue.IndexOfQueueItem`, so a duplicate id in a committed queue cycles the inter-duplicate segment forever); a windowed derive played five songs shuffled then everything else in source order. The continuation lifecycle: BOTH arms `QueueContinuationStore.Remove` unconditionally (every launch replaces the device queue wholesale), then ONLY the ordered arm re-seeds from its window edge; the shuffle arm's committed queue is already complete and must never seed one. Never window a shuffle derive.
+- **This repo is a FORK of `infinityofspace/jellyfin-alexa-plugin`** (the original project; upstream issue #42, opened by the maintainer 2026-05-05 asking about merging, is unanswered). The local gh safety gates redirect fork targets to the parent, so a post to OUR repo needs a fresh read of the UPSTREAM repo's source/issues after every prior outward post, and the session must start with `GH_RESEARCH_GATE_OFF=1` when research genuinely cannot be done.
 - **Stream endpoints**: Audio uses `/Audio/{id}/stream?static=true`, video uses `/Videos/{id}/stream?static=true`. Do NOT use `/Download` — lacks Content-Type and Range headers needed by AudioPlayer.
 - **AMAZON.SearchQuery** cannot coexist with other slot types in the same utterance. Use custom slot types (e.g. `MediaType`) instead.
 - **Slot name consistency**: Same slot name must use same slot type across all intents in a locale.
@@ -652,8 +654,9 @@ The CI workflow (`release-build.yml`) handles building, testing, zipping, creati
 2. **Update `build.yaml` changelog** — this becomes the manifest changelog and GitHub release description
 3. **Add placeholder entry to `manifest.json`** (a new version object with `"checksum": "placeholder"`, `"changelog": "placeholder"`, correct `sourceUrl` and `targetAbi`). The CI replaces checksum and changelog after building the zips and writes BOTH entries: net10 targetAbi 12.0.0.0 first, then the net9 build.yaml targetAbi; the script drops every same-version entry first.
 4. **Run `python3 scripts/validate_versions.py`** — must show all 3 sources match
-5. **Build and test locally**: `dotnet build` (0 warnings) + `dotnet test` (all pass)
-6. **Verify `icon.jpg` exists** at `Jellyfin.Plugin.AlexaSkill/icon.jpg` (the release workflow copies it as `icon.png` into EACH of the two zips)
+5. **Run `python3 scripts/generate_voice_reference.py --check`**: MUST be clean. Release CI runs it, and a new intent missing from the generator's GROUPS fails the tag (the 1.1.0.0 first attempt, 2026-11-16).
+6. **Build and test locally**: `dotnet build` (0 warnings) + `dotnet test` (all pass)
+7. **Verify `icon.jpg` exists** at `Jellyfin.Plugin.AlexaSkill/icon.jpg` (the release workflow copies it as `icon.png` into EACH of the two zips)
 
 **Tag and push:**
 
