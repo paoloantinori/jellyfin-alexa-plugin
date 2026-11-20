@@ -54,10 +54,24 @@ public class PlaybackFailedEventHandler : BaseHandler
         AudioPlayerRequest req = (AudioPlayerRequest)request;
         string deviceId = context.GetDeviceId();
 
+        // Sleep-timer streams carry composite tokens ("{guid}|sleep:{ticks}", minted by
+        // SleepTimerIntentHandler); the shared StreamTokenCodec is the one owner of the
+        // format (JF-447). Anything unparseable yields Guid.Empty so the event handler
+        // still completes and returns the ack Amazon requires.
+        StreamTokenCodec.TryGetItemId(req.Token, out Guid itemId);
+
+        // JF-929: the parsed item id rides {ItemId} (a composite "{guid}|launch:n" token
+        // under ItemId sends triagers grepping Jellyfin for a nonexistent item, the JF-910
+        // class); the raw token stays visible under {Token}. error.type/message come from
+        // the request's Error payload (Alexa.NET renders the enum member name, e.g.
+        // MediaServiceUnavailable; the wire/MEDIA_ERROR_* dual vocabulary is JF-930).
         Logger.LogError(
-            "Playback failed for item {ItemId} at offset {OffsetMs}ms [RequestId={RequestId}, DeviceId={DeviceId}]",
+            "Playback failed for item {ItemId} (token {Token}) at offset {OffsetMs}ms, error {ErrorType}: {ErrorMessage} [RequestId={RequestId}, DeviceId={DeviceId}]",
+            itemId,
             req.Token,
             req.OffsetInMilliseconds,
+            req.Error?.Type.ToString() ?? "UNKNOWN",
+            req.Error?.Message ?? string.Empty,
             request.RequestId,
             deviceId);
 
@@ -69,12 +83,6 @@ public class PlaybackFailedEventHandler : BaseHandler
         {
             (_queueManager ?? Plugin.Instance?.DeviceQueueManager)?.MarkAudioPlaybackStopped(deviceId);
         }
-
-        // Sleep-timer streams carry composite tokens ("{guid}|sleep:{ticks}", minted by
-        // SleepTimerIntentHandler); the shared StreamTokenCodec is the one owner of the
-        // format (JF-447). Anything unparseable yields Guid.Empty so the event handler
-        // still completes and returns the ack Amazon requires.
-        StreamTokenCodec.TryGetItemId(req.Token, out Guid itemId);
 
         PlaybackStopInfo playbackStopInfo = new PlaybackStopInfo
         {

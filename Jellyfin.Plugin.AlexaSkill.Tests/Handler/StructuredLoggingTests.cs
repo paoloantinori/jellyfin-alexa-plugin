@@ -167,6 +167,54 @@ public class StructuredLoggingTests : PluginTestBase
         Assert.Contains("device-def", entry.Message);
     }
 
+    [Fact]
+    public async Task PlaybackFailed_LogsErrorTypeAndMessage()
+    {
+        var factory = CreateCapturingLoggerFactory();
+        var handler = new PlaybackFailedEventHandler(_sessionManagerMock.Object, _config, factory);
+
+        var request = new AudioPlayerRequest
+        {
+            Type = "AudioPlayer.PlaybackFailed",
+            Token = Guid.NewGuid().ToString(),
+            RequestId = "pf-err-001",
+            Error = new Error { Type = ErrorType.MediaServiceUnavailable, Message = "identifier not found" }
+        };
+        var context = CreateContext(deviceId: "pf-err-device");
+
+        await handler.HandleAsync(request, context, TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+
+        var entry = Assert.Single(factory.LogEntries);
+        Assert.Equal(LogLevel.Error, entry.Level);
+        Assert.Contains("MediaServiceUnavailable", entry.Message);
+        Assert.Contains("identifier not found", entry.Message);
+        Assert.Contains("pf-err-001", entry.Message);
+        Assert.Contains("pf-err-device", entry.Message);
+    }
+
+    [Fact]
+    public async Task PlaybackFailed_LogsUnknownWhenErrorAbsent()
+    {
+        var factory = CreateCapturingLoggerFactory();
+        var handler = new PlaybackFailedEventHandler(_sessionManagerMock.Object, _config, factory);
+
+        var request = new AudioPlayerRequest
+        {
+            Type = "AudioPlayer.PlaybackFailed",
+            Token = Guid.NewGuid().ToString(),
+            RequestId = "pf-noerr-001"
+        };
+        var context = CreateContext(deviceId: "pf-noerr-device");
+
+        await handler.HandleAsync(request, context, TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+
+        // The null-Error fallback is part of the JF-929 diagnostic contract (an absent
+        // Error payload must still identify itself as UNKNOWN, not render an empty hole)
+        var entry = Assert.Single(factory.LogEntries);
+        Assert.Equal(LogLevel.Error, entry.Level);
+        Assert.Contains("UNKNOWN", entry.Message);
+    }
+
     // -----------------------------------------------------------------------
     // 3. SessionEndedRequestHandler logs Reason when no error
     // -----------------------------------------------------------------------
