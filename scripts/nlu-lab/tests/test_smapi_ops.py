@@ -169,18 +169,22 @@ def test_battery_rows_non_dict_response_is_error_not_abort():
 
 
 def test_wait_for_build_timeout_expired_poll_reads_in_progress(monkeypatch):
+    """A runner timeout on one poll reads IN_PROGRESS: the conversion lives in
+    _ask_json (subprocess.TimeoutExpired -> SmapiError at the choke point), so
+    wait_for_build itself catches only SmapiError and keeps polling."""
     polls = iter([
         subprocess.TimeoutExpired(cmd="ask smapi get-skill-status", timeout=120),
-        {"interactionModel": {"lastModified": {"status": "SUCCEEDED", "locale": "de-DE"}}},
+        _completed(["ask"], stdout=json.dumps(
+            {"interactionModel": {"lastModified": {"status": "SUCCEEDED", "locale": "de-DE"}}})),
     ])
 
-    def fake_ask_json(args):
+    def runner(argv):
         nxt = next(polls)
         if isinstance(nxt, Exception):
             raise nxt
         return nxt
 
-    monkeypatch.setattr(smapi_ops, "_ask_json", fake_ask_json)
+    monkeypatch.setattr(smapi_ops, "_run_ask", runner)
     monkeypatch.setattr(smapi_ops, "POLL_INTERVAL_S", 0)
     assert smapi_ops.wait_for_build("skill", "de-DE", timeout_s=30) is True
 

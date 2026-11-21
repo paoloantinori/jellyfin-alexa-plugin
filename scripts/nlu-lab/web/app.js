@@ -4,9 +4,20 @@
 // change-driven matrix, the intent legend and the resolved chrome strings;
 // probe content (utterances, intent names, slots) is rendered untouched.
 
+// Chrome language: the stored manual override wins; otherwise the browser's
+// language when it is one the webapp ships strings for (en/it), else en. The
+// resolved value is always sent to /state.json, so the server never has to
+// guess from the run locale.
+function defaultLang() {
+  const stored = localStorage.getItem("nlu-lab-lang");
+  if (stored) return stored;
+  const prefix = (navigator.language || "").slice(0, 2).toLowerCase();
+  return (prefix === "it" || prefix === "en") ? prefix : "en";
+}
+
 const S = {
   locale: new URLSearchParams(location.search).get("locale") || "it-IT",
-  lang: localStorage.getItem("nlu-lab-lang") || null,
+  lang: defaultLang(),
   runA: null,
   runB: null,
   state: null,
@@ -186,8 +197,13 @@ function renderDetail(st) {
   $("detail-title").textContent =
     fmt("detail_title", { utterance: row.utterance, source: row.source });
   const side = row.new || row.old;
+  // Slots arrive as {name, value} objects (the run schema stores them in the
+  // shape SmapiClient.parse_profile_nlu_result emits); render the VALUE, and
+  // any other shape falls back to JSON instead of "[object Object]".
   const slots = Object.entries(side.slots || {})
-    .map(([k, v]) => k + ": " + v).join(", ") || st.strings.detail_none;
+    .map(([k, v]) => k + ": " +
+      (v && typeof v === "object" && "value" in v ? v.value : JSON.stringify(v)))
+    .join(", ") || st.strings.detail_none;
   const lines = [
     [st.strings.detail_expected, row.expected_intent || st.strings.detail_none],
     [st.strings.before + " -> " + st.strings.after,

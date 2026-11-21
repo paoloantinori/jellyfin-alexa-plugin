@@ -1,6 +1,7 @@
 import yaml
+import pytest
 
-from battery import load_battery
+from battery import WorkingsetRefused, load_battery
 
 FIXTURE_TESTS = [
     {"utterance": "Wiederholung aus", "expected_intent": "LoopAllOffIntent", "expected_slots": {}},
@@ -24,6 +25,37 @@ def test_fixture_load_excludes_e2e_family(tmp_path):
     rows = load_battery("de-DE", tmp_path, None, None)
     assert [r.utterance for r in rows] == ["Wiederholung aus", "Lied wiederholen"]
     assert all(r.source == "fixture" for r in rows)
+
+
+def test_workingset_missing_file_refused(tmp_path):
+    """A provided-but-missing workingset refuses (never silently contributes
+    zero rows); the CLI-facing '--workingset ...: no such file' text is the
+    same message the old cli-side existence check emitted."""
+    with pytest.raises(WorkingsetRefused, match="no such file"):
+        load_battery("de-DE", tmp_path, tmp_path / "nope.yaml", None)
+
+
+def test_workingset_locale_mismatch_refused(tmp_path):
+    """Moved from test_cli_run (the refusal now lives here, where the workingset
+    is parsed once): a workingset declaring another locale must refuse with the
+    CLI-facing message text, never silently feed foreign rows to profile-nlu."""
+    ws = _write(tmp_path, "ws.yaml", _doc(locale="it-IT",
+                                          tests=[{"utterance": "riproduci"}]))
+    with pytest.raises(WorkingsetRefused, match="it-IT.*de-DE"):
+        load_battery("de-DE", tmp_path, ws, None)
+
+
+def test_workingset_unparseable_yaml_refused(tmp_path):
+    ws = tmp_path / "ws.yaml"
+    ws.write_text("tests: [unclosed", encoding="utf-8")
+    with pytest.raises(WorkingsetRefused, match="not parseable YAML"):
+        load_battery("de-DE", tmp_path, ws, None)
+
+
+def test_workingset_non_mapping_top_level_refused(tmp_path):
+    ws = _write(tmp_path, "ws.yaml", ["not", "a", "mapping"])
+    with pytest.raises(WorkingsetRefused, match="expected a mapping"):
+        load_battery("de-DE", tmp_path, ws, None)
 
 
 def test_workingset_loads_fixture_format(tmp_path):

@@ -232,7 +232,37 @@ def test_run_refuses_nonexistent_workingset_path(tmp_path, monkeypatch, capsys):
     assert "workingset" in err and "no such file" in err
 
 
+def test_run_accepts_nameless_external_model(tmp_path, monkeypatch):
+    """A model file without invocationName must pass run preflight: the lab
+    always substitutes its own name, so preflight validates the
+    POST-substitution payload (a missing SOURCE name is not a structural
+    error); the deployed payload carries the lab invocation name. A real
+    structural error still refuses (covered by the structural-error test
+    below)."""
+    monkeypatch.setenv("SMAPI_DELAY", "0")
+    lab = _lab_dir(tmp_path)
+    fx = _fixtures(tmp_path, [FX_ROW_A])
+    seen = {}
+
+    def deploy(sid, loc, payload):
+        seen["payload"] = payload
+        return True
+    _happy_smapi(monkeypatch, deploy=deploy)
+    nameless = {"languageModel": {"intents": [
+        {"name": "PlaySongIntent", "samples": ["spiele das lied x", "spiele das lied y"]},
+        {"name": "AMAZON.StopIntent", "samples": []},
+    ]}}
+    rc = _cmd(lab, fx, _model_file(tmp_path, nameless), label="nameless")
+    assert rc == 0
+    lm = seen["payload"]["interactionModel"]["languageModel"]
+    assert lm["invocationName"] == LAB_INVOCATION
+    assert _single_run(tmp_path).status == "ok"
+
+
 def test_run_refuses_workingset_locale_mismatch(tmp_path, monkeypatch, capsys):
+    """CLI wiring of the battery-level refusal (the parse and the message live
+    in battery.load_battery; see test_battery.py): a locale-mismatched
+    workingset still refuses end to end, before any deploy or run file."""
     lab = _lab_dir(tmp_path)
     fx = _fixtures(tmp_path, [FX_ROW_A])
     ws = _workingset(tmp_path, [{"utterance": "riproduci"}], locale="it-IT")

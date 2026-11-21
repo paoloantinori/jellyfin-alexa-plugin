@@ -68,6 +68,15 @@ def _ask_json(args: list[str]) -> dict:
     return data
 
 
+def _unwrap_body(payload: dict) -> dict:
+    """The payload's own body: the outer "body" wrapper when the CLI's
+    --full-response mode added it, the payload itself otherwise; a non-dict
+    reads as {} (every caller then finds no fields)."""
+    if not isinstance(payload, dict):
+        return {}
+    return payload.get("body", payload)
+
+
 def parse_skill_name(payload: dict) -> str | None:
     """en-US publishing name from a get-skill-manifest payload (first locale
     as fallback), None when no publishable name exists. The outer body
@@ -76,7 +85,7 @@ def parse_skill_name(payload: dict) -> str | None:
     The installed ask CLI has no get-skill subcommand; get-skill-manifest is
     the live-name source lab_config's deploy guard checks against.
     """
-    data = payload.get("body", payload) if isinstance(payload, dict) else {}
+    data = _unwrap_body(payload)
     manifest = data.get("manifest") or {}
     locales = (manifest.get("publishingInformation") or {}).get("locales") or {}
     entry = locales.get("en-US")
@@ -103,7 +112,7 @@ def parse_skill_id(payload: dict) -> str | None:
     response; Alexa.NET's Skills.Create, which SmapiManagement.CreateSkillAsync
     calls, parses the same field). The outer body wrapper is tolerated like
     every other parser here. None when no usable skillId is present."""
-    data = payload.get("body", payload) if isinstance(payload, dict) else {}
+    data = _unwrap_body(payload)
     skill_id = data.get("skillId")
     return skill_id if isinstance(skill_id, str) and skill_id else None
 
@@ -176,7 +185,7 @@ def parse_build_status(payload: dict) -> str:
     than SUCCEEDED/FAILED reads IN_PROGRESS (keep polling): a build whose
     resource row has not appeared yet cannot be judged.
     """
-    data = payload.get("body", payload) if isinstance(payload, dict) else {}
+    data = _unwrap_body(payload)
     last_modified = (data.get("interactionModel") or {}).get("lastModified") or {}
     if not last_modified.get("locale"):
         return BUILD_IN_PROGRESS
@@ -189,15 +198,16 @@ def parse_build_status(payload: dict) -> str:
 def wait_for_build(skill_id: str, locale: str, timeout_s: float = 600) -> bool:
     """Poll get-skill-status (no --stage flag on this subcommand) every
     POLL_INTERVAL_S until SUCCEEDED (True), FAILED (raise), or the deadline
-    (False). A poll that itself fails (CLI error, bad JSON, or the runner's
-    subprocess.TimeoutExpired) reads IN_PROGRESS: the deadline, not a
+    (False). A poll that itself fails reads IN_PROGRESS: _ask_json converts
+    every failure shape (nonzero exit, bad JSON, the runner's
+    subprocess.TimeoutExpired) into SmapiError, and the deadline, not a
     transient CLI hiccup, ends the wait."""
     deadline = time.monotonic() + timeout_s
     while True:
         try:
             status = parse_build_status(
                 _ask_json(["smapi", "get-skill-status", "--skill-id", skill_id]))
-        except (SmapiError, subprocess.TimeoutExpired):
+        except SmapiError:
             status = BUILD_IN_PROGRESS
         if status == BUILD_SUCCEEDED:
             return True

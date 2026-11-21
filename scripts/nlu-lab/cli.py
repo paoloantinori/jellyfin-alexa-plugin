@@ -23,8 +23,6 @@ from pathlib import Path
 import _paths
 _paths.bootstrap()
 
-import yaml
-
 import battery
 import models
 import smapi_ops
@@ -73,22 +71,6 @@ def _slug(label: str) -> str:
     return s or "run"
 
 
-def _language_model(model: dict, source: str) -> dict:
-    """The languageModel dict from either model shape (bare build_model dict or
-    the interactionModel wrapper), for validate_single_model."""
-    lm = None
-    if isinstance(model, dict):
-        if "interactionModel" in model:
-            lm = model["interactionModel"].get("languageModel")
-        elif "languageModel" in model:
-            lm = model["languageModel"]
-    if not isinstance(lm, dict):
-        raise RunRefused(
-            f"{source}: neither an interactionModel wrapper nor a languageModel "
-            "dict; not a model the lab can deploy")
-    return lm
-
-
 def _resolve_model(args) -> tuple[dict, str]:
     if args.template:
         try:
@@ -106,21 +88,26 @@ def _resolve_model(args) -> tuple[dict, str]:
     return model, str(path)
 
 
-def _check_workingset(path: Path, locale: str) -> None:
-    """Refuse a workingset whose locale differs from the run locale: load_battery
-    never reads that field, so this check lives here (Task 4 review mandate)."""
+def _validated_payload(model: dict, model_source: str, invocation_name: str,
+                       locale: str) -> tuple[dict, str, list]:
+    """The one prepare-and-validate sequence both deploy paths ride (run and
+    export), so they can never validate different shapes: stamp the payload
+    with the caller's invocation name FIRST, then run structural validation on
+    the POST-substitution languageModel (the exact model being deployed; a
+    name-less external source is not a structural error because the name is
+    always substituted). Returns (payload, sha256, intent_roster); warnings
+    print, errors refuse."""
     try:
-        data = yaml.safe_load(path.read_text(encoding="utf-8"))
-    except yaml.YAMLError as exc:
-        raise RunRefused(f"workingset {path} is not parseable YAML: {exc}") from exc
-    if not isinstance(data, dict):
-        raise RunRefused(
-            f"workingset {path}: top level is {type(data).__name__}, expected a mapping")
-    ws_locale = data.get("locale")
-    if ws_locale != locale:
-        raise RunRefused(
-            f"workingset {path} declares locale {ws_locale!r} but the run locale is "
-            f"{locale!r}; refusing to feed another locale's rows to profile-nlu")
+        payload, sha, roster = models.prepare_payload(model, invocation_name)
+    except ValueError as exc:
+        raise RunRefused(f"{model_source}: {exc}") from exc
+    errors, warnings = validate_single_model(
+        locale, payload["interactionModel"]["languageModel"])
+    for w in warnings:
+        print(f"warning: {w}", file=sys.stderr)
+    if errors:
+        raise RunRefused("model preflight found structural errors:\n" + "\n".join(errors))
+    return payload, sha, roster
 
 
 def prepare_manifest(endpoint_uri: str, events_uri: str, version: str, skill_name: str,
@@ -314,21 +301,14 @@ def _preflight(args, lab_dir: Path, fixtures: Path):
     cfg.guard_deploy_target(cfg.skill_id, live_skill_name=live_name)
 
     model, model_source = _resolve_model(args)
-    lm = _language_model(model, model_source)
-    errors, warnings = validate_single_model(args.locale, lm)
-    for w in warnings:
-        print(f"warning: {w}", file=sys.stderr)
-    if errors:
-        raise RunRefused("model preflight found structural errors:\n" + "\n".join(errors))
+    payload, sha, roster = _validated_payload(model, model_source,
+                                              cfg.invocation_name, args.locale)
 
-    workingset = None
-    if args.workingset is not None:
-        workingset = Path(args.workingset)
-        if not workingset.is_file():
-            raise RunRefused(f"--workingset {workingset}: no such file")
-        _check_workingset(workingset, args.locale)
-
-    rows = battery.load_battery(args.locale, fixtures, workingset, args.filter_k)
+    workingset = Path(args.workingset) if args.workingset is not None else None
+    try:
+        rows = battery.load_battery(args.locale, fixtures, workingset, args.filter_k)
+    except battery.WorkingsetRefused as exc:
+        raise RunRefused(str(exc)) from exc
     for i, row in enumerate(rows):
         if not isinstance(row.utterance, str) or not row.utterance.strip():
             raise RunRefused(
@@ -339,8 +319,6 @@ def _preflight(args, lab_dir: Path, fixtures: Path):
         raise RunRefused(
             f"battery assembled 0 rows for {args.locale} (fixtures {fixtures}, "
             f"workingset {workingset}); refusing to deploy for an empty run")
-
-    payload, sha, roster = models.prepare_payload(model, cfg.invocation_name)
 
     now = datetime.now()
     run = RunRecord(
@@ -373,13 +351,7 @@ def cmd_export(args) -> int:
                 "is what the plugin's custom-model import deploys verbatim, so the "
                 "lab refuses to guess (never the source model's name, never the lab's)")
         model, model_source = _resolve_model(args)
-        payload, _, _ = models.prepare_payload(model, name)
-        errors, warnings = validate_single_model(
-            args.locale, payload["interactionModel"]["languageModel"])
-        for w in warnings:
-            print(f"warning: {w}", file=sys.stderr)
-        if errors:
-            raise RunRefused("model preflight found structural errors:\n" + "\n".join(errors))
+        payload, _, _ = _validated_payload(model, model_source, name, args.locale)
         out_dir = Path(args.out) if args.out else Path.cwd()
         out_dir.mkdir(parents=True, exist_ok=True)
         path = out_dir / f"{args.locale}-{_slug(args.label)}.json"

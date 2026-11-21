@@ -6,6 +6,9 @@ fallback key-by-key), and the HTTP layer (ONLY the static files under web/ plus
 never a traceback page)."""
 import http.client
 import json
+import os
+import shutil
+import subprocess
 import threading
 from pathlib import Path
 
@@ -92,7 +95,10 @@ def test_matrix_union_kinds_sides_and_legend(tmp_path):
         _row("gone", "PlaySongIntent"),
     ], timestamp="2026-11-19T09:00:00", label="base")
     _save_run(runs_dir, "fix", [
-        _row("to-green", "PlaySongIntent", slots={"song": "nuvole bianche"},
+        # real slot shape: SmapiClient.parse_profile_nlu_result emits
+        # {slot_name: {"name": ..., "value": ...}}, never flat strings
+        _row("to-green", "PlaySongIntent",
+             slots={"song": {"name": "song", "value": "nuvole bianche"}},
              considered=["PlaySongIntent", "PlayRadioIntent"]),
         _row("to-red", "PlayRadioIntent"),
         _row("to-amber", "PlaySongIntent", expected=None),
@@ -111,7 +117,7 @@ def test_matrix_union_kinds_sides_and_legend(tmp_path):
     row = by_key[("to-green", "fixture")]
     assert row["old"]["selected_intent"] == "PlayRadioIntent"
     assert row["new"]["selected_intent"] == "PlaySongIntent"
-    assert row["new"]["slots"] == {"song": "nuvole bianche"}
+    assert row["new"]["slots"] == {"song": {"name": "song", "value": "nuvole bianche"}}
     assert row["new"]["considered_intents"] == ["PlaySongIntent", "PlayRadioIntent"]
     assert row["expected_intent"] == "PlaySongIntent"
     assert by_key[("gone", "fixture")]["new"] is None      # only in the baseline
@@ -215,6 +221,122 @@ def test_http_serves_static_state_and_refuses_traversal(tmp_path):
         httpd.shutdown()
         httpd.server_close()
         thread.join(timeout=5)
+
+
+# --- app.js behavior (the real script executed under node with a DOM stub) ---
+
+_JS_PRELUDE = """
+const _els = {};
+class _El {
+  constructor(tag) {
+    this.tag = tag; this.children = []; this.textContent = "";
+    this.hidden = false; this.value = ""; this.selected = false;
+    this.disabled = false; this.className = ""; this.dataset = {};
+    this.classList = { add() {}, remove() {}, toggle() {} };
+  }
+  appendChild(child) { this.children.push(child); return child; }
+}
+const document = {
+  title: "",
+  getElementById(id) { return _els[id] || (_els[id] = new _El(id)); },
+  createElement(tag) { return new _El(tag); },
+  createTextNode(text) { return { text }; },
+  querySelectorAll() { return []; },
+};
+const _store = {};
+if (process.env.LAB_STORED_LANG) _store["nlu-lab-lang"] = process.env.LAB_STORED_LANG;
+const localStorage = {
+  getItem(k) { return k in _store ? _store[k] : null; },
+  setItem(k, v) { _store[k] = String(v); },
+};
+const navigator = { language: process.env.LAB_NAV_LANG || "en-US" };
+const location = { search: "?locale=it-IT" };
+let _lastFetchUrl = null;
+const fetch = async (url) => {
+  _lastFetchUrl = url;
+  return { ok: true, status: 200,
+           json: async () => JSON.parse(process.env.LAB_STATE_JSON) };
+};
+function _collect(node) {
+  if (!node) return "";
+  if (typeof node.text === "string") return node.text;
+  return (typeof node.textContent === "string" ? node.textContent : "") +
+    (node.children || []).map(_collect).join("");
+}
+"""
+
+_JS_DRIVER = """
+(async () => {
+  await refresh();
+  const query = new URLSearchParams((_lastFetchUrl || "").split("?")[1] || "");
+  const out = { langParam: query.get("lang") };
+  const row = S.state.matrix.find((r) => r.new && r.new.slots &&
+    Object.keys(r.new.slots).length > 0);
+  if (row) {
+    S.selected = row;
+    renderDetail(S.state);
+    out.detailHidden = document.getElementById("detail").hidden;
+    out.detailText = _collect(document.getElementById("detail-body"));
+  }
+  console.log(JSON.stringify(out));
+})();
+"""
+
+
+def _run_app_js(tmp_path, state, stored_lang=None, nav_lang="it-IT"):
+    """Run the real web/app.js under node (minimal DOM stub; the composed page
+    state is served through the fetch stub) and return the driver's JSON: the
+    lang param app.js sent and the rendered detail text. Skipped when no node
+    is on PATH (the CI runner ships one)."""
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node is not available to execute web/app.js")
+    script = tmp_path / "app_js_harness.js"
+    script.write_text(
+        _JS_PRELUDE + "\n" + (WEB_DIR / "app.js").read_text(encoding="utf-8")
+        + "\n" + _JS_DRIVER, encoding="utf-8")
+    env = {**os.environ,
+           "LAB_STATE_JSON": json.dumps(state, ensure_ascii=False),
+           "LAB_STORED_LANG": stored_lang or "",
+           "LAB_NAV_LANG": nav_lang}
+    proc = subprocess.run([node, str(script)], capture_output=True, text=True,
+                          env=env, timeout=60)
+    assert proc.returncode == 0, proc.stderr
+    return json.loads(proc.stdout.strip().splitlines()[-1])
+
+
+def test_app_js_detail_renders_slot_value_not_object(tmp_path):
+    """The detail card must render the slot VALUE: slots arrive as
+    {name, value} objects (the shape parse_profile_nlu_result stores in run
+    files), and the old `k + ": " + v` concatenation showed [object Object]."""
+    runs_dir = tmp_path / "runs"
+    _save_run(runs_dir, "r1", [_row("suona a", "X")], timestamp="2026-11-19T09:00:00")
+    _save_run(runs_dir, "r2", [_row("suona a", "PlaySongIntent",
+                                    slots={"song": {"name": "song", "value": "nuvole bianche"}})],
+              timestamp="2026-11-20T09:00:00")
+    state = webapp.build_page_state(runs_dir, "it-IT", run_a="r1", run_b="r2")
+    out = _run_app_js(tmp_path, state)
+    assert out["detailHidden"] is False
+    assert "song: nuvole bianche" in out["detailText"]
+    assert "[object Object]" not in out["detailText"]
+
+
+@pytest.mark.parametrize("stored,nav,expected", [
+    ("it", "en-US", "it"),   # the stored manual override wins
+    (None, "it-IT", "it"),   # browser language with a supported prefix
+    (None, "en-US", "en"),
+    (None, "fr-FR", "en"),   # unsupported browser language falls back to en
+])
+def test_app_js_lang_default_follows_browser_language(tmp_path, stored, nav, expected):
+    """Chrome language spec: stored override, else the browser's language when
+    supported (en/it), else en; the resolved lang is always SENT to
+    /state.json, so the server never guesses from the run locale."""
+    runs_dir = tmp_path / "runs"
+    _save_run(runs_dir, "r1", [_row("a", "X")], timestamp="2026-11-19T09:00:00")
+    _save_run(runs_dir, "r2", [_row("a", "PlaySongIntent")], timestamp="2026-11-20T09:00:00")
+    state = webapp.build_page_state(runs_dir, "it-IT", run_a="r1", run_b="r2")
+    out = _run_app_js(tmp_path, state, stored_lang=stored, nav_lang=nav)
+    assert out["langParam"] == expected
 
 
 # --- cli serve wiring ---
