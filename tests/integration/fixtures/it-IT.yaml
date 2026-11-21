@@ -1279,6 +1279,16 @@ tests:
     expected_slots:
       song: {}
 
+  # JF-933 (issue #46) CONTROL row: it-IT MediaInfoType is phrase-shaped
+  # ('che brano è'), never a single song noun, so this locale has no
+  # vocabulary collision and needs no template change. The row pins that
+  # non-famous titles keep routing to PlaySongIntent here while the 16
+  # colliding locales get the synonym removal.
+  - utterance: "suona la canzone pesci di latta"
+    expected_intent: PlaySongIntent
+    expected_slots:
+      song: {}
+
   # -------------------------------------------------------------------------
   # 24. PlayAlbumIntent (album, musician)
   # -------------------------------------------------------------------------

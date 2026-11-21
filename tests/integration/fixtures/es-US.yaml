@@ -176,6 +176,19 @@ tests:
   - utterance: "I'm looking for a song"
     expected_intent: PlaySongIntent
     skip_reason: "English-loss record, JF-399 item b accepted trade: reads PlaySongIntent with 'looking for a song' glued into song (was FindSongIntent); not asserted to avoid pinning a glued fill"
+
+  # ------------------------------------------------------------------------
+  # JF-933 (issue #46): non-famous-title pin (the live Spanish shape; the
+  # rows above are English-loss records). MediaInfoType's title entry carried
+  # canción/tema as synonyms, so unanchorable free-text titles slid to
+  # MediaInfoIntent's static tokens. The synonyms are removed from the
+  # template (template edit + regen in this change). RED-UNTIL-DEPLOY row (the JF-766 convention):
+  # green on the live suite only after the rebuilt model deploys.
+  # ------------------------------------------------------------------------
+  - utterance: "Reproduce la canción luciérnagas del sur"
+    expected_intent: PlaySongIntent
+    expected_slots:
+      song: {}
   # -------------------------------------------------------------------------
   # SkipForwardBackIntent (JF-875 rollout; "salta adelante" was the JF-684
   # no-selection class before). The avanza/retrocede verb-direction synonyms

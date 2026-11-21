@@ -89,6 +89,17 @@ tests:
       song: {}
       musician: {}
 
+  # JF-933 (issue #46): non-famous-title pin. MediaInfoType's title entry
+  # carried chanson/morceau as synonyms, so unanchorable free-text titles
+  # slid to MediaInfoIntent's static tokens. The synonyms are removed from
+  # the template (template edit + regen in this change). RED-UNTIL-DEPLOY row (the JF-766
+  # convention): green on the live suite only after the rebuilt model
+  # deploys.
+  - utterance: "Lis la chanson paradis de papier"
+    expected_intent: PlaySongIntent
+    expected_slots:
+      song: {}
+
   # -------------------------------------------------------------------------
   # 6. PlayAlbumIntent (album, musician)
   # -------------------------------------------------------------------------

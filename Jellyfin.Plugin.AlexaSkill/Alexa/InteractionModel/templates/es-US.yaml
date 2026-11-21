@@ -985,7 +985,7 @@ types:
     values:
       - id: title
         value: título
-        synonyms: [canción, tema, nombre]
+        synonyms: [nombre]
       - id: album
         value: álbum
         synonyms: [disco]

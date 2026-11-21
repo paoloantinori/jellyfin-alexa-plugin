@@ -1093,7 +1093,7 @@ types:
     values:
       - id: title
         value: title
-        synonyms: [song, track, name]
+        synonyms: [name]
       - id: album
         value: album
         synonyms: [record]

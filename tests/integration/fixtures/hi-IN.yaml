@@ -150,6 +150,17 @@ tests:
       song:
         value: "bohemian rhapsody"
 
+  # JF-933 (issue #46): non-famous-title pin. MediaInfoType's title entry
+  # carried गाना/ट्रैक as synonyms, so unanchorable free-text titles slid to
+  # MediaInfoIntent's static tokens. The synonyms are removed from the
+  # template (template edit + regen in this change). RED-UNTIL-DEPLOY row (the JF-766 convention):
+  # green on the live suite only after the rebuilt model deploys; slot pinned
+  # present-but-any-value until the first green live read (the JF-769 rule).
+  - utterance: "गाना शहर की आवाज़ चलाओ"
+    expected_intent: PlaySongIntent
+    expected_slots:
+      song: {}
+
   # ------------------------------------------------------------------------
   # JF-770 round 2 (2026-10-17): pins for the second thickening (the
   # nukta twin, the post-position twin, the दिखाओ tail on both carriers)

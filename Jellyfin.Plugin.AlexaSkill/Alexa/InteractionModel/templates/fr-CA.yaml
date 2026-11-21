@@ -1027,7 +1027,7 @@ types:
     values:
       - id: title
         value: titre
-        synonyms: [chanson, morceau, nom]
+        synonyms: [nom]
       - id: album
         value: album
         synonyms: [disque]

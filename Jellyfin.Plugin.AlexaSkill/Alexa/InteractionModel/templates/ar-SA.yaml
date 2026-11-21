@@ -903,7 +903,7 @@ types:
     values:
       - id: title
         value: العنوان
-        synonyms: [أغنية, مسار, اسم]
+        synonyms: [مسار, اسم]
       - id: album
         value: الألبوم
         synonyms: [قرص]

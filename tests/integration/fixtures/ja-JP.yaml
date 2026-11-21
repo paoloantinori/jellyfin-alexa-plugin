@@ -28,6 +28,16 @@ tests:
     expected_slots:
       song: {}
 
+  # JF-933 (issue #46): non-famous-title pin. MediaInfoType's title entry
+  # carried 曲 as a synonym, so unanchorable free-text titles slid to
+  # MediaInfoIntent's static tokens. The synonym is removed from the
+  # template (template edit + regen in this change). RED-UNTIL-DEPLOY row (the JF-766 convention):
+  # green on the live suite only after the rebuilt model deploys.
+  - utterance: "曲 しろつめくさ を再生して"
+    expected_intent: PlaySongIntent
+    expected_slots:
+      song: {}
+
   - utterance: "アルバム スリラー を再生して"
     expected_intent: PlayAlbumIntent
     expected_slots:

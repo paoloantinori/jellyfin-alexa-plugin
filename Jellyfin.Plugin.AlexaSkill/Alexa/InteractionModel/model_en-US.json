@@ -1885,8 +1885,6 @@
             "name": {
               "value": "title",
               "synonyms": [
-                "song",
-                "track",
                 "name"
               ]
             }

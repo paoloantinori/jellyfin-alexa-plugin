@@ -995,7 +995,7 @@ types:
     values:
       - id: title
         value: शीर्षक
-        synonyms: [गाना, ट्रैक, नाम]
+        synonyms: [नाम]
       - id: album
         value: एल्बम
         synonyms: [रिकॉर्ड]

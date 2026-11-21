@@ -984,7 +984,7 @@ types:
     values:
       - id: title
         value: titel
-        synonyms: [nummer, track, naam]
+        synonyms: [track, naam]
       - id: album
         value: album
         synonyms: [plaat]

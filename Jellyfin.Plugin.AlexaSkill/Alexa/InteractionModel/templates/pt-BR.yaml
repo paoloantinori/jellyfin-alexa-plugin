@@ -963,7 +963,7 @@ types:
     values:
       - id: title
         value: título
-        synonyms: [música, faixa, nome]
+        synonyms: [nome]
       - id: album
         value: álbum
         synonyms: [disco]

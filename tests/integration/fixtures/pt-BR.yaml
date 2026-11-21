@@ -97,3 +97,15 @@ tests:
   - utterance: "leia a letra"
     expected_intent: ShowLyricsIntent
     expected_slots: {}
+
+  # ------------------------------------------------------------------------
+  # JF-933 (issue #46): non-famous-title pin. MediaInfoType's title entry
+  # carried música/faixa as synonyms, so unanchorable free-text titles slid
+  # to MediaInfoIntent's static tokens. The synonyms are removed from the
+  # template (template edit + regen in this change). RED-UNTIL-DEPLOY row (the JF-766 convention):
+  # green on the live suite only after the rebuilt model deploys.
+  # ------------------------------------------------------------------------
+  - utterance: "tocar a música borboletas de papel"
+    expected_intent: PlaySongIntent
+    expected_slots:
+      song: {}

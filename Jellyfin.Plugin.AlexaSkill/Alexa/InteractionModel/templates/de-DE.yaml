@@ -182,6 +182,9 @@ intents:
       - Ich möchte {song} hören
       - Spiele den Titel {song}
       - Spiele den Titel {song} von {musician}
+      # JF-933: the den Song carrier (issue #46 steal row); "Song" is also
+      # removed from MediaInfoType title synonyms so the token anchors here.
+      - Spiele den Song {song}
       - Lass uns {song} hören
       - Starte {song}
       - Spiele das Stück {song}
@@ -1052,7 +1055,7 @@ types:
     values:
       - id: title
         value: Titel
-        synonyms: [Lied, Song, Name]
+        synonyms: [Name]
       - id: album
         value: Album
         synonyms: [Platte]

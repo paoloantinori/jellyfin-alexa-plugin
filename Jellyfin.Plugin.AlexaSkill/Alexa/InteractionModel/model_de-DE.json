@@ -156,6 +156,7 @@
           "Ich möchte {song} hören",
           "Spiele den Titel {song}",
           "Spiele den Titel {song} von {musician}",
+          "Spiele den Song {song}",
           "Lass uns {song} hören",
           "Starte {song}",
           "Spiele das Stück {song}",
@@ -1583,8 +1584,6 @@
             "name": {
               "value": "Titel",
               "synonyms": [
-                "Lied",
-                "Song",
                 "Name"
               ]
             }

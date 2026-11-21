@@ -1528,8 +1528,6 @@
             "name": {
               "value": "titre",
               "synonyms": [
-                "chanson",
-                "morceau",
                 "nom"
               ]
             }

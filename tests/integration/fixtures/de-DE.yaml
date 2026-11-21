@@ -85,6 +85,24 @@ tests:
       song: {}
       musician: {}
 
+  # JF-933 (issue #46): non-famous-title pins. MediaInfoType's title entry
+  # carried Lied/Song as synonyms, so unanchorable free-text titles slid to
+  # the static-token intents (lab bench 2026-11-21, stock model: 'spiele das
+  # lied die streithörnchen' -> MediaInfoIntent with an EMPTY media_info_type;
+  # 'spiele den song ...' -> PlayRadio with an empty station). The synonyms
+  # are removed from the template (template edit + regen in this change) and the den Song carrier is
+  # added to PlaySongIntent. RED-UNTIL-DEPLOY rows (the JF-766 convention):
+  # green on the live suite only after the rebuilt model deploys.
+  - utterance: "spiele das lied die streithörnchen"
+    expected_intent: PlaySongIntent
+    expected_slots:
+      song: {}
+
+  - utterance: "spiele den song die streithörnchen"
+    expected_intent: PlaySongIntent
+    expected_slots:
+      song: {}
+
   # -------------------------------------------------------------------------
   # 6. PlayAlbumIntent (album, musician)
   # -------------------------------------------------------------------------
