@@ -1,14 +1,17 @@
-"""NLU Lab CLI. Today one subcommand: `run` (deploy a model to the dedicated lab
-skill, wait for the build, profile the battery, snapshot a run file).
+"""NLU Lab CLI. Two subcommands: `init-skill` (create or pin the dedicated lab
+skill and write lab.json) and `run` (deploy a model to that skill, wait for the
+build, profile the battery, snapshot a run file).
 
 Orchestration contract (spec): preflight refusals happen BEFORE any run file
 exists and before any deploy; the run file is created EARLY in the "running"
 state so a mid-run crash or Ctrl-C still leaves an artifact, then rewritten to
-ok / failed / interrupted. Every smapi_ops and models call goes through the
+ok / failed / interrupted. init-skill refuses to overwrite an existing lab.json
+before any ask call fires. Every smapi_ops and models call goes through the
 module attribute (smapi_ops.deploy_model, ...) so tests monkeypatch the module,
 never this file's namespace.
 """
 import argparse
+import json
 import re
 import sys
 from datetime import datetime
@@ -24,10 +27,17 @@ import models
 import smapi_ops
 from lab_config import LabConfig, LabConfigError
 from runs import RowResult, RunRecord, save_run
+from smapi_client import SmapiError
 from validate_interaction_models import validate_single_model
+from validate_versions import get_props_version
 
 LAB_DIR_DEFAULT = Path(__file__).resolve().parent
 FIXTURES_DIR_DEFAULT = _paths.REPO / "tests" / "integration" / "fixtures"
+MANIFEST_TEMPLATE_DEFAULT = (
+    _paths.REPO / "Jellyfin.Plugin.AlexaSkill" / "Alexa" / "Manifest" / "manifest.json")
+
+DEFAULT_SKILL_NAME = "jellyfin nlu lab"
+DEFAULT_INVOCATION = "jellyfin nlu laboratorio"
 
 STATUS_RUNNING = "running"
 STATUS_OK = "ok"
@@ -37,6 +47,21 @@ STATUS_INTERRUPTED = "interrupted"
 
 class RunRefused(RuntimeError):
     """A preflight refusal: nothing was deployed and no run file was created."""
+
+
+class InitRefused(RuntimeError):
+    """An init-skill refusal: no skill was created and lab.json was not touched."""
+
+
+def _lab_dir_from(args, lab_dir: Path | None) -> Path:
+    """Resolve the lab dir: explicit kwarg (tests) > the --lab-dir flag > the
+    production default scripts/nlu-lab/. The flag keeps the redirect visible
+    on the command line (an env var would silently redirect every later lab
+    command from a stale shell)."""
+    if lab_dir is not None:
+        return Path(lab_dir)
+    flagged = getattr(args, "lab_dir", None)
+    return Path(flagged) if flagged else LAB_DIR_DEFAULT
 
 
 def _slug(label: str) -> str:
@@ -94,9 +119,113 @@ def _check_workingset(path: Path, locale: str) -> None:
             f"{locale!r}; refusing to feed another locale's rows to profile-nlu")
 
 
+def prepare_manifest(endpoint_uri: str, events_uri: str, version: str, skill_name: str,
+                     template_path: Path | None = None) -> dict:
+    """Read the committed skill-manifest template and return a creation payload
+    stamped for the lab; the template on disk is never modified.
+
+    - INSERTS manifest.apis.custom.endpoint.uri (absent from the template)
+    - fills manifest.events.endpoint.uri (the template ships it empty)
+    - stamps the version into publishingInformation.testingInstructions
+    - stamps skill_name into EVERY publishingInformation.locales.*.name: the
+      run command reads the live en-US name at deploy time and refuses a
+      mismatch, so a locale left at the template's "Jellyfin" would make every
+      later deploy refuse
+    """
+    path = Path(template_path) if template_path is not None else MANIFEST_TEMPLATE_DEFAULT
+    try:
+        doc = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise InitRefused(f"manifest template {path} unreadable: {exc}") from exc
+    manifest = doc.get("manifest") if isinstance(doc, dict) else None
+    custom = ((manifest or {}).get("apis") or {}).get("custom")
+    events = (manifest or {}).get("events")
+    publishing = (manifest or {}).get("publishingInformation")
+    locales = (publishing or {}).get("locales")
+    # One up-front shape check (template is repo-committed; this catches a
+    # hand-mangled or wrong-file template), then the stamps below are plain.
+    if not (isinstance(manifest, dict) and isinstance(custom, dict) and custom
+            and isinstance(events, dict) and isinstance(events.get("endpoint"), dict)
+            and isinstance(publishing, dict)
+            and isinstance(locales, dict) and locales
+            and all(isinstance(entry, dict) for entry in locales.values())):
+        raise InitRefused(
+            f"{path}: not the expected skill manifest shape (manifest.apis.custom, "
+            "manifest.events.endpoint, publishingInformation.locales of mappings); "
+            "refusing")
+    custom["endpoint"] = {"uri": endpoint_uri}
+    events["endpoint"]["uri"] = events_uri
+    instructions = publishing.get("testingInstructions")
+    original = instructions if isinstance(instructions, str) else ""
+    publishing["testingInstructions"] = f"nlu-lab {version}. {original}".strip()
+    for entry in locales.values():
+        entry["name"] = skill_name
+    return doc
+
+
+def _plugin_version() -> str:
+    version = get_props_version()
+    if not version:
+        raise InitRefused("could not read the plugin version from Directory.Build.props")
+    return version
+
+
+def cmd_init(args, *, lab_dir: Path | None = None) -> int:
+    config_path = _lab_dir_from(args, lab_dir) / "lab.json"
+    try:
+        if config_path.exists() and not args.force:
+            raise InitRefused(
+                f"{config_path} already exists (pass --force to re-init); "
+                "no skill was created")
+        if args.pin_id:
+            return _init_from_pin(args, config_path)
+        return _init_by_create(args, config_path)
+    except (InitRefused, SmapiError, OSError) as exc:
+        print(f"refusing to init: {exc}", file=sys.stderr)
+        return 1
+
+
+def _init_by_create(args, config_path: Path) -> int:
+    if not args.endpoint:
+        raise InitRefused(
+            "--endpoint is required when creating the lab skill (the HTTPS URI "
+            "Alexa posts skill requests to)")
+    if not smapi_ops.has_create_skill_command():
+        print(
+            "this ask CLI has no `smapi create-skill-for-vendor` subcommand, so the\n"
+            "lab skill must be created in the developer console:\n"
+            f"  1. create a custom skill named exactly '{args.name}'\n"
+            "  2. copy its skill id (amzn1.ask.skill....)\n"
+            "  3. run: init-skill --pin-id <that-id>\n"
+            "     (if you named it differently, pass --name '<its exact name>')")
+        return 2
+    payload = prepare_manifest(endpoint_uri=args.endpoint, events_uri=args.endpoint,
+                               version=_plugin_version(), skill_name=args.name)
+    skill_id = smapi_ops.create_skill(payload)
+    LabConfig.save(config_path, skill_id, args.name, args.invocation)
+    print(f"lab skill '{args.name}' created ({skill_id}); lab.json -> {config_path}")
+    return 0
+
+
+def _init_from_pin(args, config_path: Path) -> int:
+    try:
+        live_name = smapi_ops.get_skill_name(args.pin_id)
+    except Exception as exc:  # noqa: BLE001 - a failed live read is a refusal, not a traceback
+        raise InitRefused(
+            f"could not read the live name of skill {args.pin_id}: {exc}") from exc
+    if live_name != args.name:
+        raise InitRefused(
+            f"skill {args.pin_id} is named '{live_name}' on the console, not "
+            f"'{args.name}'; re-run with --name set to the console skill's exact "
+            "name (the deploy-time live-name guard compares against the pinned name)")
+    LabConfig.save(config_path, args.pin_id, args.name, args.invocation)
+    print(f"lab skill '{args.name}' pinned ({args.pin_id}); lab.json -> {config_path}")
+    return 0
+
+
 def cmd_run(args, *, lab_dir: Path | None = None,
             fixtures_dir: Path | None = None) -> int:
-    lab_dir = Path(lab_dir) if lab_dir is not None else LAB_DIR_DEFAULT
+    lab_dir = _lab_dir_from(args, lab_dir)
     fixtures = Path(fixtures_dir) if fixtures_dir is not None else FIXTURES_DIR_DEFAULT
     try:
         run, rows, payload = _preflight(args, lab_dir, fixtures)
@@ -229,7 +358,30 @@ def build_parser() -> argparse.ArgumentParser:
         prog="nlu-lab",
         description="Deploy-and-probe harness for interaction models against a dedicated lab skill")
     sub = parser.add_subparsers(dest="command", required=True)
-    run = sub.add_parser("run", help="deploy a model to the lab skill and run the battery")
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("--lab-dir", type=Path, default=None, metavar="DIR",
+                        help=f"lab directory holding lab.json and runs/ "
+                             f"(default: {LAB_DIR_DEFAULT})")
+    init = sub.add_parser(
+        "init-skill", parents=[common],
+        help="create (or pin) the dedicated lab skill and write lab.json")
+    init.add_argument("--name", default=DEFAULT_SKILL_NAME,
+                      help=f"skill name stamped into every publishing locale "
+                           f"(default: {DEFAULT_SKILL_NAME!r})")
+    init.add_argument("--invocation", default=DEFAULT_INVOCATION,
+                      help=f"invocation name substituted into every deployed model "
+                           f"(default: {DEFAULT_INVOCATION!r})")
+    init.add_argument("--endpoint", default=None, metavar="URI",
+                      help="HTTPS endpoint Alexa posts skill requests to "
+                           "(required when creating; a console-created skill already has one)")
+    init.add_argument("--pin-id", default=None, metavar="SKILL_ID",
+                      help="record an existing (console-created) skill instead of "
+                           "creating one; its live name must match --name")
+    init.add_argument("--force", action="store_true",
+                      help="overwrite an existing lab.json")
+    init.set_defaults(func=cmd_init)
+    run = sub.add_parser("run", parents=[common],
+                         help="deploy a model to the lab skill and run the battery")
     run.add_argument("--locale", required=True)
     source = run.add_mutually_exclusive_group(required=True)
     source.add_argument("--model", type=Path, default=None,

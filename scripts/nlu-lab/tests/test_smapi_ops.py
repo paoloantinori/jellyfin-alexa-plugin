@@ -5,8 +5,13 @@ manifest/status samples tolerate the outer body wrapper because the CLI's
 --full-response mode wraps, and smapi_client's simulate parsing unwraps the
 same way.
 """
+import json
 import subprocess
 import time
+from pathlib import Path
+
+import pytest
+
 
 import _paths
 _paths.bootstrap()
@@ -15,7 +20,7 @@ import smapi_ops
 from battery import BatteryRow
 from runs import RowStatus
 from smapi_client import SmapiError
-from smapi_ops import parse_build_status, parse_skill_name, run_battery_rows
+from smapi_ops import parse_build_status, parse_skill_id, parse_skill_name, run_battery_rows
 
 
 def _rows(*utterances):
@@ -178,3 +183,124 @@ def test_wait_for_build_timeout_expired_poll_reads_in_progress(monkeypatch):
     monkeypatch.setattr(smapi_ops, "_ask_json", fake_ask_json)
     monkeypatch.setattr(smapi_ops, "POLL_INTERVAL_S", 0)
     assert smapi_ops.wait_for_build("skill", "de-DE", timeout_s=30) is True
+
+
+# --- parse_skill_id / create_skill / has_create_skill_command ---
+
+def test_ask_json_prefixes_argv_exactly_once(monkeypatch):
+    """Guards the choke point every _ask_json caller rides: the "smapi" prefix
+    arrives from the caller, so the helper must add only "ask". The doubled
+    form (`ask smapi smapi ...`) is rejected by the real CLI with "Command
+    not recognized"."""
+    argvs = []
+
+    def runner(argv):
+        argvs.append(list(argv))
+        return _completed(argv, stdout='{"ok": 1}')
+    monkeypatch.setattr(smapi_ops, "_run_ask", runner)
+    assert smapi_ops._ask_json(["smapi", "get-skill-status", "--skill-id", "s"]) == {"ok": 1}
+    assert argvs == [["ask", "smapi", "get-skill-status", "--skill-id", "s"]]
+
+
+def test_ask_json_converts_timeout_to_smapi_error(monkeypatch):
+    """The runner's TimeoutExpired must surface as SmapiError here, not escape
+    as a raw traceback through create_skill / get_skill_name callers."""
+    def runner(argv):
+        raise subprocess.TimeoutExpired(cmd=argv, timeout=120)
+    monkeypatch.setattr(smapi_ops, "_run_ask", runner)
+    with pytest.raises(SmapiError, match="timed out after 120"):
+        smapi_ops._ask_json(["smapi", "create-skill-for-vendor", "--manifest", "file:x"])
+
+
+def test_parse_skill_id_plain():
+    assert parse_skill_id({"skillId": "amzn1.ask.skill.x"}) == "amzn1.ask.skill.x"
+
+
+def test_parse_skill_id_body_wrapped():
+    assert parse_skill_id({"body": {"skillId": "amzn1.ask.skill.x"}}) == "amzn1.ask.skill.x"
+
+
+def test_parse_skill_id_absent_or_empty_is_none():
+    assert parse_skill_id({}) is None
+    assert parse_skill_id({"skillId": ""}) is None
+
+
+def _completed(argv, rc=0, stdout="", stderr=""):
+    return subprocess.CompletedProcess(argv, rc, stdout, stderr)
+
+
+def test_create_skill_passes_file_manifest_and_returns_skill_id(monkeypatch):
+    argvs = []
+    payloads = []
+
+    def runner(argv):
+        argvs.append(list(argv))
+        token = argv[argv.index("--manifest") + 1]
+        assert token.startswith("file:")
+        # read while the tmp file still exists: create_skill unlinks on return
+        payloads.append(json.loads(Path(token[len("file:"):]).read_text(encoding="utf-8")))
+        return _completed(argv, stdout=json.dumps({"skillId": "amzn1.ask.skill.new"}))
+
+    monkeypatch.setattr(smapi_ops, "_run_ask", runner)
+    payload = {"manifest": {"marker": True}}
+    assert smapi_ops.create_skill(payload) == "amzn1.ask.skill.new"
+    assert argvs == [["ask", "smapi", "create-skill-for-vendor",
+                      "--manifest", argvs[0][4]]]
+    assert "--vendor-id" not in argvs[0]  # the installed CLI has no such flag
+    assert payloads == [payload]
+
+
+def test_create_skill_raises_on_nonzero_exit(monkeypatch):
+    monkeypatch.setattr(smapi_ops, "_run_ask",
+                        lambda argv: _completed(argv, 1, stderr="validation failed"))
+    with pytest.raises(SmapiError, match="exited 1"):
+        smapi_ops.create_skill({"manifest": {}})
+
+
+def test_create_skill_raises_when_skill_id_absent(monkeypatch):
+    monkeypatch.setattr(smapi_ops, "_run_ask",
+                        lambda argv: _completed(argv, stdout="{}"))
+    with pytest.raises(SmapiError, match="skillId"):
+        smapi_ops.create_skill({"manifest": {}})
+
+
+def test_has_create_skill_command_probes_help_locally(monkeypatch):
+    argvs = []
+
+    def runner(argv):
+        argvs.append(list(argv))
+        return _completed(argv)
+    monkeypatch.setattr(smapi_ops, "_run_ask", runner)
+    assert smapi_ops.has_create_skill_command() is True
+    assert argvs == [["ask", "smapi", "create-skill-for-vendor", "--help"]]
+
+    monkeypatch.setattr(smapi_ops, "_run_ask",
+                        lambda argv: _completed(argv, 1, stderr="Command not recognized"))
+    assert smapi_ops.has_create_skill_command() is False
+
+
+def test_deploy_model_passes_file_payload_and_raises_on_failure(monkeypatch):
+    """Direct guard on deploy_model's tmp-file ride (the shared _payload_file):
+    before init-skill folded the dance into one helper, no test exercised the
+    real function (the CLI tests fake smapi_ops.deploy_model whole)."""
+    argvs = []
+    payloads = []
+
+    def runner(argv):
+        argvs.append(list(argv))
+        token = argv[argv.index("--interaction-model") + 1]
+        assert token.startswith("file:")
+        payloads.append(json.loads(Path(token[len("file:"):]).read_text(encoding="utf-8")))
+        return _completed(argv, stdout="")
+    monkeypatch.setattr(smapi_ops, "_run_ask", runner)
+    payload = {"interactionModel": {"marker": True}}
+    assert smapi_ops.deploy_model("skill", "de-DE", payload) is True
+    assert argvs == [["ask", "smapi", "set-interaction-model", "--skill-id", "skill",
+                      "--stage", "development", "--locale", "de-DE",
+                      "--interaction-model", argvs[0][10]]]
+    assert payloads == [payload]
+
+    monkeypatch.setattr(smapi_ops, "_run_ask",
+                        lambda argv: _completed(argv, 1, stderr="boom"))
+    with pytest.raises(SmapiError, match="set-interaction-model"):
+        smapi_ops.deploy_model("skill", "de-DE", payload)

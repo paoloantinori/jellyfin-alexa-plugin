@@ -334,8 +334,12 @@ def test_main_missing_lab_json_refuses(tmp_path, monkeypatch, capsys):
     assert "lab.json" in capsys.readouterr().err
 
 
-def test_cli_module_entrypoint():
+def test_cli_module_entrypoint(tmp_path):
+    # --lab-dir redirects the lab dir: init-skill can now create a real
+    # lab.json in scripts/nlu-lab, so the refusal must fire against a tmp dir,
+    # never against whatever state the production default happens to hold.
     r = subprocess.run([sys.executable, str(CLI_PATH), "run",
+                        "--lab-dir", str(tmp_path),
                         "--locale", "de-DE", "--template", "--label", "x"],
                        capture_output=True, text=True)
     assert r.returncode == 1

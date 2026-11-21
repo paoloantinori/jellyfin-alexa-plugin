@@ -48,3 +48,7 @@ tmp/
 .playwright-mcp/
 .ccgram-uploads/
 .superpowers/
+
+# NLU Lab local state (per-developer skill id + endpoint; init-skill and run output)
+scripts/nlu-lab/lab.json
+scripts/nlu-lab/runs/

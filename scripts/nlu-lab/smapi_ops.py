@@ -10,6 +10,7 @@ a live skill/locale pair this module does not have). nlu_wrapper_battery's
 own profile_nlu returns only the intent name and misses slots/considered
 intents, which the run schema needs.
 """
+import contextlib
 import json
 import os
 import subprocess
@@ -39,11 +40,22 @@ def default_delay() -> float:
 def _ask_json(args: list[str]) -> dict:
     """Run one `ask smapi ...` subcommand and return its parsed JSON stdout.
 
-    Raises SmapiError on nonzero exit, unparseable output, or a non-object
-    payload, so run_battery_rows can translate failures into ERROR rows.
+    args carries the full argv AFTER the leading "ask" (callers pass the
+    "smapi" prefix themselves); prepending it here too would emit
+    `ask smapi smapi ...`, which the CLI rejects with "Command not recognized"
+    (caught by init-skill's argv-pinning tests, 2026-11-21).
+
+    Raises SmapiError on nonzero exit, timeout (the runner's
+    subprocess.TimeoutExpired converted here, so every caller of this choke
+    point refuses cleanly instead of tracing), unparseable output, or a
+    non-object payload, so run_battery_rows can translate failures into
+    ERROR rows.
     """
-    result = _run_ask(["ask", "smapi", *args])
     label = " ".join(args[:2])
+    try:
+        result = _run_ask(["ask", *args])
+    except subprocess.TimeoutExpired as exc:
+        raise SmapiError(f"ask {label} timed out after {exc.timeout}s") from exc
     if result.returncode != 0:
         detail = (result.stderr or result.stdout or "").strip()[:300]
         raise SmapiError(f"ask {label} exited {result.returncode}: {detail}")
@@ -86,26 +98,72 @@ def get_skill_name(skill_id: str) -> str:
     return name
 
 
-def deploy_model(skill_id: str, locale: str, payload: dict) -> bool:
-    """Deploy one locale's interaction model; the payload is written to a tmp
-    file (the CLI's file: form) and unlinked after the call. Raises
-    SmapiError on nonzero exit."""
+def parse_skill_id(payload: dict) -> str | None:
+    """skillId from a create-skill-for-vendor payload (the SMAPI v1 createSkill
+    response; Alexa.NET's Skills.Create, which SmapiManagement.CreateSkillAsync
+    calls, parses the same field). The outer body wrapper is tolerated like
+    every other parser here. None when no usable skillId is present."""
+    data = payload.get("body", payload) if isinstance(payload, dict) else {}
+    skill_id = data.get("skillId")
+    return skill_id if isinstance(skill_id, str) and skill_id else None
+
+
+@contextlib.contextmanager
+def _payload_file(payload: dict):
+    """Write payload to a tmp JSON file and yield its path for the CLI's
+    `file:{path}` form; always unlinked afterwards. The one tmp-file dance
+    behind every file-passing smapi call (create-skill, set-interaction-model)."""
     tmp = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8")
     try:
         json.dump(payload, tmp, ensure_ascii=False)
         tmp.close()
+        yield tmp.name
+    finally:
+        Path(tmp.name).unlink(missing_ok=True)
+
+
+def create_skill(manifest_payload: dict) -> str:
+    """Create a skill via `ask smapi create-skill-for-vendor --manifest file:`
+    and return its skillId. The installed CLI takes no --vendor-id flag (only
+    --manifest/-p/--full-response/--debug; verified against its --help): the
+    vendor comes from the ask profile's own state. Raises SmapiError on nonzero
+    exit, unparseable output, or a payload without skillId."""
+    with _payload_file(manifest_payload) as path:
+        data = _ask_json(["smapi", "create-skill-for-vendor",
+                          "--manifest", f"file:{path}"])
+    skill_id = parse_skill_id(data)
+    if not skill_id:
+        raise SmapiError("create-skill response carries no skillId")
+    return skill_id
+
+
+def has_create_skill_command() -> bool:
+    """True when the installed ask CLI knows `smapi create-skill-for-vendor`.
+    Resolved locally via --help (the CLI answers before any network call): an
+    unknown subcommand exits 1 with 'Command not recognized' on stderr, a
+    known one exits 0 (probed on this machine)."""
+    try:
+        result = _run_ask(["ask", "smapi", "create-skill-for-vendor", "--help"])
+    except subprocess.TimeoutExpired as exc:
+        raise SmapiError(
+            "timed out probing the ask CLI for create-skill-for-vendor") from exc
+    return result.returncode == 0
+
+
+def deploy_model(skill_id: str, locale: str, payload: dict) -> bool:
+    """Deploy one locale's interaction model via the CLI's file: form (the
+    shared _payload_file tmp dance). Raises SmapiError on nonzero exit."""
+    with _payload_file(payload) as path:
         result = _run_ask(["ask", "smapi", "set-interaction-model",
                            "--skill-id", skill_id, "--stage", "development",
                            "--locale", locale,
-                           "--interaction-model", f"file:{tmp.name}"])
-        if result.returncode != 0:
-            detail = (result.stderr or result.stdout or "").strip()[:300]
-            raise SmapiError(
-                f"ask smapi set-interaction-model ({locale}) exited "
-                f"{result.returncode}: {detail}")
-        return True
-    finally:
-        Path(tmp.name).unlink(missing_ok=True)
+                           "--interaction-model", f"file:{path}"])
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout or "").strip()[:300]
+        raise SmapiError(
+            f"ask smapi set-interaction-model ({locale}) exited "
+            f"{result.returncode}: {detail}")
+    return True
 
 
 def parse_build_status(payload: dict) -> str:
