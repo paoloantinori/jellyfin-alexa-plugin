@@ -12,6 +12,7 @@ intents, which the run schema needs.
 """
 import json
 import os
+import subprocess
 import tempfile
 import time
 from pathlib import Path
@@ -130,14 +131,15 @@ def parse_build_status(payload: dict) -> str:
 def wait_for_build(skill_id: str, locale: str, timeout_s: float = 600) -> bool:
     """Poll get-skill-status (no --stage flag on this subcommand) every
     POLL_INTERVAL_S until SUCCEEDED (True), FAILED (raise), or the deadline
-    (False). A poll that itself fails (CLI error, bad JSON) reads
-    IN_PROGRESS: the deadline, not a transient CLI hiccup, ends the wait."""
+    (False). A poll that itself fails (CLI error, bad JSON, or the runner's
+    subprocess.TimeoutExpired) reads IN_PROGRESS: the deadline, not a
+    transient CLI hiccup, ends the wait."""
     deadline = time.monotonic() + timeout_s
     while True:
         try:
             status = parse_build_status(
                 _ask_json(["smapi", "get-skill-status", "--skill-id", skill_id]))
-        except SmapiError:
+        except (SmapiError, subprocess.TimeoutExpired):
             status = BUILD_IN_PROGRESS
         if status == BUILD_SUCCEEDED:
             return True
@@ -171,8 +173,9 @@ def run_battery_rows(profile_fn, rows, delay: float | None = None) -> list[dict]
     dict per row: {utterance, selected_intent, slots, considered_intents,
     status} with status from runs.RowStatus. Every pair of consecutive
     profile calls (retries included) is spaced by `delay` (None =
-    SMAPI_DELAY env, repo default 1.5). A row whose profile call fails is
-    retried exactly once (the JF-406 single-500 class); a second failure
+    SMAPI_DELAY env, repo default 1.5). A row whose profile call raises or
+    returns a non-dict is retried exactly once (the JF-406 single-500
+    class); a second failure
     maps the row to ERROR and the loop continues, so one bad row never
     aborts the run. A response without selectedIntent maps to NO_SELECTION:
     SmapiClient.parse_profile_nlu_result raises SmapiError on that shape and
@@ -192,13 +195,15 @@ def run_battery_rows(profile_fn, rows, delay: float | None = None) -> list[dict]
             else:
                 time.sleep(delay)
             try:
-                response = profile_fn(utterance)
-                if not isinstance(response, dict):
-                    raise SmapiError(
-                        f"profile_fn returned {type(response).__name__}, expected a dict")
-                break
+                candidate = profile_fn(utterance)
             except Exception:  # noqa: BLE001 - one JF-406 retry, then ERROR row
                 continue
+            # Assign only a dict, never the bad value: the sentinel must stay
+            # _MISSING for every failed attempt shape (raise, None, non-dict)
+            # or a non-dict would flow into the parser and abort the battery.
+            if isinstance(candidate, dict):
+                response = candidate
+                break
         if response is _MISSING:
             out.append({"utterance": utterance, "selected_intent": None,
                         "slots": {}, "considered_intents": [],

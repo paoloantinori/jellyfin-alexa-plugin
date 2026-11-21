@@ -5,11 +5,13 @@ manifest/status samples tolerate the outer body wrapper because the CLI's
 --full-response mode wraps, and smapi_client's simulate parsing unwraps the
 same way.
 """
+import subprocess
 import time
 
 import _paths
 _paths.bootstrap()
 
+import smapi_ops
 from battery import BatteryRow
 from runs import RowStatus
 from smapi_client import SmapiError
@@ -141,3 +143,38 @@ def test_battery_rows_transient_failure_recovers_on_retry():
     assert state["failed"] is True
     assert out[0]["status"] is RowStatus.OK
     assert out[0]["selected_intent"] == "PlaySongIntent"
+
+
+def test_battery_rows_non_dict_response_is_error_not_abort():
+    attempts = []
+
+    def fake(utterance):
+        attempts.append(utterance)
+        if utterance == "bad":
+            return None  # non-dict on BOTH attempts: the guard must fire twice
+        return _ok_response(utterance)
+
+    out = run_battery_rows(fake, _rows("bad", "good"), 0)
+    assert attempts.count("bad") == 2
+    assert "good" in attempts  # the following row is still probed
+    assert out[0]["status"] is RowStatus.ERROR
+    assert out[0]["selected_intent"] is None
+    assert out[1]["status"] is RowStatus.OK
+    assert out[1]["selected_intent"] == "PlaySongIntent"
+
+
+def test_wait_for_build_timeout_expired_poll_reads_in_progress(monkeypatch):
+    polls = iter([
+        subprocess.TimeoutExpired(cmd="ask smapi get-skill-status", timeout=120),
+        {"interactionModel": {"lastModified": {"status": "SUCCEEDED", "locale": "de-DE"}}},
+    ])
+
+    def fake_ask_json(args):
+        nxt = next(polls)
+        if isinstance(nxt, Exception):
+            raise nxt
+        return nxt
+
+    monkeypatch.setattr(smapi_ops, "_ask_json", fake_ask_json)
+    monkeypatch.setattr(smapi_ops, "POLL_INTERVAL_S", 0)
+    assert smapi_ops.wait_for_build("skill", "de-DE", timeout_s=30) is True
