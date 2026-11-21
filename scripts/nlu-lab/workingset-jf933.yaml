@@ -1,0 +1,16 @@
+# scripts/nlu-lab/workingset-jf933.yaml
+locale: de-DE
+tests:
+  - utterance: "spiele das lied die streithörnchen"
+    expected_intent: PlaySongIntent
+  - utterance: "spiele den titel die streithörnchen"
+    expected_intent: PlaySongIntent
+  - utterance: "spiele den song die streithörnchen"
+    expected_intent: PlaySongIntent
+  - utterance: "spiele die streithörnchen"
+  - utterance: "spiele musik von die streithörnchen"
+    expected_intent: PlayArtistSongsIntent
+  - utterance: "spiele das album magellan"
+    expected_intent: PlayAlbumIntent
+  - utterance: "spiele die playlist nico"
+    expected_intent: PlayPlaylistIntent
