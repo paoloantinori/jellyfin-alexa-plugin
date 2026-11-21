@@ -74,6 +74,13 @@ jobs:
       - name: Validate interaction models
         run: python3 scripts/validate_interaction_models.py
 
+      # NLU Lab unit suite (JF-937): all unit level, smapi monkeypatched,
+      # no SMAPI credentials needed. No PYTEST_DISABLE_PLUGIN_AUTOLOAD here:
+      # that pin is a workstation-only quirk (local HA pytest plugin), the
+      # CI runner has a bare pytest install.
+      - name: lab-tests
+        run: python3 -m pytest scripts/nlu-lab/tests -q
+
       - name: Elicit checker test harness (JF-613)
         run: python3 -m pytest tests/scripts -q
         env:

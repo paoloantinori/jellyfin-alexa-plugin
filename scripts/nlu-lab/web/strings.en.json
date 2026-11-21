@@ -1,0 +1,21 @@
+{
+  "title": "NLU Lab",
+  "before": "before",
+  "after": "after",
+  "utterance": "phrase",
+  "legend_toggle": "intent legend",
+  "legend_title": "intent legend · {count} in the model · {locale}",
+  "legend_empty": "this run carries no intent roster",
+  "summary": "{changed} changed of {total} rows",
+  "tap_hint": "tap a row for details",
+  "absent": "absent",
+  "error": "error",
+  "corrupt": "unreadable run",
+  "no_runs": "no runs for {locale} yet; run `cli.py run` first",
+  "need_two": "pick two readable runs to compare",
+  "detail_title": "detail: {utterance} ({source})",
+  "detail_expected": "expected",
+  "detail_slots": "slots",
+  "detail_considered": "considered",
+  "detail_none": "none"
+}

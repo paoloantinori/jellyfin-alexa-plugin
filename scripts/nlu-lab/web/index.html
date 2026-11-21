@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NLU Lab</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #141414; color: #eee;
+         font: 15px/1.45 system-ui, -apple-system, sans-serif; }
+  main { max-width: 560px; margin: 0 auto; padding: 14px 12px 48px; }
+  header { display: flex; align-items: baseline; gap: 8px; margin-bottom: 12px; }
+  h1 { font-size: 17px; margin: 0; font-weight: 600; }
+  h1 .locale { color: #62a0ea; font-weight: 400; }
+  #lang-btn { margin-left: auto; background: #262626; color: #eee;
+              border: 1px solid #444; border-radius: 12px; padding: 4px 12px;
+              font-size: 13px; }
+  .selectors { display: flex; gap: 8px; margin-bottom: 8px; }
+  .selector { flex: 1; min-width: 0; }
+  .selector label { display: block; color: #888; font-size: 12px; margin-bottom: 3px; }
+  select { width: 100%; background: #1c1c1c; color: #eee; border: 1px solid #444;
+           border-radius: 8px; padding: 8px; font-size: 13.5px; }
+  .toolbar { display: flex; justify-content: flex-end; margin-bottom: 8px; }
+  #legend-btn { background: none; border: none; color: #62a0ea; font-size: 13px;
+                padding: 2px 0; cursor: pointer; }
+  #notice { margin: 12px 0; color: #e5a50a; font-size: 13.5px; }
+  table.matrix { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  .matrix th { text-align: left; color: #888; font-weight: 400; font-size: 12px;
+               padding: 6px 4px; }
+  .matrix td { padding: 8px 4px; border-top: 1px solid #2b2b2b; vertical-align: top; }
+  .matrix tbody tr { cursor: pointer; }
+  .matrix tr.changed { background: #2d1f1f; }
+  td.u { padding-right: 8px; }
+  td.u .utt { display: block; overflow-wrap: anywhere; }
+  td.u .src { display: block; color: #777; font-size: 11px; }
+  td.old, td.new { width: 29%; overflow-wrap: anywhere; }
+  .green { color: #33d17a; } .red { color: #e01b24; } .amber { color: #e5a50a; }
+  .err { color: #c061cb; } .absent { color: #666; }
+  .win { font-weight: 600; }
+  .summary { margin: 10px 0 0; color: #888; font-size: 12.5px; }
+  .card { margin-top: 14px; border: 1px solid #444; border-radius: 8px;
+          background: #1c1c1c; }
+  .card-title { padding: 10px 12px; border-bottom: 1px solid #444; color: #888;
+                font-size: 12.5px; }
+  .card-body { padding: 8px 12px 12px; }
+  .legend-row { padding: 5px 0; font-size: 12.5px; border-top: 1px solid #2b2b2b; }
+  .legend-row:first-child { border-top: none; }
+  .legend-name { color: #ddd; font-weight: 600; display: inline-block; min-width: 104px; }
+  .legend-rest { color: #aaa; overflow-wrap: anywhere; }
+  .detail-line { margin: 6px 0; font-size: 13px; overflow-wrap: anywhere; }
+  .detail-line .k { color: #888; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1><span data-i18n="title">NLU Lab</span> <span class="locale" id="locale-chip"></span></h1>
+    <button id="lang-btn" type="button">EN</button>
+  </header>
+  <div class="selectors">
+    <div class="selector">
+      <label for="sel-a" data-i18n="before">prima</label>
+      <select id="sel-a"></select>
+    </div>
+    <div class="selector">
+      <label for="sel-b" data-i18n="after">dopo</label>
+      <select id="sel-b"></select>
+    </div>
+  </div>
+  <div class="toolbar">
+    <button id="legend-btn" type="button" data-i18n="legend_toggle">legenda intent</button>
+  </div>
+  <p id="notice" hidden></p>
+  <table class="matrix">
+    <thead>
+      <tr><th data-i18n="utterance">frase</th><th data-i18n="before">prima</th><th data-i18n="after">dopo</th></tr>
+    </thead>
+    <tbody id="matrix-body"></tbody>
+  </table>
+  <p class="summary" id="summary"></p>
+  <section class="card" id="legend" hidden>
+    <div class="card-title" id="legend-title"></div>
+    <div class="card-body" id="legend-body"></div>
+  </section>
+  <section class="card" id="detail" hidden>
+    <div class="card-title" id="detail-title"></div>
+    <div class="card-body" id="detail-body"></div>
+  </section>
+</main>
+<script src="app.js"></script>
+</body>
+</html>
