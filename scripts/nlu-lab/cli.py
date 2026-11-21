@@ -1,8 +1,9 @@
-"""NLU Lab CLI. Four subcommands: `init-skill` (create or pin the dedicated lab
+"""NLU Lab CLI. Five subcommands: `init-skill` (create or pin the dedicated lab
 skill and write lab.json), `run` (deploy a model to that skill, wait for the
 build, profile the battery, snapshot a run file), `export` (write a deploy-ready
-payload stamped with the caller's explicit invocation name), and `compare`
-(diff two run files; --expect-zero-changes is the A/A gate).
+payload stamped with the caller's explicit invocation name), `compare`
+(diff two run files; --expect-zero-changes is the A/A gate), and `serve`
+(the read-only phone-first diff webapp over runs/).
 
 Orchestration contract (spec): preflight refusals happen BEFORE any run file
 exists and before any deploy; the run file is created EARLY in the "running"
@@ -27,8 +28,9 @@ import yaml
 import battery
 import models
 import smapi_ops
+import webapp
 from lab_config import LabConfig, LabConfigError
-from runs import RowResult, RunRecord, load_run, save_run
+from runs import RowResult, RunLoadError, RunRecord, load_run, save_run
 from smapi_client import SmapiError
 from validate_interaction_models import validate_single_model
 from validate_versions import get_props_version
@@ -391,14 +393,23 @@ def cmd_export(args) -> int:
 
 
 def _load_run_or_refuse(runs_dir: Path, run_id: str) -> RunRecord:
+    """Thin wrapper: the corrupt-run catch lives in runs.load_run (RunLoadError)
+    so every caller - compare here, the webapp run list - is covered by one guard."""
     path = runs_dir / f"{run_id}.json"
     if not path.is_file():
         raise RunRefused(
             f"run '{run_id}' not found at {path} (pass a run file stem from {runs_dir})")
     try:
         return load_run(path)
-    except (ValueError, KeyError, TypeError, AttributeError, OSError) as exc:
-        raise RunRefused(f"run file {path} unreadable: {exc}") from exc
+    except RunLoadError as exc:
+        raise RunRefused(str(exc)) from exc
+
+
+def cmd_serve(args, *, lab_dir: Path | None = None) -> int:
+    """Serve the read-only diff webapp over the lab's runs dir until Ctrl-C."""
+    lab_dir = _lab_dir_from(args, lab_dir)
+    webapp.serve(lab_dir / "runs", port=args.port)
+    return 0
 
 
 def cmd_compare(args, *, lab_dir: Path | None = None) -> int:
@@ -501,6 +512,12 @@ def build_parser() -> argparse.ArgumentParser:
     compare.add_argument("--expect-zero-changes", action="store_true",
                          help="exit 1 when any row is not 'same' (the A/A gate)")
     compare.set_defaults(func=cmd_compare)
+    serve = sub.add_parser(
+        "serve", parents=[common],
+        help="serve the read-only diff webapp (run list, matrix, legend) for LAN browsing")
+    serve.add_argument("--port", type=int, default=webapp.DEFAULT_PORT, metavar="N",
+                       help=f"TCP port to listen on (default: {webapp.DEFAULT_PORT})")
+    serve.set_defaults(func=cmd_serve)
     return parser
 
 

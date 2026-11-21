@@ -16,6 +16,13 @@ from pathlib import Path
 DIFF_KINDS = ("same", "green", "red", "amber", "error", "absent_old", "absent_new")
 
 
+class RunLoadError(RuntimeError):
+    """A run file exists but cannot be parsed into a RunRecord. The corrupt-run
+    guard lives in load_run itself (not in each caller) so every consumer - the
+    CLI's compare, the webapp's run list - catches one typed exception instead
+    of a raw json/KeyError/TypeError escaping as a traceback."""
+
+
 class RowStatus(str, Enum):
     OK = "ok"
     NO_SELECTION = "no_selection"
@@ -147,31 +154,36 @@ def save_run(runs_dir: Path, run: RunRecord) -> Path:
 
 
 def load_run(path: Path) -> RunRecord:
-    """Read a run file; unknown extra keys are ignored (schema tolerance for older files)."""
-    data = json.loads(Path(path).read_text())
-    results = [
-        RowResult(
-            utterance=r["utterance"],
-            source=r["source"],
-            status=RowStatus(r["status"]),
-            expected_intent=r.get("expected_intent"),
-            selected_intent=r.get("selected_intent"),
-            slots=r.get("slots") or {},
-            considered_intents=r.get("considered_intents") or [],
-            raw=r.get("raw") or {},
+    """Read a run file; unknown extra keys are ignored (schema tolerance for
+    older files). Raises RunLoadError (never a raw json/KeyError/TypeError/
+    OSError) when the file cannot be read or parsed."""
+    try:
+        data = json.loads(Path(path).read_text())
+        results = [
+            RowResult(
+                utterance=r["utterance"],
+                source=r["source"],
+                status=RowStatus(r["status"]),
+                expected_intent=r.get("expected_intent"),
+                selected_intent=r.get("selected_intent"),
+                slots=r.get("slots") or {},
+                considered_intents=r.get("considered_intents") or [],
+                raw=r.get("raw") or {},
+            )
+            for r in data.get("results", [])
+        ]
+        return RunRecord(
+            id=data["id"],
+            timestamp=data["timestamp"],
+            locale=data["locale"],
+            label=data["label"],
+            model_source=data["model_source"],
+            model_sha256=data["model_sha256"],
+            skill_id=data["skill_id"],
+            status=data["status"],
+            error=data.get("error"),
+            intent_roster=data.get("intent_roster") or [],
+            results=results,
         )
-        for r in data.get("results", [])
-    ]
-    return RunRecord(
-        id=data["id"],
-        timestamp=data["timestamp"],
-        locale=data["locale"],
-        label=data["label"],
-        model_source=data["model_source"],
-        model_sha256=data["model_sha256"],
-        skill_id=data["skill_id"],
-        status=data["status"],
-        error=data.get("error"),
-        intent_roster=data.get("intent_roster") or [],
-        results=results,
-    )
+    except (ValueError, KeyError, TypeError, AttributeError, OSError) as exc:
+        raise RunLoadError(f"run file {path} unreadable: {exc}") from exc

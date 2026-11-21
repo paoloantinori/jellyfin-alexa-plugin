@@ -1,5 +1,6 @@
 import json
-from runs import RunRecord, RowResult, RowStatus, load_run, save_run
+import pytest
+from runs import RunLoadError, RunRecord, RowResult, RowStatus, load_run, save_run
 
 def make_row(**kw):
     base = dict(utterance="u", source="fixture", status=RowStatus.OK, expected_intent="PlaySongIntent",
@@ -24,6 +25,24 @@ def test_failed_and_interrupted_roundtrip(tmp_path):
                         model_sha256="0" * 64, skill_id="s", status=status, error="boom",
                         intent_roster=[], results=[])
         assert load_run(save_run(tmp_path, run)).status == status
+
+def test_load_run_raises_runloaderror_on_any_malformed_file(tmp_path):
+    # the corrupt-run guard lives in load_run itself (Task 9 review note) so every
+    # caller (cli compare, the webapp run list) catches one typed exception
+    bad = tmp_path / "bad.json"
+    for content in ("[1, 2, 3]",                 # valid JSON, not a run dict
+                    "{}",                         # missing every required key
+                    "not json at all",            # unparseable
+                    '{"id": "x", "timestamp": "t", "locale": "l", "label": "l", '
+                    '"model_source": "m", "model_sha256": "0", "skill_id": "s", '
+                    '"status": "ok", "results": [{"utterance": "u", "source": "f", '
+                    '"status": "nonsense"}]}'):    # unknown RowStatus value
+        bad.write_text(content, encoding="utf-8")
+        with pytest.raises(RunLoadError):
+            load_run(bad)
+    bad.unlink()
+    with pytest.raises(RunLoadError):
+        load_run(bad)  # missing file is also a RunLoadError, not a naked OSError
 
 def test_diff_judgment_table(tmp_path):
     def rec(rid, rows):
