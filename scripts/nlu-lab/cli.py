@@ -238,9 +238,17 @@ def cmd_run(args, *, lab_dir: Path | None = None,
     try:
         print(f"deploying {args.locale} model from {run.model_source} "
               f"(sha {run.model_sha256[:12]}) to skill {run.skill_id}")
+        try:
+            baseline = smapi_ops.get_build_entry(run.skill_id, args.locale)  # JF-934 witness
+        except smapi_ops.SmapiError as exc:
+            baseline = None
+            print(f"WARNING: pre-deploy build status unreadable ({exc}); the stale-SUCCEEDED "
+                  "guard is DEGRADED for this run (a previous build's success could satisfy "
+                  "the wait)", file=sys.stderr)
+        # an ABSENT entry (fresh skill, nothing deployed yet) needs no warning: baseline stays None silently
         smapi_ops.deploy_model(run.skill_id, args.locale, payload)
         print("deployed; waiting for the model build")
-        if not smapi_ops.wait_for_build(run.skill_id, args.locale):
+        if not smapi_ops.wait_for_build(run.skill_id, args.locale, baseline=baseline):
             raise RuntimeError(f"model build for {args.locale} did not succeed before the timeout")
         print(f"build succeeded; profiling {len(rows)} battery rows")
         row_dicts = smapi_ops.run_battery_rows(profile_fn, rows)

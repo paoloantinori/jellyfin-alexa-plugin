@@ -175,38 +175,77 @@ def deploy_model(skill_id: str, locale: str, payload: dict) -> bool:
     return True
 
 
-def parse_build_status(payload: dict) -> str:
-    """Map a get-skill-status payload to SUCCEEDED / FAILED / IN_PROGRESS.
-
-    Pins the SMAPI v1 per-resource shape the repo's own
-    SmapiManagement.WaitForSkillStatusAsync consumes
-    (interactionModel.lastModified.{status,locale}); the outer body wrapper is
-    optional. An absent lastModified, an absent locale, or any status other
-    than SUCCEEDED/FAILED reads IN_PROGRESS (keep polling): a build whose
-    resource row has not appeared yet cannot be judged.
-    """
+def _locale_entry(payload: dict, locale: str) -> dict | None:
+    """The per-locale interactionModel entry, LIVE shape (probed read-only
+    2026-11-21 against the dev skill): interactionModel[<locale>] = {eTag,
+    lastUpdateRequest: {status, buildDetails}}; the outer body wrapper is
+    optional. None when the locale is absent or any level is malformed
+    (non-dict): guarded, never raises. There is NO lastModified key in the
+    live payload (the plan's earlier pinned shape was fiction; JF-938 tracks
+    the C# consumer of the same drift)."""
     data = _unwrap_body(payload)
-    last_modified = (data.get("interactionModel") or {}).get("lastModified") or {}
-    if not last_modified.get("locale"):
+    im = data.get("interactionModel")
+    if not isinstance(im, dict):
+        return None
+    entry = im.get(locale)
+    return entry if isinstance(entry, dict) and entry else None
+
+
+def _entry_status(entry: dict | None) -> str:
+    """Terminal only on entry.lastUpdateRequest.status. The locale match is
+    structural (the entry is fetched BY locale), so a foreign locale's row
+    cannot end this locale's wait. Absent entry reads IN_PROGRESS: a build
+    whose entry has not appeared yet cannot be judged."""
+    if entry is None:
         return BUILD_IN_PROGRESS
-    status = last_modified.get("status")
+    req = entry.get("lastUpdateRequest")
+    if not isinstance(req, dict):
+        return BUILD_IN_PROGRESS
+    status = req.get("status")
     if status in (BUILD_SUCCEEDED, BUILD_FAILED):
         return status
     return BUILD_IN_PROGRESS
 
 
-def wait_for_build(skill_id: str, locale: str, timeout_s: float = 600) -> bool:
-    """Poll get-skill-status (no --stage flag on this subcommand) every
-    POLL_INTERVAL_S until SUCCEEDED (True), FAILED (raise), or the deadline
-    (False). A poll that itself fails reads IN_PROGRESS: _ask_json converts
-    every failure shape (nonzero exit, bad JSON, the runner's
-    subprocess.TimeoutExpired) into SmapiError, and the deadline, not a
-    transient CLI hiccup, ends the wait."""
+def _status_argv(skill_id: str) -> list[str]:
+    """The ONE get-skill-status argv (no --stage flag on this subcommand):
+    the baseline read and the poll must never drift apart."""
+    return ["smapi", "get-skill-status", "--skill-id", skill_id]
+
+
+def get_build_entry(skill_id: str, locale: str) -> dict | None:
+    """The current per-locale entry (the wait baseline WITNESS): the eTag
+    changes per build, so whole-entry equality is the transition token.
+    RAISES SmapiError on read failure: the CLI distinguishes an absent entry
+    (fresh skill, silent baseline=None) from an unreadable one (degraded
+    guard, loud warning)."""
+    return _locale_entry(_ask_json(_status_argv(skill_id)), locale)
+
+
+def wait_for_build(skill_id: str, locale: str, timeout_s: float = 600,
+                   baseline: dict | None = None) -> bool:
+    """Poll get-skill-status every POLL_INTERVAL_S until SUCCEEDED (True),
+    FAILED (raise), or the deadline (False). JF-934: an entry identical to
+    the PRE-DEPLOY baseline (eTag unchanged) is the previous build's state
+    and is never trusted (stale SUCCEEDED would profile the old model
+    against the new run's sha256); only an entry that differs from the
+    baseline (or any entry, when baseline is None: the first build on a
+    fresh skill) may read terminal. A poll that itself fails reads
+    IN_PROGRESS: _ask_json converts every failure shape (nonzero exit, bad
+    JSON, the runner's subprocess.TimeoutExpired) into SmapiError, and the
+    deadline, not a transient CLI hiccup, ends the wait."""
     deadline = time.monotonic() + timeout_s
     while True:
         try:
-            status = parse_build_status(
-                _ask_json(["smapi", "get-skill-status", "--skill-id", skill_id]))
+            entry = _locale_entry(_ask_json(_status_argv(skill_id)), locale)
+            # Stale predicate on the eTag ALONE (the per-build token): the old
+            # build's own IN_PROGRESS->SUCCEEDED flip keeps the same eTag and
+            # must not satisfy the transition when the baseline was captured
+            # mid-build (re-review residual (a)).
+            stale = (baseline is not None and entry is not None
+                     and entry.get("eTag") is not None
+                     and entry.get("eTag") == baseline.get("eTag"))
+            status = BUILD_IN_PROGRESS if stale else _entry_status(entry)
         except SmapiError:
             status = BUILD_IN_PROGRESS
         if status == BUILD_SUCCEEDED:

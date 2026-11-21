@@ -20,7 +20,7 @@ import smapi_ops
 from battery import BatteryRow
 from runs import RowStatus
 from smapi_client import SmapiError
-from smapi_ops import parse_build_status, parse_skill_id, parse_skill_name, run_battery_rows
+from smapi_ops import parse_skill_id, parse_skill_name, run_battery_rows
 
 
 def _rows(*utterances):
@@ -58,28 +58,31 @@ def test_parse_skill_name_absent_name_is_none():
                                           {"locales": {"en-US": {}}}}}) is None
 
 
-# --- parse_build_status ---
+# --- _locale_entry / _entry_status (LIVE shape, probed 2026-11-21) ---
 
-def test_build_status_body_wrapped_succeeded():
-    payload = {"body": {"interactionModel":
-                        {"lastModified": {"status": "SUCCEEDED", "locale": "de-DE"}}}}
-    assert parse_build_status(payload) == "SUCCEEDED"
+def _entry(status, etag="A1"):
+    return {"eTag": etag, "lastUpdateRequest": {"status": status}}
 
 
-def test_build_status_unwrapped_failed():
-    payload = {"interactionModel":
-               {"lastModified": {"status": "FAILED", "locale": "de-DE"}}}
-    assert parse_build_status(payload) == "FAILED"
+def test_locale_entry_extracts_real_shape():
+    payload = {"interactionModel": {"de-DE": _entry("SUCCEEDED")}}
+    assert smapi_ops._locale_entry(payload, "de-DE") == _entry("SUCCEEDED")
+    assert smapi_ops._locale_entry({"body": payload}, "de-DE") == _entry("SUCCEEDED")  # wrapper tolerated
+    assert smapi_ops._locale_entry(payload, "it-IT") is None  # foreign locale is structurally absent
 
 
-def test_build_status_absent_last_modified_in_progress():
-    assert parse_build_status({"body": {"interactionModel": {}}}) == "IN_PROGRESS"
-    assert parse_build_status({}) == "IN_PROGRESS"
+def test_locale_entry_malformed_levels_are_none():
+    assert smapi_ops._locale_entry({"interactionModel": "unavailable"}, "de-DE") is None  # AttributeError guard
+    assert smapi_ops._locale_entry({"interactionModel": {"de-DE": "x"}}, "de-DE") is None
+    assert smapi_ops._locale_entry({}, "de-DE") is None
 
 
-def test_build_status_absent_locale_in_progress():
-    payload = {"interactionModel": {"lastModified": {"status": "SUCCEEDED"}}}
-    assert parse_build_status(payload) == "IN_PROGRESS"
+def test_entry_status_terminal_only_on_last_update_request():
+    assert smapi_ops._entry_status(_entry("SUCCEEDED")) == smapi_ops.BUILD_SUCCEEDED
+    assert smapi_ops._entry_status(_entry("FAILED")) == smapi_ops.BUILD_FAILED
+    assert smapi_ops._entry_status(_entry("IN_PROGRESS")) == smapi_ops.BUILD_IN_PROGRESS
+    assert smapi_ops._entry_status(None) == smapi_ops.BUILD_IN_PROGRESS
+    assert smapi_ops._entry_status({"eTag": "A1"}) == smapi_ops.BUILD_IN_PROGRESS  # no lastUpdateRequest
 
 
 # --- run_battery_rows ---
@@ -175,7 +178,7 @@ def test_wait_for_build_timeout_expired_poll_reads_in_progress(monkeypatch):
     polls = iter([
         subprocess.TimeoutExpired(cmd="ask smapi get-skill-status", timeout=120),
         _completed(["ask"], stdout=json.dumps(
-            {"interactionModel": {"lastModified": {"status": "SUCCEEDED", "locale": "de-DE"}}})),
+            {"interactionModel": {"de-DE": _entry("SUCCEEDED")}})),
     ])
 
     def runner(argv):
@@ -308,3 +311,89 @@ def test_deploy_model_passes_file_payload_and_raises_on_failure(monkeypatch):
                         lambda argv: _completed(argv, 1, stderr="boom"))
     with pytest.raises(SmapiError, match="set-interaction-model"):
         smapi_ops.deploy_model("skill", "de-DE", payload)
+
+
+# --- JF-934: stale entry, structural locale, transition requirement ---
+
+_ROW_DE_OK = {"interactionModel": {"de-DE": _entry("SUCCEEDED", etag="A1")}}
+_ROW_DE_OK_V2 = {"interactionModel": {"de-DE": _entry("SUCCEEDED", etag="B2")}}
+_ROW_DE_FAIL_V2 = {"interactionModel": {"de-DE": _entry("FAILED", etag="B2")}}
+_BASELINE_ENTRY = _entry("SUCCEEDED", etag="A1")
+
+
+def _pin_row(monkeypatch, payloads):
+    polls = iter(payloads)
+    monkeypatch.setattr(smapi_ops, "_run_ask",
+                        lambda argv: _completed(argv, stdout=json.dumps(next(polls))))
+
+
+def _poll_row(monkeypatch, payload):
+    """The constant-row seam: every poll returns the same payload (itertools
+    forever, so the poll count is unbounded like the real loop)."""
+    import itertools
+    _pin_row(monkeypatch, itertools.repeat(payload))
+
+
+def test_wait_for_build_stale_entry_times_out(monkeypatch):
+    """JF-934 shape (a): an entry identical to the pre-deploy baseline (eTag
+    unchanged) is the PREVIOUS build's success; it must never satisfy the wait."""
+    _poll_row(monkeypatch, _ROW_DE_OK)
+    monkeypatch.setattr(smapi_ops, "POLL_INTERVAL_S", 0)
+    assert smapi_ops.wait_for_build("skill", "de-DE", timeout_s=0.05, baseline=_BASELINE_ENTRY) is False
+
+
+def test_wait_for_build_etag_flip_then_succeeded(monkeypatch):
+    _pin_row(monkeypatch, [_ROW_DE_OK, _ROW_DE_OK_V2])
+    monkeypatch.setattr(smapi_ops, "POLL_INTERVAL_S", 0)
+    assert smapi_ops.wait_for_build("skill", "de-DE", timeout_s=30, baseline=_BASELINE_ENTRY) is True
+
+
+def test_wait_for_build_new_skill_no_baseline_trusts_immediate_success(monkeypatch):
+    _poll_row(monkeypatch, _ROW_DE_OK)
+    monkeypatch.setattr(smapi_ops, "POLL_INTERVAL_S", 0)
+    assert smapi_ops.wait_for_build("skill", "de-DE", timeout_s=30, baseline=None) is True
+
+
+def test_wait_for_build_foreign_locale_entry_times_out(monkeypatch):
+    """JF-934 shape (b), structural: an it-IT entry simply does not exist for
+    a de-DE wait (fetched BY locale), so the wait runs to the deadline."""
+    _poll_row(monkeypatch, {"interactionModel": {"it-IT": _entry("SUCCEEDED")}})
+    monkeypatch.setattr(smapi_ops, "POLL_INTERVAL_S", 0)
+    assert smapi_ops.wait_for_build("skill", "de-DE", timeout_s=0.05) is False
+
+
+def test_wait_for_build_stale_failed_entry_does_not_raise(monkeypatch):
+    _poll_row(monkeypatch, {"interactionModel": {"de-DE": _entry("FAILED")}})
+    monkeypatch.setattr(smapi_ops, "POLL_INTERVAL_S", 0)
+    assert smapi_ops.wait_for_build("skill", "de-DE", timeout_s=0.05, baseline=_entry("FAILED")) is False
+
+
+def test_wait_for_build_changed_failed_entry_raises(monkeypatch):
+    _pin_row(monkeypatch, [_ROW_DE_OK, _ROW_DE_FAIL_V2])
+    monkeypatch.setattr(smapi_ops, "POLL_INTERVAL_S", 0)
+    with pytest.raises(SmapiError, match="FAILED"):
+        smapi_ops.wait_for_build("skill", "de-DE", timeout_s=30, baseline=_BASELINE_ENTRY)
+
+
+def test_wait_for_build_midbuild_flip_same_etag_is_stale(monkeypatch):
+    """Residual (a): the baseline captured MID-BUILD (IN_PROGRESS, eTag A) and
+    the OLD build then completing (SUCCEEDED, same eTag A) must NOT satisfy
+    the transition; only a new eTag does."""
+    baseline = _entry("IN_PROGRESS", etag="A1")
+    _poll_row(monkeypatch, {"interactionModel": {"de-DE": _entry("SUCCEEDED", etag="A1")}})
+    monkeypatch.setattr(smapi_ops, "POLL_INTERVAL_S", 0)
+    assert smapi_ops.wait_for_build("skill", "de-DE", timeout_s=0.05, baseline=baseline) is False
+
+
+def test_get_build_entry_extracts_and_raises_on_read_failure(monkeypatch):
+    monkeypatch.setattr(smapi_ops, "_run_ask",
+                        lambda argv: _completed(argv, stdout=json.dumps(_ROW_DE_OK)))
+    assert smapi_ops.get_build_entry("skill", "de-DE") == _BASELINE_ENTRY
+    monkeypatch.setattr(smapi_ops, "_run_ask",
+                        lambda argv: _completed(argv, stdout=json.dumps({"interactionModel": {}})))
+    assert smapi_ops.get_build_entry("skill", "de-DE") is None  # absent entry, NO raise
+    monkeypatch.setattr(smapi_ops, "_run_ask",
+                        lambda argv: _completed(argv, 1, stderr="boom"))
+    with pytest.raises(SmapiError):
+        smapi_ops.get_build_entry("skill", "de-DE")  # read failure PROPAGATES: the CLI distinguishes
+

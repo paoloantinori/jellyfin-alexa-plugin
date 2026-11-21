@@ -74,9 +74,16 @@ def _workingset(tmp_path, tests, locale="de-DE"):
 
 
 def _happy_smapi(monkeypatch, deploy=None, profile=None):
-    """Patch the four smapi_ops entry points cli calls; returns the ordered call log."""
+    """Patch the smapi_ops entry points cli calls; returns the ordered call log."""
     log = []
     monkeypatch.setattr(smapi_ops, "get_skill_name", lambda sid: LAB_NAME)
+
+    _BASELINE = {"eTag": "A1", "lastUpdateRequest": {"status": "SUCCEEDED"}}
+
+    def _row(sid, loc):
+        log.append(("baseline", sid, loc))
+        return dict(_BASELINE)
+    monkeypatch.setattr(smapi_ops, "get_build_entry", _row)
 
     def _deploy(sid, loc, payload):
         log.append(("deploy", sid, loc))
@@ -85,8 +92,8 @@ def _happy_smapi(monkeypatch, deploy=None, profile=None):
         return True
     monkeypatch.setattr(smapi_ops, "deploy_model", _deploy)
 
-    def _wait(sid, loc, timeout_s=600):
-        log.append(("wait", sid, loc))
+    def _wait(sid, loc, timeout_s=600, baseline=None):
+        log.append(("wait", sid, loc, baseline))
         return True
     monkeypatch.setattr(smapi_ops, "wait_for_build", _wait)
 
@@ -136,7 +143,7 @@ def test_run_happy_path_end_to_end(tmp_path, monkeypatch, capsys):
     assert seen["payload"]["interactionModel"]["languageModel"]["invocationName"] == LAB_INVOCATION
     assert seen["early"].status == "running"
     kinds = [e[0] for e in log]
-    assert kinds[0] == "deploy" and kinds[1] == "wait" and kinds.count("profile") == 4
+    assert kinds[0] == "baseline" and kinds[1] == "deploy" and kinds[2] == "wait" and kinds.count("profile") == 4
 
     run = _single_run(tmp_path)
     assert run.status == "ok" and run.error is None
@@ -331,7 +338,7 @@ def test_deploy_exception_saves_failed_run(tmp_path, monkeypatch, capsys):
     run = _single_run(tmp_path)
     assert run.status == "failed" and "boom" in run.error
     assert run.results == []
-    assert [e[0] for e in log] == ["deploy"]  # wait/battery never ran
+    assert [e[0] for e in log] == ["baseline", "deploy"]  # wait/battery never ran
     assert "failed" in capsys.readouterr().err
 
 
@@ -374,3 +381,48 @@ def test_cli_module_entrypoint(tmp_path):
                        capture_output=True, text=True)
     assert r.returncode == 1
     assert "lab.json" in r.stderr
+
+
+def test_run_baseline_read_failure_warns_and_degrades(tmp_path, monkeypatch, capsys):
+    """Read failure on the pre-deploy status: loud DEGRADED warning, run proceeds."""
+    monkeypatch.setenv("SMAPI_DELAY", "0")
+    lab = _lab_dir(tmp_path)
+    fx = _fixtures(tmp_path, [FX_ROW_A, FX_ROW_B])
+    _happy_smapi(monkeypatch)
+
+    def _boom(sid, loc):
+        raise smapi_ops.SmapiError("ask CLI failed (exit 1)")
+    monkeypatch.setattr(smapi_ops, "get_build_entry", _boom)
+    rc = _cmd(lab, fx, _model_file(tmp_path, _valid_model()))
+    assert rc == 0
+    err = capsys.readouterr().err
+    assert "DEGRADED" in err and "unreadable" in err
+
+
+def test_run_baseline_absent_entry_is_silent(tmp_path, monkeypatch, capsys):
+    """Fresh skill, no entry yet: baseline None with NO warning (nothing can be stale)."""
+    monkeypatch.setenv("SMAPI_DELAY", "0")
+    lab = _lab_dir(tmp_path)
+    fx = _fixtures(tmp_path, [FX_ROW_A, FX_ROW_B])
+    _happy_smapi(monkeypatch)
+    monkeypatch.setattr(smapi_ops, "get_build_entry", lambda sid, loc: None)
+    rc = _cmd(lab, fx, _model_file(tmp_path, _valid_model()))
+    assert rc == 0
+    assert "DEGRADED" not in capsys.readouterr().err
+
+
+def test_run_threads_pre_deploy_baseline_into_wait(tmp_path, monkeypatch):
+    """JF-934: the wait must receive the pre-deploy per-locale entry so a
+    stale SUCCEEDED from the previous build can never satisfy it."""
+    monkeypatch.setenv("SMAPI_DELAY", "0")
+    lab = _lab_dir(tmp_path)
+    fx = _fixtures(tmp_path, [FX_ROW_A, FX_ROW_B])
+    model_path = _model_file(tmp_path, _valid_model())
+    log = _happy_smapi(monkeypatch)
+    rc = _cmd(lab, fx, model_path)
+    assert rc == 0
+    waits = [e for e in log if e[0] == "wait"]
+    assert len(waits) == 1
+    assert waits[0][3] == {"eTag": "A1", "lastUpdateRequest": {"status": "SUCCEEDED"}}
+    baselines = [e for e in log if e[0] == "baseline"]
+    assert len(baselines) == 1 and baselines[0][1] == "amzn1.ask.skill.lab"
