@@ -1,6 +1,8 @@
-"""NLU Lab CLI. Two subcommands: `init-skill` (create or pin the dedicated lab
-skill and write lab.json) and `run` (deploy a model to that skill, wait for the
-build, profile the battery, snapshot a run file).
+"""NLU Lab CLI. Four subcommands: `init-skill` (create or pin the dedicated lab
+skill and write lab.json), `run` (deploy a model to that skill, wait for the
+build, profile the battery, snapshot a run file), `export` (write a deploy-ready
+payload stamped with the caller's explicit invocation name), and `compare`
+(diff two run files; --expect-zero-changes is the A/A gate).
 
 Orchestration contract (spec): preflight refusals happen BEFORE any run file
 exists and before any deploy; the run file is created EARLY in the "running"
@@ -26,7 +28,7 @@ import battery
 import models
 import smapi_ops
 from lab_config import LabConfig, LabConfigError
-from runs import RowResult, RunRecord, save_run
+from runs import RowResult, RunRecord, load_run, save_run
 from smapi_client import SmapiError
 from validate_interaction_models import validate_single_model
 from validate_versions import get_props_version
@@ -353,6 +355,84 @@ def _preflight(args, lab_dir: Path, fixtures: Path):
     return run, rows, payload
 
 
+def cmd_export(args) -> int:
+    """Write a deploy-ready SMAPI payload carrying the CALLER-NAMED invocation
+    name, never the source model's and never the lab's: the plugin's
+    custom-model import deploys the file's invocationName verbatim, so an
+    exported file with a guessed name would rename the importing skill.
+    Fully offline: no lab.json is read, nothing is deployed. Refuses (exit 1,
+    no file written) on a blank name, an unusable model source, or validator
+    errors; warnings print but do not block."""
+    try:
+        name = args.invocation_name
+        if not name or not name.strip():
+            raise RunRefused(
+                "--invocation-name is required: the exported file's invocationName "
+                "is what the plugin's custom-model import deploys verbatim, so the "
+                "lab refuses to guess (never the source model's name, never the lab's)")
+        model, model_source = _resolve_model(args)
+        payload, _, _ = models.prepare_payload(model, name)
+        errors, warnings = validate_single_model(
+            args.locale, payload["interactionModel"]["languageModel"])
+        for w in warnings:
+            print(f"warning: {w}", file=sys.stderr)
+        if errors:
+            raise RunRefused("model preflight found structural errors:\n" + "\n".join(errors))
+        out_dir = Path(args.out) if args.out else Path.cwd()
+        out_dir.mkdir(parents=True, exist_ok=True)
+        path = out_dir / f"{args.locale}-{_slug(args.label)}.json"
+        path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+    except (RunRefused, OSError) as exc:
+        print(f"refusing to export: {exc}", file=sys.stderr)
+        return 1
+    print(f"exported {args.locale} model from {model_source} -> {path} "
+          f"(invocation name: {name!r})")
+    return 0
+
+
+def _load_run_or_refuse(runs_dir: Path, run_id: str) -> RunRecord:
+    path = runs_dir / f"{run_id}.json"
+    if not path.is_file():
+        raise RunRefused(
+            f"run '{run_id}' not found at {path} (pass a run file stem from {runs_dir})")
+    try:
+        return load_run(path)
+    except (ValueError, KeyError, TypeError, AttributeError, OSError) as exc:
+        raise RunRefused(f"run file {path} unreadable: {exc}") from exc
+
+
+def cmd_compare(args, *, lab_dir: Path | None = None) -> int:
+    """Diff RUN_B (new) against RUN_A (baseline): one line per non-same row
+    ("KIND  utterance  (source)") plus a "N changed of M rows" summary. The
+    same-locale guarantee lives in the webapp per spec; the CLI only warns
+    (loudly) on a locale mismatch. --expect-zero-changes turns any non-same
+    row into exit 1 (the A/A gate: comparing a run against itself must be
+    all-same)."""
+    lab_dir = _lab_dir_from(args, lab_dir)
+    try:
+        run_old = _load_run_or_refuse(lab_dir / "runs", args.run_a)
+        run_new = _load_run_or_refuse(lab_dir / "runs", args.run_b)
+    except RunRefused as exc:
+        print(f"refusing to compare: {exc}", file=sys.stderr)
+        return 1
+    if run_old.locale != run_new.locale:
+        print(
+            f"*** WARNING: run {run_old.id} is locale {run_old.locale} but run "
+            f"{run_new.id} is locale {run_new.locale}: a cross-locale diff judges "
+            "rows against incomparable models ***", file=sys.stderr)
+    diffs = run_new.diff_against(run_old)
+    changed = 0
+    for d in diffs:
+        if d.kind == "same":
+            continue
+        changed += 1
+        print(f"{d.kind}  {d.utterance}  ({d.source})")
+    print(f"{changed} changed of {len(diffs)} rows")
+    if args.expect_zero_changes and changed:
+        return 1
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="nlu-lab",
@@ -394,6 +474,33 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("-k", dest="filter_k", default=None, metavar="SUBSTR",
                      help="substring filter on utterances, applied across both battery sources")
     run.set_defaults(func=cmd_run)
+    export = sub.add_parser(
+        "export",
+        help="write a deploy-ready model payload stamped with an explicit invocation name")
+    export.add_argument("--locale", required=True)
+    source = export.add_mutually_exclusive_group(required=True)
+    source.add_argument("--model", type=Path, default=None,
+                        help="path to a model JSON file (interactionModel wrapper or bare languageModel)")
+    source.add_argument("--template", action="store_true",
+                        help="build the locale's model in memory from its YAML template")
+    export.add_argument("--label", required=True,
+                        help="export label; the slug becomes part of the file name")
+    export.add_argument("--invocation-name", required=True, metavar="NAME",
+                        help="invocation name stamped into the payload; MANDATORY because the "
+                             "plugin's custom-model import deploys it verbatim (the lab never "
+                             "substitutes the source model's or the lab's name)")
+    export.add_argument("--out", type=Path, default=None, metavar="DIR",
+                        help="output directory (default: the current directory)")
+    export.set_defaults(func=cmd_export)
+    compare = sub.add_parser(
+        "compare", parents=[common], help="diff two runs row by row (RUN_B against RUN_A)")
+    compare.add_argument("run_a", metavar="RUN_A",
+                         help="baseline run id (a run file stem under runs/)")
+    compare.add_argument("run_b", metavar="RUN_B",
+                         help="new run id; its rows are diffed against RUN_A's")
+    compare.add_argument("--expect-zero-changes", action="store_true",
+                         help="exit 1 when any row is not 'same' (the A/A gate)")
+    compare.set_defaults(func=cmd_compare)
     return parser
 
 
