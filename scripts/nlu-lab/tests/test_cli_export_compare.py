@@ -15,7 +15,7 @@ _paths.bootstrap()
 
 import cli
 import models
-from runs import RowResult, RowStatus, save_run
+from runs import RowResult, RowStatus, RunRecord, save_run
 
 SOURCE_MODEL = {
     "languageModel": {
@@ -144,10 +144,10 @@ RUN_B_ROWS = [
 ]
 
 
-def _save_run(lab_dir, run_id, results, locale="de-DE"):
+def _save_run(lab_dir, run_id, results, locale="de-DE", sha="0" * 64):
     from runs import RunRecord
     run = RunRecord(id=run_id, timestamp="2026-11-21T00:00:00", locale=locale,
-                    label=run_id, model_source="m", model_sha256="0" * 64,
+                    label=run_id, model_source="m", model_sha256=sha,
                     skill_id="s", status="ok", intent_roster=[], results=results)
     save_run(lab_dir / "runs", run)
 
@@ -210,3 +210,36 @@ def test_compare_refuses_malformed_run_file_without_traceback(tmp_path, capsys):
     assert cli.cmd_compare(args, lab_dir=tmp_path) == 1
     err = capsys.readouterr().err
     assert "unreadable" in err and "bad.json" in err
+
+
+def test_compare_sha_mismatch_fails_the_aa_gate_and_warns_otherwise(tmp_path, capsys):
+    """The A/A integrity guard: two runs that probed DIFFERENT models cannot
+    certify zero-change noise; without the gate it is a loud warning."""
+    row = RowResult(utterance="u", source="fixture", status=RowStatus.OK,
+                             expected_intent="X", selected_intent="X", slots={},
+                             considered_intents=["X"], raw={})
+    _save_run(tmp_path, "aaA", [row], sha="a" * 64)
+    _save_run(tmp_path, "aaB", [row], sha="b" * 64)
+    args_gate = cli.build_parser().parse_args(["compare", "aaA", "aaB", "--expect-zero-changes"])
+    rc = cli.cmd_compare(args_gate, lab_dir=tmp_path)
+    assert rc == 1 and "sha mismatch" in capsys.readouterr().err
+    args_plain = cli.build_parser().parse_args(["compare", "aaA", "aaB"])
+    rc = cli.cmd_compare(args_plain, lab_dir=tmp_path)
+    assert rc == 0 and "WARNING" in capsys.readouterr().err
+
+
+def test_compare_etag_mismatch_fails_the_aa_gate(tmp_path, capsys):
+    """Same file, different BUILDS (the skip-deploy false-pass direction):
+    the eTag chain must refuse the gate even when the shas match."""
+    row = RowResult(utterance="u", source="fixture", status=RowStatus.OK,
+                             expected_intent="X", selected_intent="X", slots={},
+                             considered_intents=["X"], raw={})
+    (tmp_path / "runs").mkdir()
+    for rid, etag in (("r1", "E-1"), ("r2", "E-2")):
+        rec = RunRecord(id=rid, timestamp="t", locale="de-DE", label=rid,
+                                 model_source="m", model_sha256="a" * 64, skill_id="s",
+                                 status="ok", intent_roster=[], results=[row], build_etag=etag)
+        save_run(tmp_path / "runs", rec)
+    args = cli.build_parser().parse_args(["compare", "r1", "r2", "--expect-zero-changes"])
+    assert cli.cmd_compare(args, lab_dir=tmp_path) == 1
+    assert "different builds" in capsys.readouterr().err

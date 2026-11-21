@@ -89,6 +89,24 @@ def _scan_runs(runs_dir: Path, locale: str) -> tuple[list[dict], dict[str, RunRe
     return entries, records
 
 
+def _pair_warnings(records: dict, a_entry, b_entry) -> list[str]:
+    """Incomparability signals for the chosen pair (mirrors the CLI compare
+    guards): different models, different builds, different skills. The
+    change-driven matrix stays renderable, but the page says when the pair
+    cannot support a before/after reading."""
+    if not (a_entry and b_entry):
+        return []
+    a, b = records[a_entry["id"]], records[b_entry["id"]]
+    warnings = []
+    if a.model_sha256 != b.model_sha256:
+        warnings.append(f"model sha mismatch: {a.model_sha256[:12]} vs {b.model_sha256[:12]}")
+    if a.build_etag and b.build_etag and a.build_etag != b.build_etag:
+        warnings.append(f"different builds (eTag {a.build_etag} vs {b.build_etag})")
+    if a.skill_id != b.skill_id:
+        warnings.append(f"different lab skills: {a.skill_id} vs {b.skill_id}")
+    return warnings
+
+
 def _resolve_pair(runs_dir: Path, entries: list[dict],
                   run_a: str | None, run_b: str | None) -> tuple[dict | None, dict | None]:
     """Resolve the baseline (a) and the new (b) run entries. Explicit ids must
@@ -168,6 +186,7 @@ def build_page_state(runs_dir: Path, locale: str, run_a: str | None = None,
     resolved_lang = _resolve_lang(lang, locale)
     return {
         "meta": {"locale": locale, "lang": resolved_lang,
+                 "pair_warnings": _pair_warnings(records, a_entry, b_entry),
                  "run_a": a_entry["id"] if a_entry else None,
                  "run_b": b_entry["id"] if b_entry else None,
                  "label_a": a_entry["label"] if a_entry else None,

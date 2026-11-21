@@ -110,13 +110,19 @@ def _validated_payload(model: dict, model_source: str, invocation_name: str,
     return payload, sha, roster
 
 
-def prepare_manifest(endpoint_uri: str, events_uri: str, version: str, skill_name: str,
+def prepare_manifest(endpoint_uri: str, version: str, skill_name: str,
                      template_path: Path | None = None) -> dict:
     """Read the committed skill-manifest template and return a creation payload
     stamped for the lab; the template on disk is never modified.
 
     - INSERTS manifest.apis.custom.endpoint.uri (absent from the template)
-    - fills manifest.events.endpoint.uri (the template ships it empty)
+    - REMOVES the whole manifest.events block and the empty icon URI
+      properties: SMAPI skill CREATION (live 400 evidence, 2026-11-21) rejects
+      the template's events subscriptions (AMAZON.MediaContent.Available is
+      not an allowed SUBSCRIPTION enum value at creation; the plugin's own
+      skill predates that validation) and rejects empty smallIconUri/
+      largeIconUri as unexpected properties. The lab skill needs neither
+      proactive events nor icons: profile-nlu never invokes the endpoint.
     - stamps the version into publishingInformation.testingInstructions
     - stamps skill_name into EVERY publishingInformation.locales.*.name: the
       run command reads the live en-US name at deploy time and refuses a
@@ -130,22 +136,23 @@ def prepare_manifest(endpoint_uri: str, events_uri: str, version: str, skill_nam
         raise InitRefused(f"manifest template {path} unreadable: {exc}") from exc
     manifest = doc.get("manifest") if isinstance(doc, dict) else None
     custom = ((manifest or {}).get("apis") or {}).get("custom")
-    events = (manifest or {}).get("events")
     publishing = (manifest or {}).get("publishingInformation")
     locales = (publishing or {}).get("locales")
     # One up-front shape check (template is repo-committed; this catches a
     # hand-mangled or wrong-file template), then the stamps below are plain.
     if not (isinstance(manifest, dict) and isinstance(custom, dict) and custom
-            and isinstance(events, dict) and isinstance(events.get("endpoint"), dict)
             and isinstance(publishing, dict)
             and isinstance(locales, dict) and locales
             and all(isinstance(entry, dict) for entry in locales.values())):
         raise InitRefused(
             f"{path}: not the expected skill manifest shape (manifest.apis.custom, "
-            "manifest.events.endpoint, publishingInformation.locales of mappings); "
+            "publishingInformation.locales of mappings); "
             "refusing")
     custom["endpoint"] = {"uri": endpoint_uri}
-    events["endpoint"]["uri"] = events_uri
+    manifest.pop("events", None)
+    for icon_key in ("smallIconUri", "largeIconUri"):
+        if not publishing.get(icon_key):
+            publishing.pop(icon_key, None)
     instructions = publishing.get("testingInstructions")
     original = instructions if isinstance(instructions, str) else ""
     publishing["testingInstructions"] = f"nlu-lab {version}. {original}".strip()
@@ -190,7 +197,7 @@ def _init_by_create(args, config_path: Path) -> int:
             "  3. run: init-skill --pin-id <that-id>\n"
             "     (if you named it differently, pass --name '<its exact name>')")
         return 2
-    payload = prepare_manifest(endpoint_uri=args.endpoint, events_uri=args.endpoint,
+    payload = prepare_manifest(endpoint_uri=args.endpoint,
                                version=_plugin_version(), skill_name=args.name)
     skill_id = smapi_ops.create_skill(payload)
     LabConfig.save(config_path, skill_id, args.name, args.invocation)
@@ -236,21 +243,37 @@ def cmd_run(args, *, lab_dir: Path | None = None,
         return response
 
     try:
-        print(f"deploying {args.locale} model from {run.model_source} "
-              f"(sha {run.model_sha256[:12]}) to skill {run.skill_id}")
-        try:
-            baseline = smapi_ops.get_build_entry(run.skill_id, args.locale)  # JF-934 witness
-        except smapi_ops.SmapiError as exc:
-            baseline = None
-            print(f"WARNING: pre-deploy build status unreadable ({exc}); the stale-SUCCEEDED "
-                  "guard is DEGRADED for this run (a previous build's success could satisfy "
-                  "the wait)", file=sys.stderr)
-        # an ABSENT entry (fresh skill, nothing deployed yet) needs no warning: baseline stays None silently
-        smapi_ops.deploy_model(run.skill_id, args.locale, payload)
-        print("deployed; waiting for the model build")
-        if not smapi_ops.wait_for_build(run.skill_id, args.locale, baseline=baseline):
-            raise RuntimeError(f"model build for {args.locale} did not succeed before the timeout")
-        print(f"build succeeded; profiling {len(rows)} battery rows")
+        if args.skip_deploy:
+            print(f"skip-deploy: profiling the ALREADY-deployed model (sha {run.model_sha256[:12]}) "
+                  "for the A/A noise control")
+            try:
+                live = smapi_ops.get_build_entry(run.skill_id, args.locale)
+                if live is not None:
+                    run.build_etag = live.get("eTag")
+            except smapi_ops.SmapiError:
+                pass  # degraded identity: the sha guard still applies
+        else:
+            print(f"deploying {args.locale} model from {run.model_source} "
+                  f"(sha {run.model_sha256[:12]}) to skill {run.skill_id}")
+            try:
+                baseline = smapi_ops.get_build_entry(run.skill_id, args.locale)  # JF-934 witness
+            except smapi_ops.SmapiError as exc:
+                baseline = None
+                print(f"WARNING: pre-deploy build status unreadable ({exc}); the stale-SUCCEEDED "
+                      "guard is DEGRADED for this run (a previous build's success could satisfy "
+                      "the wait)", file=sys.stderr)
+            # an ABSENT entry (fresh skill, nothing deployed yet) needs no warning: baseline stays None silently
+            smapi_ops.deploy_model(run.skill_id, args.locale, payload)
+            print("deployed; waiting for the model build")
+            if not smapi_ops.wait_for_build(run.skill_id, args.locale, baseline=baseline):
+                raise RuntimeError(f"model build for {args.locale} did not succeed before the timeout")
+            try:
+                fresh = smapi_ops.get_build_entry(run.skill_id, args.locale)
+                if fresh is not None:
+                    run.build_etag = fresh.get("eTag")
+            except smapi_ops.SmapiError:
+                pass  # degraded identity: the sha guard still applies
+        print(f"profiling {len(rows)} battery rows")
         row_dicts = smapi_ops.run_battery_rows(profile_fn, rows)
         run.results = [_to_row_result(r, d, raws) for r, d in zip(rows, row_dicts)]
         run.status = STATUS_OK
@@ -406,6 +429,30 @@ def cmd_compare(args, *, lab_dir: Path | None = None) -> int:
     except RunRefused as exc:
         print(f"refusing to compare: {exc}", file=sys.stderr)
         return 1
+    if run_old.skill_id != run_new.skill_id:
+        msg_skill = f"different lab skills: {run_old.skill_id} vs {run_new.skill_id}"
+        if args.expect_zero_changes:
+            print(f"refusing to compare: {msg_skill} (an A/A gate requires the same skill)", file=sys.stderr)
+            return 1
+        print(f"*** WARNING *** {msg_skill}", file=sys.stderr)
+    if (run_old.build_etag is not None and run_new.build_etag is not None
+            and run_old.build_etag != run_new.build_etag):
+        msg_etag = (f"different builds (eTag {run_old.build_etag} vs {run_new.build_etag}): "
+                    "the two runs probed different model builds")
+        if args.expect_zero_changes:
+            print(f"refusing to compare: {msg_etag} (an A/A gate requires the same build)", file=sys.stderr)
+            return 1
+        print(f"*** WARNING *** {msg_etag}", file=sys.stderr)
+    if run_old.model_sha256 != run_new.model_sha256:
+        msg = (f"model sha mismatch: {args.run_a} probed {run_old.model_sha256[:12]}, "
+               f"{args.run_b} probed {run_new.model_sha256[:12]}")
+        if args.expect_zero_changes:
+            # The A/A claim would be fiction: the two runs probed DIFFERENT
+            # models (a --skip-deploy run against the wrong file records the
+            # file's sha, not what is deployed).
+            print(f"refusing to compare: {msg} (an A/A gate requires the same model)", file=sys.stderr)
+            return 1
+        print(f"*** WARNING *** {msg}", file=sys.stderr)
     if run_old.locale != run_new.locale:
         print(
             f"*** WARNING: run {run_old.id} is locale {run_old.locale} but run "
@@ -462,6 +509,10 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--label", required=True, help="run label; slug becomes part of the run id")
     run.add_argument("--workingset", type=Path, default=None,
                      help="optional workingset YAML in the fixture format (its locale must match)")
+    run.add_argument("--skip-deploy", action="store_true",
+                     help="probe the ALREADY-deployed model (A/A noise control: deploy once, "
+                          "probe twice; an identical redeploy mints no new eTag and would "
+                          "time out the build wait, live-verified 2026-11-21)")
     run.add_argument("-k", dest="filter_k", default=None, metavar="SUBSTR",
                      help="substring filter on utterances, applied across both battery sources")
     run.set_defaults(func=cmd_run)

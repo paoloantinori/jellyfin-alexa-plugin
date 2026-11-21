@@ -143,7 +143,9 @@ def test_run_happy_path_end_to_end(tmp_path, monkeypatch, capsys):
     assert seen["payload"]["interactionModel"]["languageModel"]["invocationName"] == LAB_INVOCATION
     assert seen["early"].status == "running"
     kinds = [e[0] for e in log]
-    assert kinds[0] == "baseline" and kinds[1] == "deploy" and kinds[2] == "wait" and kinds.count("profile") == 4
+    assert kinds[0] == "baseline" and kinds[1] == "deploy" and kinds[2] == "wait"
+    assert kinds.count("baseline") == 2  # witness + post-wait eTag capture
+    assert kinds.count("profile") == 4
 
     run = _single_run(tmp_path)
     assert run.status == "ok" and run.error is None
@@ -425,4 +427,24 @@ def test_run_threads_pre_deploy_baseline_into_wait(tmp_path, monkeypatch):
     assert len(waits) == 1
     assert waits[0][3] == {"eTag": "A1", "lastUpdateRequest": {"status": "SUCCEEDED"}}
     baselines = [e for e in log if e[0] == "baseline"]
-    assert len(baselines) == 1 and baselines[0][1] == "amzn1.ask.skill.lab"
+    assert len(baselines) == 2 and all(b[1] == "amzn1.ask.skill.lab" for b in baselines)
+
+
+def test_run_skip_deploy_never_deploys_nor_waits(tmp_path, monkeypatch, capsys):
+    """--skip-deploy is the A/A instrument: probe the already-deployed model;
+    deploy and build-wait must be skipped (the one build-entry read at start
+    is the identity capture, not a baseline witness)."""
+    monkeypatch.setenv("SMAPI_DELAY", "0")
+    lab = _lab_dir(tmp_path)
+    fx = _fixtures(tmp_path, [FX_ROW_A, FX_ROW_B])
+    log = _happy_smapi(monkeypatch)
+    args = cli.build_parser().parse_args(
+        ["run", "--locale", "de-DE", "--model", str(_model_file(tmp_path, _valid_model())),
+         "--label", "aa2", "--skip-deploy"])
+    rc = cli.cmd_run(args, lab_dir=tmp_path, fixtures_dir=fx)
+    assert rc == 0
+    kinds = [e[0] for e in log]
+    assert "deploy" not in kinds and "wait" not in kinds
+    assert kinds.count("baseline") == 1  # the identity capture only
+    assert kinds.count("profile") == 2
+    assert "skip-deploy" in capsys.readouterr().out

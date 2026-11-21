@@ -71,16 +71,19 @@ def test_prepare_manifest_stamps_the_committed_template():
     template = json.loads(template_before)["manifest"]
 
     out = cli.prepare_manifest(endpoint_uri=ENDPOINT,
-                               events_uri=ENDPOINT + "/events",
                                version="9.9.9.9", skill_name=SKILL_NAME)
 
     manifest = out["manifest"]
     # custom endpoint INSERTED (absent from the committed template)
     assert "endpoint" not in template["apis"]["custom"]
     assert manifest["apis"]["custom"]["endpoint"] == {"uri": ENDPOINT}
-    # events endpoint FILLED (the template ships it empty)
-    assert template["events"]["endpoint"]["uri"] == ""
-    assert manifest["events"]["endpoint"]["uri"] == ENDPOINT + "/events"
+    # events block REMOVED and empty icon URIs dropped (live 400 evidence,
+    # 2026-11-21: creation rejects the template's events subscriptions enum
+    # and the empty icon properties; the lab skill needs neither)
+    assert "events" in template and "events" not in manifest
+    assert template["publishingInformation"].get("smallIconUri") == ""
+    assert "smallIconUri" not in manifest["publishingInformation"]
+    assert "largeIconUri" not in manifest["publishingInformation"]
     # version stamped into testingInstructions
     assert "9.9.9.9" in manifest["publishingInformation"]["testingInstructions"]
     # every publishing locale name stamped, no locale dropped
@@ -94,19 +97,19 @@ def test_prepare_manifest_stamps_the_committed_template():
 
 def test_prepare_manifest_refuses_non_template_shapes(tmp_path):
     with pytest.raises(cli.InitRefused):
-        cli.prepare_manifest(ENDPOINT, ENDPOINT, "1.0.0.0", SKILL_NAME,
+        cli.prepare_manifest(ENDPOINT, "1.0.0.0", SKILL_NAME,
                              template_path=tmp_path / "missing.json")
     bad = tmp_path / "bad.json"
     bad.write_text(json.dumps({"nope": 1}), encoding="utf-8")
     with pytest.raises(cli.InitRefused):
-        cli.prepare_manifest(ENDPOINT, ENDPOINT, "1.0.0.0", SKILL_NAME, template_path=bad)
+        cli.prepare_manifest(ENDPOINT, "1.0.0.0", SKILL_NAME, template_path=bad)
     nonlocale = tmp_path / "nonlocale.json"
     nonlocale.write_text(json.dumps({"manifest": {
-        "apis": {"custom": {}}, "events": {"endpoint": {}},
+        "apis": {"custom": {}},
         "publishingInformation": {"testingInstructions": "",
                                   "locales": {"en-US": "jellyfin"}}}}), encoding="utf-8")
     with pytest.raises(cli.InitRefused):
-        cli.prepare_manifest(ENDPOINT, ENDPOINT, "1.0.0.0", SKILL_NAME,
+        cli.prepare_manifest(ENDPOINT, "1.0.0.0", SKILL_NAME,
                              template_path=nonlocale)
 
 
@@ -141,7 +144,8 @@ def test_init_creates_skill_and_writes_lab_json(tmp_path, monkeypatch, capsys):
 
     manifest = payloads[0]["manifest"]
     assert manifest["apis"]["custom"]["endpoint"]["uri"] == ENDPOINT
-    assert manifest["events"]["endpoint"]["uri"] == ENDPOINT
+    assert "events" not in manifest  # pruned for creation (live 400 evidence)
+    assert "smallIconUri" not in manifest["publishingInformation"]
     assert all(e["name"] == SKILL_NAME
                for e in manifest["publishingInformation"]["locales"].values())
     assert get_props_version() in manifest["publishingInformation"]["testingInstructions"]

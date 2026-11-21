@@ -72,6 +72,11 @@ class RunRecord:
     skill_id: str
     status: str  # ok | failed | interrupted
     error: str | None = None
+    # Amazon's per-build identity (the JF-934 eTag): recorded on BOTH the
+    # deploy path (post-wait) and the skip-deploy path (at start), so compare
+    # can refuse an A/A pair whose two runs probed different BUILDS even when
+    # the model file sha matches (the false-pass direction of the sha guard).
+    build_etag: str | None = None
     intent_roster: list[dict] = field(default_factory=list)
     results: list[RowResult] = field(default_factory=list)
 
@@ -137,6 +142,7 @@ def _to_dict(run: RunRecord) -> dict:
         "skill_id": run.skill_id,
         "status": run.status,
         "error": run.error,
+        "build_etag": run.build_etag,
         "intent_roster": run.intent_roster,
         "results": [_row_to_dict(r) for r in run.results],
     }
@@ -182,6 +188,7 @@ def load_run(path: Path) -> RunRecord:
             skill_id=data["skill_id"],
             status=data["status"],
             error=data.get("error"),
+            build_etag=data.get("build_etag"),
             intent_roster=data.get("intent_roster") or [],
             results=results,
         )
