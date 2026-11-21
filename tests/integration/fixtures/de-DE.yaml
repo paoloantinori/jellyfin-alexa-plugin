@@ -328,6 +328,16 @@ tests:
   - utterance: "schau breaking bad staffel 2 folge 1"
     expected_intent: PlayEpisodeIntent
     expected_slots:
+      series_name: {}
+      season_number: {}
+      episode_number: {}
+
+  # The escape hatch for song-title series (stranger things): the series-last
+  # form routes correctly even when the title IS a famous recording (Fable
+  # live-verified 2026-11-21). Pinned so a trainer re-roll can't silently break it.
+  - utterance: "schau staffel 2 folge 1 von stranger things"
+    expected_intent: PlayEpisodeIntent
+    expected_slots:
       season_number: {}
       episode_number: {}
 
@@ -367,7 +377,7 @@ tests:
       media_type: {}
 
   # -------------------------------------------------------------------------
-  # 23. SleepTimerIntent (duration_minutes)
+  # 23. SleepTimerIntent (sleep_duration)
   # -------------------------------------------------------------------------
   - utterance: "stoppe in dreißig minuten"
     expected_intent: SleepTimerIntent

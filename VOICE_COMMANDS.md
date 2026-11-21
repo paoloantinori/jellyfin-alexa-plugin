@@ -137,7 +137,7 @@ Invocation name: **"jellyfin player"**
 | Shuffle All On | `zufallswiedergabe aktivieren` · `zufallswiedergabe einschalten` · `musik zufällig abspielen` · `zufällige wiedergabe an` |
 | Shuffle Play | `spiele die Playlist {playlist} in zufälliger Reihenfolge` · `mische die Playlist {playlist}` · `spiele die Playlist {playlist} im Zufallsmodus` |
 | Skip Forward Back | `springe {seek_direction}` · `springe {seek_amount} {seek_unit} {seek_direction}` · `spule {seek_amount} {seek_unit} {seek_direction}` |
-| Sleep Timer | `stoppe in {sleep_duration}` · `schalte aus in {sleep_duration}` · `stoppe nach {sleep_duration}` · `ausschalten in {sleep_duration}` |
+| Sleep Timer | `stoppe in {sleep_duration}` · `schlaf-timer {sleep_duration}` · `schalte aus in {sleep_duration}` · `stoppe nach {sleep_duration}` · `ausschalten in {sleep_duration}` |
 | Turn Radio Off | `Schalte den Radiomodus aus` · `Deaktiviere den Radiomodus` · `Radiomodus aus` · `Schalte Radio aus` · `Deaktiviere Radio` · `Stoppe den Radiomodus` |
 | Turn Radio On | `Schalte den Radiomodus ein` · `Aktiviere den Radiomodus` · `Radiomodus an` · `Schalte Radio ein` · `Aktiviere Radio` |
 | Unmark Favorite | `Das gefaellt mir nicht` · `Das Video gefaellt mir nicht` · `Das Lied gefaellt mir nicht` · `Die Musik gefaellt mir nicht` · `Entferne das Video aus meinen Favoriten` · `Entferne das Lied aus meinen Favoriten` |

@@ -599,8 +599,11 @@ intents:
     samples:
       - stoppe in {sleep_duration}
       # JF-933 research fix: "schlaf-timer" (an anglicism) is too weak an NLU
-      # carrier boundary; only "eine stunde" fills, number+unit fails. Replaced
-      # with the standard prepositional form (live-verified pattern 2026-11-21).
+      # carrier boundary for compound durations; only the simplest phrase
+      # ("eine stunde") fills. The sample stays (that one phrase is verified
+      # working: PT1H, live 2026-11-21) and the standard prepositional form is
+      # added alongside it for compound durations (sechzig minuten -> PT60M).
+      - schlaf-timer {sleep_duration}
       - schalte aus in {sleep_duration}
       - stoppe nach {sleep_duration}
       - ausschalten in {sleep_duration}
