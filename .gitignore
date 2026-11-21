@@ -38,6 +38,7 @@ test_media
 .claude.local.md
 .claude/worktrees/
 __pycache__/
+.pytest_cache/
 tmp/
 
 # Local Claude/playwright caches (never commit)
@@ -52,3 +53,4 @@ tmp/
 # NLU Lab local state (per-developer skill id + endpoint; init-skill and run output)
 scripts/nlu-lab/lab.json
 scripts/nlu-lab/runs/
+scripts/nlu-lab/tests/__screenshots__/
