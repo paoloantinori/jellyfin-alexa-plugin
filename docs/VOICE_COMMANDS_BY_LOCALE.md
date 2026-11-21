@@ -7049,7 +7049,7 @@ Placeholder legend:
 | `<Wörter aus dem Songtitel>` | `{titleKeywords}` |
 | `<Benutzername>` | `{username}` |
 
-Complete phrase list (493 phrases across 74 commands):
+Complete phrase list (494 phrases across 74 commands):
 
 #### Play music
 
@@ -7236,6 +7236,7 @@ Complete phrase list (493 phrases across 74 commands):
 - `Zu schauen staffel <Staffelnummer> folge <Episodennummer> von <Name der Serie>`
 - `Zu spielen <Name der Serie> staffel <Staffelnummer> folge <Episodennummer>`
 - `Zu schauen <Name der Serie> staffel <Staffelnummer> folge <Episodennummer>`
+- `schau <Name der Serie> staffel <Staffelnummer> folge <Episodennummer>`
 - `spiele folge <Episodennummer> von <Name der Serie>`
 - `schau folge <Episodennummer> von <Name der Serie>`
 - `Zu spielen folge <Episodennummer> von <Name der Serie>`

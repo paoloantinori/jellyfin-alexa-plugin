@@ -317,8 +317,15 @@ tests:
       stable verb is "schau" (fills in both states); "spiele" flips. Re-enable when
       a stable window is confirmed or the carrier is reworked.
 
-  # trainer re-roll 2026-09-20 (skill recreation): worded numbers and the spiele verb lose to PlaySong free-text; schau + digits is the exact-sample shape that routes (spiele flip already documented JF-553)
-  - utterance: "schau stranger things staffel 2 folge 1"
+  # JF-933 fixture rework: "stranger things" removed because it is ALSO a famous
+  # song title; for non-owned series whose title shares a name with a recording,
+  # MusicRecording wins the anchor and PlaySongIntent steals (live-verified with
+  # profile-nlu 2026-11-21, Fable analysis). Owned series route correctly (the bear,
+  # adolescence, barry), and so do non-owned non-song titles (breaking bad, dark).
+  # The series-last form works even for song-title series: "schau staffel 2 folge 1
+  # von stranger things" routes PlayEpisodeIntent. Trainer re-roll context (JF-553)
+  # kept: schau + digits is the exact-sample shape that routes.
+  - utterance: "schau breaking bad staffel 2 folge 1"
     expected_intent: PlayEpisodeIntent
     expected_slots:
       season_number: {}
