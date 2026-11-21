@@ -47,3 +47,4 @@ tmp/
 # Playwright MCP artifacts (never commit)
 .playwright-mcp/
 .ccgram-uploads/
+.superpowers/
