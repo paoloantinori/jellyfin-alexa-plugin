@@ -31,20 +31,22 @@ Subcommands:
 - `export`: produce a deploy-ready custom model JSON (the `{"interactionModel": ...}` wrapping) from any source, with preflight validation and a recommended filename carrying locale and label. This is the authoring side of the publish flow.
 - `serve`: start the read-only webapp on the LAN (phone-friendly), serving the runs directory.
 
-Hard safety guard: the deploy step refuses any skill id that is not the lab skill id from `lab.json`. The household skill and any other skill are out of reach by construction. Deploys toward the live skill remain the existing rebuild-endpoint path, never the lab.
+Hard safety guard: the deploy step refuses any skill id that is not the lab skill id from `lab.json`. `lab.json` is the guard's trust root: a missing or unparseable file makes `run` refuse rather than re-init, and the file pins the lab skill NAME alongside the id, refusing on mismatch. The household skill and any other skill are out of reach by construction. Deploys toward the live skill remain the existing rebuild-endpoint path, never the lab.
 
-Battery: the committed NLU fixtures for the locale (tests/integration/fixtures/<locale>.yaml, same format) plus an optional working-set YAML per case under investigation; the issue #46 table becomes `workingset-jf933.yaml`.
+Reuse over reimplementation: `init-skill` reads the committed `Alexa/Manifest/manifest.json` template from the repo tree in Python and applies the locale/endpoint/version substitutions (the C# generator's real payload is that template; the drift risk is accepted and the lab skill's manifest needs locales and a valid endpoint far more than the full interface set, since profile-nlu never invokes the endpoint). `run` reuses the profile-nlu invocation and payload parsing that already exist in `scripts/nlu_wrapper_battery.py` (parameterized by `--skill-id`, SMAPI_DELAY aware, including the top-level `selectedIntent` shape quirk) and `tests/integration/smapi_client.py`, extracting rather than copying.
+
+Battery: the committed NLU fixtures for the locale (tests/integration/fixtures/<locale>.yaml, same format; the `e2e_*.yaml` siblings in that directory are excluded) plus an optional working-set YAML per case under investigation; the issue #46 table becomes `workingset-jf933.yaml`.
 
 Run JSON schema: `{id, timestamp, locale, label, model_source, model_sha256, skill_id, status, error?, results: [{utterance, source, selected_intent, slots, considered_intents, raw}]}`. The `raw` field keeps the full profile-nlu payload so views can be rebuilt without re-probing. Runs are plain files: diffable, reviewable in chat, and the webapp holds no state of its own.
 
 Webapp views:
 - Run list per locale with labels and timestamps.
-- The routing matrix: rows are the battery utterances, columns are two chosen runs, cells carry the intent short name, changed rows highlighted, regression cells red in the newer run.
+- The routing matrix: rows are the UNION of the two chosen runs' batteries (a row present in only one run shows absent in the other column; a fresh working set against an older baseline is the expected first use, not an edge case), comparison is same-locale only (guard). Cells carry the intent short name. Judgment is INTENT-SELECTION level only: slots are displayed in the row detail but never judged, because catalog-backed slot types have no catalog wiring on the lab skill (decision 2's caveat) and would go permanently red otherwise. A cell whose selected intent differs from the older run is highlighted; it is RED when the newer run's intent fails the row's expectation (a fixture's `expected_intent`, or a working-set row's optional expectation) and AMBER when it changed with no expectation to judge against.
 - Row detail: filled slots, entity resolution status, and the considered intents list.
 - Intent legend: the full intent roster of the model under test (short name, full intent name, one sample each), collapsible.
 - Multi-language chrome from a strings file; en and it first; content stays in the tested locale.
 
-A failed deploy or build timeout marks the run `failed` with the reason and saves it; no ghost runs.
+A failed deploy or build timeout marks the run `failed` with the reason and saves it; a mid-battery interruption saves a partial run with an `interrupted` status; no ghost runs. `scripts/nlu-lab/runs/` is gitignored (raw profile payloads, churn); runs are working artifacts, not repo content.
 
 ### Phase 2: the diagnostics tab (plugin settings page)
 
@@ -59,7 +61,7 @@ The log parser is shared logic: same grammar in the lab (for our workstation log
 ### Phase 3: in-plugin probe and custom model lifecycle
 
 - Single-utterance probe in the tab: an additive profile-nlu call through the plugin's existing SMAPI integration, read-only against the user's own live model. The user types an utterance and sees the selected intent, slots, and considered intents. This is the self-service debugger that would have auto-diagnosed issue #46.
-- Custom model support completed: multi-locale custom models (a locale to URL map in configuration instead of the single CustomModelUrl pair), provenance and status surface (which model is live, stock or custom, hash and date, drift versus current stock), export of the live model for modification, guided import, and the restore path. The publish guide lives in the tab and mirrors to the docs site as a static page.
+- Custom model support completed: multi-locale custom models (a locale-to-URL map in configuration instead of the single CustomModelUrl pair; the map MUST be a Collection DTO, never a Dictionary, per the XmlSerializer IDictionary crash gotcha; the single-pair to map migration is specced when Phase 3 is planned), provenance and status surface (which model is live, stock or custom, hash and date, drift versus current stock), export of the live model for modification, guided import, and the restore path. Live-skill model loading as a run source lands in this phase too (Phase 1's `run` takes `--model` files and `--template` regeneration only). The publish guide lives in the tab and mirrors to the docs site as a static page.
 
 ## What each phase needs
 
@@ -67,7 +69,7 @@ Phase 1: new scripts directory, one-time lab skill creation, zero plugin changes
 
 ## Testing
 
-Phase 1: unit tests for run serialization and the log/parser grammar pieces; the battery itself is the functional test; webapp verified with rendered screenshots (house rule). Phase 2 and 3: unit tests for the endpoints and the parser shared with the lab; on-instance verification per the deploy checklist.
+Phase 1: unit tests for run serialization and battery assembly; the battery itself is the functional test; webapp verified with rendered screenshots (house rule). The log-parser grammar lands with Phase 2 (its first consumer) and is unit-tested there. Phase 2 and 3: unit tests for the endpoints and the parser shared with the lab; on-instance verification per the deploy checklist.
 
 ## Non-goals (v1)
 
