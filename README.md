@@ -345,7 +345,9 @@ The final step links your Jellyfin account to the Alexa skill:
 
 ## Testing
 
-> 🎨 **[Voice Command Explorer](https://paoloantinori.github.io/jellyfin-alexa-plugin/)** — browse every voice command and how it routes between intents, interactively, in all 17 locales (utterance transition graphs).
+> 🎨 **[Voice Command Explorer](https://paoloantinori.github.io/jellyfin-alexa-plugin/)**: browse every voice command and how it routes between intents, interactively, in all 17 locales (utterance transition graphs).
+
+> 🧪 **[NLU Lab](docs/nlu-lab.md)**: iterate on your locale's voice model safely. Deploy candidate models to a dedicated lab skill, probe utterance routing, and see exactly what changed between iterations in a before/after matrix. If a voice command routes to the wrong intent, this is the tool that shows you why and whether your fix breaks anything else.
 
 ### What the committed models contain (and what they don't)
 
