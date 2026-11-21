@@ -75,8 +75,8 @@ def bootstrap() -> None:
 
 - [ ] **Step 3: Run the tests.** This is the spike: if any module runs code at import or writes files, this FAILS and the executor must extract that module's needed functions into the lab with a documented divergence note in the commit message before continuing.
 
-Run: `python3 -m pytest scripts/nlu-lab/tests/test_imports.py -v`
-Expected: PASS.
+Run: `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest scripts/nlu-lab/tests/test_imports.py -v`
+Expected: PASS. (The env prefix is REQUIRED on this workstation for every pytest run in this plan: the Home Assistant pytest plugin autoloads an autouse fixture that errors every test at collection, and at this spike its failure would mimic an import side effect and mislead the extraction path.)
 
 - [ ] **Step 4: Commit**
 
@@ -124,13 +124,13 @@ def test_missing_invocation_name_refuses(tmp_path):
         LabConfig.load(_write(tmp_path, {"skill_id": "s", "skill_name": "n"}))
 
 def test_guard_rejects_foreign_skill(tmp_path):
-    cfg = LabConfig.load(_write(tmp_path, {"skill_id": "amzn1.ask.skill.1", "skill_name": "n"}))
+    cfg = LabConfig.load(_write(tmp_path, {"skill_id": "amzn1.ask.skill.1", "skill_name": "n", "invocation_name": "jellyfin nlu laboratorio"}))
     with pytest.raises(LabConfigError, match="lab skill"):
         cfg.guard_deploy_target("amzn1.ask.skill.OTHER")
 
 def test_guard_rejects_live_name_mismatch(tmp_path):
-    cfg = LabConfig.load(_write(tmp_path, {"skill_id": "amzn1.ask.skill.1", "skill_name": "lab name"}))
-    with pytest.raises(LabConfigError, match="name"):
+    cfg = LabConfig.load(_write(tmp_path, {"skill_id": "amzn1.ask.skill.1", "skill_name": "lab name", "invocation_name": "jellyfin nlu laboratorio"}))
+    with pytest.raises(LabConfigError, match="pinned"):
         cfg.guard_deploy_target("amzn1.ask.skill.1", live_skill_name="some other skill")
 ```
 
@@ -184,7 +184,7 @@ class LabConfig:
         path.write_text(json.dumps({"skill_id": skill_id, "skill_name": skill_name, "invocation_name": invocation_name}, indent=2))
 ```
 
-- [ ] **Step 4: Run tests.** `python3 -m pytest scripts/nlu-lab/tests/test_lab_config.py -v`. Expected: 5 PASS.
+- [ ] **Step 4: Run tests.** `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest scripts/nlu-lab/tests/test_lab_config.py -v`. Expected: 6 PASS.
 
 - [ ] **Step 5: Commit.** `git add scripts/nlu-lab/ && git commit -m "nlu-lab: lab.json trust root and deploy guard"`
 
@@ -332,11 +332,11 @@ tests:
 - Create: `scripts/nlu-lab/smapi_ops.py`
 - Test: `scripts/nlu-lab/tests/test_smapi_ops.py`
 
-- [ ] **Step 1: Write the failing tests** (pure-parse level, no network): `parse_skill_name` extracts the name from a SAMPLE `ask smapi get-skill-manifest` payload (pin the sample in the test: `{"manifest": {"publishingInformation": {"locales": {"en-US": {"name": "jellyfin nlu lab"}}}}}`; note the installed ask CLI has NO `get-skill` subcommand, `get-skill-manifest` is the live-name source); `parse_build_status` maps a SAMPLE `get-skill-status` payload's `interactionModel.locales[locale]` field to SUCCEEDED, FAILED, or IN_PROGRESS (pin the sample shape in the test); `run_battery_rows(profile_fn, rows, delay)` with a recording fake profile_fn spaces calls by the delay, maps a missing `selectedIntent` to NO_SELECTION, maps an exception to ERROR after exactly one retry (the JF-406 single-500 class), and never lets one error row abort the loop.
+- [ ] **Step 1: Write the failing tests** (pure-parse level, no network): `parse_skill_name` extracts the name from a SAMPLE `ask smapi get-skill-manifest` payload (pin the sample in the test: `{"manifest": {"publishingInformation": {"locales": {"en-US": {"name": "jellyfin nlu lab"}}}}}`; note the installed ask CLI has NO `get-skill` subcommand, `get-skill-manifest` is the live-name source); `parse_build_status` maps a SAMPLE `get-skill-status` payload to SUCCEEDED, FAILED, or IN_PROGRESS, pinning the SMAPI v1 per-resource shape the repo's own SmapiManagement.WaitForSkillStatusAsync consumes: `{"body": {"interactionModel": {"lastModified": {"status": "SUCCEEDED", "locale": "de-DE"}}}}` (tolerate the outer `body` wrapper being present or absent, and an absent locale meaning IN_PROGRESS; a WRONG pinned shape here would pass its unit test while wait_for_build burns the full 600s timeout on every live deploy, so at Task 12 Step 2 the first live build-wait also dumps the raw payload once and the executor eyeballs parse_build_status against it before freezing); `run_battery_rows(profile_fn, rows, delay)` with a recording fake profile_fn spaces calls by the delay, maps a missing `selectedIntent` to NO_SELECTION, maps an exception to ERROR after exactly one retry (the JF-406 single-500 class), and never lets one error row abort the loop.
 
 - [ ] **Step 2: Run.** Expected: FAIL.
 
-- [ ] **Step 3: Implement `smapi_ops.py`**, reusing the repo's ask-CLI runner from `nlu_wrapper_battery` (`_run_ask`, `SMAPI_DELAY` with default 1.5) and the profile payload PARSING from `tests/integration/smapi_client.py` (reuse `SmapiClient.parse_profile_nlu_result` for slots and considered intents; `nlu_wrapper_battery.profile_nlu` returns only the intent name and misses them): `get_skill_name(skill_id)` via `ask smapi get-skill-manifest --skill-id ... --stage development`, parsing the en-US (or first) publishing locale's name; `deploy_model(skill_id, locale, payload)` writing the payload to a tmp file and invoking `ask smapi set-interaction-model --skill-id ... --stage development --locale ... --interaction-model file:`; `wait_for_build(skill_id, locale, timeout_s=600)` polling `ask smapi get-skill-status` every 10 seconds; `profile_row(skill_id, locale, utterance)`; `run_battery_rows(...)` as tested.
+- [ ] **Step 3: Implement `smapi_ops.py`**, reusing the repo's ask-CLI runner from `nlu_wrapper_battery` (`_run_ask`, `SMAPI_DELAY` with default 1.5) and the profile payload PARSING from `tests/integration/smapi_client.py` (reuse `SmapiClient.parse_profile_nlu_result` for slots and considered intents, wrapping it in the thin catch the NO_SELECTION mapping already implies since it raises `SmapiError` on the no-selectedIntent shape; `nlu_wrapper_battery.profile_nlu` returns only the intent name and misses them): `get_skill_name(skill_id)` via `ask smapi get-skill-manifest --skill-id ... --stage development`, parsing the en-US (or first) publishing locale's name; `deploy_model(skill_id, locale, payload)` writing the payload to a tmp file and invoking `ask smapi set-interaction-model --skill-id ... --stage development --locale ... --interaction-model file:`; `wait_for_build(skill_id, locale, timeout_s=600)` polling `ask smapi get-skill-status` every 10 seconds; `profile_row(skill_id, locale, utterance)`; `run_battery_rows(...)` as tested.
 
 - [ ] **Step 4: Run tests.** Expected: PASS.
 
@@ -368,7 +368,7 @@ tests:
 
 - [ ] **Step 2: Run.** Expected: FAIL.
 
-- [ ] **Step 3: Implement:** `prepare_manifest(...)` plus `cmd_init --name N --invocation I --endpoint URI`, creating via `ask smapi create-skill-for-vendor --manifest file:` (the vendor id comes from `~/.ask/ask_states.json` the same way `nlu_wrapper_battery.default_skill_id` reads state; pass `--vendor-id` if the CLI requires it). If the installed ask CLI lacks that subcommand, `cmd_init` prints the developer-console fallback (create a custom skill with the pinned name, then run `init-skill --pin-id <id>`) and exits 2; `--pin-id` verifies the LIVE name via `get-skill-manifest` matches before recording id, name, and invocation_name into lab.json.
+- [ ] **Step 3: Implement:** `prepare_manifest(...)` plus `cmd_init --name N --invocation I --endpoint URI`, creating via `ask smapi create-skill-for-vendor --manifest file:` (the CLI resolves the vendor implicitly from its own state; pass `--vendor-id` explicitly if the installed CLI requires it). If the installed ask CLI lacks that subcommand, `cmd_init` prints the developer-console fallback (create a custom skill with the pinned name, then run `init-skill --pin-id <id>`) and exits 2; `--pin-id` verifies the LIVE name via `get-skill-manifest` matches before recording id, name, and invocation_name into lab.json.
 
 - [ ] **Step 4: Run tests.** Expected: PASS.
 
@@ -429,7 +429,7 @@ tests:
 
 - [ ] **Step 1:** run `init-skill` (console fallback allowed; endpoint = the minix plugin URL, harmless since profile-nlu never invokes it).
 
-- [ ] **Step 2: A/A gate.** `run --template --locale de-DE --label stock-aa-1 --workingset scripts/nlu-lab/workingset-jf933.yaml -k streithörnchen`, then the same again as `stock-aa-2`; `compare stock-aa-1 stock-aa-2 --expect-zero-changes` must pass. Note the `-k` filter covers 5 of the 7 working-set rows (the album and playlist rows lack the substring and are excluded from this fast pass; the full battery in Step 3 covers everything). Any change means noise: the bench stops and the noise is investigated before anything else.
+- [ ] **Step 2: A/A gate.** `run --template --locale de-DE --label stock-aa-1 --workingset scripts/nlu-lab/workingset-jf933.yaml -k streithörnchen`, then the same again as `stock-aa-2`. On the FIRST build-wait, dump the raw `get-skill-status` payload once and eyeball `parse_build_status` against it before freezing (the pinned-sample drift guard from Task 6). Then `compare stock-aa-1 stock-aa-2 --expect-zero-changes` must pass. Note the `-k` filter covers 5 of the 7 working-set rows (the album and playlist rows lack the substring and are excluded from this fast pass; the full battery in Step 3 covers everything). Any change means noise: the bench stops and the noise is investigated before anything else.
 
 - [ ] **Step 3: stock reproduction.** Full `run --template --locale de-DE --label stock-base --workingset workingset-jf933.yaml`; the matrix must record the reporter's table (das Lied to MediaInfo, den Titel and den Song to PlayRadio, the bare title no_selection, musik von to PlayArtistSongs, album and playlist OK). Any divergence from the reporter's observed results is cross-checked with him (his standing offer) before trusting either side.
 
