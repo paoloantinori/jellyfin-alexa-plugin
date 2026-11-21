@@ -598,7 +598,10 @@ intents:
         type: AMAZON.DURATION
     samples:
       - stoppe in {sleep_duration}
-      - schlaf-timer {sleep_duration}
+      # JF-933 research fix: "schlaf-timer" (an anglicism) is too weak an NLU
+      # carrier boundary; only "eine stunde" fills, number+unit fails. Replaced
+      # with the standard prepositional form (live-verified pattern 2026-11-21).
+      - schalte aus in {sleep_duration}
       - stoppe nach {sleep_duration}
       - ausschalten in {sleep_duration}
   - name: SetReminderIntent

@@ -378,7 +378,10 @@ tests:
     expected_intent: ShuffleAllOnIntent
     expected_slots: {}
 
-  - utterance: "schlaf-timer sechzig minuten"
+  # JF-933: "schlaf-timer" carrier replaced with "schalte aus in" (the anglicism
+  # compound is too weak an NLU boundary; live-probed 2026-11-21, research in
+  # claudedocs/research_amazon-duration-german-carrier_2026-11-21.md)
+  - utterance: "schalte aus in sechzig minuten"
     expected_intent: SleepTimerIntent
     expected_slots:
       sleep_duration: {}

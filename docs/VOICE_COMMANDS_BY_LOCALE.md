@@ -7723,7 +7723,7 @@ Complete phrase list (494 phrases across 74 commands):
 **Set a sleep timer**
 
 - `stoppe in <Dauer (5 Minuten, 30 Sekunden, eine halbe Stunde)>`
-- `schlaf-timer <Dauer (5 Minuten, 30 Sekunden, eine halbe Stunde)>`
+- `schalte aus in <Dauer (5 Minuten, 30 Sekunden, eine halbe Stunde)>`
 - `stoppe nach <Dauer (5 Minuten, 30 Sekunden, eine halbe Stunde)>`
 - `ausschalten in <Dauer (5 Minuten, 30 Sekunden, eine halbe Stunde)>`
 

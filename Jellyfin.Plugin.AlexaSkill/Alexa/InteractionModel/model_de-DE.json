@@ -693,7 +693,7 @@
         ],
         "samples": [
           "stoppe in {sleep_duration}",
-          "schlaf-timer {sleep_duration}",
+          "schalte aus in {sleep_duration}",
           "stoppe nach {sleep_duration}",
           "ausschalten in {sleep_duration}"
         ]
