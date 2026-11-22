@@ -1,47 +1,46 @@
 # NLU Lab: test your locale's voice model before it breaks
 
-The NLU Lab is a command-line tool for iterating on Alexa interaction models safely. It deploys candidate models to a dedicated lab skill (never your live skill), probes utterance routing against them, and shows exactly what changed between two iterations as a before/after matrix.
+Think of Alexa as a mail sorting office. Every sentence you say is a letter, and each of the roughly 74 things the skill can do is a pigeonhole. The interaction model is the sorting rulebook. When you change one sorting rule (adding a word, removing a synonym), other letters can end up in the wrong pigeonhole without you noticing. The NLU Lab re-sorts the same batch of letters before and after your change, and shows you exactly which ones moved.
 
-## Why you want this
+## Important: a green lab result does not mean it works on your skill
 
-When a voice command does not reach the right intent, the cause is usually a routing conflict in the interaction model: one intent's vocabulary overlaps another's, or a greedy slot type absorbs phrases meant for a different intent. Finding these conflicts by trial and error on a real device is slow, and every fix risks breaking a different route.
+Your live skill carries your library's data (artist names, album titles, series names) in Amazon's catalog system. The lab skill does not. This changes how Alexa resolves competition between commands. A routing result that is correct on the lab can be wrong on your real skill. Always confirm important changes against the live skill before shipping.
 
-The lab turns this into a three-minute loop:
+## Who this is for
 
-1. Edit the locale's YAML template
-2. Deploy to the lab skill and probe your test utterances
-3. Read the before/after matrix: green means a fix worked, red means a regression, amber means a route changed with no expectation to judge against
+**If a voice command in your language goes to the wrong place**, you do not need this tool. Just tell us the phrase: open a GitHub issue saying what you said, what happened, and what you expected. Native speakers of the 15 non-English, non-Italian locales are especially valuable; you need no tooling to help.
+
+**If you want to test model changes yourself** (a contributor, or a power user who wants to verify a fix before it ships), the lab gives you the full loop in about three minutes per iteration.
 
 ## What you need
 
-- The `ask` CLI v2, authenticated with your Amazon developer account (`ask configure`)
-- Python 3 with `pytest` and `pyyaml`
+- The `ask` CLI v2, authenticated with your Amazon developer account (`ask configure`; requires Node.js)
+- Python 3 with `pyyaml`
 - This repository cloned
 
-## Setup (one time)
+Setup is the bottleneck: installing Node.js and authenticating the ask CLI takes longer than learning the tool. If you already have them, everything below takes about five minutes.
 
-Create the lab skill on your Amazon developer account. This is a separate skill used exclusively for testing; your live Jellyfin skill is never touched by the lab.
-
-```bash
-python3 scripts/nlu-lab/cli.py init-skill --endpoint "https://your-jellyfin-server/alexaskill"
-```
-
-If your ask CLI does not support skill creation, create a custom skill named `jellyfin nlu lab` in the Alexa Developer Console, then:
+## Quick start
 
 ```bash
-python3 scripts/nlu-lab/cli.py init-skill --pin-id amzn1.ask.skill.YOUR_ID
+# One time: create the lab skill
+python3 scripts/nlu-lab/cli.py init-skill --endpoint "https://your-server/alexaskill"
+
+# Test the current model
+python3 scripts/nlu-lab/cli.py run --template --locale de-DE --label baseline \
+  --workingset my-phrases.yaml
+
+# Edit the template, then test the change
+python3 scripts/nlu-lab/cli.py run --template --locale de-DE --label after-fix \
+  --workingset my-phrases.yaml
+
+# See what changed
+python3 scripts/nlu-lab/cli.py compare baseline after-fix
 ```
 
-## Testing a locale's routing
+## The working set: your test phrases
 
-Run the full test battery (committed fixtures plus your working set) against the current model:
-
-```bash
-python3 scripts/nlu-lab/cli.py run --template --locale de-DE --label my-test \
-  --workingset my-test-phrases.yaml
-```
-
-The working set is a YAML file with utterances you care about:
+A YAML file with the utterances you care about:
 
 ```yaml
 locale: de-DE
@@ -54,60 +53,45 @@ tests:
 
 Leave `expected_intent` out for observation-only rows (they show as amber when they change, never red).
 
-### Probing without redeploying
-
-If you want to re-probe the SAME deployed model (to verify that routing results are stable), use `--skip-deploy`:
-
-```bash
-python3 scripts/nlu-lab/cli.py run --template --locale de-DE --label aa-2 \
-  --workingset my-test-phrases.yaml --skip-deploy
-```
-
-This skips the deploy and build wait entirely and profiles the already-deployed model. Deploying the same model twice does not trigger a new Amazon-side build (no new eTag is minted), so a redeploy would time out; `--skip-deploy` is the correct instrument for A/A noise checking.
-
-## Comparing two iterations
-
-After editing the template and regenerating:
-
-```bash
-python3 scripts/nlu-lab/cli.py run --template --locale de-DE --label after-fix \
-  --workingset my-test-phrases.yaml
-python3 scripts/nlu-lab/cli.py compare my-test after-fix
-```
-
-The compare output shows one line per changed route:
+## Reading the comparison
 
 ```
 red      spiele das lied mein lieblingslied    (workingset)
 green    was ist das für ein lied             (workingset)
-4 changed of 25 rows
+2 changed of 25 rows
 ```
 
-Green: the route changed and now satisfies its expectation. Red: the route changed and now violates it. Amber: the route changed with no expectation. Error: the probe itself failed (transient Amazon error, not a routing change).
+- **Green**: the route changed and now satisfies its expectation (your fix worked for this phrase)
+- **Red**: the route changed and now violates its expectation (your fix broke this phrase)
+- **Amber**: the route changed with no expectation to judge against
+- **Error**: the probe itself failed (a transient Amazon error, not a routing change)
 
-### The A/A gate
+### The A/A gate: verify the probing is noise-free
 
-Before trusting any before/after comparison, verify that probing the SAME model twice produces identical results:
+Before trusting any comparison, run the same model twice and confirm zero changes:
 
 ```bash
 python3 scripts/nlu-lab/cli.py run --template --locale de-DE --label aa-1 \
-  --workingset my-test-phrases.yaml -k my-substring
+  --workingset my-phrases.yaml
 python3 scripts/nlu-lab/cli.py run --template --locale de-DE --label aa-2 \
-  --workingset my-test-phrases.yaml -k my-substring --skip-deploy
+  --workingset my-phrases.yaml --skip-deploy
 python3 scripts/nlu-lab/cli.py compare aa-1 aa-2 --expect-zero-changes
 ```
 
-If this gate fails, the probing itself is noisy and any diff is unreliable.
+If this fails, the probing is noisy and any diff is unreliable.
 
-### What compare checks before showing the matrix
+### What compare checks before showing results
 
-The compare command refuses to show a comparison (and exits with an error under `--expect-zero-changes`) when the two runs:
+Under `--expect-zero-changes`, the compare command refuses to show results when the two runs probed different models (sha mismatch), different Amazon builds (eTag mismatch), or different skills. Without the flag, it shows the results with a loud warning instead.
 
-- Probed different models (the file sha does not match)
-- Probed different Amazon builds (the eTag does not match; this catches the case where a `--skip-deploy` run was launched against a different model than the one actually deployed)
-- Were run against different skills (the skill ID does not match)
+## Probing without redeploying
 
-Without `--expect-zero-changes`, these mismatches produce loud warnings but the comparison still renders.
+Amazon does not build a new model version when you deploy identical content, so deploying the same model twice will time out. Use `--skip-deploy` to probe the already-deployed model:
+
+```bash
+python3 scripts/nlu-lab/cli.py run --template --locale de-DE --label re-probe \
+  --workingset my-phrases.yaml --skip-deploy
+```
 
 ## The web dashboard
 
@@ -115,55 +99,55 @@ Without `--expect-zero-changes`, these mismatches produce loud warnings but the 
 python3 scripts/nlu-lab/cli.py serve --port 8766
 ```
 
-Open `http://your-workstation:8766` on your phone or desktop. The dashboard shows the run list with failure counts and model/build identifiers, the before/after matrix with green/red/amber/error/absent cells, per-row detail with filled slots and considered intents, and the full intent legend. The interface language switches between English and Italian based on your browser, with a manual override.
-
-When the selected pair of runs probed different models or builds, a warning banner explains that the pair cannot support a before/after reading.
+Open `http://your-workstation:8766`. The dashboard shows the run list, the before/after matrix, per-row detail with filled slots and considered intents, and the full intent legend. The interface language switches between English and Italian.
 
 ## Exporting a model for the custom import
 
-The plugin supports importing a custom interaction model via URL. To produce a deploy-ready model file with a specific invocation name (the name is required; the plugin deploys it verbatim):
+The plugin supports importing a custom interaction model via URL. To produce a deploy-ready file:
 
 ```bash
 python3 scripts/nlu-lab/cli.py export --template --locale de-DE --label my-model \
   --invocation-name "my jellyfin"
 ```
 
-This writes `de-DE-my-model.json` to the current directory, validated and ready to host at a URL for the plugin's custom model import.
+The invocation name is required (the plugin deploys it verbatim onto your skill).
 
 ## What the lab does NOT do
 
-- It never touches your live Jellyfin skill (deploys go only to the lab skill, enforced by a hard-coded guard that checks the skill ID and the live skill name on every deploy)
-- It does not test the actual playback pipeline (use the E2E tests for that)
-- Catalog-backed slots (artist names, album names) behave differently on the lab skill because it carries no catalog wiring
+- It never touches your live Jellyfin skill (a hard-coded guard checks the skill ID on every deploy)
+- It does not test the actual playback pipeline
+- It does not carry your library's catalog data, so routing that depends on catalog anchoring behaves differently on the lab than on your live skill (see the warning at the top)
 
-## The catalog limitation: what the lab CANNOT reproduce
+## Known routing limitations (platform-level)
 
-This is the most important limitation to understand, learned from live verification during the 1.1.1.0 release cycle.
+These are Alexa platform behaviors, not something the interaction model can fix. They are listed here so you do not chase them in the lab:
 
-**The lab skill has no catalog wiring.** Your live skill does (artist names, album names, series names, movie titles are synced from your library to Amazon's catalog system). The catalog changes how the NLU resolves competition between intents. Concretely:
-
-- A routing result that is CORRECT on the lab skill may be WRONG on the live skill, and vice versa
-- This was observed live: asking to watch a TV series routed correctly on the lab skill but incorrectly on the live skill, because the live skill's artist catalog changed the NLU's confidence in a way the lab could not predict
-- For series whose title is also a famous song title (Stranger Things, Game of Thrones), the live skill may route the request to PlaySongIntent instead of PlayEpisodeIntent because the artist catalog makes the music anchor stronger; the lab, without the catalog, has no such bias
-
-**Practical consequence**: always verify a fix against the live skill (via the NLU test suite or on-device testing) before shipping it. The lab is the fast iteration loop; the live skill is the ground truth.
-
-## Known routing limitations (platform-level, not fixable at the model layer)
-
-These behaviors were verified live during the 1.1.1.0 release cycle and are documented here so you do not chase them in the lab:
-
-1. **Non-famous song titles**: for titles Amazon does not know (personal recordings, children's audio plays), the NLU cannot fill the free-text song slot and routes the utterance to another intent (or no intent at all). The long-term fix is catalog-backed song recognition (in development).
+1. **Non-famous song titles**: for titles Amazon does not know (personal recordings, children's audio plays), the NLU cannot fill the song slot and routes elsewhere. The fix is catalog-backed song recognition (in development).
 
 2. **Series with song-title names**: asking to watch a series whose title is also a famous recording may route to PlaySongIntent. The series-last phrasing ("schau staffel 2 folge 1 von [series]") works reliably.
 
-3. **German compound carriers**: the sleep timer's compound carrier ("schlaf-timer") only fills the duration slot for the simplest phrases ("eine stunde"); compound durations ("sechzig minuten") fail because the compound word is too weak an NLU boundary. Standard prepositional carriers ("stoppe in", "schalte aus in") work for all durations.
+3. **German compound carriers**: the sleep timer's compound carrier ("schlaf-timer") only fills the duration slot for the simplest phrases. Standard prepositional carriers ("stoppe in", "schalte aus in") work for all durations.
+
+## A worked example: fixing the German "play song" steal
+
+This is the real story of issue #46, from report to fix, using the lab at every step.
+
+**The problem**: a German user reported that "spiele das lied [title]" for a children's audio play (not a famous song) was being interpreted as a question about the currently playing media instead of a request to play the song.
+
+**Step 1: reproduce on the lab**. We created a working set with the reporter's exact phrases and ran them against the stock German model. The lab confirmed the steal: "spiele das lied die streithörnchen" routed to MediaInfoIntent instead of PlaySongIntent.
+
+**Step 2: identify the collision**. The word "Lied" was a synonym of the MediaInfoType slot type (used for "what song is this?" questions) while simultaneously being a carrier word in PlaySongIntent samples. For titles Amazon didn't know, the NLU preferred the question intent.
+
+**Step 3: fix and verify on the lab**. We removed "Lied" and "Song" from MediaInfoType, regenerated, deployed to the lab, and compared. The steal was gone (the phrase now fell to the neutral FallbackIntent instead of MediaInfoIntent). No other fixture regressed.
+
+**Step 4: verify on the live skill**. We deployed the fix to the real skill and ran the NLU test suite against it. This caught a regression the lab could not see: a TV episode request that had been working now routed to PlaySongIntent, because the live skill's catalog wiring changed the NLU competition in a way the lab (without catalogs) could not reproduce. We fixed the regression and shipped.
 
 ## Technical details
 
 - `scripts/nlu-lab/` is the tool root; `runs/` holds JSON run files (gitignored)
 - The deploy guard reads `scripts/nlu-lab/lab.json` and refuses to deploy to any skill that is not the pinned lab skill
-- Build-state waiting uses the SMAPI eTag as the per-build identity token, so a stale build result is never trusted (a redeploy that mints no new eTag is correctly detected and does not falsely satisfy the wait)
-- Each run file records the model sha, the build eTag, and the skill ID, so the compare command can verify pair integrity without re-probing
+- Build-state waiting uses the SMAPI eTag as the per-build identity token, so a stale build result is never trusted
+- Each run file records the model sha, the build eTag, and the skill ID, so the compare command can verify pair integrity
 - The NLU fixtures live in `tests/integration/fixtures/<locale>.yaml`; the lab loads them plus your working set
-- The `-k` flag filters the battery by substring, which is the fast iteration loop (the full de-DE battery is 83 fixture rows plus your working set; a filtered run with 5 rows completes in seconds)
-- The lab skill's manifest is created from the plugin's committed manifest template, pruned of the events block and empty icon URIs (Amazon's skill creation API rejects both since late 2026)
+- The `-k` flag filters the battery by substring (a fast iteration loop; the full de-DE battery is 83 fixture rows)
+- The lab skill's manifest is created from the plugin's template, pruned of the events block and empty icon URIs (Amazon's skill creation API rejects both)
