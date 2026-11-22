@@ -250,9 +250,29 @@ def cmd_run(args, *, lab_dir: Path | None = None,
                 live = smapi_ops.get_build_entry(run.skill_id, args.locale)
                 if live is not None:
                     run.build_etag = live.get("eTag")
+                    # JF-942: verify the build is in a good state before probing
+                    status = (live.get("lastUpdateRequest") or {}).get("status")
+                    if status and status != "SUCCEEDED":
+                        print(f"WARNING: deployed build status is {status} (not SUCCEEDED); "
+                              "results may reflect a partially built or failed model",
+                              file=sys.stderr)
             except smapi_ops.SmapiError:
                 pass  # degraded identity: the sha guard still applies
         else:
+            # JF-942 auto-skip hint: if the most recent ok run against this skill
+            # carried the same sha, the redeploy will mint no new eTag and time out
+            for prev_path in sorted((runs_dir).glob("*.json"), reverse=True):
+                try:
+                    prev = load_run(prev_path)
+                except RunLoadError:
+                    continue
+                if (prev.skill_id == run.skill_id and prev.status == STATUS_OK
+                        and prev.model_sha256 == run.model_sha256):
+                    print(f"HINT: sha {run.model_sha256[:12]} already deployed successfully "
+                          f"(run {prev.label or prev_path.stem}); an identical redeploy will "
+                          "mint no new eTag and time out after 600s. Consider --skip-deploy.",
+                          file=sys.stderr)
+                    break
             print(f"deploying {args.locale} model from {run.model_source} "
                   f"(sha {run.model_sha256[:12]}) to skill {run.skill_id}")
             try:
