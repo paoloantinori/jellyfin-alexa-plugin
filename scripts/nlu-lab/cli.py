@@ -395,13 +395,41 @@ def cmd_export(args) -> int:
     return 0
 
 
+def _resolve_run_id(runs_dir: Path, run_id: str) -> str:
+    """JF-943: users think in labels ('stock-base'), not timestamped stems
+    ('20261121-183426-stock-base'). Resolution order: exact stem match, then
+    the NEWEST run whose label equals the argument, then the newest run whose
+    stem CONTAINS the argument. Returns the resolved stem."""
+    # 1. Exact stem match (the current behavior, always wins)
+    if (runs_dir / f"{run_id}.json").is_file():
+        return run_id
+    # 2. Label match: scan all runs, find the newest whose label equals
+    candidates: list[tuple[str, str]] = []  # (timestamp_prefix, stem)
+    for p in sorted(runs_dir.glob("*.json"), reverse=True):
+        try:
+            rec = load_run(p)
+        except RunLoadError:
+            continue
+        if rec.label == run_id:
+            return p.stem
+        # 3. Stem-contains match (partial label or partial stem)
+        if run_id in p.stem:
+            candidates.append((p.stem[:15], p.stem))
+    if candidates:
+        return max(candidates)[1]
+    return run_id  # fall through: _load_run_or_refuse will produce the error
+
+
 def _load_run_or_refuse(runs_dir: Path, run_id: str) -> RunRecord:
     """Thin wrapper: the corrupt-run catch lives in runs.load_run (RunLoadError)
     so every caller - compare here, the webapp run list - is covered by one guard."""
-    path = runs_dir / f"{run_id}.json"
+    resolved = _resolve_run_id(runs_dir, run_id)
+    if resolved != run_id:
+        print(f"resolved '{run_id}' -> {resolved}")
+    path = runs_dir / f"{resolved}.json"
     if not path.is_file():
         raise RunRefused(
-            f"run '{run_id}' not found at {path} (pass a run file stem from {runs_dir})")
+            f"run '{run_id}' not found at {path} (pass a run label or file stem from {runs_dir})")
     try:
         return load_run(path)
     except RunLoadError as exc:

@@ -243,3 +243,24 @@ def test_compare_etag_mismatch_fails_the_aa_gate(tmp_path, capsys):
     args = cli.build_parser().parse_args(["compare", "r1", "r2", "--expect-zero-changes"])
     assert cli.cmd_compare(args, lab_dir=tmp_path) == 1
     assert "different builds" in capsys.readouterr().err
+
+
+def test_compare_resolves_labels_to_stems(tmp_path, capsys):
+    """JF-943: users type labels, not timestamped stems."""
+    row = RowResult(utterance="u", source="fixture", status=RowStatus.OK,
+                    expected_intent="X", selected_intent="X", slots={},
+                    considered_intents=["X"], raw={})
+    runs_dir = tmp_path / "runs"
+    runs_dir.mkdir()
+    for rid, label in [("20261121-100000-stock-aa-1", "stock-aa-1"),
+                       ("20261121-110000-stock-aa-2", "stock-aa-2")]:
+        rec = RunRecord(id=rid, timestamp="t", locale="de-DE", label=label,
+                        model_source="m", model_sha256="a" * 64, skill_id="s",
+                        status="ok", intent_roster=[], results=[row], build_etag="E")
+        save_run(runs_dir, rec)
+    args = cli.build_parser().parse_args(["compare", "stock-aa-1", "stock-aa-2"])
+    rc = cli.cmd_compare(args, lab_dir=tmp_path)
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "resolved 'stock-aa-1' -> 20261121-100000-stock-aa-1" in out
+    assert "resolved 'stock-aa-2' -> 20261121-110000-stock-aa-2" in out
