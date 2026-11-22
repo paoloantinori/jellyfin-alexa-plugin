@@ -277,6 +277,19 @@ def cmd_run(args, *, lab_dir: Path | None = None,
         row_dicts = smapi_ops.run_battery_rows(profile_fn, rows)
         run.results = [_to_row_result(r, d, raws) for r, d in zip(rows, row_dicts)]
         run.status = STATUS_OK
+        # JF-941: bracket the battery. If the build eTag changed between the
+        # pre-battery capture and now, a concurrent redeploy mixed two models
+        # in this run: mark it tainted so the compare gate can refuse it.
+        if run.build_etag:
+            try:
+                post = smapi_ops.get_build_entry(run.skill_id, args.locale)
+                if post is not None and post.get("eTag") != run.build_etag:
+                    run.status = "tainted"
+                    run.error = (f"build changed mid-battery (eTag {run.build_etag} -> "
+                                 f"{post.get('eTag')}): routing results may mix two models")
+                    print(f"WARNING: {run.error}", file=sys.stderr)
+            except smapi_ops.SmapiError:
+                pass  # degraded bracket: the sha guard still applies
     except KeyboardInterrupt:
         run.status = STATUS_INTERRUPTED
         done = [r for r in rows if r.utterance in raws]
@@ -296,6 +309,10 @@ def cmd_run(args, *, lab_dir: Path | None = None,
         print(f"run ok: {len(run.results)} rows, "
               f"expectation failures: {run.expectation_failure_count} -> {run_path}")
         return 0
+    if run.status == "tainted":
+        print(f"run TAINTED: {run.error}; results saved but untrustworthy -> {run_path}",
+              file=sys.stderr)
+        return 1
     if run.status == STATUS_INTERRUPTED:
         print(f"run interrupted: {run.error}; partial run saved -> {run_path}",
               file=sys.stderr)
