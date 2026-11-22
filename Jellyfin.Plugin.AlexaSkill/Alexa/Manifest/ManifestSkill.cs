@@ -162,6 +162,24 @@ public class ManifestSkill : Skill
     }
 
     /// <summary>
+    /// JF-939: sanitize the manifest for SKILL CREATION only. SMAPI creation
+    /// validation (live 400 evidence, 2026-11-21) rejects the events
+    /// subscriptions entry "AMAZON.MediaContent.Available" as an invalid
+    /// SUBSCRIPTION enum value at creation (it IS valid in publications,
+    /// which stay). The events block itself (publications + endpoint) stays:
+    /// the plugin genuinely uses proactive events. Called ONLY from
+    /// CreateSkillAsync, never from the update path (the existing production
+    /// skill predates the validation and updates tolerate the full template).
+    /// </summary>
+    public void PrepareForCreation()
+    {
+        if (Manifest.Events?.Subscriptions != null)
+        {
+            Manifest.Events.Subscriptions = null;
+        }
+    }
+
+    /// <summary>
     /// Serialize the manifest to JSON.
     /// </summary>
     /// <returns>JSON string of the manifest.</returns>

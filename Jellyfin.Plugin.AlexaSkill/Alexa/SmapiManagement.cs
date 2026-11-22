@@ -59,10 +59,17 @@ public class SmapiManagement : ManagementApi
     {
         _logger.LogInformation("Creating new skill...");
 
+        // JF-939: sanitize a CLONE for creation, never the shared cached
+        // instance (Plugin.Instance.ManifestSkill is reused for updates;
+        // mutating it would strip subscriptions from every subsequent
+        // UpdateSkillAsync call in the same process).
+        var creationSkill = new ManifestSkill(manifestSkill.Manifest!);
+        creationSkill.PrepareForCreation();
+
         VendorResponse vendor = await this.Vendors.Get().ConfigureAwait(false);
         string vendorId = vendor.Vendors[0].Id;
 
-        SkillId skillId = await this.Skills.Create(vendorId, manifestSkill).ConfigureAwait(false);
+        SkillId skillId = await this.Skills.Create(vendorId, creationSkill).ConfigureAwait(false);
         _logger.LogInformation("Skill creation initiated: {SkillId}", skillId.Id);
 
         await WaitForSkillStatusAsync(skillId.Id).ConfigureAwait(false);
@@ -387,7 +394,12 @@ public class SmapiManagement : ManagementApi
             cancellationToken.ThrowIfCancellationRequested();
 
             var status = await GetSkillStatusAsync(skillId).ConfigureAwait(false);
-            if (status.Manifest.LastModified.Status != SkillStatusState.IN_PROGRESS)
+            // JF-938 note: the property is NAMED LastModified but the
+            // Alexa.NET 5.10.0 JsonProperty binding maps it to the LIVE
+            // `lastUpdateRequest` field the SMAPI API actually sends
+            // (reflection-verified against the pinned DLL; the old
+            // `lastModified` wire key no longer exists in the API).
+            if (status.Manifest?.LastModified?.Status is not null and not SkillStatusState.IN_PROGRESS)
             {
                 return status;
             }

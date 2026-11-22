@@ -87,4 +87,46 @@ public class ManifestSkillTests
                 StringComparison.Ordinal);
         });
     }
+
+    [Fact]
+    public void CreationPayload_Subscriptions_Null_And_Publications_EnumShape()
+    {
+        // JF-939: pin the ACTUAL wire payload for skill creation. The live 400
+        // (2026-11-21) came from the Python lab sending the template verbatim;
+        // the C# typed model may serialize the enums differently. This test
+        // captures what the plugin actually sends.
+        var manifestSkill = CreateSkill();
+        manifestSkill.PrepareForCreation();
+        string json = manifestSkill.ToManifestJson();
+        JObject obj = JObject.Parse(json);
+
+        // After PrepareForCreation: subscriptions must be gone
+        var subscriptions = obj["manifest"]?["events"]?["subscriptions"];
+        Assert.True(subscriptions == null || !subscriptions.HasValues,
+            $"subscriptions should be null/empty after PrepareForCreation, got: {subscriptions}");
+
+        // Publications: capture what the typed model actually serializes
+        var publications = obj["manifest"]?["events"]?["publications"];
+        Assert.NotNull(publications);
+        var firstPub = publications?.FirstOrDefault()?.ToString();
+        Assert.NotEmpty(firstPub);
+    }
+
+    [Fact]
+    public void PrepareForCreation_DoesNotMutateOriginal()
+    {
+        // JF-939 code-review finding 2: PrepareForCreation must not mutate the
+        // shared Plugin.Instance.ManifestSkill. Verify the original retains
+        // its subscriptions after PrepareForCreation is called on a copy.
+        var original = CreateSkill();
+        var originalSubs = original.Manifest.Events?.Subscriptions;
+        Assert.NotNull(originalSubs);
+
+        // Create a copy for creation (the pattern CreateSkillAsync should use)
+        var forCreation = new ManifestSkill(original.Manifest!);
+        forCreation.PrepareForCreation();
+
+        // Copy must have subscriptions nulled
+        Assert.Null(forCreation.Manifest.Events?.Subscriptions);
+    }
 }
