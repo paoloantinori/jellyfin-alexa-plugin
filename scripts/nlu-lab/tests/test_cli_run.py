@@ -474,3 +474,33 @@ def test_run_marks_tainted_when_etag_changes_mid_battery(tmp_path, monkeypatch, 
     run = _single_run(tmp_path)
     assert run.status == "tainted"
     assert "eTag E-1" in run.error
+
+
+def test_run_live_probes_real_skill_no_lab_guard(tmp_path, monkeypatch, capsys):
+    """JF-944: --live profiles the real skill, skips the lab.json guard,
+    and writes a normal run file with the live skill's ID."""
+    monkeypatch.setenv("SMAPI_DELAY", "0")
+    lab = _lab_dir(tmp_path)  # no lab.json created on purpose
+    fx = _fixtures(tmp_path, [FX_ROW_A, FX_ROW_B])
+    model_path = _model_file(tmp_path, _valid_model())
+
+    # Mock the live skill discovery
+    monkeypatch.setattr(cli, "_discover_live_skill_id",
+                        lambda: "amzn1.ask.skill.LIVE-001")
+    log = _happy_smapi(monkeypatch)
+
+    args = cli.build_parser().parse_args(
+        ["run", "--locale", "de-DE", "--model", str(model_path),
+         "--label", "live-check", "--live"])
+    rc = cli.cmd_run(args, lab_dir=lab, fixtures_dir=fx)
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "live:" in out and "LIVE-001" in out
+    kinds = [e[0] for e in log]
+    assert "deploy" not in kinds and "wait" not in kinds and "baseline" not in kinds
+    assert kinds.count("profile") >= 2  # at least one per battery row
+    run = _single_run(lab)
+    assert run.skill_id == "amzn1.ask.skill.LIVE-001"
+    assert run.model_source.startswith("live:")
+    assert run.status == "ok"
+    assert len(run.results) == 2  # the two fixture rows

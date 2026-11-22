@@ -66,6 +66,31 @@ def _lab_dir_from(args, lab_dir: Path | None) -> Path:
     return Path(flagged) if flagged else LAB_DIR_DEFAULT
 
 
+def _discover_live_skill_id() -> str | None:
+    """JF-944: discover the live Jellyfin skill via the ask CLI (NEVER cached).
+    Same discriminator as nlu_wrapper_battery.default_skill_id: the it-IT model
+    is the only one carrying the JellyfinArtist custom slot type."""
+    import json as _json
+    from nlu_wrapper_battery import _run_ask
+    try:
+        out = _run_ask(["ask", "smapi", "list-skills-for-vendor"]).stdout
+        ids = [s.get("skillId") for s in _json.loads(out).get("skills", []) if s.get("skillId")]
+    except Exception:
+        return None
+    for skill_id in ids:
+        if skill_id is None:
+            continue
+        try:
+            result = _run_ask(["ask", "smapi", "get-interaction-model",
+                               "--skill-id", skill_id, "--stage", "development",
+                               "--locale", "it-IT"])
+            if "jellyfinartist" in result.stdout.lower():
+                return skill_id
+        except Exception:
+            continue
+    return None
+
+
 def _slug(label: str) -> str:
     s = re.sub(r"[^a-z0-9]+", "-", label.lower()).strip("-")
     return s or "run"
@@ -243,7 +268,12 @@ def cmd_run(args, *, lab_dir: Path | None = None,
         return response
 
     try:
-        if args.skip_deploy:
+        if getattr(args, "live", False):
+            print(f"live: profiling the REAL skill {run.skill_id} (read-only, catalog wiring active)")
+            row_dicts = smapi_ops.run_battery_rows(profile_fn, rows)
+            run.results = [_to_row_result(r, d, raws) for r, d in zip(rows, row_dicts)]
+            run.status = STATUS_OK
+        elif args.skip_deploy:
             print(f"skip-deploy: profiling the ALREADY-deployed model (sha {run.model_sha256[:12]}) "
                   "for the A/A noise control")
             try:
@@ -359,6 +389,34 @@ def _preflight(args, lab_dir: Path, fixtures: Path):
     guard, model source resolution, structural validation, battery assembly.
     Returns the fully-populated (status=running) RunRecord, the battery rows,
     and the deploy payload."""
+    if getattr(args, "live", False):
+        # JF-944 --live: probe the REAL skill (catalog wiring, ground truth).
+        # The lab.json guard does NOT apply: --live targets a different skill
+        # by definition. The skill is discovered via the ask CLI (the same
+        # JellyfinArtist discriminator nlu_wrapper_battery uses), never cached.
+        skill_id = _discover_live_skill_id()
+        if not skill_id:
+            raise RunRefused(
+                "could not discover the live Jellyfin skill (ask smapi list-skills-for-vendor "
+                "found no skill with the JellyfinArtist custom slot type)")
+        invocation = "live"  # no substitution on the live skill
+        model, model_source = _resolve_model(args)
+        payload, sha, roster = _validated_payload(model, model_source, invocation, args.locale)
+        # Override the skill: the run file records the LIVE skill, not the lab's
+        # (built below in the non-live path)
+        workingset = Path(args.workingset) if args.workingset is not None else None
+        try:
+            rows = battery.load_battery(args.locale, fixtures, workingset, args.filter_k)
+        except battery.WorkingsetRefused as exc:
+            raise RunRefused(str(exc)) from exc
+        run = RunRecord(
+            id=f"{datetime.now():%Y%m%d-%H%M%S}-{_slug(args.label)}",
+            timestamp=f"{datetime.now():%Y-%m-%dT%H:%M:%S}", locale=args.locale,
+            label=args.label, model_source=f"live:{model_source}",
+            model_sha256=sha, skill_id=skill_id, status="running",
+            intent_roster=roster)
+        return run, rows, payload
+
     cfg = LabConfig.load(lab_dir / "lab.json")
 
     try:
@@ -574,6 +632,10 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--label", required=True, help="run label; slug becomes part of the run id")
     run.add_argument("--workingset", type=Path, default=None,
                      help="optional workingset YAML in the fixture format (its locale must match)")
+    run.add_argument("--live", action="store_true",
+                     help="probe the LIVE skill (read-only, profile-nlu only, no deploy, no "
+                          "lab.json guard): ground-truth routing with catalog wiring, the "
+                          "divergence check the lab skill cannot provide (JF-944)")
     run.add_argument("--skip-deploy", action="store_true",
                      help="probe the ALREADY-deployed model (A/A noise control: deploy once, "
                           "probe twice; an identical redeploy mints no new eTag and would "
