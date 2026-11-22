@@ -3,9 +3,10 @@ id: JF-943
 title: >-
   nlu-lab: compare should resolve run labels to file stems (users think in
   labels, not timestamps)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-11-22 07:07'
+updated_date: '2026-11-22 07:20'
 labels: []
 dependencies: []
 references:

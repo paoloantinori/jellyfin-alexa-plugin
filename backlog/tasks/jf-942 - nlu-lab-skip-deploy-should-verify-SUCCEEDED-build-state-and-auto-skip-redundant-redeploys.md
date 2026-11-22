@@ -3,9 +3,10 @@ id: JF-942
 title: >-
   nlu-lab: --skip-deploy should verify SUCCEEDED build state and auto-skip
   redundant redeploys
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-11-22 07:06'
+updated_date: '2026-11-22 07:23'
 labels: []
 dependencies: []
 references:

@@ -3,9 +3,10 @@ id: JF-944
 title: >-
   nlu-lab: --live mode (probe the real skill read-only, ground-truth column for
   the catalog divergence)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-11-22 07:07'
+updated_date: '2026-11-22 07:30'
 labels: []
 dependencies: []
 references:

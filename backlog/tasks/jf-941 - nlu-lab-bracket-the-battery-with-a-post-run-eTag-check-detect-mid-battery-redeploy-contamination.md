@@ -3,9 +3,10 @@ id: JF-941
 title: >-
   nlu-lab: bracket the battery with a post-run eTag check (detect mid-battery
   redeploy contamination)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-11-22 07:06'
+updated_date: '2026-11-22 07:22'
 labels: []
 dependencies: []
 references:
