@@ -58,3 +58,13 @@ scripts/nlu-lab/tests/__screenshots__/
 # local agent artifacts (poteto-mode decision trails, session settings backups)
 .audit/
 .claude/settings.local.json.bak.*
+
+# Machine-local agent state (2026-11-22 cleanup: these were committed by accident;
+# they stay on disk locally but are never public)
+.agent-sandbox/
+.ccgram-uploads/
+.claude/CLAUDE.md
+.claude/settings.local.json
+.claude/pw-cache-xdg/
+.claude/pw-server-registry/
+.claude/pw-mcp.sh
