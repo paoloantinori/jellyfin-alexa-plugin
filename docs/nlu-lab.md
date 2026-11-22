@@ -12,20 +12,43 @@ Your live skill carries your library's data (artist names, album titles, series 
 
 **If you want to test model changes yourself** (a contributor, or a power user who wants to verify a fix before it ships), the lab gives you the full loop in about three minutes per iteration.
 
-## What you need
+## How this tool is meant to be used: an agent sets up, you read the dashboard
 
-- The `ask` CLI v2, authenticated with your Amazon developer account (`ask configure`; requires Node.js)
-- Python 3 with `pyyaml`
-- This repository cloned
+The lab assumes a **split of roles**, because the setup is technical and the results are not:
 
-Setup is the bottleneck: installing Node.js and authenticating the ask CLI takes longer than learning the tool. If you already have them, everything below takes about five minutes.
+- A **coding agent** (Claude Code, or any agent working in this repository) performs the setup and every iteration: authenticating the Amazon developer CLI, creating the lab skill, deploying model candidates, running the phrase batteries, comparing runs, and shipping the fix. Everything below marked "the agent" is a command the agent runs when asked.
+- **You** never touch a terminal. Your entire surface is the web dashboard: the agent starts it and hands you a URL, and you read what changed. Tapping a row shows the filled slots and the alternative intents Alexa considered.
 
-## Quick start
+So if you reported a routing problem in your language, the way to use this tool is: ask an agent to "reproduce my issue in the NLU lab". The agent does the rest and shows you the matrix.
+
+## Setup runbook (the agent, once per machine)
+
+The agent needs: the `ask` CLI v2 authenticated with your Amazon developer account (`ask configure`; requires Node.js), Python 3 with `pyyaml`, and this repository cloned. The user needs a browser.
 
 ```bash
-# One time: create the lab skill
+# One time: create the lab skill (pins its ID into scripts/nlu-lab/lab.json,
+# the trust root every later deploy checks)
 python3 scripts/nlu-lab/cli.py init-skill --endpoint "https://your-server/alexaskill"
 
+# Noise gate before trusting anything: the same model probed twice must
+# produce zero changes (see "The A/A gate" below)
+python3 scripts/nlu-lab/cli.py run --template --locale de-DE --label aa-1 \
+  --workingset my-phrases.yaml
+python3 scripts/nlu-lab/cli.py run --template --locale de-DE --label aa-2 \
+  --workingset my-phrases.yaml --skip-deploy
+python3 scripts/nlu-lab/cli.py compare aa-1 aa-2 --expect-zero-changes
+
+# Handoff: start the dashboard and give the user the URL.
+# Pass an explicit port: the default 8765 can be taken by another service
+# (it collided with a chat bridge on our own workstation).
+python3 scripts/nlu-lab/cli.py serve --port 8877
+```
+
+From then on the user opens `http://<workstation>:8877/` whenever a new run lands; the agent can leave `serve` running or restart it per session (it is read-only over the runs directory).
+
+## The iteration loop (the agent, every fix)
+
+```bash
 # Test the current model
 python3 scripts/nlu-lab/cli.py run --template --locale de-DE --label baseline \
   --workingset my-phrases.yaml
@@ -37,6 +60,8 @@ python3 scripts/nlu-lab/cli.py run --template --locale de-DE --label after-fix \
 # See what changed
 python3 scripts/nlu-lab/cli.py compare baseline after-fix
 ```
+
+Each `run` deploys to the lab skill (never your live one), waits for Amazon's build, probes every phrase, and writes a JSON run file; the user watches the results appear in the dashboard.
 
 ## The working set: your test phrases
 
@@ -93,13 +118,17 @@ python3 scripts/nlu-lab/cli.py run --template --locale de-DE --label re-probe \
   --workingset my-phrases.yaml --skip-deploy
 ```
 
-## The web dashboard
+## The web dashboard (the user's surface)
 
-```bash
-python3 scripts/nlu-lab/cli.py serve --port 8766
-```
+![The NLU Lab dashboard: the before/after run selectors on top, the phrase matrix below](img/nlu-lab-webapp-overview.png)
 
-Open `http://your-workstation:8766`. The dashboard shows the run list, the before/after matrix, per-row detail with filled slots and considered intents, and the full intent legend. The interface language switches between English and Italian.
+The dashboard opens with the two run selectors (top): pick which model version is "before" and which is "after". Every phrase from the fixture suite and your working set is one row, with the intent Alexa chose on each side. The footer line summarizes how many routes changed; the `intent legend` button explains what each intent name does.
+
+![A row tapped open: the detail panel shows the expectation, the route change, the filled slots, and the intents Alexa considered](img/nlu-lab-webapp-row-detail.png)
+
+Tap any row to open its detail panel: what the phrase was expected to route to, the before/after routes, the slots Alexa filled (here the spoken title landed in the song slot), and which other intents were considered. This is usually the panel that answers "why did it go there".
+
+The interface language switches between English and Italian. The dashboard is read-only: everything that changes state (deploys, runs) happens through the CLI on the agent's side.
 
 ## Exporting a model for the custom import
 
