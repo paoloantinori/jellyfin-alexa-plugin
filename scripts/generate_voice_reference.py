@@ -94,6 +94,7 @@ ONESHOT_EXAMPLES = {
 GROUPS = [
     ("Play music", [
         ("PlaySongIntent", "Play a song", False),
+        ("PlayLibrarySongIntent", "Play a song by title (library)", False),
         ("PlayArtistSongsIntent", "Play an artist", False),
         ("PlayByGenreIntent", "Play by genre", False),
         ("PlayByDecadeIntent", "Play by decade", False),
@@ -220,7 +221,7 @@ SLOT_HINTS = {
     "en": {
         "photoAlbum": "photo album name",
         "song_query": "song title",
-        "song": "song title", "musician": "artist name", "album": "album title",
+        "song": "song title", "librarySong": "song title", "musician": "artist name", "album": "album title",
         "book": "audiobook title", "genre": "music genre",
         "decade": "decade (the 80s)", "mood": "mood (relaxed, energetic)",
         "playlist_target": "playlist name", "playlist": "playlist name", "podcast_name": "podcast name",
@@ -248,6 +249,7 @@ SLOT_HINTS = {
         "photoAlbum": "nome dell'album di foto",
         "song_query": "titolo del brano",
         "song": "titolo del brano", "musician": "nome dell'artista",
+        "librarySong": "titolo del brano",
         "album": "titolo dell'album", "book": "titolo dell'audiolibro",
         "genre": "genere musicale", "decade": "decennio (gli anni ottanta)",
         "mood": "umore (rilassato, energico)",
@@ -278,7 +280,7 @@ SLOT_HINTS = {
     "de": {
         "photoAlbum": "Name des Fotoalbums",
         "song_query": "Songtitel",
-        "song": "Titel des Liedes", "musician": "Name des Künstlers",
+        "song": "Titel des Liedes", "librarySong": "Titel des Liedes", "musician": "Name des Künstlers",
         "album": "Titel des Albums", "book": "Titel des Hörbuchs",
         "genre": "Musikgenre", "decade": "Jahrzehnt (die 80er)",
         "mood": "Stimmung (entspannt, energiegeladen)",

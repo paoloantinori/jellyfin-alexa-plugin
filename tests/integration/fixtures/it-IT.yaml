@@ -1241,7 +1241,13 @@ tests:
       musician: {}
 
   # -------------------------------------------------------------------------
-  # 23. PlaySongIntent (song, musician)
+  # 23. PlaySongIntent (song, musician) + PlayLibrarySongIntent (JF-940)
+  # JF-940 routing split (measured live 2026-11-22, it-IT and de-DE agree):
+  # FAMOUS titles on song_noun carriers stay on free-text PlaySongIntent
+  # (MusicRecording fills for knowledge-graph entities and wins the
+  # competition); NON-FAMOUS titles on the carrier land on the custom-type
+  # twin PlayLibrarySongIntent (the issue #46 fix: the slot carries the raw
+  # spoken title). PlaySong keeps musician-qualified and bare-infinitive forms.
   # -------------------------------------------------------------------------
   - utterance: "Riproduci il brano bohemian rhapsody"
     expected_intent: PlaySongIntent
@@ -1262,6 +1268,30 @@ tests:
     expected_slots:
       song: {}
 
+  # JF-940: non-famous title on the carrier lands on the twin (measured:
+  # 'suona il brano rapsodia' -> twin, battery-green live; the musician-tail
+  # variant 'suona il brano rapsodia di mia martini' also measured -> twin)
+  - utterance: "suona il brano rapsodia"
+    expected_intent: PlayLibrarySongIntent
+    expected_slots:
+      librarySong: {}
+
+  # JF-940 control: the bare infinitive stays on free-text PlaySongIntent.
+  # The title must be Amazon-FAMOUS: MusicRecording fills only for knowledge-
+  # graph entities (JF-298), so a library-only title selects nothing on this
+  # form even on the stock model (lab-verified 2026-11-22).
+  - utterance: "riprodurre bohemian rhapsody"
+    expected_intent: PlaySongIntent
+    expected_slots:
+      song: {}
+
+  # JF-940 wrapper tail: the composed one-shot form anchors on the new
+  # intent's infinitive carrier row
+  - utterance: "chiedi a mia collezione di suonare il brano rapsodia"
+    expected_intent: PlayLibrarySongIntent
+    expected_slots:
+      librarySong: {}
+
   # "Metti hotel california" — NLU can't select an intent (competition between
   # PlaySongIntent, PlayVideoIntent, PlayArtistSongsIntent). Use explicit forms
   # like "Metti il brano hotel california" for reliable routing.
@@ -1279,15 +1309,15 @@ tests:
     expected_slots:
       song: {}
 
-  # JF-933 (issue #46) CONTROL row: it-IT MediaInfoType is phrase-shaped
-  # ('che brano è'), never a single song noun, so this locale has no
-  # vocabulary collision and needs no template change. The row pins that
-  # non-famous titles keep routing to PlaySongIntent here while the 16
-  # colliding locales get the synonym removal.
+  # JF-933 (issue #46) CONTROL row, re-anchored by JF-940: it-IT MediaInfoType
+  # is phrase-shaped ('che brano è'), never a single song noun, so this locale
+  # has no vocabulary collision. The row pins that non-famous titles keep
+  # routing to a song-playing intent here; since JF-940 the carrier form lands
+  # on PlayLibrarySongIntent (the custom-type arm) instead of PlaySongIntent.
   - utterance: "suona la canzone pesci di latta"
-    expected_intent: PlaySongIntent
+    expected_intent: PlayLibrarySongIntent
     expected_slots:
-      song: {}
+      librarySong: {}
 
   # -------------------------------------------------------------------------
   # 24. PlayAlbumIntent (album, musician)

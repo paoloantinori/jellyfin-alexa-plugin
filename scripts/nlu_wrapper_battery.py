@@ -58,6 +58,15 @@ BATTERY: dict[str, list[tuple[str, str, str]]] = {
         ("profile", "aggiungere alla playlist prova echo", "AddSongToPlaylistIntent"),
         ("profile", "riprodurre musica a caso", "PlayRandomIntent"),
         ("profile", "riprendi", "AMAZON.ResumeIntent"),
+        # JF-940: song_noun carrier routes to the custom-type intent; the
+        # bare infinitive stays on free-text PlaySongIntent. The bare row
+        # needs an Amazon-FAMOUS title: MusicRecording only fills for KG
+        # entities (JF-298), so a library-only title ('riprodurre rapsodia')
+        # selects NOTHING even on the stock model (lab-verified 2026-11-22,
+        # run 20261122-172731-stock-it-bare). The carrier row carries any
+        # title; that contrast IS the issue #46 fix.
+        ("profile", "suona il brano rapsodia", "PlayLibrarySongIntent"),
+        ("profile", "riprodurre bohemian rhapsody", "PlaySongIntent"),
         # full one-shot wrappers (invocation layer + infinitive)
         ("simulate", "chiedi a mia collezione di riprodurre musica a caso", "PlayRandomIntent"),
         ("simulate", "chiedi a mia collezione di mettere rapsodia in coda", "AddToQueueIntent"),
@@ -188,20 +197,63 @@ def default_skill_id() -> str | None:
     The vendor skill LIST carries an empty skillManifest and this ask CLI has no
     get-skill, so the discriminator is the it-IT interaction model: only this
     plugin's skill declares the JellyfinArtist custom slot type.
+
+    AMBIGUATION (2026-11-22): probe/lab skills built FROM this plugin's models
+    (the nlu-lab skill, ad-hoc NLU probes) also declare JellyfinArtist, and
+    list order decides first-match. Among the JellyfinArtist carriers, prefer
+    the skill NAMED 'Jellyfin' in it-IT (the plugin manifest's name): lab and
+    probe skills carry distinct names ('jellyfin nlu lab', 'JF869 NLU Probe'),
+    which nameByLocale on the list call exposes without extra SMAPI round
+    trips. Without this, the battery silently probed the lab skill right
+    after a stock-model lab deploy (live incident 2026-11-22: carrier row
+    read the STOCK routing and simulate rows OUTAGE-skipped on the lab's
+    invocation name). The probes are name-TIERED with early exit: the named
+    tier is scanned first (common case: exactly one 'Jellyfin' skill, one
+    probe), the rest only when no named skill carries the type, so the
+    discovery never pays an exhaustive scan in the common path.
     """
     try:
         out = _run_ask(["ask", "smapi", "list-skills-for-vendor"]).stdout
-        ids = [s.get("skillId") for s in json.loads(out).get("skills", []) if s.get("skillId")]
+        entries = json.loads(out).get("skills", [])
+        named: list[str] = []
+        others: list[str] = []
+        for s in entries:
+            skill_id = s.get("skillId")
+            if not skill_id:
+                continue
+            name = (s.get("nameByLocale") or {}).get("it-IT", "").strip().lower()
+            (named if name == "jellyfin" else others).append(skill_id)
     except Exception as exc:  # noqa: BLE001 - report and bail, no skill guesswork
         print(f"ERROR: could not list skills ({exc})")
         return None
 
-    for skill_id in ids:
-        result = _run_ask(["ask", "smapi", "get-interaction-model", "--skill-id", skill_id,
-                           "--stage", "development", "--locale", "it-IT"])
-        if "jellyfinartist" in result.stdout.lower():
-            return skill_id
-    return None
+    def probe_carries(skill_id: str) -> bool:
+        # Per-probe failures (a hung subprocess, a transient SMAPI 5xx) skip
+        # the skill instead of crashing the caller: the lab's --live run rides
+        # this function and its contract is clean refusal, never a traceback
+        # (the JF-935 class). A skipped named skill falls to the loud
+        # multi-carrier warning below rather than a silent wrong pick.
+        try:
+            result = _run_ask(["ask", "smapi", "get-interaction-model", "--skill-id", skill_id,
+                               "--stage", "development", "--locale", "it-IT"])
+        except Exception:
+            return False
+        return "jellyfinartist" in result.stdout.lower()
+
+    named_hit = next((s for s in named if probe_carries(s)), None)
+    if named_hit:
+        return named_hit
+
+    # No skill named 'Jellyfin' carries the type (renamed skill, localized
+    # publishing name, or a fresh vendor): fall back to first-carrier, but
+    # say so loudly when several candidates exist. A silent pick here is
+    # the original first-match bug re-armed (the 2026-11-22 incident shape).
+    others_hits = [s for s in others if probe_carries(s)]
+    if len(others_hits) > 1:
+        print(f"WARNING: no skill named 'Jellyfin' carries JellyfinArtist; "
+              f"picking {others_hits[0]} of {others_hits} (list order). "
+              f"Rename probes, or pass --skill-id to pin the right one.")
+    return others_hits[0] if others_hits else None
 
 
 def profile_nlu(skill_id: str, locale: str, phrase: str) -> str | None:

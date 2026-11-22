@@ -70,8 +70,13 @@ public class PlaySongIntentHandler : BaseHandler
     /// <inheritdoc/>
     public override bool CanHandle(Request request)
     {
+        // JF-940: this handler also serves PlayLibrarySongIntent, the JF-874
+        // twin-intent shape (PlayVideo serves PlayMovieIntent the same way):
+        // the carrier-noun NLU arm lands here and reads its LibrarySong slot.
         IntentRequest? intentRequest = request as IntentRequest;
-        return intentRequest != null && string.Equals(intentRequest.Intent.Name, IntentNames.PlaySong, System.StringComparison.Ordinal);
+        return intentRequest != null
+            && (string.Equals(intentRequest.Intent.Name, IntentNames.PlaySong, System.StringComparison.Ordinal)
+                || string.Equals(intentRequest.Intent.Name, IntentNames.PlayLibrarySong, System.StringComparison.Ordinal));
     }
 
     /// <summary>
@@ -88,7 +93,14 @@ public class PlaySongIntentHandler : BaseHandler
         string locale = GetLocale(request);
         IntentRequest intentRequest = (IntentRequest)request;
 
-        string? songQuery = intentRequest.Intent.Slots?.TryGetValue("song", out var songSlot) == true ? songSlot.Value : null;
+        // JF-940: the twin intent's SongTitle-typed slot carries the same raw
+        // spoken title as the free-text song slot (static custom types are
+        // training guidelines, not constraints); read whichever slot the
+        // arrival carries. No request substitution: the musician slot's ER
+        // resolutions (catalog-wired JellyfinArtist in it-IT) survive intact.
+        bool isLibrarySong = string.Equals(intentRequest.Intent.Name, IntentNames.PlayLibrarySong, System.StringComparison.Ordinal);
+        string? songQuery = intentRequest.Intent.Slots?.TryGetValue(
+            isLibrarySong ? IntentNames.Slots.LibrarySong : "song", out var songSlot) == true ? songSlot.Value : null;
         string? musicianQuery = intentRequest.Intent.Slots?.TryGetValue("musician", out var musicianSlot) == true ? musicianSlot.Value : null;
         // JF-659: the ER canonical feeds the artist search; musicianQuery keeps
         // driving the not-found speech (the JF-642 F-1 lesson; SlotValueHelper

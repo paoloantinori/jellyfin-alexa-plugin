@@ -27,6 +27,7 @@ internal static class IntentNames
     public const string CreatePlaylist = "CreatePlaylistIntent";
     public const string ShufflePlay = "ShufflePlayIntent";
     public const string PlaySong = "PlaySongIntent";
+    public const string PlayLibrarySong = "PlayLibrarySongIntent";
     public const string PlayVideo = "PlayVideoIntent";
 
     /// <summary>
@@ -209,5 +210,15 @@ internal static class IntentNames
         /// (the JF-614 song/song_query precedent).
         /// </summary>
         public const string Movie = "movie";
+
+        /// <summary>
+        /// JF-940: the SongTitle custom-typed slot on PlayLibrarySongIntent
+        /// (the carrier-noun PlaySong form). Its own NAME (not "song") for the
+        /// same one-type-per-name reason as <see cref="Movie"/>:
+        /// PlaySongIntentHandler serves the twin intent in place and reads
+        /// this slot's raw fill exactly as it reads its own free-text song
+        /// slot (no request substitution; see the JF-874 twin pattern there).
+        /// </summary>
+        public const string LibrarySong = "librarySong";
     }
 }

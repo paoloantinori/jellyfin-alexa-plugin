@@ -18123,6 +18123,10 @@
             "label": "PlayAlbumIntent"
           },
           {
+            "id": "PlayLibrarySong",
+            "label": "PlayLibrarySongIntent"
+          },
+          {
             "id": "PlaySong",
             "label": "PlaySongIntent"
           },
@@ -18250,8 +18254,14 @@
           },
           {
             "source": "Idle",
+            "target": "PlayLibrarySong",
+            "label": "Riproduci il brano {librarySong}",
+            "style": "solid"
+          },
+          {
+            "source": "Idle",
             "target": "PlaySong",
-            "label": "Riproduci il brano {song}",
+            "label": "Riproduci {song} di {musician}",
             "style": "solid"
           },
           {
@@ -18316,6 +18326,12 @@
           },
           {
             "source": "PlayAlbum",
+            "target": "Playing",
+            "label": "",
+            "style": "solid"
+          },
+          {
+            "source": "PlayLibrarySong",
             "target": "Playing",
             "label": "",
             "style": "solid"

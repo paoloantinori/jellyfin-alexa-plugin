@@ -6,7 +6,8 @@ graph TD
 
     Idle -->|"Riproduci brani di {musician}"| PlayArtist["PlayArtistSongsIntent"]
     Idle -->|"Riproduci album {album}"| PlayAlbum["PlayAlbumIntent"]
-    Idle -->|"Riproduci il brano {song}"| PlaySong["PlaySongIntent"]
+    Idle -->|"Riproduci il brano {librarySong}"| PlayLibrarySong["PlayLibrarySongIntent"]
+    Idle -->|"Riproduci {song} di {musician}"| PlaySong["PlaySongIntent"]
     Idle -->|"Riproduci playlist {playlist}"| PlayPlaylist["PlayPlaylistIntent"]
     Idle -->|"riproduci il libro {book}"| PlayBook["PlayBookIntent"]
     Idle -->|"Riproduci il podcast {podcast_name}"| PlayPodcast["PlayPodcastIntent"]
@@ -19,6 +20,7 @@ graph TD
 
     PlayArtist --> Playing
     PlayAlbum --> Playing
+    PlayLibrarySong --> Playing
     PlaySong --> Playing
     PlayPlaylist --> Playing
     PlayBook --> Playing

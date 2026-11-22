@@ -54,3 +54,7 @@ tmp/
 scripts/nlu-lab/lab.json
 scripts/nlu-lab/runs/
 scripts/nlu-lab/tests/__screenshots__/
+
+# local agent artifacts (poteto-mode decision trails, session settings backups)
+.audit/
+.claude/settings.local.json.bak.*

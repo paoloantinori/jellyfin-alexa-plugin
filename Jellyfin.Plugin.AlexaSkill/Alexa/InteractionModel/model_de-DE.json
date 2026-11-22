@@ -137,29 +137,44 @@
         ]
       },
       {
+        "name": "PlayLibrarySongIntent",
+        "samples": [
+          "Spiele das Lied {librarySong}",
+          "Spiele den Titel {librarySong}",
+          "Spiele den Song {librarySong}",
+          "Spiele das Stück {librarySong}",
+          "Spiele das Lied {librarySong} von {musician}",
+          "Spiele den Titel {librarySong} von {musician}",
+          "Höre das Lied {librarySong}",
+          "Gib das Lied {librarySong} wieder",
+          "Ich möchte das Lied {librarySong} hören"
+        ],
+        "slots": [
+          {
+            "name": "librarySong",
+            "type": "SongTitle"
+          },
+          {
+            "name": "musician",
+            "type": "AMAZON.Musician"
+          }
+        ]
+      },
+      {
         "name": "PlaySongIntent",
         "samples": [
           "Spiele {song}",
-          "Spiele das Lied {song}",
           "Spiele Lied {song}",
           "Spiele {song} von {musician}",
-          "Spiele das Lied {song} von {musician}",
           "Spiele Lied {song} von {musician}",
           "Höre {song}",
-          "Höre das Lied {song}",
           "Höre {song} von {musician}",
-          "Höre das Lied {song} von {musician}",
           "Gib {song} wieder",
-          "Gib das Lied {song} wieder",
           "Gib {song} von {musician} wieder",
           "Mach {song} an",
           "Ich möchte {song} hören",
-          "Spiele den Titel {song}",
-          "Spiele den Titel {song} von {musician}",
-          "Spiele den Song {song}",
           "Lass uns {song} hören",
           "Starte {song}",
-          "Spiele das Stück {song}",
           "Kannst du {song} spielen"
         ],
         "slots": [
@@ -1136,6 +1151,61 @@
       }
     ],
     "types": [
+      {
+        "name": "SongTitle",
+        "values": [
+          {
+            "name": {
+              "value": "titel"
+            }
+          },
+          {
+            "name": {
+              "value": "lied"
+            }
+          },
+          {
+            "name": {
+              "value": "stück"
+            }
+          },
+          {
+            "name": {
+              "value": "song"
+            }
+          },
+          {
+            "name": {
+              "value": "musik"
+            }
+          },
+          {
+            "name": {
+              "value": "melody"
+            }
+          },
+          {
+            "name": {
+              "value": "rock"
+            }
+          },
+          {
+            "name": {
+              "value": "pop"
+            }
+          },
+          {
+            "name": {
+              "value": "ballade"
+            }
+          },
+          {
+            "name": {
+              "value": "hit"
+            }
+          }
+        ]
+      },
       {
         "name": "SpeedRate",
         "values": [

@@ -163,31 +163,45 @@ intents:
     slots:
       - name: channel
         type: AMAZON.SearchQuery
+  # JF-940 (spike-proven 2026-11-22): the custom-type intent that anchors
+  # non-famous titles on the natural carrier. The carrier-noun samples
+  # ("das Lied", "den Titel", "den Song", "das Stück") moved HERE from
+  # PlaySongIntent: the custom SongTitle type accepts text outside its seed
+  # (static types are training guidelines, not constraints), so every title
+  # flows through and the handler searches Jellyfin with whatever arrives.
+  - name: PlayLibrarySongIntent
+    samples:
+      - Spiele das Lied {librarySong}
+      - Spiele den Titel {librarySong}
+      - Spiele den Song {librarySong}
+      - Spiele das Stück {librarySong}
+      - Spiele das Lied {librarySong} von {musician}
+      - Spiele den Titel {librarySong} von {musician}
+      - Höre das Lied {librarySong}
+      - Gib das Lied {librarySong} wieder
+      # The one-shot wrapper-twin marker (validator: every intent needs a
+      # 'hören'/'abspielen'-bearing sample so composed wrapper forms anchor;
+      # also a natural bare in-session command, PlaySong has the twin shape)
+      - Ich möchte das Lied {librarySong} hören
+    slots:
+      - name: librarySong
+        type: SongTitle
+      - name: musician
+        type: AMAZON.Musician
   - name: PlaySongIntent
     samples:
       - Spiele {song}
-      - Spiele das Lied {song}
       - Spiele Lied {song}
       - Spiele {song} von {musician}
-      - Spiele das Lied {song} von {musician}
       - Spiele Lied {song} von {musician}
       - Höre {song}
-      - Höre das Lied {song}
       - Höre {song} von {musician}
-      - Höre das Lied {song} von {musician}
       - Gib {song} wieder
-      - Gib das Lied {song} wieder
       - Gib {song} von {musician} wieder
       - Mach {song} an
       - Ich möchte {song} hören
-      - Spiele den Titel {song}
-      - Spiele den Titel {song} von {musician}
-      # JF-933: the den Song carrier (issue #46 steal row); "Song" is also
-      # removed from MediaInfoType title synonyms so the token anchors here.
-      - Spiele den Song {song}
       - Lass uns {song} hören
       - Starte {song}
-      - Spiele das Stück {song}
       - Kannst du {song} spielen
     slots:
       - name: song
@@ -935,6 +949,24 @@ intents:
         type: AMAZON.SearchQuery
 
 types:
+  # JF-940 spike-proven (2026-11-22): a custom type on the natural carrier
+  # anchors non-famous titles that AMAZON.MusicRecording refuses (issue #46).
+  # Static values are training GUIDELINES (the custom type accepts text outside
+  # the list, unlike a catalog type which gates selection per JF-684), so a
+  # small seed suffices and no library sync is needed: the handler searches
+  # Jellyfin with whatever text arrives. The seed is generic, not per-library.
+  SongTitle:
+    values:
+      - value: titel
+      - value: lied
+      - value: stück
+      - value: song
+      - value: musik
+      - value: melody
+      - value: rock
+      - value: pop
+      - value: ballade
+      - value: hit
   # JF-636: playback-speed vocabulary (the JF-354 Mood architecture). Ids are
   # the shared cross-locale key space (per-mille strings + faster/slower).
   SpeedRate:

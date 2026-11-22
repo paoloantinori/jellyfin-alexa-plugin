@@ -7022,6 +7022,7 @@ Placeholder legend:
 | `<Position (nächste, neueste)>` | `{episode_position}` |
 | `<Filterwort (Rock, Jazz)>` | `{filter}` |
 | `<Musikgenre>` | `{genre}` |
+| `<Titel des Liedes>` | `{librarySong}` |
 | `<gewünschte Info (Titel, Künstler, Album)>` | `{media_info_type}` |
 | `<Medientyp (Musik, Video)>` | `{media_type}` |
 | `<Stimmung (entspannt, energiegeladen)>` | `{mood}` |
@@ -7049,34 +7050,37 @@ Placeholder legend:
 | `<Wörter aus dem Songtitel>` | `{titleKeywords}` |
 | `<Benutzername>` | `{username}` |
 
-Complete phrase list (495 phrases across 74 commands):
+Complete phrase list (495 phrases across 75 commands):
 
 #### Play music
 
 **Play a song**
 
 - `Spiele <Titel des Liedes>`
-- `Spiele das Lied <Titel des Liedes>`
 - `Spiele Lied <Titel des Liedes>`
 - `Spiele <Titel des Liedes> von <Name des Künstlers>`
-- `Spiele das Lied <Titel des Liedes> von <Name des Künstlers>`
 - `Spiele Lied <Titel des Liedes> von <Name des Künstlers>`
 - `Höre <Titel des Liedes>`
-- `Höre das Lied <Titel des Liedes>`
 - `Höre <Titel des Liedes> von <Name des Künstlers>`
-- `Höre das Lied <Titel des Liedes> von <Name des Künstlers>`
 - `Gib <Titel des Liedes> wieder`
-- `Gib das Lied <Titel des Liedes> wieder`
 - `Gib <Titel des Liedes> von <Name des Künstlers> wieder`
 - `Mach <Titel des Liedes> an`
 - `Ich möchte <Titel des Liedes> hören`
-- `Spiele den Titel <Titel des Liedes>`
-- `Spiele den Titel <Titel des Liedes> von <Name des Künstlers>`
-- `Spiele den Song <Titel des Liedes>`
 - `Lass uns <Titel des Liedes> hören`
 - `Starte <Titel des Liedes>`
-- `Spiele das Stück <Titel des Liedes>`
 - `Kannst du <Titel des Liedes> spielen`
+
+**Play a song by title (library)**
+
+- `Spiele das Lied <Titel des Liedes>`
+- `Spiele den Titel <Titel des Liedes>`
+- `Spiele den Song <Titel des Liedes>`
+- `Spiele das Stück <Titel des Liedes>`
+- `Spiele das Lied <Titel des Liedes> von <Name des Künstlers>`
+- `Spiele den Titel <Titel des Liedes> von <Name des Künstlers>`
+- `Höre das Lied <Titel des Liedes>`
+- `Gib das Lied <Titel des Liedes> wieder`
+- `Ich möchte das Lied <Titel des Liedes> hören`
 
 **Play an artist**
 
@@ -8423,6 +8427,7 @@ Placeholder legend:
 | `<posizione (prossimo, ultimo)>` | `{episode_position}` |
 | `<filtro (rock, jazz)>` | `{filter}` |
 | `<genere musicale>` | `{genre}` |
+| `<titolo del brano>` | `{librarySong}` |
 | `<informazione (titolo, artista, album)>` | `{media_info_type}` |
 | `<tipo di contenuto (musica, video)>` | `{media_type}` |
 | `<umore (rilassato, energico)>` | `{mood}` |
@@ -8451,52 +8456,12 @@ Placeholder legend:
 | `<titolo del video o del film>` | `{title}` |
 | `<parole del titolo del brano>` | `{titleKeywords}` |
 
-Complete phrase list (1690 phrases across 75 commands):
+Complete phrase list (1850 phrases across 76 commands):
 
 #### Play music
 
 **Play a song**
 
-- `Riproduci il brano <titolo del brano>`
-- `Riproduci la canzone <titolo del brano>`
-- `Riproduci il pezzo <titolo del brano>`
-- `Riproduci la traccia <titolo del brano>`
-- `Suona il brano <titolo del brano>`
-- `Suona la canzone <titolo del brano>`
-- `Suona il pezzo <titolo del brano>`
-- `Suona la traccia <titolo del brano>`
-- `Metti il brano <titolo del brano>`
-- `Metti la canzone <titolo del brano>`
-- `Metti il pezzo <titolo del brano>`
-- `Metti la traccia <titolo del brano>`
-- `Pleia il brano <titolo del brano>`
-- `Pleia la canzone <titolo del brano>`
-- `Pleia il pezzo <titolo del brano>`
-- `Pleia la traccia <titolo del brano>`
-- `Ascolta il brano <titolo del brano>`
-- `Ascolta la canzone <titolo del brano>`
-- `Ascolta il pezzo <titolo del brano>`
-- `Ascolta la traccia <titolo del brano>`
-- `Di riprodurre il brano <titolo del brano>`
-- `Di riprodurre la canzone <titolo del brano>`
-- `Di riprodurre il pezzo <titolo del brano>`
-- `Di riprodurre la traccia <titolo del brano>`
-- `Di suonare il brano <titolo del brano>`
-- `Di suonare la canzone <titolo del brano>`
-- `Di suonare il pezzo <titolo del brano>`
-- `Di suonare la traccia <titolo del brano>`
-- `Di mettere il brano <titolo del brano>`
-- `Di mettere la canzone <titolo del brano>`
-- `Di mettere il pezzo <titolo del brano>`
-- `Di mettere la traccia <titolo del brano>`
-- `Di pleiare il brano <titolo del brano>`
-- `Di pleiare la canzone <titolo del brano>`
-- `Di pleiare il pezzo <titolo del brano>`
-- `Di pleiare la traccia <titolo del brano>`
-- `Di ascoltare il brano <titolo del brano>`
-- `Di ascoltare la canzone <titolo del brano>`
-- `Di ascoltare il pezzo <titolo del brano>`
-- `Di ascoltare la traccia <titolo del brano>`
 - `Riproduci <titolo del brano> di <nome dell'artista>`
 - `Riproduci <titolo del brano> dei <nome dell'artista>`
 - `Riproduci <titolo del brano> degli <nome dell'artista>`
@@ -8541,6 +8506,209 @@ Complete phrase list (1690 phrases across 75 commands):
 - `suonare <titolo del brano>`
 - `mettere <titolo del brano>`
 - `ascoltare <titolo del brano>`
+
+**Play a song by title (library)**
+
+- `Riproduci il brano <titolo del brano>`
+- `Riproduci la canzone <titolo del brano>`
+- `Riproduci il pezzo <titolo del brano>`
+- `Riproduci la traccia <titolo del brano>`
+- `Suona il brano <titolo del brano>`
+- `Suona la canzone <titolo del brano>`
+- `Suona il pezzo <titolo del brano>`
+- `Suona la traccia <titolo del brano>`
+- `Metti il brano <titolo del brano>`
+- `Metti la canzone <titolo del brano>`
+- `Metti il pezzo <titolo del brano>`
+- `Metti la traccia <titolo del brano>`
+- `Pleia il brano <titolo del brano>`
+- `Pleia la canzone <titolo del brano>`
+- `Pleia il pezzo <titolo del brano>`
+- `Pleia la traccia <titolo del brano>`
+- `Ascolta il brano <titolo del brano>`
+- `Ascolta la canzone <titolo del brano>`
+- `Ascolta il pezzo <titolo del brano>`
+- `Ascolta la traccia <titolo del brano>`
+- `Di riprodurre il brano <titolo del brano>`
+- `Di riprodurre la canzone <titolo del brano>`
+- `Di riprodurre il pezzo <titolo del brano>`
+- `Di riprodurre la traccia <titolo del brano>`
+- `Di suonare il brano <titolo del brano>`
+- `Di suonare la canzone <titolo del brano>`
+- `Di suonare il pezzo <titolo del brano>`
+- `Di suonare la traccia <titolo del brano>`
+- `Di mettere il brano <titolo del brano>`
+- `Di mettere la canzone <titolo del brano>`
+- `Di mettere il pezzo <titolo del brano>`
+- `Di mettere la traccia <titolo del brano>`
+- `Di pleiare il brano <titolo del brano>`
+- `Di pleiare la canzone <titolo del brano>`
+- `Di pleiare il pezzo <titolo del brano>`
+- `Di pleiare la traccia <titolo del brano>`
+- `Di ascoltare il brano <titolo del brano>`
+- `Di ascoltare la canzone <titolo del brano>`
+- `Di ascoltare il pezzo <titolo del brano>`
+- `Di ascoltare la traccia <titolo del brano>`
+- `Riproduci il brano <titolo del brano> di <nome dell'artista>`
+- `Riproduci il brano <titolo del brano> dei <nome dell'artista>`
+- `Riproduci il brano <titolo del brano> degli <nome dell'artista>`
+- `Riproduci il brano <titolo del brano> delle <nome dell'artista>`
+- `Riproduci la canzone <titolo del brano> di <nome dell'artista>`
+- `Riproduci la canzone <titolo del brano> dei <nome dell'artista>`
+- `Riproduci la canzone <titolo del brano> degli <nome dell'artista>`
+- `Riproduci la canzone <titolo del brano> delle <nome dell'artista>`
+- `Riproduci il pezzo <titolo del brano> di <nome dell'artista>`
+- `Riproduci il pezzo <titolo del brano> dei <nome dell'artista>`
+- `Riproduci il pezzo <titolo del brano> degli <nome dell'artista>`
+- `Riproduci il pezzo <titolo del brano> delle <nome dell'artista>`
+- `Riproduci la traccia <titolo del brano> di <nome dell'artista>`
+- `Riproduci la traccia <titolo del brano> dei <nome dell'artista>`
+- `Riproduci la traccia <titolo del brano> degli <nome dell'artista>`
+- `Riproduci la traccia <titolo del brano> delle <nome dell'artista>`
+- `Suona il brano <titolo del brano> di <nome dell'artista>`
+- `Suona il brano <titolo del brano> dei <nome dell'artista>`
+- `Suona il brano <titolo del brano> degli <nome dell'artista>`
+- `Suona il brano <titolo del brano> delle <nome dell'artista>`
+- `Suona la canzone <titolo del brano> di <nome dell'artista>`
+- `Suona la canzone <titolo del brano> dei <nome dell'artista>`
+- `Suona la canzone <titolo del brano> degli <nome dell'artista>`
+- `Suona la canzone <titolo del brano> delle <nome dell'artista>`
+- `Suona il pezzo <titolo del brano> di <nome dell'artista>`
+- `Suona il pezzo <titolo del brano> dei <nome dell'artista>`
+- `Suona il pezzo <titolo del brano> degli <nome dell'artista>`
+- `Suona il pezzo <titolo del brano> delle <nome dell'artista>`
+- `Suona la traccia <titolo del brano> di <nome dell'artista>`
+- `Suona la traccia <titolo del brano> dei <nome dell'artista>`
+- `Suona la traccia <titolo del brano> degli <nome dell'artista>`
+- `Suona la traccia <titolo del brano> delle <nome dell'artista>`
+- `Metti il brano <titolo del brano> di <nome dell'artista>`
+- `Metti il brano <titolo del brano> dei <nome dell'artista>`
+- `Metti il brano <titolo del brano> degli <nome dell'artista>`
+- `Metti il brano <titolo del brano> delle <nome dell'artista>`
+- `Metti la canzone <titolo del brano> di <nome dell'artista>`
+- `Metti la canzone <titolo del brano> dei <nome dell'artista>`
+- `Metti la canzone <titolo del brano> degli <nome dell'artista>`
+- `Metti la canzone <titolo del brano> delle <nome dell'artista>`
+- `Metti il pezzo <titolo del brano> di <nome dell'artista>`
+- `Metti il pezzo <titolo del brano> dei <nome dell'artista>`
+- `Metti il pezzo <titolo del brano> degli <nome dell'artista>`
+- `Metti il pezzo <titolo del brano> delle <nome dell'artista>`
+- `Metti la traccia <titolo del brano> di <nome dell'artista>`
+- `Metti la traccia <titolo del brano> dei <nome dell'artista>`
+- `Metti la traccia <titolo del brano> degli <nome dell'artista>`
+- `Metti la traccia <titolo del brano> delle <nome dell'artista>`
+- `Pleia il brano <titolo del brano> di <nome dell'artista>`
+- `Pleia il brano <titolo del brano> dei <nome dell'artista>`
+- `Pleia il brano <titolo del brano> degli <nome dell'artista>`
+- `Pleia il brano <titolo del brano> delle <nome dell'artista>`
+- `Pleia la canzone <titolo del brano> di <nome dell'artista>`
+- `Pleia la canzone <titolo del brano> dei <nome dell'artista>`
+- `Pleia la canzone <titolo del brano> degli <nome dell'artista>`
+- `Pleia la canzone <titolo del brano> delle <nome dell'artista>`
+- `Pleia il pezzo <titolo del brano> di <nome dell'artista>`
+- `Pleia il pezzo <titolo del brano> dei <nome dell'artista>`
+- `Pleia il pezzo <titolo del brano> degli <nome dell'artista>`
+- `Pleia il pezzo <titolo del brano> delle <nome dell'artista>`
+- `Pleia la traccia <titolo del brano> di <nome dell'artista>`
+- `Pleia la traccia <titolo del brano> dei <nome dell'artista>`
+- `Pleia la traccia <titolo del brano> degli <nome dell'artista>`
+- `Pleia la traccia <titolo del brano> delle <nome dell'artista>`
+- `Ascolta il brano <titolo del brano> di <nome dell'artista>`
+- `Ascolta il brano <titolo del brano> dei <nome dell'artista>`
+- `Ascolta il brano <titolo del brano> degli <nome dell'artista>`
+- `Ascolta il brano <titolo del brano> delle <nome dell'artista>`
+- `Ascolta la canzone <titolo del brano> di <nome dell'artista>`
+- `Ascolta la canzone <titolo del brano> dei <nome dell'artista>`
+- `Ascolta la canzone <titolo del brano> degli <nome dell'artista>`
+- `Ascolta la canzone <titolo del brano> delle <nome dell'artista>`
+- `Ascolta il pezzo <titolo del brano> di <nome dell'artista>`
+- `Ascolta il pezzo <titolo del brano> dei <nome dell'artista>`
+- `Ascolta il pezzo <titolo del brano> degli <nome dell'artista>`
+- `Ascolta il pezzo <titolo del brano> delle <nome dell'artista>`
+- `Ascolta la traccia <titolo del brano> di <nome dell'artista>`
+- `Ascolta la traccia <titolo del brano> dei <nome dell'artista>`
+- `Ascolta la traccia <titolo del brano> degli <nome dell'artista>`
+- `Ascolta la traccia <titolo del brano> delle <nome dell'artista>`
+- `Di riprodurre il brano <titolo del brano> di <nome dell'artista>`
+- `Di riprodurre il brano <titolo del brano> dei <nome dell'artista>`
+- `Di riprodurre il brano <titolo del brano> degli <nome dell'artista>`
+- `Di riprodurre il brano <titolo del brano> delle <nome dell'artista>`
+- `Di riprodurre la canzone <titolo del brano> di <nome dell'artista>`
+- `Di riprodurre la canzone <titolo del brano> dei <nome dell'artista>`
+- `Di riprodurre la canzone <titolo del brano> degli <nome dell'artista>`
+- `Di riprodurre la canzone <titolo del brano> delle <nome dell'artista>`
+- `Di riprodurre il pezzo <titolo del brano> di <nome dell'artista>`
+- `Di riprodurre il pezzo <titolo del brano> dei <nome dell'artista>`
+- `Di riprodurre il pezzo <titolo del brano> degli <nome dell'artista>`
+- `Di riprodurre il pezzo <titolo del brano> delle <nome dell'artista>`
+- `Di riprodurre la traccia <titolo del brano> di <nome dell'artista>`
+- `Di riprodurre la traccia <titolo del brano> dei <nome dell'artista>`
+- `Di riprodurre la traccia <titolo del brano> degli <nome dell'artista>`
+- `Di riprodurre la traccia <titolo del brano> delle <nome dell'artista>`
+- `Di suonare il brano <titolo del brano> di <nome dell'artista>`
+- `Di suonare il brano <titolo del brano> dei <nome dell'artista>`
+- `Di suonare il brano <titolo del brano> degli <nome dell'artista>`
+- `Di suonare il brano <titolo del brano> delle <nome dell'artista>`
+- `Di suonare la canzone <titolo del brano> di <nome dell'artista>`
+- `Di suonare la canzone <titolo del brano> dei <nome dell'artista>`
+- `Di suonare la canzone <titolo del brano> degli <nome dell'artista>`
+- `Di suonare la canzone <titolo del brano> delle <nome dell'artista>`
+- `Di suonare il pezzo <titolo del brano> di <nome dell'artista>`
+- `Di suonare il pezzo <titolo del brano> dei <nome dell'artista>`
+- `Di suonare il pezzo <titolo del brano> degli <nome dell'artista>`
+- `Di suonare il pezzo <titolo del brano> delle <nome dell'artista>`
+- `Di suonare la traccia <titolo del brano> di <nome dell'artista>`
+- `Di suonare la traccia <titolo del brano> dei <nome dell'artista>`
+- `Di suonare la traccia <titolo del brano> degli <nome dell'artista>`
+- `Di suonare la traccia <titolo del brano> delle <nome dell'artista>`
+- `Di mettere il brano <titolo del brano> di <nome dell'artista>`
+- `Di mettere il brano <titolo del brano> dei <nome dell'artista>`
+- `Di mettere il brano <titolo del brano> degli <nome dell'artista>`
+- `Di mettere il brano <titolo del brano> delle <nome dell'artista>`
+- `Di mettere la canzone <titolo del brano> di <nome dell'artista>`
+- `Di mettere la canzone <titolo del brano> dei <nome dell'artista>`
+- `Di mettere la canzone <titolo del brano> degli <nome dell'artista>`
+- `Di mettere la canzone <titolo del brano> delle <nome dell'artista>`
+- `Di mettere il pezzo <titolo del brano> di <nome dell'artista>`
+- `Di mettere il pezzo <titolo del brano> dei <nome dell'artista>`
+- `Di mettere il pezzo <titolo del brano> degli <nome dell'artista>`
+- `Di mettere il pezzo <titolo del brano> delle <nome dell'artista>`
+- `Di mettere la traccia <titolo del brano> di <nome dell'artista>`
+- `Di mettere la traccia <titolo del brano> dei <nome dell'artista>`
+- `Di mettere la traccia <titolo del brano> degli <nome dell'artista>`
+- `Di mettere la traccia <titolo del brano> delle <nome dell'artista>`
+- `Di pleiare il brano <titolo del brano> di <nome dell'artista>`
+- `Di pleiare il brano <titolo del brano> dei <nome dell'artista>`
+- `Di pleiare il brano <titolo del brano> degli <nome dell'artista>`
+- `Di pleiare il brano <titolo del brano> delle <nome dell'artista>`
+- `Di pleiare la canzone <titolo del brano> di <nome dell'artista>`
+- `Di pleiare la canzone <titolo del brano> dei <nome dell'artista>`
+- `Di pleiare la canzone <titolo del brano> degli <nome dell'artista>`
+- `Di pleiare la canzone <titolo del brano> delle <nome dell'artista>`
+- `Di pleiare il pezzo <titolo del brano> di <nome dell'artista>`
+- `Di pleiare il pezzo <titolo del brano> dei <nome dell'artista>`
+- `Di pleiare il pezzo <titolo del brano> degli <nome dell'artista>`
+- `Di pleiare il pezzo <titolo del brano> delle <nome dell'artista>`
+- `Di pleiare la traccia <titolo del brano> di <nome dell'artista>`
+- `Di pleiare la traccia <titolo del brano> dei <nome dell'artista>`
+- `Di pleiare la traccia <titolo del brano> degli <nome dell'artista>`
+- `Di pleiare la traccia <titolo del brano> delle <nome dell'artista>`
+- `Di ascoltare il brano <titolo del brano> di <nome dell'artista>`
+- `Di ascoltare il brano <titolo del brano> dei <nome dell'artista>`
+- `Di ascoltare il brano <titolo del brano> degli <nome dell'artista>`
+- `Di ascoltare il brano <titolo del brano> delle <nome dell'artista>`
+- `Di ascoltare la canzone <titolo del brano> di <nome dell'artista>`
+- `Di ascoltare la canzone <titolo del brano> dei <nome dell'artista>`
+- `Di ascoltare la canzone <titolo del brano> degli <nome dell'artista>`
+- `Di ascoltare la canzone <titolo del brano> delle <nome dell'artista>`
+- `Di ascoltare il pezzo <titolo del brano> di <nome dell'artista>`
+- `Di ascoltare il pezzo <titolo del brano> dei <nome dell'artista>`
+- `Di ascoltare il pezzo <titolo del brano> degli <nome dell'artista>`
+- `Di ascoltare il pezzo <titolo del brano> delle <nome dell'artista>`
+- `Di ascoltare la traccia <titolo del brano> di <nome dell'artista>`
+- `Di ascoltare la traccia <titolo del brano> dei <nome dell'artista>`
+- `Di ascoltare la traccia <titolo del brano> degli <nome dell'artista>`
+- `Di ascoltare la traccia <titolo del brano> delle <nome dell'artista>`
 
 **Play an artist**
 
@@ -13843,6 +14011,7 @@ The body above is user-facing and never names intents or handlers. This table ma
 | Group | Command label | Intent name |
 | --- | --- | --- |
 | Play music | Play a song | `PlaySongIntent` |
+| Play music | Play a song by title (library) | `PlayLibrarySongIntent` |
 | Play music | Play an artist | `PlayArtistSongsIntent` |
 | Play music | Play by genre | `PlayByGenreIntent` |
 | Play music | Play by decade | `PlayByDecadeIntent` |

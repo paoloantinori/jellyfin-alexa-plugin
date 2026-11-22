@@ -68,27 +68,13 @@ def _lab_dir_from(args, lab_dir: Path | None) -> Path:
 
 def _discover_live_skill_id() -> str | None:
     """JF-944: discover the live Jellyfin skill via the ask CLI (NEVER cached).
-    Same discriminator as nlu_wrapper_battery.default_skill_id: the it-IT model
-    is the only one carrying the JellyfinArtist custom slot type."""
-    import json as _json
-    from nlu_wrapper_battery import _run_ask
-    try:
-        out = _run_ask(["ask", "smapi", "list-skills-for-vendor"]).stdout
-        ids = [s.get("skillId") for s in _json.loads(out).get("skills", []) if s.get("skillId")]
-    except Exception:
-        return None
-    for skill_id in ids:
-        if skill_id is None:
-            continue
-        try:
-            result = _run_ask(["ask", "smapi", "get-interaction-model",
-                               "--skill-id", skill_id, "--stage", "development",
-                               "--locale", "it-IT"])
-            if "jellyfinartist" in result.stdout.lower():
-                return skill_id
-        except Exception:
-            continue
-    return None
+    Delegates to nlu_wrapper_battery.default_skill_id, whose discriminator
+    (JellyfinArtist in the it-IT model) prefers the skill NAMED 'Jellyfin'
+    among the carriers: the LAB skill also declares JellyfinArtist whenever it
+    carries an it-IT model, and first-match list order would return the lab
+    skill itself (live incident 2026-11-22)."""
+    from nlu_wrapper_battery import default_skill_id
+    return default_skill_id()
 
 
 def _slug(label: str) -> str:

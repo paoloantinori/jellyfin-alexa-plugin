@@ -247,19 +247,20 @@ tests:
   # "Suonala ancora" collision samples were removed; handler-side tolerance for
   # that flip is tracked as JF-439.
   - utterance: "suona la canzone screenwriter's blues"
-    expected_intent: PlaySongIntent
+    expected_intent: PlayLibrarySongIntent
     expected_slots:
-      song: {}
+      librarySong: {}
     expected_response_type: any
 
-  # "Metti il brano {song}": alternative carrier phrase variant. Deliberately
-  # keeps the musician-shaped title: the "il brano" carrier sits OUTSIDE the
-  # "Suona la ..." collision region and still routes to PlaySongIntent
-  # (profile-nlu verified 2026-09-01, JF-438).
+  # "Metti il brano {librarySong}": alternative carrier phrase variant (JF-940
+  # re-anchor: the carrier now lands on PlayLibrarySongIntent, which delegates
+  # to the PlaySong pipeline with the spoken title). Deliberately keeps the
+  # musician-shaped title: the "il brano" carrier sits OUTSIDE the
+  # "Suona la ..." collision region (profile-nlu verified 2026-09-01, JF-438).
   - utterance: "metti il brano sugar free jazz"
-    expected_intent: PlaySongIntent
+    expected_intent: PlayLibrarySongIntent
     expected_slots:
-      song: {}
+      librarySong: {}
     expected_response_type: any
 
   # --- Play podcast (MusicAlbum of Audio tracks; the only podcast model Jellyfin supports) ---
@@ -531,6 +532,9 @@ tests:
     expected_response_type: any
 
   # --- Play specific song (carrier phrase stripping) ---
+  # JF-940 note: FAMOUS titles on the carrier stay on free-text
+  # PlaySongIntent (measured live 2026-11-22, same as de-DE); only
+  # NON-FAMOUS titles land on the twin (see the it-IT NLU fixtures).
   - utterance: "suona la canzone bohemian rhapsody"
     expected_intent: PlaySongIntent
     expected_slots:

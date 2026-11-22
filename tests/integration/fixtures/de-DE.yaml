@@ -72,8 +72,17 @@ tests:
       channel: {}
 
   # -------------------------------------------------------------------------
-  # 5. PlaySongIntent (song, musician)
+  # 5. PlaySongIntent (song, musician) + PlayLibrarySongIntent (JF-940)
+  # JF-940: the article carriers ("das Lied", "den Titel", "den Song",
+  # "das Stück") moved to PlayLibrarySongIntent (custom SongTitle type;
+  # static values are training guidelines, so any title flows through).
+  # PlaySongIntent keeps the bare forms ("Spiele {song}", "Spiele Lied {song}").
   # -------------------------------------------------------------------------
+  # JF-940 measured-live reality (lab matrix 2026-11-22, runs jf940-de-*
+  # + live probes): FAMOUS titles on the article carriers stay on
+  # free-text PlaySongIntent (MusicRecording fills for knowledge-graph
+  # entities and wins the competition). Functionally identical: both arms
+  # play the song. These rows pin the measured routing.
   - utterance: "Spiele das Lied bohemian rhapsody"
     expected_intent: PlaySongIntent
     expected_slots:
@@ -85,23 +94,32 @@ tests:
       song: {}
       musician: {}
 
-  # JF-933 (issue #46): non-famous-title pins. MediaInfoType's title entry
-  # carried Lied/Song as synonyms, so unanchorable free-text titles slid to
-  # the static-token intents (lab bench 2026-11-21, stock model: 'spiele das
-  # lied die streithörnchen' -> MediaInfoIntent with an EMPTY media_info_type;
-  # 'spiele den song ...' -> PlayRadio with an empty station). The synonyms
-  # are removed from the template (template edit + regen in this change) and the den Song carrier is
-  # added to PlaySongIntent. RED-UNTIL-DEPLOY rows (the JF-766 convention):
-  # green on the live suite only after the rebuilt model deploys.
-  - utterance: "spiele das lied die streithörnchen"
+  # JF-940 control: the bare article-less form stays on free-text PlaySongIntent
+  - utterance: "Spiele bohemian rhapsody"
     expected_intent: PlaySongIntent
     expected_slots:
       song: {}
 
-  - utterance: "spiele den song die streithörnchen"
-    expected_intent: PlaySongIntent
+  # JF-933 (issue #46) non-famous-title pins, re-anchored by JF-940.
+  # 'das Lied' + an unknown title SELECTS PlayLibrarySongIntent on the live
+  # model (profile-verified 2026-11-22): the headline carrier works.
+  - utterance: "spiele das lied die streithörnchen"
+    expected_intent: PlayLibrarySongIntent
     expected_slots:
-      song: {}
+      librarySong: {}
+
+  # RED-UNTIL-CATALOG: the den Song carrier does NOT select with an unknown
+  # title on the static seed (lab matrix 2026-11-22: only a seed CONTAINING
+  # the exact title greens all carriers, run jf940-de-vc; removing just the
+  # test title from that seed breaks it again, run jf940-de-ve; generic and
+  # dual-sample variants fail differently, runs jf940-de-final/va/vb/vd).
+  # The durable fix is the catalog-backed SongTitle (per-library values,
+  # the AlbumName architecture), tracked as JF-946; this row goes green
+  # only when that lands and the next catalog sync pins the version.
+  - utterance: "spiele den song die streithörnchen"
+    expected_intent: PlayLibrarySongIntent
+    expected_slots:
+      librarySong: {}
 
   # -------------------------------------------------------------------------
   # 6. PlayAlbumIntent (album, musician)
