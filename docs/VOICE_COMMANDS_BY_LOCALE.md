@@ -8456,7 +8456,7 @@ Placeholder legend:
 | `<titolo del video o del film>` | `{title}` |
 | `<parole del titolo del brano>` | `{titleKeywords}` |
 
-Complete phrase list (1850 phrases across 76 commands):
+Complete phrase list (1860 phrases across 76 commands):
 
 #### Play music
 
@@ -10006,6 +10006,16 @@ Complete phrase list (1850 phrases across 76 commands):
 
 **Find a song (multi-turn conversation)**
 
+- `Di riprodurre una canzone`
+- `Di suonare una canzone`
+- `Di mettere una canzone`
+- `Di pleiare una canzone`
+- `Di ascoltare una canzone`
+- `Di riprodurre un brano`
+- `Di suonare un brano`
+- `Di mettere un brano`
+- `Di pleiare un brano`
+- `Di ascoltare un brano`
 - `cerca una canzone`
 - `aiutami a trovare una canzone`
 - `sto cercando una canzone`

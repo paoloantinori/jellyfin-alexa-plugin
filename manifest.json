@@ -487,6 +487,22 @@
                 "changelog": "FIXED: voice commands for playing a song by title now route correctly in 16 languages. Words like \"Lied\" and \"Song\" in German (and their equivalents in English, French, Spanish, Italian, Japanese, Hindi, Arabic, Dutch, and Portuguese) were simultaneously recognized as questions about the currently playing media, so asking to play a song that Alexa did not know by name would be misinterpreted as a media-info question. Those words are no longer ambiguous. Also adds the \"den Song\" carrier in German and a new German phrasing for the sleep timer that works with compound durations like \"sixty minutes\" (the previous phrasing only worked with simple durations like \"one hour\"). IMPROVED: playback errors now log the Amazon error type and message, making it much easier to diagnose playback issues from server logs. Songs not known to Amazon may still route to other intents in some phrasings; this is a platform limitation being addressed with catalog-backed song recognition (in progress).",
                 "targetAbi": "10.11.0.0",
                 "timestamp": "2026-11-22 06:45:16"
+            },
+            {
+                "version": "1.1.2.0",
+                "changelog": "placeholder",
+                "targetAbi": "12.0.0.0",
+                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/1.1.2.0/jellyfin-plugin-alexa_1.1.2.0_net10.0.zip",
+                "checksum": "placeholder",
+                "timestamp": "2026-11-23T20:00:00Z"
+            },
+            {
+                "version": "1.1.2.0",
+                "changelog": "placeholder",
+                "targetAbi": "10.11.0.0",
+                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/1.1.2.0/jellyfin-plugin-alexa_1.1.2.0_net9.0.zip",
+                "checksum": "placeholder",
+                "timestamp": "2026-11-23T20:00:00Z"
             }
         ]
     }

@@ -837,7 +837,7 @@ Invocation name: **"mia collezione"**
 | Clear Queue | `svuota la coda` · `pulisci la coda` · `cancella la coda` · `elimina la coda` · `rimuovi tutto dalla coda` · `svuota la mia coda` |
 | Continue Watching | `Continua a guardare` · `Riprendi a guardare` · `Continua il video` · `Riprendi il video` |
 | Create Playlist | `Crea una playlist chiamata {playlist}` · `Crea una nuova playlist chiamata {playlist}` · `Nuova playlist chiamata {playlist}` · `Crea una playlist {playlist}` · `Crea playlist {playlist}` · `Crea playlist chiamata {playlist}` |
-| Find Song | `cerca una canzone` · `trova una canzone chiamata {titleKeywords}` · `aiutami a trovare una canzone` · `sto cercando una canzone` · `voglio trovare una canzone` · `trova una canzone` |
+| Find Song | `Di riprodurre una canzone` · `trova una canzone chiamata {titleKeywords}` · `Di suonare una canzone` · `Di mettere una canzone` · `Di pleiare una canzone` · `Di ascoltare una canzone` |
 | Find Song By Artist | `cerca una canzone di {musician}` · `cerca una canzone dei {musician}` · `cerca una canzone degli {musician}` · `cerca una canzone delle {musician}` · `aiutami a trovare una canzone di {musician}` · `aiutami a trovare una canzone dei {musician}` |
 | Follow Me | `seguimi` · `seguirmi` · `seguir mi` · `continua ad ascoltare` · `riprendi da dove ero rimasto` · `riprendi da dove ero rimasta` |
 | Go To Chapter | `Vai al capitolo {chapter_number}` · `Vai al capitolo {direction}` · `Salta al capitolo {chapter_number}` · `Salta al capitolo {direction}` · `Capitolo {chapter_number}` · `Capitolo {direction}` |
