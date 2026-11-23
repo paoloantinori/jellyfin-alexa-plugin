@@ -66,14 +66,15 @@ public class SongTitlePreparationTests
     }
 
     [Fact]
-    public void SongSynonyms_GatePassesQualifyingTitlesThrough_Unmodified()
+    public void SongSynonyms_ValuesOnly_AlwaysEmpty()
     {
-        // The gate's contract: a qualifying title gets the generator's output
-        // WHATEVER it is (possibly empty for a name the generator cannot
-        // vary), a non-qualifying title always gets nothing.
-        Assert.Equal(
-            PhoneticSynonymGenerator.GenerateSynonyms("Crash Into Me", "it-IT"),
-            SongTitlePreparation.SongSynonyms("Crash Into Me", "it-IT"));
+        // The size-cap policy (live 2026-11-23): Amazon's 1.5MB effective
+        // per-model limit counts the catalog values, and 9,458 titles with
+        // per-locale phonetic variants blew it (it-IT 2.0MB). Songs upload
+        // VALUES-ONLY in every locale; selection anchoring is exact-match and
+        // ASR drift stays on the handler-side fuzzy chain. If variants are
+        // ever reintroduced, this pin is the place that fails loudly.
+        Assert.Empty(SongTitlePreparation.SongSynonyms("Crash Into Me", "it-IT"));
         Assert.Empty(SongTitlePreparation.SongSynonyms("ab cd", "it-IT"));
     }
 

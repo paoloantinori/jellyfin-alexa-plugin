@@ -960,19 +960,21 @@ public class CatalogManager
             lmNode["types"] = typesArray;
         }
 
-        var catalogMappings = new List<(string CatalogId, string Version, string SlotTypeName, string? ReplacesType)>();
+        var catalogMappings = new List<(string CatalogId, string Version, string SlotTypeName, string? ReplacesType, bool OnlyReplaceExisting)>();
         if (!string.IsNullOrEmpty(artistCatalogId))
         {
             catalogMappings.Add((artistCatalogId!, ResolveCatalogVersion(artistCatalogVersion, CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Artist], artistCatalogId, logger),
                 CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Artist],
-                CatalogSlotTypes.Names[CatalogType.Artist]));
+                CatalogSlotTypes.Names[CatalogType.Artist],
+                false));
         }
 
         if (!string.IsNullOrEmpty(albumCatalogId))
         {
             catalogMappings.Add((albumCatalogId!, ResolveCatalogVersion(albumCatalogVersion, CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Album], albumCatalogId, logger),
                 CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Album],
-                null));
+                null,
+                false));
         }
 
         if (!string.IsNullOrEmpty(seriesCatalogId))
@@ -982,7 +984,8 @@ public class CatalogManager
             // replaces the type definition in place without re-typing slots.
             catalogMappings.Add((seriesCatalogId!, ResolveCatalogVersion(seriesCatalogVersion, CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Series], seriesCatalogId, logger),
                 CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Series],
-                null));
+                null,
+                false));
         }
 
         if (!string.IsNullOrEmpty(audiobookCatalogId))
@@ -991,7 +994,8 @@ public class CatalogManager
             // on the CatalogSlotTypes.CatalogSlotTypeNames audiobook entry.
             catalogMappings.Add((audiobookCatalogId!, ResolveCatalogVersion(audiobookCatalogVersion, CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Audiobook], audiobookCatalogId, logger),
                 CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Audiobook],
-                null));
+                null,
+                false));
         }
 
         if (!string.IsNullOrEmpty(movieCatalogId))
@@ -1003,7 +1007,8 @@ public class CatalogManager
             // is the proven inert AlbumName shape (nothing references it).
             catalogMappings.Add((movieCatalogId!, ResolveCatalogVersion(movieCatalogVersion, CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Movie], movieCatalogId, logger),
                 CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Movie],
-                null));
+                null,
+                false));
         }
 
         if (!string.IsNullOrEmpty(songCatalogId))
@@ -1018,7 +1023,17 @@ public class CatalogManager
             // no song catalog id, so nothing injects here.
             catalogMappings.Add((songCatalogId!, ResolveCatalogVersion(songCatalogVersion, CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Song], songCatalogId, logger),
                 CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Song],
-                null));
+                null,
+                // JF-946 size cap: the song catalog is by far the largest value
+                // set, and Amazon's 1.5MB EFFECTIVE per-model limit counts the
+                // referenced values. Injecting an inert SongTitle block into
+                // locales whose models carry no SongTitle slot pushed the
+                // already-large locales over the cap (live 2026-11-23: ja-JP
+                // 2.5MB, fr 1.7MB, pt-BR 1.7MB, nl-NL 1.5MB+, all
+                // ExceededMaximumModelSize). Song wiring lands ONLY where a
+                // slot already declares the type (replace-in-place, never add);
+                // the other locales keep their pre-song size.
+                true));
         }
 
         WarnOnCrossTypeCatalogIds(artistCatalogId, albumCatalogId, seriesCatalogId, audiobookCatalogId, movieCatalogId, songCatalogId, logger);
@@ -1028,7 +1043,7 @@ public class CatalogManager
             catalogMappings.Count,
             string.Join(", ", catalogMappings.Select(m => m.SlotTypeName)));
 
-        foreach (var (catalogId, catalogVersion, slotTypeName, replacesType) in catalogMappings)
+        foreach (var (catalogId, catalogVersion, slotTypeName, replacesType, onlyReplaceExisting) in catalogMappings)
         {
             int existingIndex = Enumerable.Range(0, typesArray.Count)
                 .FirstOrDefault(i => typesArray[i]?["name"]?.GetValue<string>() == slotTypeName, -1);
@@ -1056,6 +1071,31 @@ public class CatalogManager
                     catalogId);
                 typesArray[existingIndex] = catalogType;
             }
+            else if (onlyReplaceExisting && !AnyIntentSlotDeclaresType(lmNode, slotTypeName))
+            {
+                // JF-946: no slot in this model references the type, and the
+                // value set is size-capped, so the wiring must NOT ride this
+                // locale (a live lesson: an inert block from an earlier add
+                // pushed already-large locales over Amazon's 1.5MB effective
+                // per-model cap). HEAL while here: a stale type block left by
+                // an earlier marginal build is REMOVED, not replaced, so the
+                // locale returns to its pre-song size.
+                if (existingIndex >= 0)
+                {
+                    logger.LogInformation(
+                        "Removing stale catalog-backed slot type {SlotTypeName}: no slot declares it and the value set is size-capped (JF-946 heal)",
+                        slotTypeName);
+                    typesArray.RemoveAt(existingIndex);
+                }
+                else
+                {
+                    logger.LogInformation(
+                        "Skipping catalog wiring for {SlotTypeName}: the locale declares no slot of this type and the value set is size-capped (JF-946)",
+                        slotTypeName);
+                }
+
+                continue;
+            }
             else
             {
                 logger.LogInformation(
@@ -1077,6 +1117,33 @@ public class CatalogManager
         }
 
         return root.ToJsonString();
+    }
+
+    /// <summary>
+    /// True when any intent slot in the language model references the given
+    /// slot type name: the declaring-locale test for size-capped types (the
+    /// song catalog rides only locales that actually use it).
+    /// </summary>
+    private static bool AnyIntentSlotDeclaresType(JsonObject lmNode, string slotTypeName)
+    {
+        if (lmNode["intents"] is JsonArray intents)
+        {
+            foreach (var intent in intents.OfType<JsonObject>())
+            {
+                if (intent["slots"] is JsonArray slots)
+                {
+                    foreach (var slot in slots.OfType<JsonObject>())
+                    {
+                        if (slot["type"]?.GetValue<string>() == slotTypeName)
+                        {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+
+        return false;
     }
 
     /// <summary>

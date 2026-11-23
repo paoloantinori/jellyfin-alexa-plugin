@@ -85,14 +85,22 @@ internal static class SongTitlePreparation
         name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Any(w => w.Length >= 4);
 
     /// <summary>
-    /// The song synonym gate for <see cref="CatalogPayload.FromItems"/>:
-    /// the standard per-locale phonetic generator, suppressed for titles
-    /// without a qualifying word.
+    /// The song synonym policy for <see cref="CatalogPayload.FromItems"/>:
+    /// VALUES-ONLY. The live 2026-11-23 finding: Amazon's per-model size cap
+    /// (1.5MB) counts the catalog-backed EFFECTIVE size, and 9,458 titles
+    /// with per-locale phonetic synonyms pushed it-IT to 2.0MB and de-DE to
+    /// 1.6MB, so every catalog-wired build failed ExceededMaximumModelSize
+    /// and the wiring could never land (the 15:31-'song=-'-static mystery).
+    /// The catalog's selection job is EXACT-title anchoring; ASR drift after
+    /// selection is the handler-side fuzzy chain's job, so dropping song
+    /// synonyms trades a redundant defense for the headroom that keeps the
+    /// FULL library under the cap. If phonetic song variants are ever
+    /// reintroduced, they must ride a per-title variant budget sized against
+    /// the 1.5MB effective-model limit (the HasQualifyingWord gate below is
+    /// kept for that future and for the seed path's shape).
     /// </summary>
     public static List<string> SongSynonyms(string name, string locale) =>
-        HasQualifyingWord(name)
-            ? PhoneticSynonymGenerator.GenerateSynonyms(name, locale)
-            : new List<string>();
+        new List<string>();
 
     /// <summary>
     /// The full pipeline over the raw candidates: strip, junk-exclude, order
