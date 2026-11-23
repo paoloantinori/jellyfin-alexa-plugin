@@ -464,7 +464,7 @@ public class CatalogManagerTests
             "token", "skill-1", "development", "it-IT",
             "artist-cat-1", null, null, null, null,
             "3", null, null, null, null,
-            CancellationToken.None);
+            cancellationToken: CancellationToken.None);
 
         Assert.Equal("SUCCEEDED", result.BuildStatus);
         Assert.True(result.CanaryMatch);
@@ -499,7 +499,7 @@ public class CatalogManagerTests
             "token", "skill-1", "development", "it-IT",
             "artist-cat-1", null, null, null, null,
             "3", null, null, null, null,
-            CancellationToken.None);
+            cancellationToken: CancellationToken.None);
 
         Assert.Equal("SUCCEEDED", result.BuildStatus);
         Assert.False(result.CanaryMatch);
@@ -534,7 +534,7 @@ public class CatalogManagerTests
             "token", "skill-1", "development", "it-IT",
             "artist-cat-1", null, null, null, null,
             "3", null, null, null, null,
-            CancellationToken.None);
+            cancellationToken: CancellationToken.None);
 
         Assert.Equal("SUCCEEDED", result.BuildStatus);
         Assert.True(result.CanaryMatch);
@@ -551,7 +551,7 @@ public class CatalogManagerTests
             "token", "skill-1", "development", "it-IT",
             null, null, null, null, null,
             null, null, null, null, null,
-            CancellationToken.None);
+            cancellationToken: CancellationToken.None);
 
         Assert.Equal("Skipped", result.BuildStatus);
         Assert.Equal(0, result.PutIntents);
@@ -589,7 +589,7 @@ public class CatalogManagerTests
             "token", "skill-1", "development", "it-IT",
             "artist-cat-1", null, null, null, null,
             "3", null, null, null, null,
-            CancellationToken.None);
+            cancellationToken: CancellationToken.None);
 
         Assert.Equal("SUCCEEDED", result.BuildStatus);
         Assert.True(result.CanaryMatch);
@@ -623,7 +623,7 @@ public class CatalogManagerTests
             "token", "skill-1", "development", "it-IT",
             "artist-cat-1", null, null, null, null,
             "3", null, null, null, null,
-            CancellationToken.None);
+            cancellationToken: CancellationToken.None);
 
         Assert.Equal("SUCCEEDED", result.BuildStatus);
         Assert.True(result.CanaryMatch);
@@ -646,7 +646,7 @@ public class CatalogManagerTests
             "token", "skill-1", "development", "it-IT",
             "artist-cat-1", null, null, null, null,
             "3", null, null, null, null,
-            CancellationToken.None);
+            cancellationToken: CancellationToken.None);
 
         Assert.Contains($"GET {ModelPutFakeHandler.SkillStatusUrl}", handler.Requests);
         Assert.DoesNotContain(handler.Requests, r =>
@@ -832,7 +832,7 @@ public class CatalogManagerTests
             "token", "skill-1", "development", "it-IT",
             "artist-cat-1", null, null, null, null,
             "3", null, null, null, null,
-            CancellationToken.None);
+            cancellationToken: CancellationToken.None);
 
         Assert.Equal("SUCCEEDED", result.BuildStatus);
         Assert.True(result.CanaryMatch);
@@ -855,7 +855,7 @@ public class CatalogManagerTests
             "token", "skill-1", "development", "it-IT",
             "artist-cat-1", null, null, null, null,
             "3", null, null, null, null,
-            CancellationToken.None);
+            cancellationToken: CancellationToken.None);
 
         Assert.Equal("SUCCEEDED", result.BuildStatus);
         Assert.True(result.CanaryMatch);
@@ -875,7 +875,7 @@ public class CatalogManagerTests
         var manager = CreatePollingManager(handler);
 
         string version = await manager.UploadCatalogValuesAsync(
-            "token", "cat-1", new CatalogPayload(), () => "https://example.test/catalog/x", CancellationToken.None);
+            "token", "cat-1", new CatalogPayload(), () => "https://example.test/catalog/x", cancellationToken: CancellationToken.None);
 
         Assert.Equal("1", version);
 

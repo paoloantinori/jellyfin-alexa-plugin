@@ -185,7 +185,10 @@ internal static class SongIndexSearch
     /// </summary>
     /// <param name="title">The raw song title.</param>
     /// <returns>The title without trailing parenthetical groups.</returns>
-    private static string StripTrailingParentheticalGroups(string title)
+    // JF-946: internal, shared with SongTitlePreparation (the catalog value
+    // and the n-gram index key must strip the SAME forms on the same track,
+    // full-width parens included; the JF-661 one-definition precedent).
+    internal static string StripTrailingParentheticalGroups(string title)
     {
         string stripped = title.TrimEnd();
         while (stripped.EndsWith(')') || stripped.EndsWith('）'))

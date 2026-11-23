@@ -49,6 +49,7 @@ public class LibrarySyncService
 
     private readonly ILibraryManager _libraryManager;
     private readonly CatalogManager _catalogManager;
+    private readonly IUserDataManager _userDataManager;
     private readonly ILogger<LibrarySyncService> _logger;
 
     /// <summary>
@@ -88,14 +89,17 @@ public class LibrarySyncService
     /// </summary>
     /// <param name="libraryManager">Jellyfin library manager.</param>
     /// <param name="catalogManager">SMAPI catalog manager.</param>
+    /// <param name="userDataManager">User data manager (JF-946: per-user play counts for the song-title ordering).</param>
     /// <param name="logger">Logger instance.</param>
     public LibrarySyncService(
         ILibraryManager libraryManager,
         CatalogManager catalogManager,
+        IUserDataManager userDataManager,
         ILogger<LibrarySyncService> logger)
     {
         _libraryManager = libraryManager;
         _catalogManager = catalogManager;
+        _userDataManager = userDataManager;
         _logger = logger;
     }
 
@@ -128,7 +132,7 @@ public class LibrarySyncService
     /// pin battery, where this sentence lives.
     /// </summary>
     internal static bool AllTypeLegsEmpty(
-        (CatalogType Type, BaseItemKind Kind, IReadOnlyList<BaseItem> Items, Func<string?> StoredCatalogId, Action<string> StoreCatalogId, Action<int> StoreCount, string Name, string Description)[] legs)
+        (CatalogType Type, BaseItemKind Kind, IReadOnlyList<BaseItem> Items, Func<string?> StoredCatalogId, Action<string> StoreCatalogId, Action<int> StoreCount, string Name, string Description, Func<IReadOnlyList<BaseItem>> FetchItems)[] legs)
         => legs.All(leg => leg.Items.Count == 0);
 
     /// <summary>
@@ -238,18 +242,40 @@ public class LibrarySyncService
         // sites, this sourcing loop and CatalogWiringGraft.ExtractWiring
         // (keyed off CatalogSlotTypes.CatalogSlotTypeNames), into
         // table-driven shapes.
-        var typeLegs = new (CatalogType Type, BaseItemKind Kind, IReadOnlyList<BaseItem> Items, Func<string?> StoredCatalogId, Action<string> StoreCatalogId, Action<int> StoreCount, string Name, string Description)[]
+        var typeLegs = new (CatalogType Type, BaseItemKind Kind, IReadOnlyList<BaseItem> Items, Func<string?> StoredCatalogId, Action<string> StoreCatalogId, Action<int> StoreCount, string Name, string Description, Func<IReadOnlyList<BaseItem>> FetchItems)[]
         {
-            (CatalogType.Artist, BaseItemKind.MusicArtist, Array.Empty<BaseItem>(), () => user.ArtistCatalogId, id => user.ArtistCatalogId = id, count => result.ArtistCount = count, "Jellyfin Artists", "Artist catalog synced from Jellyfin library"),
-            (CatalogType.Album, BaseItemKind.MusicAlbum, Array.Empty<BaseItem>(), () => user.AlbumCatalogId, id => user.AlbumCatalogId = id, count => result.AlbumCount = count, "Jellyfin Albums", "Album catalog synced from Jellyfin library"),
-            (CatalogType.Series, BaseItemKind.Series, Array.Empty<BaseItem>(), () => user.SeriesCatalogId, id => user.SeriesCatalogId = id, count => result.SeriesCount = count, "Jellyfin Series", "Series catalog synced from Jellyfin library"),
+            (CatalogType.Artist, BaseItemKind.MusicArtist, Array.Empty<BaseItem>(), () => user.ArtistCatalogId, id => user.ArtistCatalogId = id, count => result.ArtistCount = count, "Jellyfin Artists", "Artist catalog synced from Jellyfin library", () => FetchLibraryItems(jellyfinUser, user, BaseItemKind.MusicArtist)),
+            (CatalogType.Album, BaseItemKind.MusicAlbum, Array.Empty<BaseItem>(), () => user.AlbumCatalogId, id => user.AlbumCatalogId = id, count => result.AlbumCount = count, "Jellyfin Albums", "Album catalog synced from Jellyfin library", () => FetchLibraryItems(jellyfinUser, user, BaseItemKind.MusicAlbum)),
+            (CatalogType.Series, BaseItemKind.Series, Array.Empty<BaseItem>(), () => user.SeriesCatalogId, id => user.SeriesCatalogId = id, count => result.SeriesCount = count, "Jellyfin Series", "Series catalog synced from Jellyfin library", () => FetchLibraryItems(jellyfinUser, user, BaseItemKind.Series)),
             // JF-823: the audiobook leg, the one-row edit the JF-711 note above
             // described.
-            (CatalogType.Audiobook, BaseItemKind.AudioBook, Array.Empty<BaseItem>(), () => user.AudiobookCatalogId, id => user.AudiobookCatalogId = id, count => result.AudiobookCount = count, "Jellyfin Audiobooks", "Audiobook catalog synced from Jellyfin library"),
+            (CatalogType.Audiobook, BaseItemKind.AudioBook, Array.Empty<BaseItem>(), () => user.AudiobookCatalogId, id => user.AudiobookCatalogId = id, count => result.AudiobookCount = count, "Jellyfin Audiobooks", "Audiobook catalog synced from Jellyfin library", () => FetchLibraryItems(jellyfinUser, user, BaseItemKind.AudioBook)),
             // JF-874: the movie leg, feeding the catalog-backed MovieTitle slot
             // type (it-IT's PlayMovieIntent wrapper family). Same one-row shape.
-            (CatalogType.Movie, BaseItemKind.Movie, Array.Empty<BaseItem>(), () => user.MovieCatalogId, id => user.MovieCatalogId = id, count => result.MovieCount = count, "Jellyfin Movies", "Movie catalog synced from Jellyfin library"),
+            (CatalogType.Movie, BaseItemKind.Movie, Array.Empty<BaseItem>(), () => user.MovieCatalogId, id => user.MovieCatalogId = id, count => result.MovieCount = count, "Jellyfin Movies", "Movie catalog synced from Jellyfin library", () => FetchLibraryItems(jellyfinUser, user, BaseItemKind.Movie)),
+            // JF-946: the song-title leg, feeding the catalog-backed SongTitle
+            // slot type (the JF-940 PlayLibrarySong carrier). Its source never
+            // rides the generic SortName fetch (alphabetical ordering would
+            // cut the alphabet's tail at the cap, and the Limit would bind
+            // before the stripped dedup): it fetches uncapped and runs the
+            // preparation pipeline, whose output IS the item list (fresh
+            // query instances; mutating Name to the stripped form writes
+            // nothing back). GATED per user by the CatalogSongSyncEnabled
+            // opt-in (privacy: the FULL tracklist goes to Amazon, including
+            // private recordings); a disabled flag removes the row below, so
+            // no Song catalog is created and none is wired into any locale.
+            (CatalogType.Song, BaseItemKind.Audio, Array.Empty<BaseItem>(), () => user.SongCatalogId, id => user.SongCatalogId = id, count => result.SongCount = count, "Jellyfin Songs", "Song title catalog synced from Jellyfin library", () => FetchAndPrepareSongTitles(jellyfinUser, user, result)),
         };
+
+        // JF-946: the song leg participates only when the user opted in. The
+        // reduced table keeps every downstream consumer (the sourcing loop,
+        // AllTypeLegsEmpty, the locale legs) honest: a library holding ONLY
+        // songs with the flag off takes the emptiness skip like any other
+        // nothing-to-sync run.
+        if (!user.CatalogSongSyncEnabled)
+        {
+            typeLegs = typeLegs.Where(leg => leg.Type != CatalogType.Song).ToArray();
+        }
 
         // JF-727: item sourcing derives from the same table, replacing the
         // hand block of three fetches, three count assignments, and a
@@ -270,13 +296,29 @@ public class LibrarySyncService
         for (int i = 0; i < typeLegs.Length; i++)
         {
             ref var leg = ref typeLegs[i];
-            leg.Items = FetchLibraryItems(jellyfinUser, user, leg.Kind);
+            leg.Items = leg.FetchItems();
             leg.StoreCount(leg.Items.Count);
+
+            // JF-946: the song leg's honest cut signal. The cap bound the
+            // DEDUPED distinct count (play-count ordered), so a cut means the
+            // least-played titles lost their catalog values, not that a fetch
+            // saturated; surfaced here because only this loop sees both the
+            // capped N and the pre-cap M.
+            if (leg.Type == CatalogType.Song && result.SongTitleTotal > result.SongCount)
+            {
+                _logger.LogWarning(
+                    "Song title catalog cut for user {UserId}: kept the {Kept} most-played of {Distinct} distinct titles (cap {Cap}); the least-played {Dropped} titles have no catalog value (JF-946)",
+                    user.Id,
+                    result.SongCount,
+                    result.SongTitleTotal,
+                    EffectiveMaxCatalogValues,
+                    result.SongTitleTotal - result.SongCount);
+            }
         }
 
         if (AllTypeLegsEmpty(typeLegs))
         {
-            _logger.LogWarning("No artists, albums, series, audiobooks or movies found for user {UserId}, skipping sync", user.Id);
+            _logger.LogWarning("No artists, albums, series, audiobooks, movies or songs found for user {UserId}, skipping sync", user.Id);
             return result;
         }
 
@@ -397,6 +439,8 @@ public class LibrarySyncService
                     Minted(CatalogType.Series).Version,
                     Minted(CatalogType.Audiobook).Version,
                     Minted(CatalogType.Movie).Version,
+                    Minted(CatalogType.Song).CatalogId,
+                    Minted(CatalogType.Song).Version,
                     cancellationToken).ConfigureAwait(false);
 
                 // JF-495: catalog-sync model PUTs must appear in the per-locale
@@ -531,8 +575,8 @@ public class LibrarySyncService
             ? $" (partial: {string.Join(", ", result.FrozenTypes)} frozen, Success=false)"
             : string.Empty;
         _logger.LogInformation(
-            "Catalog sync completed for user {UserId}: {Succeeded}/{Total} locales, {Artists} artists, {Albums} albums, {Series} series, {Audiobooks} audiobooks, {Movies} movies, {ElapsedMs}ms total{FrozenClause}",
-            user.Id, localesSucceeded, locales.Count, result.ArtistCount, result.AlbumCount, result.SeriesCount, result.AudiobookCount, result.MovieCount, totalSw.ElapsedMilliseconds, frozenClause);
+            "Catalog sync completed for user {UserId}: {Succeeded}/{Total} locales, {Artists} artists, {Albums} albums, {Series} series, {Audiobooks} audiobooks, {Movies} movies, {Songs}/{SongTotal} song titles, {ElapsedMs}ms total{FrozenClause}",
+            user.Id, localesSucceeded, locales.Count, result.ArtistCount, result.AlbumCount, result.SeriesCount, result.AudiobookCount, result.MovieCount, result.SongCount, result.SongTitleTotal, totalSw.ElapsedMilliseconds, frozenClause);
 
         return result;
     }
@@ -1056,6 +1100,70 @@ public class LibrarySyncService
     }
 
     /// <summary>
+    /// JF-946: the song leg's dedicated source. Fetches the user's Audio
+    /// items UNCAPPED (the preparation pipeline dedups on the stripped form
+    /// BEFORE the cap, so a query-level Limit would bind on the pre-dedup
+    /// count), reads each track's play count for the ordering, runs
+    /// <see cref="SongTitlePreparation.Prepare"/>, and returns the prepared
+    /// tracks as fresh item instances whose Name carries the STRIPPED title
+    /// (the catalog value; mutating the query result writes nothing back).
+    /// </summary>
+    private List<BaseItem> FetchAndPrepareSongTitles(
+        Jellyfin.Database.Implementations.Entities.User jellyfinUser,
+        Entities.User user,
+        SyncResult result)
+    {
+        var query = new InternalItemsQuery
+        {
+            User = jellyfinUser,
+            Recursive = true,
+            IncludeItemTypes = new[] { BaseItemKind.Audio },
+            // Lean field set (JF-946 review): only Id/Name/DateCreated are
+            // read, and the uncapped 12k+ fetch would otherwise left-join
+            // provider/image collections for every row. EnableUserData stays
+            // ON deliberately: the per-track GetUserData reads these attached
+            // rows in memory (turning it off silently zeroes every play
+            // count and degrades the ordering to recency).
+            DtoOptions = new DtoOptions(false) { EnableImages = false },
+            // JF-946 review: a bound, not the sibling cap. The dedup-before-cap
+            // design needs the RAW tracks, but a public user's 300k-track
+            // library must not make plugin memory proportional to raw track
+            // count. A 4x multiple of the value cap covers every realistic
+            // suffix/duplicate ratio while bounding the fetch; the cut
+            // warning below fires when the distinct count still exceeds the
+            // cap.
+            Limit = EffectiveMaxCatalogValues * 4
+        };
+
+        // Same strict-scope rationale as FetchLibraryItems (JF-457).
+        LibraryFilter.ApplyLibraryFilter(query, user, _libraryManager, includeItemsByName: false);
+
+        IReadOnlyList<BaseItem> tracks = _libraryManager.GetItemList(query);
+
+        var candidates = new List<(BaseItem Item, string Name, int PlayCount, DateTime DateCreated)>(tracks.Count);
+        foreach (BaseItem track in tracks)
+        {
+            int playCount = _userDataManager.GetUserData(jellyfinUser, track)?.PlayCount ?? 0;
+            candidates.Add((track, track.Name ?? string.Empty, playCount, track.DateCreated));
+        }
+
+        List<(BaseItem Item, string Name)> prepared = SongTitlePreparation.Prepare(candidates, EffectiveMaxCatalogValues, out int totalDistinct);
+
+        // The distinct pre-cap count (the M of "N of M synced") lands here:
+        // the table's StoreCount channel carries only the capped N.
+        result.SongTitleTotal = totalDistinct;
+
+        var songItems = new List<BaseItem>(prepared.Count);
+        foreach ((BaseItem item, string name) in prepared)
+        {
+            item.Name = name;
+            songItems.Add(item);
+        }
+
+        return songItems;
+    }
+
+    /// <summary>
     /// Sync a catalog for a specific locale: build locale-specific payload with phonetic synonyms,
     /// upload to SMAPI, and return the minted version. Creates the catalog when no id is
     /// stored yet, persisting the new id through <paramref name="storeCatalogId"/> (the
@@ -1098,7 +1206,12 @@ public class LibrarySyncService
         // type like Series), so the saturation signal stands on its own.
         // Worded as "reached", never "exceeded": a library of exactly cap
         // items reads identically to a capped larger one.
-        if (items.Count >= EffectiveMaxCatalogValues)
+        // JF-946 review: the SONG leg's cut is NOT here. Its query bound is a
+        // 4x multiple (dedup-before-cap) and its honest cut signal lives in
+        // the sourcing loop, where the pre-cap distinct count is known; this
+        // fetch-cap wording would misdirect triage toward raising a limit
+        // that was never the binder.
+        if (catalogType != CatalogType.Song && items.Count >= EffectiveMaxCatalogValues)
         {
             _logger.LogWarning(
                 "Catalog {Type} fetch reached the {Limit}-value cap for user {UserId}; library items beyond the cap in sort order were not fetched",
@@ -1107,7 +1220,14 @@ public class LibrarySyncService
                 user.Id);
         }
 
-        CatalogPayload payload = CatalogPayload.FromItems(catalogType, itemTuples, PhoneticSynonymGenerator.GenerateSynonyms, locale);
+        // JF-946: the song leg rides the phonetic generator through the
+        // qualifying-word gate (short-title noise suppression); every other
+        // type passes the raw generator, byte-identical to before.
+        Func<string, string, List<string>> synonymGenerator = catalogType == CatalogType.Song
+            ? SongTitlePreparation.SongSynonyms
+            : PhoneticSynonymGenerator.GenerateSynonyms;
+
+        CatalogPayload payload = CatalogPayload.FromItems(catalogType, itemTuples, synonymGenerator, locale);
 
         // The dedup signal (debug-logging policy): the per-type count the sync
         // reports stays the FETCH count, so this is the only line that says how
@@ -1129,7 +1249,9 @@ public class LibrarySyncService
         // titles absent from the library (Thriller, Queen, ...) vanish from the
         // deployed model. Library entries win on collision; no-op for seed-less types.
         int libraryValueCount = payload.Values.Count;
-        CatalogSeedEnrichment.MergeInto(payload, catalogType, PhoneticSynonymGenerator.GenerateSynonyms, locale, _logger);
+        // JF-946 review: the SAME gated generator covers the seed-merge path, so a
+            // future Song seed arm cannot bypass the qualifying-word gate.
+            CatalogSeedEnrichment.MergeInto(payload, catalogType, synonymGenerator, locale, _logger);
 
         // JF-825: the cap must bind the FINAL payload (library values + the
         // appended static tail, after the FromItems same-name dedup), not

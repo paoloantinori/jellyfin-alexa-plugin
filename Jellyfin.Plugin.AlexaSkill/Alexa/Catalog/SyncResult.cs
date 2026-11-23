@@ -54,6 +54,21 @@ public class SyncResult
     public int MovieCount { get; set; }
 
     /// <summary>
+    /// Gets or sets the number of distinct song titles synced (JF-946), the
+    /// CAPPED value count (post strip/dedup/order), landing through the song
+    /// wiring-table row's StoreCount element like the sibling types' counts.
+    /// Zero while the per-user opt-in flag is off.
+    /// </summary>
+    public int SongCount { get; set; }
+
+    /// <summary>
+    /// Gets or sets the number of DISTINCT prepared song titles BEFORE the
+    /// cap (JF-946): with <see cref="SongCount"/> it forms the "N of M
+    /// synced" pair the cut warning reasons about.
+    /// </summary>
+    public int SongTitleTotal { get; set; }
+
+    /// <summary>
     /// Gets the catalog types (JF-695) whose payload build deterministically
     /// violated a construction invariant during the run. Per-type isolation in
     /// the sync froze each listed type while the sibling types synced normally:

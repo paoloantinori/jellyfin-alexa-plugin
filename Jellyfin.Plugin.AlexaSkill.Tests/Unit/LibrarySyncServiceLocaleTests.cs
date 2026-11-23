@@ -22,7 +22,7 @@ public class LibrarySyncServiceLocaleTests
         var libraryManager = new Mock<ILibraryManager>();
         var loggerFactory = NullLoggerFactory.Instance;
         var catalogManager = new Mock<CatalogManager>(Mock.Of<System.Net.Http.IHttpClientFactory>(), NullLogger<CatalogManager>.Instance);
-        _service = new LibrarySyncService(libraryManager.Object, catalogManager.Object, NullLogger<LibrarySyncService>.Instance);
+        _service = new LibrarySyncService(libraryManager.Object, catalogManager.Object, new Moq.Mock<MediaBrowser.Controller.Library.IUserDataManager>().Object, NullLogger<LibrarySyncService>.Instance);
     }
 
     [Fact]

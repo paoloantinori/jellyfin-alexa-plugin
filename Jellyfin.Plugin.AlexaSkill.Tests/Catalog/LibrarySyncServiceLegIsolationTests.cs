@@ -47,6 +47,7 @@ public class LibrarySyncServiceLegIsolationTests : PluginTestBase, IDisposable
     private const string Base = "https://api.amazonalexa.com";
     private const string SimulatedDriftMessage = "simulated drifted enrichment path (JF-695 isolation pin)";
 
+    private readonly Moq.Mock<MediaBrowser.Controller.Library.IUserDataManager> _userDataManagerMock = new();
     private readonly Mock<ILibraryManager> _libraryManagerMock;
     private readonly FakeSmapiHandler _smapiHandler;
     private readonly ILoggerFactory _loggerFactory;
@@ -72,6 +73,7 @@ public class LibrarySyncServiceLegIsolationTests : PluginTestBase, IDisposable
         _service = new LibrarySyncService(
             _libraryManagerMock.Object,
             catalogManager,
+            _userDataManagerMock.Object,
             _loggerFactory.CreateLogger<LibrarySyncService>());
 
         // SyncCatalogForLocaleAsync reads Plugin.Instance.Configuration.ServerAddress

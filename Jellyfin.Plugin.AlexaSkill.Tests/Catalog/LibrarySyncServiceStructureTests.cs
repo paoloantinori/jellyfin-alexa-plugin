@@ -93,18 +93,17 @@ public class LibrarySyncServiceStructureTests
     /// fetch per type; re-expanding to hand fetches fails here first with the
     /// offender named, which is the loud guard for the block's behavioral
     /// half: a missed fetch leaves that row's Items empty and the type never
-    /// syncs, silently. The pin binds the site to SyncUserLibraryAsync's own
-    /// state machine (code-review F3), not just any single caller: the fetch
-    /// must stay once-per-run in the method body (shared across locales);
-    /// moving the loop into RunLegAsync would re-fetch per locale with a
-    /// count-only pin still green. GATE-MARKER TAIL: the binding is
-    /// METHOD-granular - a re-fetch loop moved INTO SyncUserLibraryAsync's own
-    /// locale foreach keeps this pin green (same MoveNext method); the
-    /// once-per-run contract is enforced only against moves OUT of the method
-    /// body.
+    /// syncs, silently. JF-946 reshape: the call sites moved into the wiring
+    /// table's per-row FetchItems lambdas (still compiled into
+    /// SyncUserLibraryAsync's own state machine, still invoked once per row
+    /// by the sourcing loop, shared across locales), so the pin now accepts
+    /// EXACTLY the generic rows' lambdas - five today, one per non-song type -
+    /// and still refuses any call outside the method (a re-fetch inside
+    /// RunLegAsync would re-fetch per locale; the FetchAndPrepareSongTitles
+    /// twin has its own single site below).
     /// </summary>
     [Fact]
-    public void FetchLibraryItems_HasExactlyOneCallSite_TheSourcingLoop()
+    public void FetchLibraryItems_CallSitesAreExactlyTheWiringTableLambdas()
     {
         var assembly = typeof(LibrarySyncService).Assembly;
 
@@ -119,7 +118,10 @@ public class LibrarySyncServiceStructureTests
             worker,
             "FetchLibraryItems",
             SyncUserLibraryAsyncStateMachine(),
-            "the JF-727 sourcing loop in SyncUserLibraryAsync (once per run, shared across locales)");
+            "the JF-727 sourcing loop's wiring-table lambdas in SyncUserLibraryAsync (one per generic row, shared across locales)",
+            expectedMinCallSites: 5,
+            expectedMaxCallSites: 5,
+            site => site.Method.Name.StartsWith("<SyncUserLibraryAsync>b__", StringComparison.Ordinal));
     }
 
     /// <summary>
@@ -284,12 +286,38 @@ public class LibrarySyncServiceStructureTests
         string targetName,
         MethodBase expectedCaller,
         string expectedSite)
-        => AssertExactlyOneCallSite(
-            CallSites(assembly, target.MetadataToken),
-            targetName,
-            expectedSite,
-            site => site.Method == expectedCaller && site.Type == expectedCaller.DeclaringType,
-            "The single call site is not the expected method. ");
+        => AssertOnlyCallerIs(assembly, target, targetName, expectedCaller, expectedSite, 1, 1, null);
+
+    /// <summary>
+    /// JF-946 overload: the wiring-table per-row lambdas compile to distinct
+    /// methods named &lt;SyncUserLibraryAsync&gt;b__N inside the method's
+    /// display class, so a table-shaped pin cannot bind to ONE MethodBase.
+    /// The caller passes the call-instruction bounds and a site-shape
+    /// predicate instead; the default bounds (1, 1) and the
+    /// expected-caller-equality shape reproduce the original assertion
+    /// byte-for-byte for the single-site pins.
+    /// </summary>
+    internal static void AssertOnlyCallerIs(
+        Assembly assembly,
+        MethodBase target,
+        string targetName,
+        MethodBase expectedCaller,
+        string expectedSite,
+        int expectedMinCallSites,
+        int expectedMaxCallSites,
+        Func<(Type Type, MethodBase Method, int Count), bool>? siteShape)
+    {
+        var callSites = CallSites(assembly, target.MetadataToken);
+        int total = callSites.Sum(site => site.Count);
+        Assert.InRange(total, expectedMinCallSites, expectedMaxCallSites);
+
+        Func<(Type Type, MethodBase Method, int Count), bool> shape = siteShape
+            ?? (site => site.Method == expectedCaller && site.Type == expectedCaller.DeclaringType);
+        Assert.True(
+            callSites.All(shape),
+            $"The call sites are not the expected shape ({expectedSite}). " +
+            $"Call sites found: [{string.Join(", ", callSites.Select(s => $"{s.Type.FullName}.{s.Method.Name} x{s.Count}"))}]");
+    }
 
     /// <summary>
     /// JF-716: the user's four stored catalog ids (the auto-properties

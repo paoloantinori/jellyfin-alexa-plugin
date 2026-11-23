@@ -72,10 +72,10 @@ public class LibrarySyncServiceEmptinessPrecheckTests
     /// and fails these pins loudly, which is the wanted vigilance, not a
     /// hole.
     /// </summary>
-    private static (CatalogType Type, BaseItemKind Kind, IReadOnlyList<BaseItem> Items, Func<string?> StoredCatalogId, Action<string> StoreCatalogId, Action<int> StoreCount, string Name, string Description)[] Legs(
+    private static (CatalogType Type, BaseItemKind Kind, IReadOnlyList<BaseItem> Items, Func<string?> StoredCatalogId, Action<string> StoreCatalogId, Action<int> StoreCount, string Name, string Description, Func<IReadOnlyList<BaseItem>> FetchItems)[] Legs(
         params int[] itemCounts)
     {
-        var legs = new (CatalogType Type, BaseItemKind Kind, IReadOnlyList<BaseItem> Items, Func<string?> StoredCatalogId, Action<string> StoreCatalogId, Action<int> StoreCount, string Name, string Description)[itemCounts.Length];
+        var legs = new (CatalogType Type, BaseItemKind Kind, IReadOnlyList<BaseItem> Items, Func<string?> StoredCatalogId, Action<string> StoreCatalogId, Action<int> StoreCount, string Name, string Description, Func<IReadOnlyList<BaseItem>> FetchItems)[itemCounts.Length];
         for (int i = 0; i < itemCounts.Length; i++)
         {
             legs[i] = (
@@ -86,7 +86,8 @@ public class LibrarySyncServiceEmptinessPrecheckTests
                 _ => { },
                 _ => { },
                 string.Empty,
-                string.Empty);
+                string.Empty,
+                () => Array.Empty<BaseItem>());
         }
 
         return legs;

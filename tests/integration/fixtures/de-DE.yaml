@@ -108,14 +108,22 @@ tests:
     expected_slots:
       librarySong: {}
 
-  # RED-UNTIL-CATALOG: the den Song carrier does NOT select with an unknown
-  # title on the static seed (lab matrix 2026-11-22: only a seed CONTAINING
-  # the exact title greens all carriers, run jf940-de-vc; removing just the
-  # test title from that seed breaks it again, run jf940-de-ve; generic and
-  # dual-sample variants fail differently, runs jf940-de-final/va/vb/vd).
-  # The durable fix is the catalog-backed SongTitle (per-library values,
-  # the AlbumName architecture), tracked as JF-946; this row goes green
-  # only when that lands and the next catalog sync pins the version.
+  # JF-946 CATALOG-GREEN row (live-verified 2026-11-22 on the household
+  # skill with the song catalog pinned): 'circles' is a REAL library track,
+  # so the catalog anchors it and ALL FOUR carriers select the twin with the
+  # slot filled. The lab matrix (runs jf940-de-vc/v-e) proved only
+  # exact-title anchoring works; the static seed could never do this.
+  - utterance: "spiele den song circles"
+    expected_intent: PlayLibrarySongIntent
+    expected_slots:
+      librarySong: {}
+
+  # REPORTER'S-TITLE row (out of OUR library, in the reporter's): 'die
+  # streithörnchen' cannot anchor on our skill's catalog, so this row reads
+  # red HERE forever while staying the live proof-phrase for the reporter's
+  # skill once they enable the opt-in and their sync runs (issue #46). The
+  # lab matrix (jf940-de-vc/v-e) is the evidence that only exact anchoring
+  # selects; the static-seed era result for this row was NO_SELECTION.
   - utterance: "spiele den song die streithörnchen"
     expected_intent: PlayLibrarySongIntent
     expected_slots:

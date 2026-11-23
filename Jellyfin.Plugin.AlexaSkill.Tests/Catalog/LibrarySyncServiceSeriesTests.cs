@@ -35,6 +35,7 @@ public class LibrarySyncServiceSeriesTests : PluginTestBase, IDisposable
 {
     private const string SeriesCatalogId = "amzn1.catalog.test.series-1";
 
+    private readonly Moq.Mock<MediaBrowser.Controller.Library.IUserDataManager> _userDataManagerMock = new();
     private readonly Mock<ILibraryManager> _libraryManagerMock;
     private readonly FakeSmapiHandler _smapiHandler;
     private readonly ILoggerFactory _loggerFactory;
@@ -59,6 +60,7 @@ public class LibrarySyncServiceSeriesTests : PluginTestBase, IDisposable
         _service = new LibrarySyncService(
             _libraryManagerMock.Object,
             catalogManager,
+            _userDataManagerMock.Object,
             _loggerFactory.CreateLogger<LibrarySyncService>())
         {
             // The fake backend needs no rate limiting (JF-717 seam).

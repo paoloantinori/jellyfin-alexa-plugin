@@ -134,12 +134,14 @@ public class CatalogSyncTask : IScheduledTask
                 {
                     user.LastCatalogSync = result.SyncTime;
                     _logger.LogInformation(
-                        "Catalog sync succeeded for user {UserId}: {Artists} artists, {Albums} albums, {Series} series, {Audiobooks} audiobooks",
+                        "Catalog sync succeeded for user {UserId}: {Artists} artists, {Albums} albums, {Series} series, {Audiobooks} audiobooks, {Movies} movies, {Songs} song titles",
                         user.Id,
                         result.ArtistCount,
                         result.AlbumCount,
                         result.SeriesCount,
-                        result.AudiobookCount);
+                        result.AudiobookCount,
+                        result.MovieCount,
+                        result.SongCount);
                 }
             }
             catch (Exception ex)

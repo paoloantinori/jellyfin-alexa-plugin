@@ -3,10 +3,10 @@ id: JF-946
 title: >-
   Catalog-backed SongTitle slot: the durable unknown-title anchor for the
   PlayLibrarySong carrier (JF-940 phase 2, issue #46 de-DE completion)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-11-22 17:35'
-updated_date: '2026-11-22 17:37'
+updated_date: '2026-11-23 06:10'
 labels:
   - nlu
   - catalog
@@ -30,8 +30,29 @@ The JF-940 dual-intent proved the SELECTION layer works only when the custom Son
 ## Implementation Plan
 
 <!-- SECTION:PLAN:BEGIN -->
-Rollout sequencing: the remaining 15 locales take the PlayLibrarySong carrier ONLY together with this catalog phase (or later), not before: the static-seed shape underdelivers on selection for unknown titles in de-DE's competition landscape, and expanding it untested to 15 more locales would ship a known-partial shape. it-IT is the exception already live and verified end to end (one-shot wrapper -> PlayLibrarySongIntent, slot fills raw, play succeeds; simulate 2026-11-22).
+IMPLEMENTATION PLAN (drafted from the Fable-reviewed REVISED PLAN on JF-940 + the 2026-11-22 lab matrix; awaiting maintainer approval before code):
+
+PHASE A - the engine (it-IT + de-DE only, live-verified on the household dev skill):
+1. CatalogType: add Song. CatalogSlotTypeNames: [Song] = "SongTitle" (replace-in-place shape, the SeriesName precedent: both templates already declare the type with the static seed; the catalog injection replaces the block, no slot re-typing). ar-SA inherits the model-wide wiring gate automatically; the static seed remains the fallback there and for unsynced users.
+2. LibrarySyncService song arm (the Fable-reviewed rules): fetch Audio items; strip parenthetical suffixes and trailing " - " segments, dedup by the STRIPPED form BEFORE the cap; order by play count then date added (never alphabetical: the end of the alphabet must not lose); cap at the valueCatalog budget with a loud warn-on-cut only; skip phonetic synonyms for titles with no word >= 4 letters; exclude junk titles (bare track numbers, "no title" class); NO partial-name synonyms for songs; 140-char truncation rides the existing CatalogValueFactory guarantee.
+3. Config: CatalogSongSyncEnabled, default OFF (privacy: the full tracklist goes to Amazon; opt-in). Config page shows "N of M titles synced" with the cut warning when applicable.
+4. Verify live (the JF-874 MovieTitle precedent: our dev skill, not the lab): enable the flag, force a catalog sync, confirm the catalog version pins into the saved it-IT + de-DE models, then probe the four German carriers + the Italian battery rows. GREEN CRITERIA: 'spiele den song/den titel/das stueck/das lied die streithoernchen' all select PlayLibrarySongIntent with the slot filled (the lab proved only exact-match anchoring works: v-c) AND the it-IT carrier rows stay green (no regression from the catalog gate) AND out-of-library titles on the carrier stop selecting (the accepted JF-684 consequence: unplayable anyway). The RED-UNTIL-CATALOG fixture row goes green in the same change.
+PHASE B - the 15-locale expansion (only after Phase A is verified): per-locale carrier nouns + SongTitle static seeds in the remaining templates, the JF-460 NOUNS-table and voice-reference mirrors, batched with the locale-routing probes.
+
+OUT OF SCOPE: the AddToQueue/PlayNext song slots (stay free-text); bare-form coverage for non-famous titles (the JF-298 class stays: catalog types gate selection, and the free-text arm cannot anchor what Amazon does not know).
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-11-22 implementation progress (Phase A engine COMPLETE, live verification RUNNING): (1) CatalogType.Song existed unused in the enum; wired CatalogSlotTypeNames[Song]='SongTitle' (replace-in-place, the SeriesName shape) + the roster test extended to six types. (2) SongTitlePreparation (new): StripTitle (trailing parenthetical groups + first ' - ' tail), IsJunkTitle (empty/digits/no-title class), HasQualifyingWord (>=4 letters for phonetics), Prepare (order play-count then recency, dedup on stripped BEFORE cap, totalDistinct out). (3) LibrarySyncService: song leg in the wiring table, REMOVED when the per-user opt-in flag is off (a songs-only library with flag off takes the emptiness skip), dedicated uncapped fetch + userdata play counts (IUserDataManager injected), synonym gate at the FromItems call. (4) The JF-706 loud edge fired as designed: UpdateInteractionModelAsync + InjectCatalogReferences + CatalogWiring record + CatalogWiringGraft extraction/apply all extended with the song pair. Chose TRAILING-OPTIONAL params for the manager methods: the three production call sites forward the song pair explicitly (loud), while the 28 test call sites keep all-null song semantics without mechanical churn (documented at the signature). (5) User.CatalogSongSyncEnabled (default OFF, privacy opt-in) + SongCatalogId persisted; SyncResult.SongCount + SongTitleTotal (the N-of-M pair). (6) ConfigurationController PATCH user-skills: CatalogSongSyncEnabled (bool) + LastCatalogSync (explicit null resets the throttle, the verification seam). Tests: 29 new (27 preparation + 2 full-sync: flag-off creates no catalog; flag-on creates 'Jellyfin Songs' with stripped/deduped/play-count-ordered values + the SongTitle model injection asserted). Suite 6199 green after the roster pin extension. Live: deployed to minix, flag enabled + throttle reset via PATCH, 'Sync Alexa Skill Catalogs' task triggered 20:29, monitoring the logs for the song catalog creation.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+VERIFIED LIVE 2026-11-22/23 (the Phase A green criteria): (1) the first sync with the opt-in created catalog amzn1...57c3363b ('Jellyfin Songs'), injected SongTitle into ALL 16 synced locales (replace-in-place in it-IT/de-DE, inert-block add elsewhere), completed 16/16 in ~14min. (2) ALL FOUR German carriers select PlayLibrarySongIntent with the slot FILLED for a real library title ('spiele den song/den titel/das stueck circles' each verified): the three historically-dead carriers now work via exact catalog anchoring, confirming the v-c lab prediction. (3) it-IT rows stay green ('suona il brano rapsodia' -> twin, slot filled). (4) DIVERGENCE from the expected JF-684 gate: out-of-library titles on the carrier STILL select the twin (no NO_SELECTION); benign, the handler answers graceful not-found. (5) Some in-library titles route to the free-text PlaySong arm instead of the twin ('spiele das lied sweet up and down' -> PlaySong, song filled) - both arms are the SAME handler since the JF-940 twin fold, so the outcome is identical. Review rounds applied: simplify 4 agents (shared parenthetical stripper, Prepare<T> single chain, table FetchItems column, seed-warning gating, test join) + code-review 6 findings (5 applied: cross-type warning, 4x fetch bound, gated seed-merge generator, honest song-cut warning + N-of-M logs, movies on the task line; F1 the privacy teardown filed as JF-949 with UI disclosure). Suite 6199 green + 30 new tests.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->

@@ -81,13 +81,13 @@ public class CatalogSlotTypesTests
     }
 
     /// <summary>
-    /// The full static family after JF-874: five synced types. The exact-set
-    /// pin keeps a copy-paste sixth entry (two synced types sharing a
+    /// The full static family after JF-946: six synced types. The exact-set
+    /// pin keeps a copy-paste seventh entry (two synced types sharing a
     /// slot-type name) from reaching the reverse map, where it would throw at
     /// type initialization (deliberately loud, see CatalogSlotTypes).
     /// </summary>
     [Fact]
-    public void CatalogSlotTypeNames_IsExactlyTheFiveSyncedTypes()
+    public void CatalogSlotTypeNames_IsExactlyTheSixSyncedTypes()
     {
         var entries = CatalogSlotTypes.CatalogSlotTypeNames
             .OrderBy(kvp => kvp.Key)
@@ -100,7 +100,8 @@ public class CatalogSlotTypesTests
                 (CatalogType.Artist, "JellyfinArtist"),
                 (CatalogType.Audiobook, "AudiobookTitle"),
                 (CatalogType.Movie, "MovieTitle"),
-                (CatalogType.Series, "SeriesName")
+                (CatalogType.Series, "SeriesName"),
+                (CatalogType.Song, "SongTitle")
             }.OrderBy(t => t.Item1),
             entries.Select(kvp => (kvp.Key, kvp.Value)));
     }

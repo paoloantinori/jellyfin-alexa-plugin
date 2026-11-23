@@ -252,6 +252,22 @@ public class User
     public string? MovieCatalogId { get; set; }
 
     /// <summary>
+    /// Gets or sets the SMAPI catalog ID for the user's song-title catalog
+    /// (JF-946). Null if catalog has not been created yet; the same
+    /// XmlSerializer-safe DTO treatment as the sibling stored catalog ids.
+    /// </summary>
+    public string? SongCatalogId { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the user opted in to uploading
+    /// their song titles to Amazon's catalog (JF-946). Privacy gate, default
+    /// OFF: unlike artists/albums (public-artist metadata), the song-title
+    /// catalog carries the FULL personal tracklist, including private
+    /// recordings, so only an explicit opt-in syncs it.
+    /// </summary>
+    public bool CatalogSongSyncEnabled { get; set; }
+
+    /// <summary>
     /// Gets or sets the timestamp of the last successful catalog sync.
     /// </summary>
     public DateTime? LastCatalogSync { get; set; }

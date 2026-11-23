@@ -32,6 +32,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Catalog;
 [Collection("Plugin")]
 public class LibrarySyncServiceTests
 {
+    private readonly Moq.Mock<MediaBrowser.Controller.Library.IUserDataManager> _userDataManagerMock = new();
     private readonly Mock<ILibraryManager> _libraryManagerMock;
     private readonly CatalogManager _catalogManager;
     private readonly ILoggerFactory _loggerFactory;
@@ -55,6 +56,7 @@ public class LibrarySyncServiceTests
         return new LibrarySyncService(
             _libraryManagerMock.Object,
             _catalogManager,
+            _userDataManagerMock.Object,
             _loggerFactory.CreateLogger<LibrarySyncService>());
     }
 

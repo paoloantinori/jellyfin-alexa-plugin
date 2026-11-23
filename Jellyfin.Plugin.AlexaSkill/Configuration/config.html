@@ -1397,6 +1397,30 @@
                 announceField.appendChild(announceCbLabel);
                 pbGroup.appendChild(announceField);
                 grid.appendChild(pbGroup);
+
+                // ---- CATALOG group (saved users only, JF-946) ----
+                var catGroup = document.createElement("div");
+                catGroup.appendChild(groupTitleEl("Catalog"));
+                var songSyncField = document.createElement("div");
+                songSyncField.className = "checkboxContainer checkboxContainer-withDescription";
+                var songSyncCbLabel = document.createElement("label");
+                var songSyncInput = document.createElement("input");
+                songSyncInput.type = "checkbox";
+                songSyncInput.setAttribute("is", "emby-checkbox");
+                songSyncInput.setAttribute("data-field", "CatalogSongSyncEnabled");
+                songSyncInput.checked = user.CatalogSongSyncEnabled === true;
+                songSyncCbLabel.appendChild(songSyncInput);
+                var songSyncLbl = document.createElement("span");
+                songSyncLbl.textContent = "Song title sync (uploads your tracklist to Amazon)";
+                songSyncCbLabel.appendChild(songSyncLbl);
+                songSyncField.appendChild(songSyncCbLabel);
+                catGroup.appendChild(songSyncField);
+                var songSyncDesc = document.createElement("div");
+                songSyncDesc.className = "fieldDescription";
+                songSyncDesc.style.cssText = "margin-left:2.2em;";
+                songSyncDesc.textContent = "Off by default (privacy: your full list of song titles is uploaded to Amazon so Alexa can recognize titles it does not know, including personal recordings). When on, the weekly catalog sync uploads your deduplicated song titles and 'play the song <title>' works for every track in your library. Turning this off stops future uploads but does not delete what Amazon already stored; removing that needs a skill reset (tracked for a future removal button).";
+                catGroup.appendChild(songSyncDesc);
+                grid.appendChild(catGroup);
                 } // end !isUnsaved Playback branch
 
                 // ---- INVOCATION & LIBRARIES group (full width) ----
@@ -1713,6 +1737,7 @@
                                 var aapSel = field("AnnounceAudioPlays");
                                 var dilSel = field("DiagnosticInteractionLogging");
                                 var announcePos = field("AnnouncePositionOnResume");
+                                var songSync = field("CatalogSongSyncEnabled");
 
                                 // Map tri-state selects to JSON: inherit -> null (use global), true/false -> bool
                                 function triState(sel) {
@@ -1744,6 +1769,7 @@
                                     "SearchResponseMode": searchMode ? searchMode.value : "Thorough",
                                     "PostPlayBehavior": postPlayMode ? postPlayMode.value : "Stop",
                                     "AnnouncePositionOnResume": announcePos ? announcePos.checked : false,
+                                    "CatalogSongSyncEnabled": songSync ? songSync.checked : false,
                                     "VideoAppForAudio": triState(vaaSel),
                                     "AnnounceNowPlaying": triState(anpSel),
                                     "AnnounceAudioPlays": triState(aapSel),

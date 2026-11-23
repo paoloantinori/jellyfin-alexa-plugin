@@ -124,7 +124,18 @@ public static class CatalogSlotTypes
         // slots, builds SUCCEEDED). Unlike the album family there is no
         // slot-type divergence to track: no locale declares a MovieTitle slot
         // type other than this one.
-        [CatalogType.Movie] = "MovieTitle"
+        [CatalogType.Movie] = "MovieTitle",
+        // JF-946: the song-title catalog backing the SongTitle slot type the
+        // JF-940 twin intent (PlayLibrarySongIntent) carries. Declared today
+        // by it-IT + de-DE with a static generic seed (replace-in-place shape,
+        // the SeriesName precedent); the remaining locales take the carrier in
+        // JF-946 phase B, until then the injection adds the proven inert-block
+        // shape there. The lab evidence forcing the catalog arm: only exact
+        // title anchoring makes unknown titles SELECT on the carrier (runs
+        // jf940-de-vc/v-e, 2026-11-22). GATED per user by
+        // User.CatalogSongSyncEnabled (privacy: the full tracklist goes to
+        // Amazon), default OFF; a disabled flag means no Song wiring at all.
+        [CatalogType.Song] = "SongTitle"
     };
 
     /// <summary>

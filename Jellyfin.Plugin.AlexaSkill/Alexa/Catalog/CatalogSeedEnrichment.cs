@@ -117,7 +117,7 @@ public static class CatalogSeedEnrichment
                 ? word
                 : null;
 
-        if (seeds.Count == 0 && logger != null)
+        if (seeds.Count == 0 && SeedCarryingTypes.Contains(type) && logger != null)
         {
             // One-time visibility for the silent-empty degradation (embedded model
             // missing or unparseable): the title-seed enrichment disables itself
@@ -150,6 +150,21 @@ public static class CatalogSeedEnrichment
                 payload.Values.Count - before);
         }
     }
+
+    /// <summary>
+    /// JF-946 review: the types that DESIGN-carry model seeds (and whose
+    /// empty extraction therefore means degradation). Song is deliberately
+    /// absent: it is seedless by design (its static seeds are generic words,
+    /// not real titles; the unsynced fallback is the model's own static
+    /// type), so an empty extraction for it is not a warning.
+    /// </summary>
+    private static readonly HashSet<CatalogType> SeedCarryingTypes = new()
+    {
+        CatalogType.Album,
+        CatalogType.Artist,
+        CatalogType.Audiobook,
+        CatalogType.Movie
+    };
 
     /// <summary>
     /// Resolves the seed names for a catalog type.

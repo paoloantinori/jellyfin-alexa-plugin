@@ -60,6 +60,7 @@ public class LibrarySyncServiceEquivalenceClassTests : PluginTestBase, IDisposab
     /// </summary>
     private const string ArtistName = "Faith No More";
 
+    private readonly Moq.Mock<MediaBrowser.Controller.Library.IUserDataManager> _userDataManagerMock = new();
     private readonly Mock<ILibraryManager> _libraryManagerMock;
     private readonly FakeSmapiHandler _smapiHandler;
     private readonly ILoggerFactory _loggerFactory;
@@ -85,6 +86,7 @@ public class LibrarySyncServiceEquivalenceClassTests : PluginTestBase, IDisposab
         _service = new LibrarySyncService(
             _libraryManagerMock.Object,
             catalogManager,
+            _userDataManagerMock.Object,
             _loggerFactory.CreateLogger<LibrarySyncService>())
         {
             // The fake backend needs no rate limiting; the multi-locale pins

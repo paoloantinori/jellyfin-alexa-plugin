@@ -166,6 +166,26 @@ public class ConfigurationController : ControllerBase
             updated = true;
         }
 
+        // Handle CatalogSongSyncEnabled (boolean, JF-946): the per-user
+        // privacy opt-in for the song-title catalog. A null/absent key leaves
+        // the flag untouched.
+        if (req.TryGetValue("CatalogSongSyncEnabled", out var songSyncToken)
+            && songSyncToken.Type == JTokenType.Boolean)
+        {
+            pluginUser!.CatalogSongSyncEnabled = songSyncToken.Value<bool>();
+            updated = true;
+        }
+
+        // Handle LastCatalogSync reset (explicit null, JF-946 verification
+        // seam): clears the throttle timestamp so the next scheduled catalog
+        // sync runs immediately instead of waiting out the interval.
+        if (req.TryGetValue("LastCatalogSync", out var lastSyncToken)
+            && lastSyncToken.Type == JTokenType.Null)
+        {
+            pluginUser!.LastCatalogSync = null;
+            updated = true;
+        }
+
         // Handle SearchResponseMode (string enum: "Thorough", "Fast", or null for global default)
         if (req.TryGetValue("SearchResponseMode", out var modeToken))
         {
