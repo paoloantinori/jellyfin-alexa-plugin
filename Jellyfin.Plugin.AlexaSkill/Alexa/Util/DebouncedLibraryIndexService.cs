@@ -141,6 +141,15 @@ public abstract class DebouncedLibraryIndexService : IHostedService, IDisposable
         _closeDebounceWindow = CloseDebounceWindow;
         LibraryManager.ItemAdded += OnLibraryChanged;
         LibraryManager.ItemRemoved += OnLibraryChanged;
+        // JF-948: a metadata EDIT (renamed title, changed album/artist tags)
+        // raises ItemUpdated, not Added/Removed, so an index that skips it
+        // serves stale entries until the next process restart (live report:
+        // the JF-439 song fallback stopped finding a re-tagged track while
+        // the reload log line showed the same count). Playback-position
+        // saves ride UserDataSaved, not ItemUpdated, so this subscription
+        // sees metadata-shape changes, not every playback stop; the 5s
+        // debounce plus ShouldRefreshOn keep the refresh bounded either way.
+        LibraryManager.ItemUpdated += OnLibraryChanged;
     }
 
     /// <inheritdoc />
@@ -363,6 +372,7 @@ public abstract class DebouncedLibraryIndexService : IHostedService, IDisposable
 
         LibraryManager.ItemAdded -= OnLibraryChanged;
         LibraryManager.ItemRemoved -= OnLibraryChanged;
+        LibraryManager.ItemUpdated -= OnLibraryChanged;
         lock (_debounceLock)
         {
             _debounceTimer?.Dispose();

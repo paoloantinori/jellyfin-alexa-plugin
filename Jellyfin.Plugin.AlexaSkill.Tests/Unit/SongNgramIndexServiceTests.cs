@@ -604,4 +604,39 @@ public class SongNgramIndexServiceTests : PluginTestBase
             service.Dispose();
         }
     }
+
+    /// <summary>
+    /// JF-948 (issue #46 side note, live report): a metadata EDIT raises
+    /// ItemUpdated, not ItemAdded/ItemRemoved. The index must refresh on it,
+    /// otherwise a re-tagged track keeps serving its stale entries until the
+    /// next process restart (the live report: the JF-439 song fallback
+    /// stopped finding the title after an album/artist tag edit while the
+    /// reload log showed the same count, restart fixed it).
+    /// </summary>
+    [Fact]
+    public async Task ItemUpdated_OnAudio_SchedulesARefresh()
+    {
+        int loadCount = 0;
+        var service = CreateServiceWithLoad(() => { loadCount++; return new List<BaseItem>(); });
+        service.RefreshDebounceInterval = TimeSpan.FromMilliseconds(100);
+        try
+        {
+            await service.StartAsync(CancellationToken.None);
+            int initialLoads = loadCount;
+            Assert.True(initialLoads >= 1, "the startup load must have run");
+
+            _libraryManagerMock.Raise(
+                l => l.ItemUpdated += null,
+                _libraryManagerMock.Object,
+                new ItemChangeEventArgs { Item = new Audio { Name = "Retagged", Id = Guid.NewGuid() } });
+
+            // The debounce window plus a margin: the refresh must have fired.
+            await Task.Delay(600);
+            Assert.True(loadCount > initialLoads, "an ItemUpdated event on an Audio item must schedule a refresh (JF-948)");
+        }
+        finally
+        {
+            service.Dispose();
+        }
+    }
 }
