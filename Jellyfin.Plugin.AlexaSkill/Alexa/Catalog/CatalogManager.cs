@@ -1014,13 +1014,13 @@ public class CatalogManager
         if (!string.IsNullOrEmpty(songCatalogId))
         {
             // No ReplacesType (JF-946): the SeriesName replace-in-place shape.
-            // In it-IT/de-DE (the declaring locales) the PlayLibrarySongIntent
-            // slot already references SongTitle so the injection swaps the
-            // static seed block for the catalog supplier; in the other synced
-            // locales the added type block is the proven inert AlbumName shape
-            // until JF-946 phase B lands their carriers. GATED upstream by the
-            // per-user CatalogSongSyncEnabled opt-in: a disabled flag forwards
-            // no song catalog id, so nothing injects here.
+            // The wiring lands ONLY in locales whose intents declare the
+            // SongTitle slot (it-IT and de-DE today): elsewhere the gate in
+            // the injection loop skips the block entirely and heals any
+            // stale one, because the value set counts against every locale's
+            // 1.5MB effective-model cap. GATED upstream by the per-user
+            // CatalogSongSyncEnabled opt-in: a disabled flag forwards no song
+            // catalog id, so nothing injects here.
             catalogMappings.Add((songCatalogId!, ResolveCatalogVersion(songCatalogVersion, CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Song], songCatalogId, logger),
                 CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Song],
                 null,
@@ -1048,36 +1048,17 @@ public class CatalogManager
             int existingIndex = Enumerable.Range(0, typesArray.Count)
                 .FirstOrDefault(i => typesArray[i]?["name"]?.GetValue<string>() == slotTypeName, -1);
 
-            var catalogType = new JsonObject
-            {
-                ["name"] = slotTypeName,
-                ["valueSupplier"] = new JsonObject
-                {
-                    ["type"] = "CatalogValueSupplier",
-                    ["valueCatalog"] = new JsonObject
-                    {
-                        ["catalogId"] = catalogId,
-                        ["version"] = catalogVersion
-                    }
-                }
-            };
-
             // JF-946 (branch-order fix, live lesson 2026-11-23): the declare
-            // check must come FIRST for size-capped types. With the replace
-            // branch first, a locale carrying a stale wired block from an
-            // earlier add took the REPLACE path every sync (the skip branch
-            // was reachable only when the block was already absent, a no-op),
-            // so every non-declaring locale kept the full value set in its
-            // effective model.
+            // check comes FIRST for size-capped types, before the object is
+            // built (16 of 17 locales take this path every song sync; with
+            // the replace branch first, a locale carrying a stale wired block
+            // took REPLACE every sync and the skip branch was a no-op, so
+            // every non-declaring locale kept the full value set against
+            // Amazon's 1.5MB effective per-model cap; the mapping site names
+            // the policy). HEAL while here: a stale block is REMOVED, not
+            // replaced, so the locale returns to its pre-song size.
             if (onlyReplaceExisting && !AnyIntentSlotDeclaresType(lmNode, slotTypeName))
             {
-                // JF-946: no slot in this model references the type, and the
-                // value set is size-capped, so the wiring must NOT ride this
-                // locale (a live lesson: an inert block from an earlier add
-                // pushed already-large locales over Amazon's 1.5MB effective
-                // per-model cap). HEAL while here: a stale type block left by
-                // an earlier marginal build is REMOVED, not replaced, so the
-                // locale returns to its pre-song size.
                 if (existingIndex >= 0)
                 {
                     logger.LogInformation(
@@ -1094,6 +1075,20 @@ public class CatalogManager
 
                 continue;
             }
+
+            var catalogType = new JsonObject
+            {
+                ["name"] = slotTypeName,
+                ["valueSupplier"] = new JsonObject
+                {
+                    ["type"] = "CatalogValueSupplier",
+                    ["valueCatalog"] = new JsonObject
+                    {
+                        ["catalogId"] = catalogId,
+                        ["version"] = catalogVersion
+                    }
+                }
+            };
 
             if (existingIndex >= 0)
             {

@@ -55,16 +55,6 @@ public class SongTitlePreparationTests
         Assert.False(SongTitlePreparation.IsJunkTitle(title));
     }
 
-    [Theory]
-    [InlineData("Rapsodia", true)]
-    [InlineData("Suona il blues", true)]
-    [InlineData("ab cd", false)]
-    [InlineData("O", false)]
-    public void HasQualifyingWord_FourLetterMinimum(string title, bool expected)
-    {
-        Assert.Equal(expected, SongTitlePreparation.HasQualifyingWord(title));
-    }
-
     [Fact]
     public void SongSynonyms_ValuesOnly_AlwaysEmpty()
     {

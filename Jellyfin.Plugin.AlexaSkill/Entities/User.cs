@@ -267,9 +267,10 @@ public class User
     /// catalog ships opt-in until the wrapper stabilization lands; the plan
     /// is default ON from the release after that). The initializer makes the
     /// default hold for configs persisted before this field existed
-    /// (XmlSerializer only overwrites elements present in the file).
+    /// (XmlSerializer only overwrites elements present in the file, and the
+    /// compiler default for bool is already false).
     /// </summary>
-    public bool CatalogSongSyncEnabled { get; set; } = false;
+    public bool CatalogSongSyncEnabled { get; set; }
 
     /// <summary>
     /// Gets or sets the timestamp of the last successful catalog sync.

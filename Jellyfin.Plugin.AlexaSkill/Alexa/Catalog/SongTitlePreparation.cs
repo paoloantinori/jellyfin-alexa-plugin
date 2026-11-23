@@ -75,16 +75,6 @@ internal static class SongTitlePreparation
     }
 
     /// <summary>
-    /// True when the title carries at least one word of four or more letters:
-    /// the per-locale phonetic synonym generators operate on such words, and
-    /// on shorter titles they emit noise (single-letter and two-letter
-    /// fragments every title shares), so songs without a qualifying word
-    /// upload value-only (JF-946 plan decision).
-    /// </summary>
-    internal static bool HasQualifyingWord(string name) =>
-        name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Any(w => w.Length >= 4);
-
-    /// <summary>
     /// The song synonym policy for <see cref="CatalogPayload.FromItems"/>:
     /// VALUES-ONLY. The live 2026-11-23 finding: Amazon's per-model size cap
     /// (1.5MB) counts the catalog-backed EFFECTIVE size, and 9,458 titles
@@ -95,9 +85,9 @@ internal static class SongTitlePreparation
     /// selection is the handler-side fuzzy chain's job, so dropping song
     /// synonyms trades a redundant defense for the headroom that keeps the
     /// FULL library under the cap. If phonetic song variants are ever
-    /// reintroduced, they must ride a per-title variant budget sized against
-    /// the 1.5MB effective-model limit (the HasQualifyingWord gate below is
-    /// kept for that future and for the seed path's shape).
+    /// reintroduced, they must ride a per-title variant budget computed from
+    /// the payload bytes against the 1.5MB effective-model limit (JF-951's
+    /// pre-flight guard is the home; do not re-stub a policy).
     /// </summary>
     public static List<string> SongSynonyms(string name, string locale) =>
         new List<string>();
