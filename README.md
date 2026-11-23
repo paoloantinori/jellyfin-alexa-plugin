@@ -343,6 +343,13 @@ The final step links your Jellyfin account to the Alexa skill:
 5. Enter your **Jellyfin username and password** on the linking page
 6. After successful linking, the skill is ready to use
 
+> 🔐 **Use a dedicated, non-admin Jellyfin user for the skill.** The linking
+> step grants the skill a Jellyfin session for that user, and stream URLs
+> carry that user's access. A dedicated media account keeps the blast radius
+> of any leaked URL at "can play media", not "administer the server". Create
+> one in Jellyfin under Dashboard, Users, Add User, give it access to your
+> libraries only, and link that account.
+
 ## Testing
 
 > 🎨 **[Voice Command Explorer](https://paoloantinori.github.io/jellyfin-alexa-plugin/)**: browse every voice command and how it routes between intents, interactively, in all 17 locales (utterance transition graphs).

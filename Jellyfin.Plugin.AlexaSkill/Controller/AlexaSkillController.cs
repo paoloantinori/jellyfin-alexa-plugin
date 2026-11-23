@@ -365,6 +365,26 @@ public class AlexaSkillController : ControllerBase
                     return SkillResponseContent(BaseHandler.DegradeForEventRequest(req.Request, "User not found. Please link your account in the Jellyfin Alexa plugin settings."));
                 }
 
+                // Skill binding (security): the request must belong to THIS user's
+                // skill. Signature verification only proves the request originates
+                // from some Alexa-certified skill; without this comparison any
+                // developer account could point its own skill at a public endpoint
+                // and, knowing a Jellyfin user id (the linking token), act as that
+                // user. Amazon sets ApplicationId inside the signed envelope, so
+                // skill code cannot forge it: a mismatch is by construction a
+                // request routed here through a different skill. Fail closed on a
+                // missing ApplicationId or an unprovisioned user skill.
+                string? requestApplicationId = req.Context.System?.Application?.ApplicationId;
+                if (!IsBoundToUserSkill(requestApplicationId, user))
+                {
+                    _logger.LogWarning(
+                        "Rejected skill request not bound to the user's skill: user={UserId} requestApplication={RequestApplicationId} expectedSkill={ExpectedSkillId}",
+                        userId,
+                        string.IsNullOrEmpty(requestApplicationId) ? "(missing)" : requestApplicationId,
+                        string.IsNullOrEmpty(user.UserSkill?.SkillId) ? "(no user skill)" : user.UserSkill.SkillId);
+                    return SkillResponseContent(BaseHandler.DegradeForEventRequest(req.Request, "Unable to process your request. Please link your account again in the Jellyfin Alexa plugin settings."));
+                }
+
                 if (req.Request == null)
                 {
                     _logger.LogWarning("Received skill request with null request body");
@@ -451,6 +471,24 @@ public class AlexaSkillController : ControllerBase
             ContentType = "application/json"
         };
     }
+
+    /// <summary>
+    /// Skill binding (security): true only when the request's ApplicationId is
+    /// the user's own skill. Signature verification alone proves the request
+    /// comes from SOME Alexa-certified skill; without this binding any
+    /// developer account could point its own skill at a public endpoint and,
+    /// knowing a Jellyfin user id (the linking token), act as that user.
+    /// Amazon sets ApplicationId inside the signed envelope, so skill code
+    /// cannot forge it. Fail closed: a missing ApplicationId or an
+    /// unprovisioned user skill never binds.
+    /// </summary>
+    /// <param name="requestApplicationId">The signed envelope's ApplicationId.</param>
+    /// <param name="user">The resolved plugin user.</param>
+    /// <returns>True when the request belongs to this user's skill.</returns>
+    internal static bool IsBoundToUserSkill(string? requestApplicationId, Entities.User user)
+        => !string.IsNullOrEmpty(requestApplicationId)
+            && !string.IsNullOrEmpty(user.UserSkill?.SkillId)
+            && string.Equals(requestApplicationId, user.UserSkill.SkillId, StringComparison.Ordinal);
 
     /// <summary>
     /// Verifies the Alexa request signature using the Signature and SignatureCertChainUrl headers.
