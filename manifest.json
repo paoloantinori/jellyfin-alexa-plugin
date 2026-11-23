@@ -490,19 +490,19 @@
             },
             {
                 "version": "1.1.2.0",
-                "changelog": "placeholder",
+                "checksum": "b3012f231f60f6b8e1802da7a382f707",
+                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/1.1.2.0/AlexaSkill_1.1.2.0.net10.zip",
+                "changelog": "SECURITY: requests to the skill endpoint are now verified against the skill they belong to. Previously, a technically skilled attacker with their own Amazon developer account could interact with another user's plugin endpoint if they knew that user's Jellyfin ID. All users of public installations should update. NEW: optional song-title recognition. When enabled per user in the plugin settings, the plugin uploads your song titles to Amazon's catalog so 'play the song <title>' works for titles Alexa does not know, including personal recordings. Off by default for now (it can be enabled in the plugin settings); libraries larger than Amazon's catalog limit keep the most-played titles. FIXED: the plugin's internal search indexes now refresh immediately when you edit track or album metadata, so renamed or re-tagged items are found without restarting Jellyfin. Also fixed: the Italian one-shot phrase for starting a song search regressed in some conditions and now works again. KNOWN ISSUES: in Spanish and French, some episode and skip phrasings may not be recognized after a catalog sync; alternative phrasings work. A small number of generic music requests can match a song title that exists literally in your library.",
                 "targetAbi": "12.0.0.0",
-                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/1.1.2.0/jellyfin-plugin-alexa_1.1.2.0_net10.0.zip",
-                "checksum": "placeholder",
-                "timestamp": "2026-11-23T20:00:00Z"
+                "timestamp": "2026-11-23 19:43:37"
             },
             {
                 "version": "1.1.2.0",
-                "changelog": "placeholder",
+                "checksum": "f69ccd4c409ed8ab01501ee8fb3ac2ad",
+                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/1.1.2.0/AlexaSkill_1.1.2.0.zip",
+                "changelog": "SECURITY: requests to the skill endpoint are now verified against the skill they belong to. Previously, a technically skilled attacker with their own Amazon developer account could interact with another user's plugin endpoint if they knew that user's Jellyfin ID. All users of public installations should update. NEW: optional song-title recognition. When enabled per user in the plugin settings, the plugin uploads your song titles to Amazon's catalog so 'play the song <title>' works for titles Alexa does not know, including personal recordings. Off by default for now (it can be enabled in the plugin settings); libraries larger than Amazon's catalog limit keep the most-played titles. FIXED: the plugin's internal search indexes now refresh immediately when you edit track or album metadata, so renamed or re-tagged items are found without restarting Jellyfin. Also fixed: the Italian one-shot phrase for starting a song search regressed in some conditions and now works again. KNOWN ISSUES: in Spanish and French, some episode and skip phrasings may not be recognized after a catalog sync; alternative phrasings work. A small number of generic music requests can match a song title that exists literally in your library.",
                 "targetAbi": "10.11.0.0",
-                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/1.1.2.0/jellyfin-plugin-alexa_1.1.2.0_net9.0.zip",
-                "checksum": "placeholder",
-                "timestamp": "2026-11-23T20:00:00Z"
+                "timestamp": "2026-11-23 19:43:37"
             }
         ]
     }
