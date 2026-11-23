@@ -1062,16 +1062,14 @@ public class CatalogManager
                 }
             };
 
-            if (existingIndex >= 0)
-            {
-                logger.LogInformation(
-                    "Replacing slot type {SlotTypeName} (index {Index}) with catalog {CatalogId}",
-                    slotTypeName,
-                    existingIndex,
-                    catalogId);
-                typesArray[existingIndex] = catalogType;
-            }
-            else if (onlyReplaceExisting && !AnyIntentSlotDeclaresType(lmNode, slotTypeName))
+            // JF-946 (branch-order fix, live lesson 2026-11-23): the declare
+            // check must come FIRST for size-capped types. With the replace
+            // branch first, a locale carrying a stale wired block from an
+            // earlier add took the REPLACE path every sync (the skip branch
+            // was reachable only when the block was already absent, a no-op),
+            // so every non-declaring locale kept the full value set in its
+            // effective model.
+            if (onlyReplaceExisting && !AnyIntentSlotDeclaresType(lmNode, slotTypeName))
             {
                 // JF-946: no slot in this model references the type, and the
                 // value set is size-capped, so the wiring must NOT ride this
@@ -1095,6 +1093,16 @@ public class CatalogManager
                 }
 
                 continue;
+            }
+
+            if (existingIndex >= 0)
+            {
+                logger.LogInformation(
+                    "Replacing slot type {SlotTypeName} (index {Index}) with catalog {CatalogId}",
+                    slotTypeName,
+                    existingIndex,
+                    catalogId);
+                typesArray[existingIndex] = catalogType;
             }
             else
             {
