@@ -3,10 +3,10 @@ id: JF-946
 title: >-
   Catalog-backed SongTitle slot: the durable unknown-title anchor for the
   PlayLibrarySong carrier (JF-940 phase 2, issue #46 de-DE completion)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-11-22 17:35'
-updated_date: '2026-11-23 06:10'
+updated_date: '2026-11-23 19:50'
 labels:
   - nlu
   - catalog
@@ -52,6 +52,10 @@ OUT OF SCOPE: the AddToQueue/PlayNext song slots (stay free-text); bare-form cov
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
 VERIFIED LIVE 2026-11-22/23 (the Phase A green criteria): (1) the first sync with the opt-in created catalog amzn1...57c3363b ('Jellyfin Songs'), injected SongTitle into ALL 16 synced locales (replace-in-place in it-IT/de-DE, inert-block add elsewhere), completed 16/16 in ~14min. (2) ALL FOUR German carriers select PlayLibrarySongIntent with the slot FILLED for a real library title ('spiele den song/den titel/das stueck circles' each verified): the three historically-dead carriers now work via exact catalog anchoring, confirming the v-c lab prediction. (3) it-IT rows stay green ('suona il brano rapsodia' -> twin, slot filled). (4) DIVERGENCE from the expected JF-684 gate: out-of-library titles on the carrier STILL select the twin (no NO_SELECTION); benign, the handler answers graceful not-found. (5) Some in-library titles route to the free-text PlaySong arm instead of the twin ('spiele das lied sweet up and down' -> PlaySong, song filled) - both arms are the SAME handler since the JF-940 twin fold, so the outcome is identical. Review rounds applied: simplify 4 agents (shared parenthetical stripper, Prepare<T> single chain, table FetchItems column, seed-warning gating, test join) + code-review 6 findings (5 applied: cross-type warning, 4x fetch bound, gated seed-merge generator, honest song-cut warning + N-of-M logs, movies on the task line; F1 the privacy teardown filed as JF-949 with UI disclosure). Suite 6199 green + 30 new tests.
+
+RELEASE STATE (2026-11-23 evening): shipped in 1.1.2.0 as OPT-IN (default flipped back OFF after the final full-suite pass showed the es/fr wrapper families systematically broken under the live catalog state plus the bare-phrase/title collision class; Fable consult confirmed ship-with-known-issues and the wrapper stabilization as follow-up on the templates with the lab as bench). The release carries: the values-only catalog within Amazon's 1.5MB effective per-model cap, the declaring-locale-only injection with the branch-order heal fix (Fable check 1 caught the unreachable removal branch; post-fix sync removed 13 stale blocks, all 17 builds SUCCEEDED, it-IT/de-DE wired, non-declaring locales clean), the FindSong wrapper-tail fix for the it-IT song-opener regression, plus JF-948 and the security skill-binding gate. Known issues documented in the changelog and release notes. Follow-ups: JF-947 (pre-build payload memo), JF-949 (opt-out teardown), JF-950 (random tokens + stream URLs), JF-951 (synonyms toggle + pre-flight size guard), and the es/fr wrapper stabilization (needs its own task).
+
+POST-RELEASE SIMPLIFY ROUND (2026-11-23, the delta born from the review findings): four-agent battery on the post-review delta. Five applied: the declare gate before the object construction, the cap-rationale comment deduplicated to one block, the stale mapping comment rewritten to the gated behavior, HasQualifyingWord deleted (production-dead, false doc claim) with test rows, the inert initializer dropped. Two filed as JF-952: the shared slot-scan core, the universal declare check (the deeper fix). Families 271/271 green.
 <!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
