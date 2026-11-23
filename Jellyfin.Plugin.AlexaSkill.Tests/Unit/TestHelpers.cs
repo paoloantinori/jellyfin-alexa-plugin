@@ -181,12 +181,13 @@ internal static class TestHelpers
             UserSkill = new UserSkill { SkillId = "amzn1.ask.skill.test-id" },
             VendorId = "test-vendor-id",
             AllowedLibraryIds = allowedLibraryIds?.ToList(),
-            // JF-946: the production default flipped ON (2026-11-23), but the
-            // legacy sync suites assert the other five types' behavior against
-            // their own SMAPI traffic; the song leg stays opt-in HERE so its
-            // extra queries/uploads do not shift their counts. The song
-            // behavior has its own suite (LibrarySyncServiceSongTests) with
-            // an explicit local user factory.
+            // JF-946: production default OFF for 1.1.2.0 (flipped back the
+            // same evening after the full-suite findings; see User.cs). The
+            // initializer here makes the legacy suites' assumption explicit
+            // rather than inherited, so a future default flip does not
+            // silently change their SMAPI traffic. The song behavior has its
+            // own suite (LibrarySyncServiceSongTests) with explicit flag
+            // values.
             CatalogSongSyncEnabled = false
         };
     }

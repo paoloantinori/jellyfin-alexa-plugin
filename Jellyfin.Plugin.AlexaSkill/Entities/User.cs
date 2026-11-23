@@ -260,16 +260,16 @@ public class User
 
     /// <summary>
     /// Gets or sets a value indicating whether the user's song titles are
-    /// synced to Amazon's catalog (JF-946). DEFAULT ON (maintainer decision
-    /// 2026-11-23: the feature is an improvement and belongs to everyone;
-    /// the value cap plus the play-count-ordered cut bound the upload for any
-    /// library size, and the live-variant collector case collapses into few
-    /// entries through the suffix-stripping dedup). The initializer makes the
+    /// synced to Amazon's catalog (JF-946). DEFAULT OFF for 1.1.2.0
+    /// (maintainer decision, 2026-11-23 evening: the final full-suite pass
+    /// showed systematic regressions in es/fr wrapper families under the
+    /// live catalog state plus a bare-phrase/title collision class, so the
+    /// catalog ships opt-in until the wrapper stabilization lands; the plan
+    /// is default ON from the release after that). The initializer makes the
     /// default hold for configs persisted before this field existed
-    /// (XmlSerializer only overwrites elements present in the file), and an
-    /// explicit false stays honored for whoever wants the titles local-only.
+    /// (XmlSerializer only overwrites elements present in the file).
     /// </summary>
-    public bool CatalogSongSyncEnabled { get; set; } = true;
+    public bool CatalogSongSyncEnabled { get; set; } = false;
 
     /// <summary>
     /// Gets or sets the timestamp of the last successful catalog sync.
