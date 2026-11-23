@@ -121,10 +121,11 @@ public class LibrarySyncServiceSongTests : PluginTestBase, IDisposable
     }
 
     /// <summary>
-    /// THE PRIVACY GATE (JF-946): the flag defaults OFF and a disabled flag
-    /// removes the song leg entirely. A library holding ONLY songs with the
-    /// flag off must not create any catalog (the emptiness skip covers the
-    /// reduced table) and must not touch the user's catalog ids.
+    /// THE OFF SWITCH (JF-946; default flipped ON by the maintainer
+    /// 2026-11-23): an explicit disabled flag removes the song leg entirely.
+    /// A library holding ONLY songs with the flag off must not create any
+    /// catalog (the emptiness skip covers the reduced table) and must not
+    /// touch the user's catalog ids.
     /// </summary>
     [Fact]
     public async Task SyncUserLibraryAsync_SongsButFlagOff_CreatesNoCatalog()

@@ -1418,7 +1418,7 @@
                 var songSyncDesc = document.createElement("div");
                 songSyncDesc.className = "fieldDescription";
                 songSyncDesc.style.cssText = "margin-left:2.2em;";
-                songSyncDesc.textContent = "Off by default (privacy: your full list of song titles is uploaded to Amazon so Alexa can recognize titles it does not know, including personal recordings). When on, the weekly catalog sync uploads your deduplicated song titles and 'play the song <title>' works for every track in your library. Turning this off stops future uploads but does not delete what Amazon already stored; removing that needs a skill reset (tracked for a future removal button).";
+                songSyncDesc.textContent = "On by default: the catalog sync uploads your deduplicated song titles so Alexa can recognize titles it does not know, including personal recordings ('play the song <title>' then works for every track in your library). Live and remastered variants collapse into one entry, and libraries larger than Amazon's catalog limit keep the most-played titles (a log line reports the cut). Turn it off to keep your titles local-only; turning it off stops future uploads but does not delete what Amazon already stored (a removal action is planned).";
                 catGroup.appendChild(songSyncDesc);
                 grid.appendChild(catGroup);
                 } // end !isUnsaved Playback branch

@@ -259,13 +259,17 @@ public class User
     public string? SongCatalogId { get; set; }
 
     /// <summary>
-    /// Gets or sets a value indicating whether the user opted in to uploading
-    /// their song titles to Amazon's catalog (JF-946). Privacy gate, default
-    /// OFF: unlike artists/albums (public-artist metadata), the song-title
-    /// catalog carries the FULL personal tracklist, including private
-    /// recordings, so only an explicit opt-in syncs it.
+    /// Gets or sets a value indicating whether the user's song titles are
+    /// synced to Amazon's catalog (JF-946). DEFAULT ON (maintainer decision
+    /// 2026-11-23: the feature is an improvement and belongs to everyone;
+    /// the value cap plus the play-count-ordered cut bound the upload for any
+    /// library size, and the live-variant collector case collapses into few
+    /// entries through the suffix-stripping dedup). The initializer makes the
+    /// default hold for configs persisted before this field existed
+    /// (XmlSerializer only overwrites elements present in the file), and an
+    /// explicit false stays honored for whoever wants the titles local-only.
     /// </summary>
-    public bool CatalogSongSyncEnabled { get; set; }
+    public bool CatalogSongSyncEnabled { get; set; } = true;
 
     /// <summary>
     /// Gets or sets the timestamp of the last successful catalog sync.

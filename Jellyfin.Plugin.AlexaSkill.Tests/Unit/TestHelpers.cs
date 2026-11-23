@@ -180,7 +180,14 @@ internal static class TestHelpers
                 accessToken: "access-token", refreshToken: "refresh-token", expireTimestamp: 9999999999),
             UserSkill = new UserSkill { SkillId = "amzn1.ask.skill.test-id" },
             VendorId = "test-vendor-id",
-            AllowedLibraryIds = allowedLibraryIds?.ToList()
+            AllowedLibraryIds = allowedLibraryIds?.ToList(),
+            // JF-946: the production default flipped ON (2026-11-23), but the
+            // legacy sync suites assert the other five types' behavior against
+            // their own SMAPI traffic; the song leg stays opt-in HERE so its
+            // extra queries/uploads do not shift their counts. The song
+            // behavior has its own suite (LibrarySyncServiceSongTests) with
+            // an explicit local user factory.
+            CatalogSongSyncEnabled = false
         };
     }
 
