@@ -5,11 +5,21 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Data.Enums;
+using Alexa.NET;
+using Alexa.NET.Request;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
+using Jellyfin.Plugin.AlexaSkill.Configuration;
+using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
+using Microsoft.Extensions.Logging;
+using Moq;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Audio;
 using MediaBrowser.Controller.Library;
+using MediaBrowser.Controller.Session;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
@@ -633,6 +643,89 @@ public class SongNgramIndexServiceTests : PluginTestBase
             // The debounce window plus a margin: the refresh must have fired.
             await Task.Delay(600);
             Assert.True(loadCount > initialLoads, "an ItemUpdated event on an Audio item must schedule a refresh (JF-948)");
+        }
+        finally
+        {
+            service.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// JF-948 END-TO-END reproduction of the issue #46 reporter's flow, through
+    /// the REAL JF-439 fallback: a track is indexed; its metadata is edited
+    /// (the library query now returns the item under its new name); ItemUpdated
+    /// fires; after the debounced refresh the fallback must find the track
+    /// under the NEW name. This is the shape the pre-fix build could not serve:
+    /// with no ItemUpdated subscription the index kept the pre-edit entries
+    /// until process restart, and the artist-not-found path answered
+    /// "keinen Kuenstler gefunden" instead of falling through to the song.
+    /// The user's allowed-library filter is deliberately unrestricted (the
+    /// reporter's single-library shape), so the only gate is the index itself.
+    /// </summary>
+    [Fact]
+    public async Task MetadataEdit_ItemUpdatedRefreshes_AndTheJF439FallbackFindsTheNewTitle()
+    {
+        var track = new Audio { Name = "Die Streithoernchen", Id = Guid.NewGuid() };
+        var library = new List<BaseItem> { track };
+        _libraryManagerMock
+            .Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(() => new List<BaseItem>(library));
+        _libraryManagerMock
+            .Setup(l => l.GetItemById(It.IsAny<Guid>()))
+            .Returns((Guid id) => null as BaseItem);
+
+        var service = CreateServiceWithLoad(() => library.ToList<BaseItem>());
+        service.RefreshDebounceInterval = TimeSpan.FromMilliseconds(100);
+        // BuildSingleSongResponse needs the plugin instance for the stream URL.
+        TestHelpers.EnsurePluginInstance(
+            new PluginConfiguration { ServerAddress = "http://localhost:8096/" },
+            LoggerFactory.Create(b => b.AddConsole()),
+            c => { },
+            "jf-948-repro");
+        try
+        {
+            await service.StartAsync(CancellationToken.None);
+            var sessionManagerMock = new Mock<ISessionManager>();
+            var loggerFactory = LoggerFactory.Create(b => b.AddConsole());
+            var session = TestHelpers.CreateTestSession(sessionManagerMock.Object, loggerFactory);
+            var config = new PluginConfiguration { ServerAddress = "http://localhost:8096/" };
+            ILogger fallbackLogger = loggerFactory.CreateLogger("jf-948-fallback");
+            var fallback = new CrossMediaFallback(
+                config,
+                fallbackLogger,
+                new PlaybackLaunchBuilder(config, fallbackLogger, (_, _, _) => Task.FromResult(false)),
+                requestTimeoutMs: 6000);
+            var pluginUser = new Entities.User { Id = Guid.NewGuid(), InvocationName = "test", JellyfinToken = "test-token" };
+
+            // Pre-edit: the fallback finds the track by its title.
+            var before = fallback.TrySongFallback(
+                "die streithoernchen", pluginUser, session, TestHelpers.CreateTestContext(), "de-DE",
+                service, _libraryManagerMock.Object, "jf-948 probe", CancellationToken.None);
+            Assert.NotNull(before);
+
+            // THE EDIT: the track's metadata changes (a re-tag); the library
+            // now serves the item under the new name. ItemUpdated fires.
+            track.Name = "Umgetagte Aufnahme";
+            _libraryManagerMock.Raise(
+                l => l.ItemUpdated += null,
+                _libraryManagerMock.Object,
+                new ItemChangeEventArgs { Item = track });
+
+            // The debounce window plus a margin.
+            await Task.Delay(600);
+
+            var after = fallback.TrySongFallback(
+                "umgetagte aufnahme", pluginUser, session, TestHelpers.CreateTestContext(), "de-DE",
+                service, _libraryManagerMock.Object, "jf-948 probe", CancellationToken.None);
+            Assert.NotNull(after);
+
+            // And the OLD title's entry is gone (the snapshot swapped, not
+            // appended): a title disjoint from the new one must not match
+            // anything, so the fallback serves the caller's clean not-found.
+            var stale = fallback.TrySongFallback(
+                "die streithoernchen", pluginUser, session, TestHelpers.CreateTestContext(), "de-DE",
+                service, _libraryManagerMock.Object, "jf-948 probe", CancellationToken.None);
+            Assert.Null(stale);
         }
         finally
         {

@@ -6,7 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-11-23 05:37'
-updated_date: '2026-11-23 05:59'
+updated_date: '2026-11-23 07:07'
 labels:
   - bug
   - search
@@ -41,4 +41,6 @@ Reported live by issue #46's reporter (2026-11-22, their de-DE skill): after edi
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
 ROOT CAUSE (2026-11-23): DebouncedLibraryIndexService subscribed ONLY ItemAdded/ItemRemoved; a metadata edit raises ItemUpdated, so neither index service ever refreshed on re-tagging. Playback-position saves ride UserDataSaved (not ItemUpdated), so the new subscription sees metadata-shape changes, not every playback stop; the 5s debounce and ShouldRefreshOn bound it further. FIX: ItemAdded/ItemRemoved/ItemUpdated all route to OnLibraryChanged (+ dispose unsubscribe); regression test ItemUpdated_OnAudio_SchedulesARefresh in SongNgramIndexServiceTests (24/24 green). The reporter's observed reload-with-same-count was a coincidental add/remove-path refresh; with the fix the edit path itself fires deterministically. Residual to watch: if a stale-after-refresh case STILL reproduces after this fix, the snapshot swap or the artist-scoped pre-filter is the remaining surface.
+
+END-TO-END VALIDATION (2026-11-23, the maintainer's question 'would the reporter's use case be fixed?'): YES, proven by reproduction. New test MetadataEdit_ItemUpdatedRefreshes_AndTheJF439FallbackFindsTheNewTitle drives the REAL JF-439 fallback (CrossMediaFallback.TrySongFallback) against the REAL index service: (1) pre-edit the fallback finds the track by title; (2) the track is re-tagged (the library query returns the new name) and ItemUpdated fires; (3) after the debounced refresh the fallback finds the track under the NEW name; (4) the snapshot swapped atomically (the disjoint old title now misses). This is the exact reporter flow (edit -> ItemUpdated fires -> no restart needed -> the artist-not-found path falls through to the song). Caveat stated honestly: their report mentioned a reload logging the SAME count while still stale, which the atomic-snapshot layer cannot produce; the most consistent reading is a scan-path refresh racing ahead of their edit's DB commit, and with the fix the edit itself now triggers the deterministic post-edit refresh. Residual surface if their exact case still reproduces on the new build: the artist-scoped pre-filter path.
 <!-- SECTION:FINAL_SUMMARY:END -->
