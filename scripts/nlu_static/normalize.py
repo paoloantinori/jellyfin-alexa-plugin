@@ -23,9 +23,14 @@ def normalize_text(s: str) -> str:
     collapsed to one ASCII space and the ends stripped. NFC composes
     decomposed accents, so ``"cafe\\u0301"`` and ``"caf\\u00e9"`` normalize
     equal; casefold is stronger than ``lower()`` (German sharp s folds to
-    ss, so ``STRASSE`` and ``stra\\u00dfe`` normalize equal).
+    ss, so ``STRASSE`` and ``stra\\u00dfe`` normalize equal). The
+    typographic right single quote U+2019 maps to the ASCII apostrophe
+    first: taggers and web sources paste it into titles, NFC and casefold
+    do not unify the two codepoints, and an elision like ``l'album`` must
+    compare equal in both spellings.
     """
-    nfc = unicodedata.normalize("NFC", s)
+    folded_quotes = s.replace("’", "'")
+    nfc = unicodedata.normalize("NFC", folded_quotes)
     return " ".join(nfc.casefold().split())
 
 

@@ -162,7 +162,7 @@ def build_effective_model(
     """
     model = load_locale_model(locale, models_dir)
     intents = _parse_intents(model)
-    committed = _parse_types(model)
+    committed = _parse_types(model, locale)
 
     snapshot_types: list[str] = []
     notes: list[str] = []
@@ -175,11 +175,24 @@ def build_effective_model(
                 f"{SNAPSHOT_GLOB_KEY!r} fallback; committed values kept"
             )
         else:
+            if not table:
+                notes.append(
+                    f"snapshot matched locale {locale} but carries no slot "
+                    "types; committed values kept"
+                )
             for type_name in sorted(table):
                 entries = _parse_snapshot_entries(
                     table[type_name], f"snapshot locales.{locale}.{type_name}"
                 )
-                if type_name in committed:
+                if type_name not in _CATALOG_TYPE_SET:
+                    # Only catalog-backed types are replaceable: the effective
+                    # model is the committed model with CATALOG seeds swapped
+                    # for library values, so a snapshot naming a STATIC type
+                    # is a mistake to surface, not apply.
+                    notes.append(
+                        f"snapshot type {type_name!r} is not catalog-backed; ignored"
+                    )
+                elif type_name in committed:
                     committed[type_name] = replace(
                         committed[type_name], entries=entries)
                     snapshot_types.append(type_name)
@@ -285,6 +298,11 @@ def _parse_snapshot_entries(raw: object, context: str) -> tuple[tuple[str, tuple
     """Validate one type's entry list; ``context`` names it in every error."""
     if not isinstance(raw, list):
         raise ValueError(f"{context} must be a list of entries")
+    if not raw:
+        raise ValueError(
+            f"{context} must not be empty; omit the type instead (an empty "
+            "replacement list would wipe the type's vocabulary)"
+        )
     entries: list[tuple[str, tuple[str, ...]]] = []
     for index, entry in enumerate(raw):
         if not isinstance(entry, dict) or not isinstance(entry.get("value"), str):
@@ -310,23 +328,28 @@ def _parse_intents(model: dict) -> tuple[IntentSpec, ...]:
     return tuple(sorted(intents, key=lambda intent: intent.name))
 
 
-def _parse_types(model: dict) -> dict[str, SlotTypeVocab]:
+def _parse_types(model: dict, locale: str) -> dict[str, SlotTypeVocab]:
     """Read the declared types into name -> SlotTypeVocab records.
 
     Entry parsing shares ``_parse_snapshot_entries`` with the snapshot path
     (one entry-parsing authority, including its synonyms validation); the
-    model shape is adapted to the entry list that helper expects.
+    model shape is adapted to the entry list that helper expects. Every
+    ValueError names the locale, so a malformed model among the 17 is
+    identifiable from the message alone.
     """
     committed: dict[str, SlotTypeVocab] = {}
     for raw in model.get("types", []):
         name = raw.get("name")
         if not isinstance(name, str):
-            raise ValueError("model has a type entry without a string name")
+            raise ValueError(f"locale {locale}: model has a type entry without a string name")
         entry_dicts = []
         for value in raw.get("values", []):
             value_obj = value.get("name") if isinstance(value, dict) else None
             if not isinstance(value_obj, dict) or not isinstance(value_obj.get("value"), str):
-                raise ValueError(f"model type {name!r} has a value entry without a string name.value")
+                raise ValueError(
+                    f"locale {locale}: model type {name!r} has a value entry "
+                    "without a string name.value"
+                )
             entry_dicts.append({
                 "value": value_obj["value"],
                 "synonyms": list(value_obj.get("synonyms") or ()),
@@ -335,6 +358,7 @@ def _parse_types(model: dict) -> dict[str, SlotTypeVocab]:
         committed[name] = SlotTypeVocab(
             name=name,
             kind=kind,
-            entries=_parse_snapshot_entries(entry_dicts, f"model type {name!r}"),
+            entries=_parse_snapshot_entries(
+                entry_dicts, f"locale {locale} model type {name!r}"),
         )
     return committed

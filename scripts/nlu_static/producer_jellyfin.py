@@ -8,8 +8,10 @@ catalog sync actually uploads. The authoritative producer is the plugin
 export (JF-954 subtask 8); the snapshot format documented in
 docs/nlu-static-analysis.md is the contract between the two.
 
-Authentication uses the query parameter ``ApiKey=<key>`` (capital A and K):
-Jellyfin 12 rejects the ``X-Emby-Token`` header and the lowercase
+Authentication rides the ``Authorization: MediaBrowser Token="<key>"``
+header (verified working on Jellyfin 12 for /Items and /Artists), keeping
+the key out of URLs that server access logs or error objects might record.
+Jellyfin 12 also rejects the ``X-Emby-Token`` header and the lowercase
 ``api_key`` query parameter with 401 on the general API surface. The API
 key never appears in printed output or written files; error text is
 redacted before it reaches a terminal.
@@ -38,18 +40,21 @@ ITEM_TYPE_TO_SLOT_TYPE: dict[str, str] = {
     "Audio": "SongTitle",
 }
 
-FetchJson = Callable[[str], object]
+FetchJson = Callable[[str, str], object]
 
 
-def _http_get_json(url: str) -> object:
-    """GET ``url`` and return the parsed JSON body.
+def _http_get_json(url: str, api_key: str) -> object:
+    """GET ``url`` with the MediaBrowser token header, return the parsed body.
 
     THE injection seam of this producer: tests and the plugin export replace
-    this one function; nothing else here performs I/O. The url embeds the
-    API key via the ApiKey query parameter, so callers must never log or
-    print it.
+    this one function; nothing else here performs I/O. The API key travels
+    in the Authorization header, never in the URL, so urls stay safe to log;
+    the key itself must still never be printed.
     """
-    request = urllib.request.Request(url, headers={"Accept": "application/json"})
+    request = urllib.request.Request(url, headers={
+        "Accept": "application/json",
+        "Authorization": f'MediaBrowser Token="{api_key}"',
+    })
     with urllib.request.urlopen(request, timeout=30) as response:
         return json.loads(response.read().decode("utf-8"))
 
@@ -122,24 +127,28 @@ def redact(text: str, api_key: str) -> str:
 def _item_names(url: str, api_key: str, item_type: str, fetch_json: FetchJson) -> list[str]:
     """Fetch the names of every item of one type, deduped case-insensitively.
 
-    An unexpected payload shape raises ValueError: a wrong URL or a changed
-    endpoint must fail loudly, not silently omit the type from the snapshot
-    (the omit rule is reserved for a genuinely EMPTY library section).
+    Authentication rides the ``Authorization: MediaBrowser Token="..."``
+    header (verified working on Jellyfin 12 for /Items and /Artists), so
+    the API key never lands in a URL that server access logs or error
+    objects might record; the ApiKey query parameter works too but is
+    deliberately not used for that reason. An unexpected payload shape
+    raises ValueError: a wrong URL or a changed endpoint must fail loudly,
+    not silently omit the type from the snapshot (the omit rule is
+    reserved for a genuinely EMPTY library section).
     """
     base = url.rstrip("/")
     if item_type == "MusicArtist":
         path = "/Artists"
-        query: dict[str, str] = {"ApiKey": api_key}
+        query: dict[str, str] = {}
     else:
         path = "/Items"
         query = {
             "IncludeItemTypes": item_type,
             "Recursive": "true",
             "Fields": "",
-            "ApiKey": api_key,
         }
     full_url = base + path + "?" + urllib.parse.urlencode(query)
-    payload = fetch_json(full_url)
+    payload = fetch_json(full_url, api_key)
     if not isinstance(payload, dict) or "Items" not in payload:
         raise ValueError(
             f"{path} for {item_type} returned an unexpected payload "

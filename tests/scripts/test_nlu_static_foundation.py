@@ -215,7 +215,15 @@ def test_unknown_snapshot_type_is_ignored_and_noted(tmp_path):
     assert model.type_vocab("NotDeclared") is None
     assert model.snapshot_types == ()
     assert model.source == "committed"  # nothing was replaced, so values are committed
-    assert model.notes == ("snapshot type 'NotDeclared' is not declared by the xx-XX model; ignored",)
+    # A non-catalog name is refused at the catalog gate (the more fundamental
+    # reason: it could never be replaceable); a CATALOG name the model does
+    # not declare gets the declared-ness note instead.
+    assert model.notes == ("snapshot type 'NotDeclared' is not catalog-backed; ignored",)
+    catalog_snap = _snapshot({"xx-XX": {"AlbumName": [{"value": "x", "synonyms": []}]}})
+    noted = build_effective_model("xx-XX", snapshot=catalog_snap, models_dir=tmp_path)
+    assert noted.notes == (
+        "snapshot type 'AlbumName' is not declared by the xx-XX model; ignored",
+    )
 
 
 def test_snapshot_without_matching_locale_notes_and_keeps_committed(tmp_path):
@@ -329,7 +337,7 @@ def test_catalog_type_names_match_csharp():
 
 
 def _fake_fetch(pages: dict[str, dict], calls: list[str]):
-    def fake(url: str):
+    def fake(url: str, api_key: str):
         calls.append(url)
         query = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
         # The /Artists endpoint carries no IncludeItemTypes; key it as MusicArtist.
@@ -372,9 +380,11 @@ def test_snapshot_producer_authenticates_dedupes_and_sorts():
     assert "MovieTitle" not in table
     assert len(calls) == 3
     for url in calls:
-        assert "ApiKey=sekret-123" in url  # capital A and K, query parameter
+        # The key travels in the Authorization header, never in the URL:
+        # server access logs record query strings, not headers.
+        assert "sekret-123" not in url
         assert "api_key=" not in url
-        assert "X-Emby-Token" not in url
+        assert "ApiKey=" not in url
     assert "/Artists?" in calls[1]
     assert "IncludeItemTypes=Series" in calls[0]
 
@@ -462,11 +472,11 @@ def test_cli_snapshot_never_prints_or_writes_the_key(tmp_path, monkeypatch, caps
     written = out_path.read_text(encoding="utf-8")
     assert "sekret-123" not in written
     assert '"producer": "jellyfin-names"' in written
-    assert calls and "ApiKey=sekret-123" in calls[0]
+    assert calls and all("sekret-123" not in url for url in calls)
 
 
 def test_cli_snapshot_redacts_failures(tmp_path, monkeypatch, capsys):
-    def boom(url: str):
+    def boom(url: str, api_key: str):
         raise RuntimeError(f"GET {url} exploded")
 
     monkeypatch.setattr(producer_jellyfin, "_http_get_json", boom)
@@ -560,7 +570,7 @@ def test_docs_page_exists_with_contract_and_examples():
     assert "phonetic synonyms" in doc
     assert "140" in doc
     assert "50000" in doc
-    assert "ApiKey=<key>" in doc
+    assert "MediaBrowser Token" in doc
     assert "does not predict" in doc.lower() or "do not predict" in doc.lower()
 
 
@@ -593,7 +603,7 @@ def test_skip_line_is_none_for_tokenizable_locales_and_mandated_otherwise():
 
 
 def test_producer_raises_on_unexpected_payload_shape():
-    def fake_fetch(_url):
+    def fake_fetch(_url, _key):
         return {"not": "the items envelope"}
 
     with pytest.raises(ValueError) as excinfo:
@@ -601,3 +611,68 @@ def test_producer_raises_on_unexpected_payload_shape():
             "http://server", "key", fetch_json=fake_fetch, item_types=("Series",)
         )
     assert "unexpected payload" in str(excinfo.value)
+
+
+# --- review round (2026-11-24): auth header and snapshot semantics ---------------------
+
+
+def test_http_get_json_sends_mediabrowser_token_header(monkeypatch):
+    """The real seam builds the Authorization header; the key never rides the URL."""
+    captured: dict = {}
+
+    class _Resp:
+        def __init__(self, body: bytes):
+            self._body = body
+
+        def read(self) -> bytes:
+            return self._body
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_exc):
+            return False
+
+    def fake_urlopen(request, timeout=None):
+        captured["url"] = request.full_url
+        captured["headers"] = dict(request.header_items())
+        return _Resp(b'{"Items": []}')
+
+    monkeypatch.setattr(producer_jellyfin.urllib.request, "urlopen", fake_urlopen)
+    payload = producer_jellyfin._http_get_json("http://jf.test/Items?x=1", "sekret-123")
+    assert payload == {"Items": []}
+    assert "sekret-123" not in captured["url"]
+    auth = {k.lower(): v for k, v in captured["headers"].items()}
+    assert auth.get("authorization") == 'MediaBrowser Token="sekret-123"'
+
+
+def test_snapshot_rejects_empty_entry_list(tmp_path):
+    """An empty replacement list would wipe the type; the format refuses it."""
+    doc = _snapshot({"xx-XX": {"SeriesName": []}})
+    path = _write_snapshot(tmp_path, doc)
+    with pytest.raises(ValueError) as excinfo:
+        load_snapshot(path)
+    assert "must not be empty" in str(excinfo.value)
+
+
+def test_snapshot_static_type_is_ignored_with_note(tmp_path):
+    """Only catalog-backed types are replaceable; a STATIC type is surfaced, not applied."""
+    _write_model(tmp_path, "xx-XX", _series_model({"SeriesName": ["Seed"], "Mood": ["Calm"]}))
+    snap = _snapshot({"xx-XX": {"Mood": [{"value": "Chill", "synonyms": []}]}})
+    model = build_effective_model("xx-XX", snapshot=snap, models_dir=tmp_path)
+    assert model.source == "committed"
+    assert model.type_vocab("Mood").entries == (("Calm", ()),)
+    assert any("not catalog-backed" in note for note in model.notes)
+
+
+def test_snapshot_empty_locale_table_notes_and_keeps_committed(tmp_path):
+    _write_model(tmp_path, "xx-XX", _series_model({"SeriesName": ["Seed"]}))
+    snap = _snapshot({"xx-XX": {}})
+    model = build_effective_model("xx-XX", snapshot=snap, models_dir=tmp_path)
+    assert model.source == "committed"
+    assert any("carries no slot types" in note for note in model.notes)
+
+
+def test_normalize_unifies_typographic_apostrophe():
+    assert normalize_text("l’album") == normalize_text("l'album")
+    assert tokenize("l’album") == tokenize("l'album") == ["l'album"]
