@@ -190,7 +190,7 @@ public class QueueContinuation
         CachedTracks = CachedTracks,
         // JF-674: the identity carries over, so the re-mint remains bound to the
         // queue it was minted for. NOTE for the JF-753 sentinel roster: this is a
-        // COPY site, not a mint decision - ArtistId and TotalCount carry the
+        // COPY site, not a mint decision: ArtistId and TotalCount carry the
         // original mint's values verbatim (an artist entry keeps its sentinel),
         // so the roster documents this method as its accepted boundary.
         MintedQueueItemIds = MintedQueueItemIds

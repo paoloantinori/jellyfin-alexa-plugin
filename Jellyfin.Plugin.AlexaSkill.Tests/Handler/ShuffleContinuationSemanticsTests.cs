@@ -435,6 +435,88 @@ public class ShuffleContinuationSemanticsTests : PluginTestBase, IDisposable
         QueueContinuationStore.Remove(session.UserId, _deviceId);
     }
 
+    /// <summary>
+    /// The music-source gate (merge-review round): the flip applies to the three
+    /// playlist-shaped MUSIC sources; every flip below is a live entry the store
+    /// re-mints. A future fourth source type must add itself to the store gate
+    /// explicitly rather than inherit shuffle semantics silently.
+    /// </summary>
+    [Theory]
+    [InlineData("Playlist")]
+    [InlineData("Album")]
+    [InlineData("Artist")]
+    public void TryUpdateShuffleForLiveQueue_MusicSourcesFlip(string sourceType)
+    {
+        SessionInfo session = CreateSession();
+        List<Guid> window = new() { Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid() };
+        session.NowPlayingQueue = window.Select(g => new QueueItem { Id = g }).ToList();
+
+        var entry = new QueueContinuation
+        {
+            SourceType = sourceType,
+            StartIndex = 2,
+            TotalCount = 8,
+            UserId = session.UserId,
+            MintedQueueItemIds = window
+        };
+        QueueContinuationStore.Set(session.UserId, _deviceId, entry);
+
+        Assert.True(QueueContinuationStore.TryUpdateShuffleForLiveQueue(session.UserId, _deviceId, session, shuffle: true));
+        Assert.True(QueueContinuationStore.Get(session.UserId, _deviceId)!.Shuffle);
+        QueueContinuationStore.Remove(session.UserId, _deviceId);
+    }
+
+    /// <summary>
+    /// THE audiobook-exclusion pin (merge-review BLOCKING finding): a live
+    /// Audiobook continuation (the screenless chapter-resume shape the JF-674 doc
+    /// keeps on the AudioPlayer path) must survive a mid-book shuffle-on
+    /// UNCHANGED. The fetcher's ShuffleCopy gates on nothing but the flag, so a
+    /// flip here would scatter the remaining chapters; ordered chapters are
+    /// never shuffled. Same() proves no re-mint happened.
+    /// </summary>
+    [Fact]
+    public async Task ShuffleOn_AudiobookContinuation_IsNeverScattered()
+    {
+        SessionInfo session = CreateSession();
+        List<Guid> chapters = Enumerable.Range(0, 5).Select(_ => Guid.NewGuid()).ToList();
+        session.FullNowPlayingItem = new Audio { Id = chapters[0], Name = "Chapter 1" };
+        session.NowPlayingQueue = chapters.Select(g => new QueueItem { Id = g }).ToList();
+
+        DeviceQueueManager queueManager = TestHelpers.CreateDeviceQueueManager("jf928-audiobook");
+        queueManager.SetQueue(_deviceId, chapters.Select(g => g.ToString()).ToList(), 0);
+        _fx.SessionManager.Setup(s => s.OnPlaybackProgress(It.IsAny<PlaybackProgressInfo>(), It.IsAny<bool>()))
+            .Returns(Task.CompletedTask);
+
+        var book = new QueueContinuation
+        {
+            SourceType = "Audiobook",
+            ParentId = Guid.NewGuid(),
+            StartIndex = 5,
+            TotalCount = 14,
+            UserId = session.UserId,
+            MintedQueueItemIds = chapters
+        };
+        QueueContinuationStore.Set(session.UserId, _deviceId, book);
+        try
+        {
+            var shuffleOn = new ShuffleOnIntentHandler(_fx.SessionManager.Object, _fx.Config, _fx.LibraryManager.Object, _fx.LoggerFactory, queueManager);
+            await shuffleOn.HandleAsync(
+                ShuffleIntent(IntentNames.AmazonShuffleOn),
+                ContextWithToken(chapters[0].ToString(), _deviceId),
+                TestHelpers.CreateTestUser(), session, default);
+
+            QueueContinuation? stored = QueueContinuationStore.Get(session.UserId, _deviceId);
+            Assert.NotNull(stored);
+            Assert.Same(book, stored);
+            Assert.False(stored!.Shuffle);
+        }
+        finally
+        {
+            queueManager.Dispose();
+            QueueContinuationStore.Remove(session.UserId, _deviceId);
+        }
+    }
+
     // =====================================================================
     // F4 (code-review round): the clone-completeness structural guard
     // =====================================================================
@@ -442,7 +524,7 @@ public class ShuffleContinuationSemanticsTests : PluginTestBase, IDisposable
     /// <summary>
     /// WithShuffleSemantics is a hand-enumerated field copy the compiler cannot
     /// keep complete, and the identity roster scans init-assign sites, not clone
-    /// completeness - so a property added to QueueContinuation later would be
+    /// completeness, so a property added to QueueContinuation later would be
     /// silently reset to its default by the first mid-playback flip. This pin
     /// walks every public instance property and fails when the re-mint drops or
     /// alters one; Shuffle is the deliberate exception (the flip). A new
@@ -480,6 +562,20 @@ public class ShuffleContinuationSemanticsTests : PluginTestBase, IDisposable
 
             object? expected = prop.GetValue(original);
             object? actual = prop.GetValue(clone);
+            if (expected is System.Collections.IEnumerable sequence and not string)
+            {
+                // Sequence equality, not reference equality: a future CORRECT
+                // defensive copy of a collection-typed property must not false-red
+                // the guard (the pin catches DROPPED fields, not copied-by-value).
+                Assert.True(
+                    actual is System.Collections.IEnumerable,
+                    $"WithShuffleSemantics dropped collection property {prop.Name}; the re-mint clone must carry every QueueContinuation field.");
+                Assert.Equal(
+                    sequence.Cast<object?>().ToList(),
+                    ((System.Collections.IEnumerable)actual!).Cast<object?>().ToList());
+                continue;
+            }
+
             Assert.True(
                 Equals(expected, actual),
                 $"WithShuffleSemantics dropped or altered property {prop.Name} (expected {expected}, got {actual}); " +

@@ -118,7 +118,7 @@ public class ShuffleOffIntentHandler : BaseHandler
             ProgressReporter.MirrorQueueToSession(_queueManager.GetOrCreateQueue(deviceId), session);
         }
 
-        // JF-928: the ShuffleOn twin - restore ORDERED continuation batches
+        // JF-928: the ShuffleOn twin: restore ORDERED continuation batches
         // (an artist-minted or mid-playback-shuffled entry must not keep
         // shuffling appended batches against the explicit off). RestoreOrder
         // above keeps restoring the pre-shuffle queue order untouched. Full

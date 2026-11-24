@@ -55,14 +55,25 @@ internal static class QueueContinuationStore
     /// playback and is never mutated here (the fetch-time guard owns its
     /// discard). A no-entry device (short queue, a fully-consumed source) is a
     /// no-op.
+    /// The shuffle-semantics flip is a MUSIC-continuation decision: the Audiobook
+    /// source is deliberately EXCLUDED (this method returns false for it, documented
+    /// here as the one owner of the rule). A book's chapters are an ordered read;
+    /// pre-JF-928 no path ever set Shuffle on an Audiobook entry, the fetcher's
+    /// ShuffleCopy gates on nothing but the flag, and the JF-674 doc keeps a live
+    /// Audiobook continuation on the AudioPlayer path (screenless chapter resume)
+    /// where the shuffle twins' medium gate reads Audio and passes. Without this
+    /// exclusion a mid-book "shuffle on" would scatter the remaining chapters.
     /// KNOWN RACE (the JF-713 documented-boundary precedent): the re-mint is a
     /// non-atomic Get-clone-Set while the fetch path mutates the stored instance's
     /// offsets IN PLACE (AdvanceOrMarkExhausted), so a NearlyFinished fetch landing
-    /// inside the window can have its advance lost to the Set. The consequence is
-    /// bounded and benign: the next fetch re-slices the same cached range, and
-    /// AppendUnseen's id-set dedupe appends nothing for already-queued tracks, so
-    /// the worst case is one redundant in-memory slice plus one extra no-op fetch
-    /// on a spent entry - never duplicate queue entries. A lock would have to
+    /// inside the window can have its advance lost to the Set. The consequences are
+    /// bounded: the next fetch re-slices the same cached range, and AppendUnseen's
+    /// id-set dedupe appends nothing for already-queued tracks, so there are never
+    /// duplicate queue entries. The race can ALSO LOSE THE FLIP ITSELF: a fetch that
+    /// Got the entry before the Set reads the stale instance at the ShuffleCopy
+    /// gate, and one batch appends in source order against a just-commanded
+    /// shuffle-on (the command appears not to work for that batch; the NEXT batch
+    /// picks up the flipped entry and self-heals). A lock would have to
     /// cover the fetcher's own read-mutate (outside this method), which the
     /// per-batch design does not need today; revisit only if a consumer takes a
     /// reference-equality or exact-offset dependency on the stored instance.
@@ -71,12 +82,13 @@ internal static class QueueContinuationStore
     /// <param name="deviceId">The Alexa device ID (the store key).</param>
     /// <param name="session">The session whose now-playing queue is the live queue.</param>
     /// <param name="shuffle">The new per-batch shuffle semantics.</param>
-    /// <returns>True when a live continuation was found and now carries
+    /// <returns>True when a live MUSIC continuation was found and now carries
     /// <paramref name="shuffle"/> semantics (re-minted, or already carrying
-    /// them); false when no entry exists or the entry is foreign to this queue.
-    /// True does NOT promise a new stored instance: the idempotent path leaves
-    /// the original in place, so never take a reference-equality dependency on
-    /// the return.</returns>
+    /// them); false when no entry exists, the entry is foreign to this queue,
+    /// or the entry is an Audiobook continuation (ordered chapters are never
+    /// scattered). True does NOT promise a new stored instance: the idempotent
+    /// path leaves the original in place, so never take a reference-equality
+    /// dependency on the return.</returns>
     public static bool TryUpdateShuffleForLiveQueue(Guid userId, string deviceId, SessionInfo session, bool shuffle)
     {
         QueueContinuation? continuation = Get(userId, deviceId);
@@ -89,6 +101,15 @@ internal static class QueueContinuationStore
         // update and the fetch can never disagree about which queue an entry
         // belongs to.
         if (!continuation.IsForLiveQueue(session))
+        {
+            return false;
+        }
+
+        // The music-source gate (see the doc above for the full rationale): only
+        // the three playlist-shaped sources flip. An Audiobook continuation stays
+        // ordered forever; a future fourth source type must add itself here
+        // EXPLICITLY, so a new source cannot silently inherit shuffle semantics.
+        if (continuation.SourceType is not ("Playlist" or "Album" or "Artist"))
         {
             return false;
         }

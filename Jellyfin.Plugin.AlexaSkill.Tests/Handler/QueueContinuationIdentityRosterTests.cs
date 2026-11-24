@@ -153,13 +153,14 @@ public class QueueContinuationIdentityRosterTests
         Assert.True(
             artistSites > 0,
             "The scan found ZERO Artist continuation construction sites; the sentinel roster went vacuous " +
-            "(the set_ArtistId marker no longer identifies the artist arms; today's expected count is two: " +
-            "PlayArtistSongsIntentHandler and CrossMediaFallback).");
+            "(the set_ArtistId marker no longer identifies the artist arms; today's expected count is three: " +
+            "PlayArtistSongsIntentHandler, CrossMediaFallback, and the JF-928 re-mint clone " +
+            "QueueContinuation.WithShuffleSemantics).");
         Assert.True(
             copySiteSeen,
             "The JF-928 re-mint clone QueueContinuation.WithShuffleSemantics was not found among the " +
             "Artist-setting construction sites; the accepted-boundary exemption no longer matches anything " +
-            "(the clone was renamed, removed, or stopped carrying ArtistId) - tighten or drop the exemption.");
+            "(the clone was renamed, removed, or stopped carrying ArtistId); tighten or drop the exemption.");
     }
 
     /// <summary>
