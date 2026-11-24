@@ -4,10 +4,10 @@ title: >-
   Catalog injection cleanup: shared slot-scan core + the universal declare check
   (drop the OnlyReplaceExisting asymmetry, heal inert Album/Movie blocks from 16
   locales)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-11-23 19:50'
-updated_date: '2026-11-24 16:22'
+updated_date: '2026-11-24 19:45'
 labels:
   - catalog
   - cleanup
@@ -44,4 +44,6 @@ Two followups from the JF-946 post-release simplify/altitude round (2026-11-23),
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
 ATTEMPTED AND DEFERRED (2026-11-24): the universal declare check was implemented (add-branch only: skip new blocks for undeclared types, keep existing blocks) and builds clean, but 10 tests across 4 files fail because their test models carry no declaring intents. The affected tests: CatalogWiringGraftTests (4: FreshModelJson/LiveModelJson builders need PlayMovieIntent+PlayBookIntent declaring slots), CatalogManagerTests (2: bare no-intent models need declaring intents for the types being injected), plus the movie and audiobook model-builder helpers. REVERTED to the shipped song-only check (proven and deployed). TO COMPLETE in a dedicated pass: (1) update FreshModelJson/LiveModelJson in CatalogWiringGraftTests to include PlayMovieIntent with MovieTitle slot and PlayBookIntent with AudiobookTitle slot; (2) update the bare test models in CatalogManagerTests to include declaring intents; (3) re-apply the universal check (the code is in this session's transcript); (4) run the full catalog families; (5) deploy and verify the inert Album/Movie blocks are skipped on add (existing blocks stay). The shared slot-scan core extraction is also pending (AnyIntentSlotDeclaresType vs UpdateSlotTypesInIntents duplicate the traversal).
+
+Shipped 2026-11-24 via the merge of worktree-agent-a6f11a6e4cc39af2d (base 651d3ccb + review round 5de5e9ce). The universal declare check (AnyIntentSlotDeclaresType(slotTypeName) || declares(replacesType), computed before the JsonObject construction and before the replace decision) gates all six synced types; the OnlyReplaceExisting asymmetry is gone; VisitIntentSlots is the ONE intents-to-slots traversal shared by the predicate and the JF-332 mutator. The refined heal (the review round): IsCatalogWired inspects the existing block's shape (a JsonObject valueSupplier, the ExtractWiring definition), so NOT-declared + WIRED blocks are REMOVED (the JF-946 heal generalized, restoring the over-cap exit my review found missing: a stale block pushing a locale past the 1.5MB effective cap is shrunk on the next sync instead of failing every PUT forever), NOT-declared + STATIC seed blocks are left byte-untouched (never converted to a supplier: the seed-swap finding fixed), declared types replace-in-place. Recoverability documented: a future template declaring the slot re-earns wiring on the next sync. The post-loop summary distinguishes wired/kept-static/removed for over-cap triage. Test coverage includes the 17-locale theory against a hardcoded roster (AlbumName/MovieTitle only it-IT, SongTitle it-IT+de-DE) and the two shape tests (wired-undeclared removed; static-undeclared untouched). 6227/6227 both TFMs; merged main builds clean. Gates: worker ran /simplify (4 agents) + /code-review high (5 findings applied) in its session; orchestrator ran Skill(code-review) medium on the delta whose design-blocking finding (the missing over-cap exit) produced the refined rule the review round implements.
 <!-- SECTION:FINAL_SUMMARY:END -->

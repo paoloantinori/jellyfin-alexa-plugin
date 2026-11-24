@@ -7,7 +7,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-11-20 09:12'
-updated_date: '2026-11-20 09:36'
+updated_date: '2026-11-24 18:42'
 labels: []
 dependencies: []
 references:
@@ -47,6 +47,12 @@ Test note: StructuredLoggingTests asserts ExceptionHandler logs LogLevel.Critica
 <!-- SECTION:NOTES:BEGIN -->
 JF-929 code-review round (2026-11-20) folded two sibling findings into this same vocabulary/formatting cluster: (1) three divergent hand-rolled idioms now format the same Alexa Error shape in log lines (ExceptionHandler.cs:60 and SessionEndedRequestHandler.cs:49 pass the raw enum unguarded; PlaybackFailedEventHandler.cs now uses guarded ToString() + UNKNOWN sentinel); a tiny shared formatter (or uniform arg-passing style across the three sites) removes the drift the next handler would copy. (2) The logged ErrorType renders the Alexa.NET enum member name (MediaServiceUnknown), never the Amazon wire vocabulary (MEDIA_ERROR_UNKNOWN) that Amazon's error tables use, so log-to-docs correlation during triage requires a mental mapping; logging the wire form (or both) would make the lines self-correlating. Both live in the same files/fix as the dead-arm switch.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+SCOPE NOTE from the JF-931 round (2026-11-24, commit 878d3871): the tolerated-unknown rendering folds into this task's shared-formatter scope. ExceptionHandler and SessionEndedRequestHandler still render the fallback enum member (ErrorType.InternalError) for an unknown error.type wire value, and ClassifyAlexaError sees the bucket member name rather than the raw wire string; the controller's Warning line carries the raw wire value for all three Error carriers meanwhile (that part shipped with JF-931). When this task fixes the member-name-vs-wire-string comparison, also give the unknown-unknown path one shared formatter that prefers RawWireType when present.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->

@@ -3,10 +3,10 @@ id: JF-945
 title: >-
   Two it-IT wrapper battery rows are trainer-marginal (SleepTimer + PlayPodcast
   one-shot wrappers flip across identical-content rebuilds)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-11-22 17:07'
-updated_date: '2026-11-22 17:07'
+updated_date: '2026-11-24 20:07'
 labels:
   - nlu
   - battery
@@ -37,3 +37,9 @@ Two pre-existing it-IT wrapper battery rows are trainer-marginal and flip across
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Shipped 2026-11-24, commit 5e870594: one template row ('Di riprodurre il podcast', title-less) + regenerated model sample. Live-verified after DLL deploy into AlexaSkill_1.1.2.0 and the it-IT model rebuild (SUCCEEDED): both composed wrapper probes ('chiedi a mia collezione di riprodurre il podcast generazione' and '... podcast serial') route to PlayPodcastIntent, where both read FallbackIntent before the opener (the JF-940-class title-less-opener fix; the FindSong precedent). Known limitation, stated in the commit: slot FILL on the composed wrapper stays imperfect: the empty-slot case elicits via the handler's DidNotCatchPodcastName multi-turn (the anti-pattern-1-compliant default for the title-less shape), and some titles capture garbage text that misses to podcast-not-found. The battery's routing criterion is met. Gate note: one-template-row model change; the live probe (deploy + rebuild + simulate) is the verification that applies, run in this session's transcript alongside the session's /simplify and code-review invocations.
+<!-- SECTION:FINAL_SUMMARY:END -->

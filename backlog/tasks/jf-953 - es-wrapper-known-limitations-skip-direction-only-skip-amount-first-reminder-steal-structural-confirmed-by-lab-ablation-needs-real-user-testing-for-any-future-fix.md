@@ -7,6 +7,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-11-23 20:48'
+updated_date: '2026-11-24 20:13'
 labels:
   - nlu
   - es
@@ -46,3 +47,9 @@ CONCLUSION: these three families are structural limitations of the current model
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+EXTENSION (2026-11-24 fresh-suite evidence): the structural class is NOT es-only. nl-NL shows the same shapes: 'vraag mijn collectie om vooruit te springen' and '... om dertig seconden vooruit te springen' read Fallback (skip direction-only/amount-first), and 'herinner me om acht uur' reads the reminder steal (nl twin of the es recuérdame rows, which also failed in es-MX this run). Same disposition: known structural limitation, real-user testing required for any future fix; the nl rows extend the census of affected locales.
+<!-- SECTION:FINAL_SUMMARY:END -->
