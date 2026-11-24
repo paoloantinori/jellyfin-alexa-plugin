@@ -244,4 +244,17 @@ public class MediaProfiledModelPrunerTests
         Assert.Equal(Enum.GetValues<MediaFamily>().Length, counts.Count);
         Assert.All(counts.Values, value => Assert.True(value > 0));
     }
+
+    /// <summary>
+    /// The family-derived literals (review round): AllFamiliesPresent must contain
+    /// EXACTLY the FamilyKinds keys, so a family added to the one definition cannot
+    /// key a stale hand-enumerated row into a silent mismatch.
+    /// </summary>
+    [Fact]
+    public void AllFamiliesPresent_Keys_AreExactlyTheFamilyKinds()
+    {
+        Assert.Equal(
+            IntentMediaFamilies.FamilyKinds.Keys.OrderBy(k => k),
+            MediaCensus.AllFamiliesPresent().Keys.OrderBy(k => k));
+    }
 }

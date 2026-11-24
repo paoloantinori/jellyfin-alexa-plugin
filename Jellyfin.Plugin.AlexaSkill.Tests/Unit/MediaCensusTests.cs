@@ -58,20 +58,6 @@ public class MediaCensusTests
     }
 
     [Fact]
-    public void CountFamilies_MusicOnlyLibrary_CountsMusicAlone()
-    {
-        SetupMusicOnlyLibrary();
-        var census = CreateCensus();
-
-        var counts = census.CountFamilies(new List<User>());
-
-        // No linked users: the union is empty, but the census fails open so the
-        // caller never prunes on a degraded setup.
-        Assert.Equal(1, counts[MediaFamily.Music]);
-        Assert.Equal(1, counts[MediaFamily.Video]);
-    }
-
-    [Fact]
     public void CountFamilies_NoUsers_FailsOpen()
     {
         var counts = CreateCensus().CountFamilies(new List<User>());
@@ -134,6 +120,66 @@ public class MediaCensusTests
         Assert.All(_queries, q => Assert.Empty(q.TopParentIds));
         Assert.All(_queries, q => Assert.Equal(1, q.Limit));
         Assert.Contains(_queries, q => Array.Exists(q.IncludeItemTypes!, k => k == Jellyfin.Data.Enums.BaseItemKind.LiveTvChannel));
+    }
+
+    [Fact]
+    public void CountFamilies_PodcastProbeThrows_DegradesOnlyPodcastFamily()
+    {
+        // Per-family failure isolation: the podcast probe throws (the transient
+        // SQLite-busy shape); every OTHER family keeps profiling and the degraded
+        // family reports PRESENT so its intent is never pruned.
+        var pluginUser = new User { Id = Guid.NewGuid() };
+        _userManager
+            .Setup(u => u.GetUserById(pluginUser.Id))
+            .Returns(TestHelpers.CreateJellyfinUser(id: pluginUser.Id));
+        _libraryManager
+            .Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Callback((InternalItemsQuery q) => _queries.Add(q))
+            .Returns((InternalItemsQuery q) =>
+            {
+                var kinds = q.IncludeItemTypes ?? Array.Empty<Jellyfin.Data.Enums.BaseItemKind>();
+                if (Array.Exists(kinds, k => k == Jellyfin.Data.Enums.BaseItemKind.MusicAlbum)
+                    && Array.Exists(kinds, k => k == Jellyfin.Data.Enums.BaseItemKind.Series))
+                {
+                    throw new InvalidOperationException("podcast probe explosion");
+                }
+
+                return Array.Exists(kinds, k => k == Jellyfin.Data.Enums.BaseItemKind.Audio)
+                    ? new List<BaseItem> { new AudioItem { Id = Guid.NewGuid(), Name = "song" } }
+                    : new List<BaseItem>();
+            });
+
+        var counts = CreateCensus().CountFamilies(new List<User> { pluginUser });
+
+        Assert.Equal(1, counts[MediaFamily.Podcast]); // degraded family: fail-safe present
+        Assert.Equal(1, counts[MediaFamily.Music]); // healthy family: still counted
+        Assert.Equal(0, counts[MediaFamily.Video]);
+        Assert.Equal(0, counts[MediaFamily.Audiobook]);
+        Assert.Equal(0, counts[MediaFamily.LiveTv]);
+    }
+
+    /// <summary>
+    /// The family-derived literals (review round): the census result carries EXACTLY
+    /// the FamilyKinds keys, so the zeroed counts dict cannot drift from the one
+    /// family definition (a missing row would KeyNotFoundException into fail-open
+    /// forever).
+    /// </summary>
+    [Fact]
+    public void CountFamilies_Result_KeysAreExactlyTheFamilyKinds()
+    {
+        _libraryManager
+            .Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem>());
+        var pluginUser = new User { Id = Guid.NewGuid() };
+        _userManager
+            .Setup(u => u.GetUserById(pluginUser.Id))
+            .Returns(TestHelpers.CreateJellyfinUser(id: pluginUser.Id));
+
+        var counts = CreateCensus().CountFamilies(new List<User> { pluginUser });
+
+        Assert.Equal(
+            IntentMediaFamilies.FamilyKinds.Keys.OrderBy(k => k),
+            counts.Keys.OrderBy(k => k));
     }
 
     [Fact]

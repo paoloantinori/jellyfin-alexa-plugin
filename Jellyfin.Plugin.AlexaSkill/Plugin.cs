@@ -147,6 +147,14 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     /// </summary>
     public ILibraryManager? LibraryManager { get; internal set; }
 
+    // The JF-960 media-profile census cache: the census is a single per-instance union
+    // over the linked users, but this builder runs once PER USER, so the result is
+    // cached against the Configuration.Users snapshot reference and recomputed only
+    // when that collection is swapped (copy-on-write, the JF-319 discipline). The
+    // rationale comment lives at the BuildSkillInteractionModels call site.
+    private IReadOnlyDictionary<Alexa.ModelDeployment.MediaFamily, int>? _profiledModelCensus;
+    private Collection<Entities.User>? _profiledModelCensusSource;
+
     /// <summary>
     /// Gets the logger factory.
     /// </summary>
@@ -248,14 +256,29 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
         // model; the catalog injection pass runs afterwards and preserves the pruning).
         // Flag OFF (the default) or an unusable library manager: no census, no pruning,
         // byte-identical to the pre-JF-960 output.
+        // The census depends ONLY on the linked-users snapshot (a single per-instance
+        // union), while this builder runs once PER USER (the startup loop, the
+        // invocation-name save, each Rebuild click): the snapshot-reference cache below
+        // computes it once per batch and reuses it for every subsequent per-user call
+        // until the copy-on-write Users collection is swapped (AddUser/DeleteUser or a
+        // config reload), which invalidates by reference. Tests that mutate a Users
+        // collection in place bypass the copy-on-write discipline (the documented
+        // config.Users note) and share the cached result for that collection identity.
         IReadOnlyDictionary<Alexa.ModelDeployment.MediaFamily, int>? familyCounts = null;
         if (Configuration.MediaProfiledModels && LibraryManager != null)
         {
-            familyCounts = new Alexa.ModelDeployment.MediaCensus(
-                    LibraryManager,
-                    UserManager,
-                    LoggerFactory.CreateLogger<Alexa.ModelDeployment.MediaCensus>())
-                .CountFamilies(Configuration.Users);
+            Collection<Entities.User> usersSnapshot = Configuration.Users;
+            if (!ReferenceEquals(usersSnapshot, _profiledModelCensusSource))
+            {
+                _profiledModelCensus = new Alexa.ModelDeployment.MediaCensus(
+                        LibraryManager,
+                        UserManager,
+                        LoggerFactory.CreateLogger<Alexa.ModelDeployment.MediaCensus>())
+                    .CountFamilies(usersSnapshot);
+                _profiledModelCensusSource = usersSnapshot;
+            }
+
+            familyCounts = _profiledModelCensus;
         }
         else if (Configuration.MediaProfiledModels && LibraryManager == null)
         {

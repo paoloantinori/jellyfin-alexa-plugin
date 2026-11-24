@@ -48,14 +48,17 @@ public class MediaProfiledModelsBuildWiringTests : PluginTestBase
                     : new List<BaseItem>());
     }
 
-    private Plugin CreatePlugin(bool mediaProfiledModels)
+    private Plugin CreatePlugin(bool mediaProfiledModels, int linkedUsers = 1)
     {
         var config = new PluginConfiguration { MediaProfiledModels = mediaProfiledModels };
-        var pluginUser = new User { Id = Guid.NewGuid() };
-        config.Users.Add(pluginUser);
-        _userManager
-            .Setup(u => u.GetUserById(pluginUser.Id))
-            .Returns(TestHelpers.CreateJellyfinUser(id: pluginUser.Id));
+        for (int i = 0; i < linkedUsers; i++)
+        {
+            var pluginUser = new User { Id = Guid.NewGuid() };
+            config.Users.Add(pluginUser);
+            _userManager
+                .Setup(u => u.GetUserById(pluginUser.Id))
+                .Returns(TestHelpers.CreateJellyfinUser(id: pluginUser.Id));
+        }
 
         string tmpDir = TestHelpers.CreateRegisteredTempDir("jf960");
 
@@ -108,6 +111,10 @@ public class MediaProfiledModelsBuildWiringTests : PluginTestBase
         var it = models.First(m => m.Locale == "it-IT");
         string expected = Serialize(BuildEmbeddedModel("it-IT", it.InvocationName));
         Assert.Equal(expected, Serialize(it.InteractionModel));
+
+        // The flag-off path must not even reach the library manager (no census, no
+        // pruning), whatever the library mock would have answered.
+        _libraryManager.Verify(l => l.GetItemList(It.IsAny<InternalItemsQuery>()), Times.Never);
     }
 
     [Fact]
@@ -142,6 +149,48 @@ public class MediaProfiledModelsBuildWiringTests : PluginTestBase
                 Assert.DoesNotContain("PlayEpisodeIntent", dialogNames);
             }
         });
+    }
+
+    /// <summary>
+    /// The default-off invariant (review round): a FRESH configuration carries the
+    /// flag FALSE, so an accidental default flip cannot ship pruned models to real
+    /// skills with the suite green.
+    /// </summary>
+    [Fact]
+    public void MediaProfiledModels_FreshConfig_DefaultsOff()
+    {
+        Assert.False(new PluginConfiguration().MediaProfiledModels);
+    }
+
+    /// <summary>
+    /// The census is ONE per-instance union but the builder runs once PER USER: with
+    /// the flag on and three linked users, repeated batch builds must reuse the
+    /// cached census (zero additional library queries after the first batch).
+    /// </summary>
+    [Fact]
+    public void Build_FlagOn_RepeatedBatches_CensusComputedOncePerUsersSnapshot()
+    {
+        int getItemsListCalls = 0;
+        _libraryManager
+            .Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Callback(() => getItemsListCalls++)
+            .Returns((InternalItemsQuery q) =>
+                Array.Exists(q.IncludeItemTypes ?? Array.Empty<BaseItemKind>(), k => k == BaseItemKind.Audio)
+                    ? new List<BaseItem> { new AudioItem { Id = Guid.NewGuid(), Name = "song" } }
+                    : new List<BaseItem>());
+
+        Plugin plugin = CreatePlugin(mediaProfiledModels: true, linkedUsers: 3);
+
+        plugin.BuildSkillInteractionModels("batch one");
+        int afterFirstBatch = getItemsListCalls;
+        Assert.True(afterFirstBatch > 0, "the first batch must actually run the census");
+
+        // The per-user startup loop shape: two more users build models against the
+        // same linked-users snapshot; the cached census answers them without a single
+        // additional library query.
+        plugin.BuildSkillInteractionModels("batch two");
+        plugin.BuildSkillInteractionModels("batch three");
+        Assert.Equal(afterFirstBatch, getItemsListCalls);
     }
 
     /// <summary>

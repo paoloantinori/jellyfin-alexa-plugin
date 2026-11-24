@@ -45,17 +45,13 @@ public class MediaCensus
 
     /// <summary>
     /// The fail-open answer: every family present, so the caller prunes nothing.
+    /// Derived from <see cref="IntentMediaFamilies.FamilyKinds"/> (the ONE family
+    /// definition), so a family added there appears here automatically instead of a
+    /// stale hand-enumerated row keying a silent mismatch.
     /// </summary>
     public static IReadOnlyDictionary<MediaFamily, int> AllFamiliesPresent()
     {
-        return new Dictionary<MediaFamily, int>
-        {
-            [MediaFamily.Video] = 1,
-            [MediaFamily.Music] = 1,
-            [MediaFamily.Audiobook] = 1,
-            [MediaFamily.Podcast] = 1,
-            [MediaFamily.LiveTv] = 1,
-        };
+        return IntentMediaFamilies.FamilyKinds.ToDictionary(pair => pair.Key, _ => 1);
     }
 
     /// <summary>
@@ -94,14 +90,11 @@ public class MediaCensus
                 resolved.Add((pluginUser, jellyfinUser));
             }
 
-            var counts = new Dictionary<MediaFamily, int>
-            {
-                [MediaFamily.Video] = 0,
-                [MediaFamily.Music] = 0,
-                [MediaFamily.Audiobook] = 0,
-                [MediaFamily.Podcast] = 0,
-                [MediaFamily.LiveTv] = 0,
-            };
+            // Derived from FamilyKinds (the ONE family definition), never hand-enumerated:
+            // a family added to the table joins the census automatically instead of a
+            // missing zeroed row KeyNotFoundException-ing into the fail-open catch.
+            Dictionary<MediaFamily, int> counts =
+                IntentMediaFamilies.FamilyKinds.ToDictionary(pair => pair.Key, _ => 0);
 
             foreach (var (pluginUser, jellyfinUser) in resolved)
             {
@@ -118,21 +111,33 @@ public class MediaCensus
                         continue;
                     }
 
-                    if (IsFamilyPresent(family, jellyfinUser, scope))
+                    // Per-family failure isolation: one throwing probe (a transient
+                    // SQLite busy at startup) degrades ONLY its own family, which then
+                    // reports PRESENT so its intents are kept; the other families keep
+                    // profiling. A family-wide failure here is the fail-open direction.
+                    try
                     {
+                        if (IsFamilyPresent(family, jellyfinUser, scope))
+                        {
+                            counts[family] = 1;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(
+                            ex,
+                            "MediaCensus: {Family} probe failed; reporting the family present so its intents are kept, other families keep profiling (JF-960)",
+                            IntentMediaFamilies.DisplayName(family));
                         counts[family] = 1;
                     }
                 }
             }
 
             _logger.LogInformation(
-                "MediaCensus (JF-960): users={UserCount}, video={Video} music={Music} audiobook={Audiobook} podcast={Podcast} live_tv={LiveTv}",
+                "MediaCensus (JF-960): users={UserCount}, {Counts}",
                 resolved.Count,
-                counts[MediaFamily.Video],
-                counts[MediaFamily.Music],
-                counts[MediaFamily.Audiobook],
-                counts[MediaFamily.Podcast],
-                counts[MediaFamily.LiveTv]);
+                string.Join(" ", counts.OrderBy(pair => pair.Key)
+                    .Select(pair => $"{IntentMediaFamilies.DisplayName(pair.Key)}={pair.Value}")));
 
             return counts;
         }
