@@ -4,9 +4,10 @@ title: >-
   Mid-playback ShuffleOn over a windowed ordered play shuffles only the
   progressive window: the continuation keeps appending source-order batches (the
   JF-927 defect class via the ShuffleOn entry point)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-11-15 15:27'
+updated_date: '2026-11-24 21:06'
 labels: []
 dependencies: []
 references:

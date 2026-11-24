@@ -4,9 +4,10 @@ title: >-
   Media-profiled interaction models: cascade sample families on the media
   actually present on the instance (maintainer proposal; extends the JF-952
   declare-check philosophy to intents)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-11-24 20:49'
+updated_date: '2026-11-24 21:59'
 labels:
   - nlu
   - architecture
@@ -34,3 +35,15 @@ Maintainer proposal (2026-11-24, reacting to the JF-958 naked-genre-carrier diag
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+gate-exempt: /simplify on the review-round delta only (184/-48 lines of five review-driven fixes: a batch cache, per-family try/catch, derived literals, a test removal, an invariant pin); the worker's own gates covered the base slice; the /code-review evidence (orchestrator medium, 5 findings all applied) is in this transcript.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+First slice shipped 2026-11-24 via the merge of worktree-agent-a52cb74951b1907f5 (base 907b642d + review round 800bcdd9). PluginConfiguration.MediaProfiledModels (bool, default FALSE, pinned by a fresh-config test); MediaCensus (per-instance union across linked users, one Limit-1 probe per family per user, FAIL-SAFE in both directions: any degraded path reports all-families-present so pruning never runs degraded, and since the review round each throwing probe degrades only its own family); IntentMediaFamilies (the ONE static table, every row citing the handler query evidence; PlayRadioIntent deliberately excluded as dual-media, refuting the task text's music-only claim); MediaProfiledModelPruner (table-gated, dialog-consistent, slot types never touched) wired into Plugin.BuildSkillInteractionModels so rebuild PUT, startup sync and skill creation all produce profiled models; flag-off output byte-identical (library manager never queried). Review round: census cached per build batch keyed on the Configuration.Users snapshot reference (copy-on-write invalidation), per-family probe isolation, family-derived literals from FamilyKinds, the dead music-only test removed, the default-off invariant pinned. 6280/6280 both TFMs; merged main builds clean. NOT in this slice (later): config.html toggle, per-family qualified-carrier rules (the JF-958 refinement), re-profile triggers on library change (JF-954.7 interaction), fixture media-profile annotations. Gates: worker /simplify + /code-review high in its session; orchestrator Skill(code-review) medium (5 findings, all applied in 800bcdd9).
+<!-- SECTION:FINAL_SUMMARY:END -->
