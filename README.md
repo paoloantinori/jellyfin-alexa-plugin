@@ -308,6 +308,8 @@ The plugin uploads your Jellyfin library (artists and albums) to Amazon's catalo
 
 Toggle individual features on or off from the configuration page: radio mode, podcasts, mood music, sleep timer, chapter navigation, recommendations, artist library queries, voice profile recognition, resume offer, and ASR compound-word correction.
 
+**Media-profiled interaction models** (advanced, default OFF): when enabled, every model build counts the media actually reachable by the union of your linked users' libraries (video, music, audiobooks, podcasts, live TV) and removes the intents that can only serve an absent media family from the deployed models, before catalog sync runs. This shrinks the models (less NLU competition) on instances that carry only some media families. Only intents whose sole purpose is one family are eligible (play song/album/artist, play episode, play book, play podcast, play channel, and so on); anything media-neutral or multi-media (search, browse, random, recommendations, radio) is never removed. The library census is bounded (existence checks, not full scans) and fails safe: any degraded state (no linked users, a stale user row, a query error) keeps the full model. The change takes effect at the next model build: startup sync, skill creation, or a **Rebuild Models** action. With the flag off, the models are byte-identical to the unprofiled build.
+
 **Podcasts**: Jellyfin has no dedicated podcast type, so podcasts must be stored as albums in your Music library (one album per podcast show, one audio track per episode). The skill plays the latest episode by name.
 
 ### Custom Interaction Model
