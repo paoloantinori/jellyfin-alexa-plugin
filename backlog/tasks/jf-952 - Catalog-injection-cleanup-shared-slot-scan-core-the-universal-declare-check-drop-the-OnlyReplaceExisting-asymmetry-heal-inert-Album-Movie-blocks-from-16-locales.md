@@ -7,6 +7,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-11-23 19:50'
+updated_date: '2026-11-24 16:22'
 labels:
   - catalog
   - cleanup
@@ -38,3 +39,9 @@ Two followups from the JF-946 post-release simplify/altitude round (2026-11-23),
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+ATTEMPTED AND DEFERRED (2026-11-24): the universal declare check was implemented (add-branch only: skip new blocks for undeclared types, keep existing blocks) and builds clean, but 10 tests across 4 files fail because their test models carry no declaring intents. The affected tests: CatalogWiringGraftTests (4: FreshModelJson/LiveModelJson builders need PlayMovieIntent+PlayBookIntent declaring slots), CatalogManagerTests (2: bare no-intent models need declaring intents for the types being injected), plus the movie and audiobook model-builder helpers. REVERTED to the shipped song-only check (proven and deployed). TO COMPLETE in a dedicated pass: (1) update FreshModelJson/LiveModelJson in CatalogWiringGraftTests to include PlayMovieIntent with MovieTitle slot and PlayBookIntent with AudiobookTitle slot; (2) update the bare test models in CatalogManagerTests to include declaring intents; (3) re-apply the universal check (the code is in this session's transcript); (4) run the full catalog families; (5) deploy and verify the inert Album/Movie blocks are skipped on add (existing blocks stay). The shared slot-scan core extraction is also pending (AnyIntentSlotDeclaresType vs UpdateSlotTypesInIntents duplicate the traversal).
+<!-- SECTION:FINAL_SUMMARY:END -->

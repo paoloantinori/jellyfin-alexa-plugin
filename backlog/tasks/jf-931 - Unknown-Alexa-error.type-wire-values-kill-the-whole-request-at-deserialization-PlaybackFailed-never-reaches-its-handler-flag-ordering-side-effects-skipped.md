@@ -3,9 +3,10 @@ id: JF-931
 title: >-
   Unknown Alexa error.type wire values kill the whole request at deserialization
   (PlaybackFailed never reaches its handler, flag/ordering side effects skipped)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-11-20 09:36'
+updated_date: '2026-11-24 16:31'
 labels: []
 dependencies: []
 references:

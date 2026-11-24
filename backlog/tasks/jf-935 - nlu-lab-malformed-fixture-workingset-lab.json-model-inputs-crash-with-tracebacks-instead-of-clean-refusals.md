@@ -3,9 +3,10 @@ id: JF-935
 title: >-
   nlu-lab: malformed fixture/workingset/lab.json/model inputs crash with
   tracebacks instead of clean refusals
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-11-21 12:37'
+updated_date: '2026-11-24 16:41'
 labels:
   - nlu-lab
 dependencies: []

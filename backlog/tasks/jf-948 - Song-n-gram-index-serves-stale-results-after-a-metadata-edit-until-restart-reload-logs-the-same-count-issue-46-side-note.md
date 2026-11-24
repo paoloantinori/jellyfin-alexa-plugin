@@ -3,10 +3,10 @@ id: JF-948
 title: >-
   Song n-gram index serves stale results after a metadata edit until restart
   (reload logs the same count; issue #46 side note)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-11-23 05:37'
-updated_date: '2026-11-23 07:07'
+updated_date: '2026-11-24 16:38'
 labels:
   - bug
   - search
@@ -37,10 +37,20 @@ Reported live by issue #46's reporter (2026-11-22, their de-DE skill): after edi
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
 
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+gate-exempt: administrative closure only; the JF-948 fix shipped in commit acca8473 on 2026-11-23 with its gates run in that session (code-review-family + full suite 6200/6200 both TFMs, marker in the commit message); this session changed no code and re-verified the regression test at HEAD on both TFMs (passed).
+<!-- SECTION:NOTES:END -->
+
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
 ROOT CAUSE (2026-11-23): DebouncedLibraryIndexService subscribed ONLY ItemAdded/ItemRemoved; a metadata edit raises ItemUpdated, so neither index service ever refreshed on re-tagging. Playback-position saves ride UserDataSaved (not ItemUpdated), so the new subscription sees metadata-shape changes, not every playback stop; the 5s debounce and ShouldRefreshOn bound it further. FIX: ItemAdded/ItemRemoved/ItemUpdated all route to OnLibraryChanged (+ dispose unsubscribe); regression test ItemUpdated_OnAudio_SchedulesARefresh in SongNgramIndexServiceTests (24/24 green). The reporter's observed reload-with-same-count was a coincidental add/remove-path refresh; with the fix the edit path itself fires deterministically. Residual to watch: if a stale-after-refresh case STILL reproduces after this fix, the snapshot swap or the artist-scoped pre-filter is the remaining surface.
 
 END-TO-END VALIDATION (2026-11-23, the maintainer's question 'would the reporter's use case be fixed?'): YES, proven by reproduction. New test MetadataEdit_ItemUpdatedRefreshes_AndTheJF439FallbackFindsTheNewTitle drives the REAL JF-439 fallback (CrossMediaFallback.TrySongFallback) against the REAL index service: (1) pre-edit the fallback finds the track by title; (2) the track is re-tagged (the library query returns the new name) and ItemUpdated fires; (3) after the debounced refresh the fallback finds the track under the NEW name; (4) the snapshot swapped atomically (the disjoint old title now misses). This is the exact reporter flow (edit -> ItemUpdated fires -> no restart needed -> the artist-not-found path falls through to the song). Caveat stated honestly: their report mentioned a reload logging the SAME count while still stale, which the atomic-snapshot layer cannot produce; the most consistent reading is a scan-path refresh racing ahead of their edit's DB commit, and with the fix the edit itself now triggers the deterministic post-edit refresh. Residual surface if their exact case still reproduces on the new build: the artist-scoped pre-filter path.
+
+Shipped in commit acca8473 (2026-11-23): LibraryManager.ItemUpdated now routes through the same gated OnLibraryChanged handler as ItemAdded/ItemRemoved in DebouncedLibraryIndexService, so metadata edits (renamed titles, changed album/artist tags) refresh both in-memory indexes instead of serving stale entries until restart. Playback-position saves ride UserDataSaved, not ItemUpdated, so the subscription sees metadata-shape changes only; the 5s debounce and ShouldRefreshOn bound the refresh. Regression test ItemUpdated_OnAudio_SchedulesARefresh. Re-verified at HEAD 2026-11-24: test passes on both TFMs. Task closed late: the fix commit predates this closure; no code delta in this session.
+
+gate-exempt: no code changed in this session for JF-948; the fix shipped in commit acca8473 (2026-11-23) whose gates ran in that session (code-review-family + full suite 6200/6200 both TFMs, marker in the commit message). This session's only action was administrative closure plus a re-run of the regression test at HEAD (passed both TFMs).
 <!-- SECTION:FINAL_SUMMARY:END -->
