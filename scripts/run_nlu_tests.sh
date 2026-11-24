@@ -5,6 +5,8 @@
 #   ./scripts/run_nlu_tests.sh              # run all locales
 #   ./scripts/run_nlu_tests.sh --dry-run    # validate fixtures only (no SMAPI calls)
 #   ./scripts/run_nlu_tests.sh -k "en-US"   # run only en-US tests
+#   ./scripts/run_nlu_tests.sh --resume     # skip tests with existing checkpoint results
+#   ./scripts/run_nlu_tests.sh --fresh      # clear checkpoint and start clean
 #
 # Environment variables:
 #   ASK_SKILL_ID      Override auto-detected skill ID

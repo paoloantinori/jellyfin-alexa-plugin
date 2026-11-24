@@ -68,3 +68,4 @@ scripts/nlu-lab/tests/__screenshots__/
 .claude/pw-cache-xdg/
 .claude/pw-server-registry/
 .claude/pw-mcp.sh
+.nlu_checkpoint.json

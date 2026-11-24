@@ -23,6 +23,10 @@ from typing import Any
 # ``from smapi_client import ...`` works regardless of cwd.
 sys.path.insert(0, str(Path(__file__).parent))
 
+# Checkpoint/resume support (2026-11-24): inlined below (not a separate
+# plugin to avoid double-registration; the logic is small enough to live
+# here). See scripts/run_nlu_tests.sh --resume / --fresh.
+
 import pytest
 import yaml
 
@@ -183,6 +187,34 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         default=os.environ.get("JELLYFIN_USER", ""),
         help="Jellyfin user ID for E2E tests (or set JELLYFIN_USER env var).",
     )
+    # Checkpoint/resume flags (2026-11-24)
+    parser.addoption(
+        "--resume", action="store_true", default=False,
+        help="Skip tests that already have a result in the checkpoint file.",
+    )
+    parser.addoption(
+        "--fresh", action="store_true", default=False,
+        help="Delete the checkpoint file before running (start clean).",
+    )
+
+
+# --- Checkpoint/resume (2026-11-24) ---
+_CHECKPOINT_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".nlu_checkpoint.json")
+
+
+def _read_checkpoint() -> dict:
+    try:
+        with open(_CHECKPOINT_FILE, encoding="utf-8") as fh:
+            return json.load(fh)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+
+def _write_checkpoint(data: dict) -> None:
+    tmp = _CHECKPOINT_FILE + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as fh:
+        json.dump(data, fh, indent=2)
+    os.rename(tmp, _CHECKPOINT_FILE)
 
 
 def pytest_configure(config: pytest.Config) -> None:
@@ -194,6 +226,16 @@ def pytest_configure(config: pytest.Config) -> None:
     config.addinivalue_line(
         "markers", "e2e: full-chain E2E test via SMAPI simulate-skill"
     )
+    # Checkpoint: clear on --fresh, report on --resume
+    if config.getoption("--fresh"):
+        if os.path.exists(_CHECKPOINT_FILE):
+            os.remove(_CHECKPOINT_FILE)
+    if config.getoption("--resume"):
+        cp = _read_checkpoint()
+        if cp:
+            print(f"[checkpoint] Resuming: {len(cp)} tests already have results")
+        else:
+            print("[checkpoint] No checkpoint found, running fresh")
 
     # Configure the nlu.smapi logger so progress is visible with -v/--verbose
     logging.basicConfig(
@@ -281,10 +323,29 @@ def _e2e_cleanup(request: pytest.FixtureRequest, jellyfin_client):
 
 
 def pytest_collection_modifyitems(
-    config: pytest.Config,  # noqa: ARG001 – required by hookspec
+    config: pytest.Config,
     items: list[pytest.Item],
 ) -> None:
-    """Attach a ``locale`` marker to each test based on its parametrize id."""
+    """Attach a ``locale`` marker; skip completed tests when --resume is set."""
+    # Checkpoint: skip items whose nodeid already has a result
+    if config.getoption("--resume"):
+        checkpoint = _read_checkpoint()
+        if checkpoint:
+            remaining = []
+            skipped_count = 0
+            for item in items:
+                if item.nodeid in checkpoint:
+                    item.add_marker(pytest.mark.skip(
+                        reason=f"checkpoint: already {checkpoint[item.nodeid]}"))
+                    skipped_count += 1
+                else:
+                    remaining.append(item)
+            if skipped_count:
+                print(f"[checkpoint] Skipping {skipped_count} completed, "
+                      f"running {len(remaining)} remaining")
+            items[:] = remaining
+
+    # Locale markers
     for item in items:
         if not hasattr(item, "callspec"):
             continue
@@ -292,6 +353,29 @@ def pytest_collection_modifyitems(
         if " - " in test_id:
             locale_name = test_id.split(" - ")[0]
             item.add_marker(pytest.mark.locale(locale_name))
+
+
+def pytest_runtest_logreport(report: pytest.TestReport) -> None:
+    """Record each test's outcome to the checkpoint file as it completes."""
+    if report.when == "call":
+        outcome = report.outcome.upper()
+        if outcome in ("PASSED", "FAILED"):
+            cp = _read_checkpoint()
+            cp[report.nodeid] = outcome
+            _write_checkpoint(cp)
+
+
+def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
+    """Report checkpoint state at the end of the run."""
+    if not os.path.exists(_CHECKPOINT_FILE):
+        return
+    cp = _read_checkpoint()
+    passed = sum(1 for v in cp.values() if v == "PASSED")
+    failed = sum(1 for v in cp.values() if v == "FAILED")
+    total = len(cp)
+    print(f"\n[checkpoint] {total} tests recorded: {passed} passed, {failed} failed")
+    if exitstatus != 0:
+        print(f"[checkpoint] Resume with: pytest --resume (skips the {total} completed)")
 
 
 def _parametrize_fixtures(
@@ -363,6 +447,8 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
 # resolves conftest's module identity (a rootdir/sys.path change would
 # otherwise make the except clause in test_e2e silently miss the alarm).
 from smapi_timeouts import _TimeoutError, _timeout_handler  # noqa: E402
+
+# Checkpoint/resume support (2026-11-24): --resume/--fresh flags
 
 
 @pytest.fixture(autouse=True)
