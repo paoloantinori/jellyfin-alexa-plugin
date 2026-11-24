@@ -11,6 +11,7 @@ import logging
 
 import pytest
 
+import nlu_ledger_bridge
 from smapi_client import SmapiClient, SmapiError
 
 logger = logging.getLogger("nlu.test")
@@ -70,6 +71,12 @@ def test_utterance_resolves_correct_intent(dry_run, nlu_fixture, smapi_client):
     result = SmapiClient.parse_profile_nlu_result(response)
 
     resolved_intent = result["intent"]
+
+    # JF-954.5: hand the resolved intent and slots to the ledger bridge BEFORE
+    # the assertions, so the recorded row carries what the NLU actually
+    # resolved whether the assertions then pass or fail. Observation only:
+    # the assertions and their messages below are untouched.
+    nlu_ledger_bridge.observe(resolved_intent, result["slots"])
 
     # --- Intent assertion ---
     # 'A|B' alternation (the nlu_wrapper_battery.py convention): every listed

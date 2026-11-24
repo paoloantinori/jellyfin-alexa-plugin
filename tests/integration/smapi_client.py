@@ -94,14 +94,14 @@ _RATE_LIMIT_BACKOFF_BASE = 5.0
 _RATE_LIMIT_MAX_RETRIES = 3
 
 
-def _run_ask(args: list[str]) -> str:
+def _run_ask(args: list[str], timeout: float = 60) -> str:
     """Run an ASK CLI command and return stdout. Raises SmapiError on failure."""
     logger.debug("ask smapi %s", " ".join(args))
     result = subprocess.run(
         ["ask", "smapi"] + args,
         capture_output=True,
         text=True,
-        timeout=60,
+        timeout=timeout,
     )
     if result.returncode != 0:
         stderr = result.stderr
@@ -425,6 +425,51 @@ class SmapiClient:
                     f"{_RATE_LIMIT_MAX_RETRIES} attempts"
                 ) from exc
         raise SmapiError("Should not reach here")
+
+    # Identity reads are a single cheap get-skill-status call that must never
+    # stall the suite the way a full simulation poll may: a much shorter
+    # subprocess cap than the default 60s bounds the cost of a hung CLI.
+    IDENTITY_TIMEOUT_S = 10.0
+
+    def live_model_identity(self) -> str | None:
+        """Read-only SMAPI read of this locale's live interaction-model eTag.
+
+        The same get-skill-status read the NLU lab's build wait uses as its
+        baseline witness (scripts/nlu-lab/smapi_ops.py): one call, no --stage
+        flag, per-locale entry at interactionModel[<locale>] with an optional
+        outer body wrapper. The NLU results ledger (JF-954.5) uses it to
+        prove whether a rebuild happened during a suite session; it costs at
+        most two calls per locale per session under the short
+        IDENTITY_TIMEOUT_S cap. Returns None when the read fails, the locale
+        entry is absent or malformed, or the eTag is missing: the ledger
+        records null and continues.
+        """
+        try:
+            output = _run_ask([
+                "get-skill-status",
+                "--skill-id", self.skill_id,
+            ], timeout=self.IDENTITY_TIMEOUT_S)
+            data = _parse_json_output(output)
+        except (SmapiError, ValueError, OSError, subprocess.SubprocessError):
+            # SubprocessError covers the runner's timeout: a hung ask CLI must
+            # read as an unobtainable identity, never propagate into the test
+            # session's teardown. The conftest breaker additionally stops
+            # calling after repeated nulls, so a throttled CLI cannot cost
+            # even the short cap on every locale.
+            return None
+        if not isinstance(data, dict):
+            return None
+        body = data.get("body", data)
+        models = body.get("interactionModel") if isinstance(body, dict) else None
+        if not isinstance(models, dict):
+            return None
+        entry = models.get(self.locale)
+        if not isinstance(entry, dict):
+            return None
+        etag = entry.get("eTag")
+        if etag is None or etag == "":
+            return None
+        return str(etag)
 
     @staticmethod
     def _intent_summary(response: dict[str, Any]) -> str:

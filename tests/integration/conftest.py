@@ -16,6 +16,7 @@ import logging
 import os
 import signal
 import sys
+import warnings
 from pathlib import Path
 from typing import Any
 
@@ -23,12 +24,24 @@ from typing import Any
 # ``from smapi_client import ...`` works regardless of cwd.
 sys.path.insert(0, str(Path(__file__).parent))
 
+# JF-954.5: the nlu_static ledger writer lives under scripts/nlu_static; put
+# the repository's scripts directory on sys.path so conftest and test_nlu can
+# import the writer and the shared normalizer.
+_SCRIPTS_DIR = Path(__file__).resolve().parents[2] / "scripts"
+if str(_SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS_DIR))
+
 # Checkpoint/resume support (2026-11-24): inlined below (not a separate
 # plugin to avoid double-registration; the logic is small enough to live
 # here). See scripts/run_nlu_tests.sh --resume / --fresh.
 
 import pytest
 import yaml
+
+# JF-954.5: the results ledger. The bridge is a separate module (the
+# smapi_timeouts lesson) so test_nlu.py and this file share ONE holder.
+from nlu_static import ledger as nlu_ledger  # noqa: E402
+import nlu_ledger_bridge  # noqa: E402
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
@@ -64,21 +77,9 @@ def skill_id(dry_run: bool) -> str:
         return "dry-run-placeholder"
 
     # Attempt auto-detection from ASK CLI state file.
-    config_path = os.path.expanduser("~/.ask/ask_states.json")
-    if os.path.isfile(config_path):
-        try:
-            with open(config_path, encoding="utf-8") as handle:
-                data = json.load(handle)
-            for value in data.get("skillMetadata", {}).values():
-                sid = value.get("skill_id", "")
-                if sid:
-                    return sid
-        except (json.JSONDecodeError, OSError):
-            pass  # fall through to env var
-
-    env_id = os.environ.get("ASK_SKILL_ID", "")
-    if env_id:
-        return env_id
+    sid = _resolve_skill_id()
+    if sid:
+        return sid
 
     pytest.fail(
         "Cannot resolve skill_id: ~/.ask/ask_states.json not found or "
@@ -202,6 +203,91 @@ def pytest_addoption(parser: pytest.Parser) -> None:
 _CHECKPOINT_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".nlu_checkpoint.json")
 
 
+def _resolve_skill_id() -> str | None:
+    """The Alexa skill id from ASK CLI state or environment, or None.
+
+    ONE resolution definition, shared by the skill_id fixture and the JF-954.5
+    ledger wiring (failing hard is the fixture's concern, continuing with
+    nulls is the ledger's; the lookup itself must not fork). Lookup order:
+    1. ``~/.ask/ask_states.json`` -> skillMetadata values, 2. ``ASK_SKILL_ID``.
+    """
+    config_path = os.path.expanduser("~/.ask/ask_states.json")
+    if os.path.isfile(config_path):
+        try:
+            with open(config_path, encoding="utf-8") as handle:
+                data = json.load(handle)
+            for value in data.get("skillMetadata", {}).values():
+                sid = value.get("skill_id", "")
+                if sid:
+                    return sid
+        except (json.JSONDecodeError, OSError, AttributeError):
+            pass  # fall through to the environment
+    return os.environ.get("ASK_SKILL_ID", "") or None
+
+
+# --- NLU results ledger (JF-954.5) ---
+_ledger_writer: nlu_ledger.LedgerWriter | None = None
+# Resolved once in pytest_configure: the session's identity reads reuse it
+# instead of re-parsing ask_states.json per call.
+_ledger_resolved_skill_id: str | None = None
+# Session-wide identity breaker: tripped by an exception (a hung ask CLI) or
+# by IDENTITY_NULL_BREAKER_STREAK consecutive null results (a throttled CLI),
+# after which every identity read returns null without a new subprocess.
+_ledger_identity_broken: bool = False
+_ledger_identity_null_streak: int = 0
+IDENTITY_NULL_BREAKER_STREAK = 3
+
+
+def _ledger_identity_reader(locale: str) -> str | None:
+    """The live interaction-model eTag for one locale, or None.
+
+    One read-only get-skill-status call per invocation through the existing
+    SmapiClient wrapper; the writer calls it at most twice per locale per
+    session (locale start and session end). Failures land in the writer's
+    non-fatal guard, which records null. The session-wide breaker trips on an
+    exception (a hung ask CLI) or after IDENTITY_NULL_BREAKER_STREAK
+    consecutive nulls (a throttled CLI), so a dead SMAPI degrades after a
+    bounded cost instead of taxing every locale start and the session
+    teardown.
+    """
+    global _ledger_identity_broken, _ledger_identity_null_streak
+    if _ledger_identity_broken or not _ledger_resolved_skill_id:
+        return None
+    try:
+        from smapi_client import SmapiClient
+
+        identity = SmapiClient(skill_id=_ledger_resolved_skill_id,
+                               locale=locale).live_model_identity()
+    except Exception:
+        _ledger_identity_broken = True
+        logger.warning("NLU ledger identity reads disabled for this session "
+                       "after an ask CLI failure")
+        return None
+    if identity is None:
+        _ledger_identity_null_streak += 1
+        if _ledger_identity_null_streak >= IDENTITY_NULL_BREAKER_STREAK:
+            _ledger_identity_broken = True
+            logger.warning(
+                "NLU ledger identity reads disabled for this session after "
+                "%d consecutive nulls", _ledger_identity_null_streak,
+            )
+    else:
+        _ledger_identity_null_streak = 0
+    return identity
+
+
+def _ledger_glue_fault(exc: Exception) -> None:
+    """Report the first glue fault once and disable the session's writer."""
+    global _ledger_writer
+    warnings.warn(
+        nlu_ledger.DISABLED_WARNING_TEMPLATE.format(exc=exc),
+        nlu_ledger.NluLedgerWarning,
+    )
+    if _ledger_writer is not None:
+        _ledger_writer.close()
+    _ledger_writer = None
+
+
 def _read_checkpoint() -> dict:
     try:
         with open(_CHECKPOINT_FILE, encoding="utf-8") as fh:
@@ -243,6 +329,20 @@ def pytest_configure(config: pytest.Config) -> None:
         format="%(asctime)s %(name)s %(levelname)s %(message)s",
         datefmt="%H:%M:%S",
     )
+
+    # JF-954.5: create the ledger writer once per pytest session. Dry-run
+    # writes nothing and NLU_LEDGER=0 disables; the live writer opens its
+    # session file here with the skill id resolved once (never raising), and
+    # the identity reads reuse the same resolved value.
+    global _ledger_writer, _ledger_resolved_skill_id
+    writer = nlu_ledger.writer_for_environment(
+        dry_run=bool(config.getoption("--dry-run")),
+        identity_reader=_ledger_identity_reader,
+    )
+    _ledger_writer = writer
+    _ledger_resolved_skill_id = _resolve_skill_id()
+    if writer is not None:
+        writer.start_session(skill_id=_ledger_resolved_skill_id)
 
 
 # ---------------------------------------------------------------------------
@@ -365,8 +465,83 @@ def pytest_runtest_logreport(report: pytest.TestReport) -> None:
             _write_checkpoint(cp)
 
 
+# ---------------------------------------------------------------------------
+# NLU results ledger row recording (JF-954.5)
+# ---------------------------------------------------------------------------
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item: pytest.Item, call):
+    """Write one ledger row per executed NLU test (outcome as the suite decided).
+
+    Non-call phases only reset the observation holder, so a value from one
+    test can never leak into the next row. Any fault in the glue is reported
+    once and disables the ledger; it never changes a test outcome.
+    """
+    outcome = yield
+    rep = outcome.get_result()
+    try:
+        if rep.when != "call":
+            nlu_ledger_bridge.reset()
+            return
+        _ledger_record_row(item, rep)
+    except Exception as exc:
+        _ledger_glue_fault(exc)
+
+
+def _ledger_record_row(item: pytest.Item, rep) -> None:
+    """Record the ledger row for one finished NLU test, or return silently."""
+    writer = _ledger_writer
+    if writer is None:
+        return
+    callspec = getattr(item, "callspec", None)
+    if callspec is None or "nlu_fixture" not in callspec.params:
+        # E2E, reliability, smoke and non-parametrized tests are out of scope.
+        return
+    case = callspec.params["nlu_fixture"]
+    actual_intent, resolved_slots = nlu_ledger_bridge.take()
+    if rep.outcome == "skipped":
+        # Skipped rows are not recorded (the task contract).
+        return
+    if rep.passed:
+        row_outcome, failure_kind = "pass", None
+        detail = None
+    else:
+        crash = getattr(rep.longrepr, "reprcrash", None)
+        crash_message = getattr(crash, "message", "") or ""
+        full_text = rep.longreprtext if rep.longrepr is not None else ""
+        if not crash_message and full_text:
+            # No crash summary available: the traceback's last non-empty line
+            # names the actual failure better than the generic header. The
+            # CLASSIFIER still reads the full text so the pinned message
+            # fragments are found wherever they sit in the report.
+            lines = [ln for ln in full_text.splitlines() if ln.strip()]
+            crash_message = lines[-1] if lines else ""
+        row_outcome, failure_kind = nlu_ledger.classify_failure(full_text or crash_message)
+        detail = crash_message.splitlines()[0][:240] if crash_message else None
+    writer.record_row(
+        locale=str(case.get("locale", "")),
+        utterance=case.get("utterance", ""),
+        expected_intent=case.get("expected_intent", ""),
+        expected_slots=case.get("expected_slots", {}),
+        actual_intent=actual_intent,
+        slots=resolved_slots,
+        outcome=row_outcome,
+        failure_kind=failure_kind,
+        detail=detail,
+    )
+
+
 def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
-    """Report checkpoint state at the end of the run."""
+    """Report checkpoint state and close the ledger session at the end of the run."""
+    global _ledger_writer
+    writer = _ledger_writer
+    if writer is not None:
+        try:
+            writer.finish()
+        except Exception as exc:  # the ledger must never change a test outcome
+            _ledger_glue_fault(exc)
+        _ledger_writer = None
     if not os.path.exists(_CHECKPOINT_FILE):
         return
     cp = _read_checkpoint()

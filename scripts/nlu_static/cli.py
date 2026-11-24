@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -23,7 +24,7 @@ _SCRIPTS_DIR = Path(__file__).resolve().parents[1]
 if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 
-from nlu_static import fixture_vocab, producer_jellyfin, token_collisions  # noqa: E402
+from nlu_static import fixture_vocab, ledger, producer_jellyfin, token_collisions  # noqa: E402
 from nlu_static.effective_model import EffectiveModel, build_effective_model, load_snapshot  # noqa: E402
 
 
@@ -333,6 +334,93 @@ def _register_fixtures(subparsers: argparse._SubParsersAction) -> None:
     parser.set_defaults(func=cmd_fixtures)
 
 
+def _ledger_dir_or_fail(args: argparse.Namespace) -> Path | None:
+    """Resolve the --dir flag; None after printing the error.
+
+    Without --dir the default follows the same rule as the writer: the
+    NLU_LEDGER_DIR environment variable first, then the committed results
+    dir, so a suite run with the override and a stats call without --dir
+    read the same location.
+    """
+    if args.dir:
+        directory = Path(args.dir)
+    else:
+        directory = Path(os.environ.get("NLU_LEDGER_DIR") or ledger.DEFAULT_RESULTS_DIR)
+    if not directory.is_dir():
+        _fail(FileNotFoundError(f"ledger directory not found: {directory}"))
+        return None
+    return directory
+
+
+def _load_sessions_or_fail(args: argparse.Namespace) -> list[dict] | None:
+    """Load the ledger sessions from the resolved dir; None after printing the error."""
+    directory = _ledger_dir_or_fail(args)
+    if directory is None:
+        return None
+    try:
+        return ledger.load_sessions(directory)
+    except OSError as err:
+        # An unreadable session file is a refusal, not a traceback.
+        return _fail(err)
+
+
+def cmd_ledger_stats(args: argparse.Namespace) -> int:
+    """Print the per-row flip statistics over the ledger sessions."""
+    sessions = _load_sessions_or_fail(args)
+    if sessions is None:
+        return 2
+    try:
+        payload = ledger.compute_stats(sessions, locale=args.locale, last=args.last)
+    except ValueError as err:
+        # compute_stats owns the --last invariant (positive integer) and the
+        # CLI turns its refusal into the shared clean-error exit.
+        return _fail(err)
+    if args.format == "text":
+        sys.stdout.write(ledger.render_stats_text(payload))
+    else:
+        _print_json(payload, None)
+    return 0
+
+
+def cmd_ledger_list(args: argparse.Namespace) -> int:
+    """Print the ledger sessions with row counts, completeness and rebuilt flags."""
+    sessions = _load_sessions_or_fail(args)
+    if sessions is None:
+        return 2
+    payloads = [ledger.session_payload(session) for session in sessions]
+    sys.stdout.write(ledger.render_sessions_text(payloads))
+    return 0
+
+
+def _register_ledger(subparsers: argparse._SubParsersAction) -> None:
+    """Register the ledger subcommand (JF-954.5) with its stats and list children."""
+    parser = subparsers.add_parser(
+        "ledger",
+        help="statistics over the recorded live NLU suite sessions",
+    )
+    ledger_sub = parser.add_subparsers(dest="ledger_command", required=True)
+    stats = ledger_sub.add_parser(
+        "stats",
+        help="per-row flip statistics over the ledger sessions",
+    )
+    stats.add_argument("--dir", help="ledger directory (default: tests/integration/results)")
+    stats.add_argument("--locale", help="restrict the row keys to one locale, for example es-ES")
+    stats.add_argument("--last", type=int, metavar="N", help="consider only the last N sessions")
+    stats.add_argument(
+        "--format",
+        choices=("json", "text"),
+        default="json",
+        help="output format (default: json, a deterministic document)",
+    )
+    stats.set_defaults(func=cmd_ledger_stats)
+    listing = ledger_sub.add_parser(
+        "list",
+        help="list the ledger sessions with completeness and rebuilt flags",
+    )
+    listing.add_argument("--dir", help="ledger directory (default: tests/integration/results)")
+    listing.set_defaults(func=cmd_ledger_list)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="nlu_static", description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -340,6 +428,7 @@ def main(argv: list[str] | None = None) -> int:
     _register_effective(subparsers)
     _register_tokens(subparsers)
     _register_fixtures(subparsers)
+    _register_ledger(subparsers)
     args = parser.parse_args(argv)
     return int(args.func(args))
 
