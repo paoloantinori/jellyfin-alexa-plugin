@@ -347,7 +347,7 @@ def test_smapi_client_live_model_identity_parses_etag(monkeypatch):
             "it-IT": {"eTag": "abc123", "lastUpdateRequest": {"status": "SUCCEEDED"}},
         }
     })
-    monkeypatch.setattr(smapi_client_module, "_run_ask", lambda args: payload)
+    monkeypatch.setattr(smapi_client_module, "_run_ask", lambda args, timeout=60: payload)
     client = SmapiClient(skill_id="sk", locale="it-IT")
     assert client.live_model_identity() == "abc123"
 
@@ -356,21 +356,21 @@ def test_smapi_client_live_model_identity_tolerates_body_wrapper(monkeypatch):
     payload = json.dumps({
         "body": {"interactionModel": {"es-ES": {"eTag": 42}}},
     })
-    monkeypatch.setattr(smapi_client_module, "_run_ask", lambda args: payload)
+    monkeypatch.setattr(smapi_client_module, "_run_ask", lambda args, timeout=60: payload)
     client = SmapiClient(skill_id="sk", locale="es-ES")
     assert client.live_model_identity() == "42"
 
 
 def test_smapi_client_live_model_identity_returns_none_on_any_failure(monkeypatch):
-    def _raise(_args):
+    def _raise(_args, timeout=60):
         raise SmapiError("exit 1")
 
     cases = [
         pytest.param(_raise, id="cli-failure"),
-        pytest.param(lambda args: "not json", id="unparseable"),
-        pytest.param(lambda args: json.dumps({"interactionModel": {}}), id="missing-locale"),
-        pytest.param(lambda args: json.dumps({"interactionModel": {"it-IT": {"eTag": None}}}), id="null-etag"),
-        pytest.param(lambda args: json.dumps({"unrelated": True}), id="wrong-shape"),
+        pytest.param(lambda args, timeout=60: "not json", id="unparseable"),
+        pytest.param(lambda args, timeout=60: json.dumps({"interactionModel": {}}), id="missing-locale"),
+        pytest.param(lambda args, timeout=60: json.dumps({"interactionModel": {"it-IT": {"eTag": None}}}), id="null-etag"),
+        pytest.param(lambda args, timeout=60: json.dumps({"unrelated": True}), id="wrong-shape"),
     ]
     for case in cases:
         monkeypatch.setattr(smapi_client_module, "_run_ask", case.values[0])
@@ -455,15 +455,15 @@ def test_scenario_rebuild_during_run_is_reported(tmp_path):
 # --- AC 7: incomplete sessions and the session ordering contract ------------------------
 
 
-def test_sessions_order_by_started_then_session_id(tmp_path):
-    _run_session(tmp_path, pid=20, rows=[("a", "A", "pass")], minute=1)
+def test_session_id_tiebreak_orders_identical_started_strings(tmp_path):
+    # Two sessions FORCED onto the same started string: the session_id
+    # tiebreak must order them unconditionally.
+    _run_session(tmp_path, pid=20, rows=[("a", "A", "pass")], minute=0)
     _run_session(tmp_path, pid=10, rows=[("b", "B", "pass")], minute=0)
     sessions = nlu_ledger.load_sessions(tmp_path)
-    # Same started string on minute ties falls back to the session_id order.
-    first, second = sessions
-    assert first["started"] <= second["started"]
-    if first["started"] == second["started"]:
-        assert first["session_id"] < second["session_id"]
+    assert [s["session_id"] for s in sessions] == [
+        "nlu-20261124T120000Z-10", "nlu-20261124T120000Z-20",
+    ]
 
 
 def test_row_key_normalizes_the_utterance(tmp_path):
@@ -733,3 +733,146 @@ def test_ledger_module_avoids_the_em_dash():
     em_dash = chr(0x2014)  # built from the codepoint: the character never lands in this file
     module = SCRIPTS_DIR / "nlu_static" / "ledger.py"
     assert em_dash not in module.read_text(encoding="utf-8")
+
+
+# --- review round: same-model needs the live identity too -------------------------------
+
+
+def test_flip_with_equal_sha_but_different_live_identities_is_not_same_model(tmp_path):
+    # The catalog-displacement class: the committed json is unchanged (equal
+    # sha) while the live model changed under it; the flip stays in
+    # flips_total and stays out of flips_same_model.
+    _run_session(tmp_path, pid=1, rows=[("disattiva loop", "LoopAllOffIntent", "pass")],
+                 minute=0, identities=["etag-1", "etag-1"])
+    _run_session(tmp_path, pid=2, rows=[("disattiva loop", "LoopAllOnIntent", "fail")],
+                 minute=1, identities=["etag-2", "etag-2"])
+    sessions = nlu_ledger.load_sessions(tmp_path)
+    (row,) = nlu_ledger.compute_stats(sessions)["rows"]
+    assert row["flips_total"] == 1
+    assert row["flips_same_model"] == 0
+
+
+def test_flip_pair_with_a_mid_session_rebuild_is_not_same_model(tmp_path):
+    _run_session(tmp_path, pid=1, rows=[("disattiva loop", "LoopAllOffIntent", "pass")],
+                 minute=0, identities=["etag-1", "etag-1"])
+    _run_session(tmp_path, pid=2, rows=[("disattiva loop", "LoopAllOnIntent", "fail")],
+                 minute=1, identities=["etag-x", "etag-y"])
+    sessions = nlu_ledger.load_sessions(tmp_path)
+    (row,) = nlu_ledger.compute_stats(sessions)["rows"]
+    assert row["flips_total"] == 1
+    assert row["flips_same_model"] == 0
+
+
+# --- review round: session adjacency, not row adjacency ---------------------------------
+
+
+def test_duplicated_utterance_inside_one_session_never_flips(tmp_path):
+    _run_session(tmp_path, pid=1, rows=[("disattiva loop", "LoopAllOffIntent", "pass"),
+                                        ("disattiva loop", "LoopAllOnIntent", "fail")],
+                 minute=0)
+    sessions = nlu_ledger.load_sessions(tmp_path)
+    (row,) = nlu_ledger.compute_stats(sessions)["rows"]
+    assert row["runs"] == 2  # both rows still count
+    assert row["actual_intents"] == ["LoopAllOffIntent", "LoopAllOnIntent"]
+    assert row["flips_total"] == 0
+    assert row["flips_same_model"] == 0
+    assert row["last_outcome"] == "fail"
+
+
+def test_last_outcome_ignores_error_rows(tmp_path):
+    _run_session(tmp_path, pid=1, rows=[("disattiva loop", "A", "pass"),
+                                        ("disattiva loop", None, "error")], minute=0)
+    _run_session(tmp_path, pid=2, rows=[("disattiva loop", None, "error")], minute=1)
+    sessions = nlu_ledger.load_sessions(tmp_path)
+    (row,) = nlu_ledger.compute_stats(sessions)["rows"]
+    assert row["errors"] == 2
+    assert row["last_outcome"] == "pass"  # from the last NON-error row
+    assert row["last_actual_intent"] == "A"
+
+
+def test_last_outcome_is_null_when_every_row_is_an_error(tmp_path):
+    _run_session(tmp_path, pid=1, rows=[("disattiva loop", None, "error")], minute=0)
+    sessions = nlu_ledger.load_sessions(tmp_path)
+    (row,) = nlu_ledger.compute_stats(sessions)["rows"]
+    assert row["errors"] == 1
+    assert row["last_outcome"] is None
+    assert row["last_actual_intent"] is None
+
+
+# --- review round: the finish cleanup on the disabled path -------------------------------
+
+
+class _FlakyHandle:
+    """A real-file handle proxy whose writes fail after ok_writes successes."""
+
+    def __init__(self, inner, ok_writes: int):
+        self._inner = inner
+        self._remaining = ok_writes
+
+    def write(self, line: str) -> int:
+        if self._remaining <= 0:
+            raise OSError("write failed")
+        self._remaining -= 1
+        return self._inner.write(line)
+
+    def flush(self) -> None:
+        return self._inner.flush()
+
+    def close(self) -> None:
+        return self._inner.close()
+
+
+def test_finish_removes_the_zero_row_orphan_even_when_disabled(tmp_path):
+    writer = _writer(
+        tmp_path, pid=40,
+        opener=lambda path: _FlakyHandle(path.open("w", encoding="utf-8"), ok_writes=1),
+    )
+    with pytest.warns(NluLedgerWarning):
+        writer.start_session("sk-1")  # session_start lands
+        writer.record_row(  # locale_start write fails: warn once, disable
+            locale="it-IT", utterance="x", expected_intent="A", outcome="pass")
+    assert list(tmp_path.glob("*.jsonl"))  # the orphan exists before finish
+    writer.finish()
+    assert list(tmp_path.glob("*.jsonl")) == []
+    assert writer.complete is True
+
+
+def test_finish_keeps_rows_and_stays_incomplete_when_disabled(tmp_path):
+    writer = _writer(
+        tmp_path, pid=41,
+        opener=lambda path: _FlakyHandle(path.open("w", encoding="utf-8"), ok_writes=3),
+    )
+    writer.start_session("sk-1")  # writes 1-2: session_start, locale_start
+    writer.record_row(locale="it-IT", utterance="x", expected_intent="A",
+                      actual_intent="A", outcome="pass")  # write 3: the row
+    with pytest.warns(NluLedgerWarning):
+        writer.finish()  # write 4 (session_end) fails: warn once, disable
+    (session_file,) = tmp_path.glob("*.jsonl")
+    records = [json.loads(line) for line in session_file.read_text(encoding="utf-8").splitlines()]
+    assert [r["type"] for r in records] == ["session_start", "locale_start", "row"]
+    # A second finish is idempotent: the rows stay, the file stays incomplete.
+    writer.finish()
+    records = [json.loads(line) for line in session_file.read_text(encoding="utf-8").splitlines()]
+    assert [r["type"] for r in records] == ["session_start", "locale_start", "row"]
+    assert writer.complete is True
+    sessions = nlu_ledger.load_sessions(tmp_path)
+    assert sessions[0]["complete"] is False
+    assert len(sessions[0]["rows"]) == 1
+
+
+# --- review round: the CLI default dir follows NLU_LEDGER_DIR ----------------------------
+
+
+def test_cli_default_dir_follows_nlu_ledger_dir(tmp_path, monkeypatch, capsys):
+    target = tmp_path / "envdir"
+    target.mkdir()
+    _run_session(target, pid=5, rows=[("disattiva loop", "A", "pass")], minute=0)
+    monkeypatch.setenv("NLU_LEDGER_DIR", str(target))
+    code = nlu_cli.main(["ledger", "stats"])
+    payload = json.loads(capsys.readouterr().out)
+    assert code == 0
+    assert len(payload["sessions"]) == 1
+    code = nlu_cli.main(["ledger", "list"])
+    listing = capsys.readouterr().out
+    assert code == 0
+    assert "nlu-20261124T120000Z-5" in listing

@@ -19,13 +19,18 @@ and no network. The live identity reader in the suite is the read-only
 get-skill-status call behind ``SmapiClient.live_model_identity``.
 
 Statistics side: sessions are ordered by ``started`` (ties by session_id);
-the row key is ``(locale, normalize_text(utterance))``. ``flips_total``
-counts adjacent non-error rows of a key whose ``actual_intent`` differs;
-``flips_same_model`` counts the same pairs restricted to sessions whose
-``model_sha256`` for that locale is equal, so a flip counted there happened
-with no template change. Output is deterministic for a given set of ledger
-files: sorted keys, sorted rows, no timestamps beyond the ones the files
-themselves carry.
+the row key is ``(locale, normalize_text(utterance))``. Flip counting walks
+SESSION adjacency: each session contributes one representative, the last
+non-error row it recorded for the key (a session whose rows are all errors
+represents nothing). ``flips_total`` counts adjacent representatives whose
+``actual_intent`` differs; ``flips_same_model`` counts the same pairs
+restricted to those where the committed ``model_sha256`` is equal AND the
+locale's live identities are present, equal and stable within both
+sessions, so a flip counted there happened with no template or live-model
+change. ``last_outcome`` and ``last_actual_intent`` come from the last
+non-error row (errors are environmental and never read as a verdict).
+Output is deterministic for a given set of ledger files: sorted keys,
+sorted rows, no timestamps beyond the ones the files themselves carry.
 """
 
 from __future__ import annotations
@@ -338,23 +343,38 @@ class LedgerWriter:
         self._try(True, action, None)
 
     def finish(self) -> None:
-        """Write session_end and close; a session with no rows is removed."""
-        if self._disabled or not self._started or self._finished:
+        """Write session_end and close; a session with no rows is removed.
+
+        The zero-row orphan cleanup runs on EVERY finish path, including the
+        disabled one: a fatal write failure before the first row would
+        otherwise leave a session_start-only file that reads as a phantom
+        incomplete session forever. A disabled session WITH rows keeps its
+        file as an honest incomplete session (its rows still count).
+        """
+        if not self._started or self._finished:
             return
         identity_end: dict[str, str | None] = {}
-        for locale in sorted(self._locales):
-            identity_end[locale] = self._try_identity(locale)
+        if not self._disabled:
+            for locale in sorted(self._locales):
+                identity_end[locale] = self._try_identity(locale)
 
-        def action() -> None:
-            if self._row_count == 0:
-                # Nothing was exercised (a -k filter, an E2E-only run): the
-                # file holds only session_start and would read as a spurious
-                # incomplete session, so it is removed.
-                self._close_handle_quietly()
-                if self.path is not None:
-                    self.path.unlink(missing_ok=True)
-                self._finished = True
-                return
+        def close_out() -> None:
+            # The orphan cleanup and the disabled keep-rows close must run on
+            # every path, so they bypass the warning guard (the writer may
+            # already be disabled, and _try would early-return on it).
+            self._close_handle_quietly()
+            if self._row_count == 0 and self.path is not None:
+                self.path.unlink(missing_ok=True)
+            self._finished = True
+
+        if self._disabled or self._row_count == 0:
+            try:
+                close_out()
+            except Exception as exc:  # quiet: finish is best effort by contract
+                self.errors.append(exc)
+            return
+
+        def write_end() -> None:
             _, iso = _stamp(self._clock())
             self._emit({
                 "type": "session_end",
@@ -365,7 +385,7 @@ class LedgerWriter:
             self._finished = True
             self._close_handle_quietly()
 
-        self._try(True, action, None)
+        self._try(True, write_end, None)
 
     def close(self) -> None:
         """Idempotent close of the file handle without writing session_end."""
@@ -544,22 +564,39 @@ def _row_stats(key: tuple[str, str], entries: list[tuple[dict, dict]]) -> dict:
     actual_intents = sorted(
         {str(r.get("actual_intent")) for _, r in entries if r.get("actual_intent")}
     )
-    # Error rows are environmental and are dropped before the adjacency walk,
-    # so an outage between two passes is never a flip.
-    non_error = [(s, r) for s, r in entries if r.get("outcome") != OUTCOME_ERROR]
+    # Flip counting walks SESSION adjacency, not row adjacency: each session
+    # contributes ONE representative, the last non-error row it recorded for
+    # the key (so a duplicated utterance inside one session never flips
+    # against itself), and a session whose rows are all errors represents
+    # nothing. Runs, passes, fails and errors still count ROWS.
+    representatives: list[tuple[dict, dict]] = []
+    for session, row in entries:
+        if row.get("outcome") == OUTCOME_ERROR:
+            continue
+        if representatives and representatives[-1][0] is session:
+            representatives[-1] = (session, row)  # the session's LAST non-error row
+        else:
+            representatives.append((session, row))
     flips_total = 0
     flips_same_model = 0
-    for index in range(1, len(non_error)):
-        s_prev, r_prev = non_error[index - 1]
-        s_next, r_next = non_error[index]
+    for index in range(1, len(representatives)):
+        s_prev, r_prev = representatives[index - 1]
+        s_next, r_next = representatives[index]
         if r_prev.get("actual_intent") == r_next.get("actual_intent"):
             continue
         flips_total += 1
-        sha_prev = _locale_sha(s_prev, loc)
-        sha_next = _locale_sha(s_next, loc)
-        if sha_prev is not None and sha_prev == sha_next:
+        if _pair_same_model(s_prev, s_next, loc):
             flips_same_model += 1
-    _, r_last = entries[-1]
+    # last_outcome and last_actual_intent come from the last NON-error row:
+    # a session-ending SMAPI outage is environmental noise, not the row's
+    # routing verdict; null when every recorded row for the key is an error.
+    last_outcome = None
+    last_actual_intent = None
+    for _session, row in reversed(entries):
+        if row.get("outcome") != OUTCOME_ERROR:
+            last_outcome = row.get("outcome")
+            last_actual_intent = row.get("actual_intent")
+            break
     return {
         "locale": loc,
         "utterance": utterance,
@@ -570,11 +607,52 @@ def _row_stats(key: tuple[str, str], entries: list[tuple[dict, dict]]) -> dict:
         "actual_intents": actual_intents,
         "flips_total": flips_total,
         "flips_same_model": flips_same_model,
-        "last_outcome": r_last.get("outcome"),
-        "last_actual_intent": r_last.get("actual_intent"),
+        "last_outcome": last_outcome,
+        "last_actual_intent": last_actual_intent,
         "first_session": entries[0][0]["session_id"],
         "last_session": entries[-1][0]["session_id"],
     }
+
+
+def _pair_same_model(session_prev: dict, session_next: dict, locale: str) -> bool:
+    """True when the flip pair provably ran the SAME model for the locale.
+
+    Both the committed model bytes (model_sha256) and the LIVE model must be
+    equal: the 2026-10-19 catalog-displacement class changed the live model
+    without touching the committed json, so the committed sha alone would
+    misattribute those flips to trainer nondeterminism. Each session's live
+    identity counts only when it is present AND stable (start equals end): a
+    session with a rebuild during the run did not run one model, so the pair
+    is unproven. Anything unproven is False: the flip stays in flips_total
+    and stays out of flips_same_model.
+    """
+    sha_prev = _locale_sha(session_prev, locale)
+    sha_next = _locale_sha(session_next, locale)
+    if sha_prev is None or sha_prev != sha_next:
+        return False
+    identity_prev = _stable_identity(session_prev, locale)
+    identity_next = _stable_identity(session_next, locale)
+    return (
+        identity_prev is not None
+        and identity_next is not None
+        and identity_prev == identity_next
+    )
+
+
+def _stable_identity(session: dict, locale: str) -> str | None:
+    """The session's one live identity for the locale, or None.
+
+    None when the locale entry is missing, either identity is null, or a
+    rebuild happened during the session (identities differ).
+    """
+    entry = session["locales"].get(locale)
+    if not entry:
+        return None
+    start = entry.get("live_identity_start")
+    end = entry.get("live_identity_end")
+    if start is None or end is None or start != end:
+        return None
+    return start
 
 
 def session_payload(session: dict, locale_filter: str | None = None) -> dict:

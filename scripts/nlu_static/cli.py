@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -334,8 +335,17 @@ def _register_fixtures(subparsers: argparse._SubParsersAction) -> None:
 
 
 def _ledger_dir_or_fail(args: argparse.Namespace) -> Path | None:
-    """Resolve the --dir flag (default: the committed results dir); None after printing the error."""
-    directory = Path(args.dir) if args.dir else ledger.DEFAULT_RESULTS_DIR
+    """Resolve the --dir flag; None after printing the error.
+
+    Without --dir the default follows the same rule as the writer: the
+    NLU_LEDGER_DIR environment variable first, then the committed results
+    dir, so a suite run with the override and a stats call without --dir
+    read the same location.
+    """
+    if args.dir:
+        directory = Path(args.dir)
+    else:
+        directory = Path(os.environ.get("NLU_LEDGER_DIR") or ledger.DEFAULT_RESULTS_DIR)
     if not directory.is_dir():
         _fail(FileNotFoundError(f"ledger directory not found: {directory}"))
         return None

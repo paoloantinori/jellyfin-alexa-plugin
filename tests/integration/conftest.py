@@ -230,9 +230,12 @@ _ledger_writer: nlu_ledger.LedgerWriter | None = None
 # Resolved once in pytest_configure: the session's identity reads reuse it
 # instead of re-parsing ask_states.json per call.
 _ledger_resolved_skill_id: str | None = None
-# Session-wide identity breaker: tripped by an exception (a hung ask CLI),
+# Session-wide identity breaker: tripped by an exception (a hung ask CLI) or
+# by IDENTITY_NULL_BREAKER_STREAK consecutive null results (a throttled CLI),
 # after which every identity read returns null without a new subprocess.
 _ledger_identity_broken: bool = False
+_ledger_identity_null_streak: int = 0
+IDENTITY_NULL_BREAKER_STREAK = 3
 
 
 def _ledger_identity_reader(locale: str) -> str | None:
@@ -241,21 +244,36 @@ def _ledger_identity_reader(locale: str) -> str | None:
     One read-only get-skill-status call per invocation through the existing
     SmapiClient wrapper; the writer calls it at most twice per locale per
     session (locale start and session end). Failures land in the writer's
-    non-fatal guard, which records null; an EXCEPTION (a hung ask CLI) trips
-    the session-wide breaker so a dead SMAPI cannot add a per-locale
-    subprocess wait to every identity read and to the session teardown.
+    non-fatal guard, which records null. The session-wide breaker trips on an
+    exception (a hung ask CLI) or after IDENTITY_NULL_BREAKER_STREAK
+    consecutive nulls (a throttled CLI), so a dead SMAPI degrades after a
+    bounded cost instead of taxing every locale start and the session
+    teardown.
     """
-    global _ledger_identity_broken
+    global _ledger_identity_broken, _ledger_identity_null_streak
     if _ledger_identity_broken or not _ledger_resolved_skill_id:
         return None
     try:
         from smapi_client import SmapiClient
 
-        return SmapiClient(skill_id=_ledger_resolved_skill_id,
-                           locale=locale).live_model_identity()
+        identity = SmapiClient(skill_id=_ledger_resolved_skill_id,
+                               locale=locale).live_model_identity()
     except Exception:
         _ledger_identity_broken = True
+        logger.warning("NLU ledger identity reads disabled for this session "
+                       "after an ask CLI failure")
         return None
+    if identity is None:
+        _ledger_identity_null_streak += 1
+        if _ledger_identity_null_streak >= IDENTITY_NULL_BREAKER_STREAK:
+            _ledger_identity_broken = True
+            logger.warning(
+                "NLU ledger identity reads disabled for this session after "
+                "%d consecutive nulls", _ledger_identity_null_streak,
+            )
+    else:
+        _ledger_identity_null_streak = 0
+    return identity
 
 
 def _ledger_glue_fault(exc: Exception) -> None:
@@ -490,11 +508,17 @@ def _ledger_record_row(item: pytest.Item, rep) -> None:
         detail = None
     else:
         crash = getattr(rep.longrepr, "reprcrash", None)
-        message = getattr(crash, "message", "") or ""
-        if not message and rep.longrepr is not None:
-            message = rep.longreprtext
-        row_outcome, failure_kind = nlu_ledger.classify_failure(message)
-        detail = message.splitlines()[0][:240] if message else None
+        crash_message = getattr(crash, "message", "") or ""
+        full_text = rep.longreprtext if rep.longrepr is not None else ""
+        if not crash_message and full_text:
+            # No crash summary available: the traceback's last non-empty line
+            # names the actual failure better than the generic header. The
+            # CLASSIFIER still reads the full text so the pinned message
+            # fragments are found wherever they sit in the report.
+            lines = [ln for ln in full_text.splitlines() if ln.strip()]
+            crash_message = lines[-1] if lines else ""
+        row_outcome, failure_kind = nlu_ledger.classify_failure(full_text or crash_message)
+        detail = crash_message.splitlines()[0][:240] if crash_message else None
     writer.record_row(
         locale=str(case.get("locale", "")),
         utterance=case.get("utterance", ""),
