@@ -246,27 +246,27 @@ tests:
   # and now routes to PlayArtistSongs (musician slot) since the RepeatSingle
   # "Suonala ancora" collision samples were removed; handler-side tolerance for
   # that flip is tracked as JF-439.
-  # JF-438 coin flip, catalog-shifted (measured 2026-11-23 post-song-catalog):
-  # the catalog-armed JellyfinArtist musician slot wins this musician-shaped
-  # title, so the carrier lands on PlayArtistSongsIntent; the artist misses
-  # and the JF-439 inverse fallback serves the SONG (FoundSongInstead), the
-  # same song-shape tolerance JF-438/JF-439 documented.
+  # JF-438 coin flip, twice catalog-shifted (final state measured 2026-11-24,
+  # simulate-skill 3/3): the SongTitle catalog armed on the household skill
+  # (JF-946 opt-in) now anchors "la canzone X" to PlayLibrarySongIntent with
+  # librarySong ER_SUCCESS_MATCH, the JF-940 twin. The 2026-11-23 pin to
+  # PlayArtistSongsIntent (catalog-armed JellyfinArtist wins) described the
+  # pre-song-catalog window; with both catalogs live the song catalog wins the
+  # carrier and the PlaySong pipeline serves the title directly (no artist
+  # miss, no JF-439 fallback needed). NOTE: this pin holds on a skill whose
+  # song catalog is synced; a skill without it routes the musician-shaped
+  # titles to PlayArtistSongsIntent (the JF-438/JF-439 shape).
   - utterance: "suona la canzone screenwriter's blues"
-    expected_intent: PlayArtistSongsIntent
+    expected_intent: PlayLibrarySongIntent
     expected_slots:
-      musician: {}
+      librarySong: {}
     expected_response_type: any
 
-  # "Metti il brano {librarySong}": alternative carrier phrase variant (JF-940
-  # re-anchor: the carrier now lands on PlayLibrarySongIntent, which delegates
-  # to the PlaySong pipeline with the spoken title). Deliberately keeps the
-  # musician-shaped title: the "il brano" carrier sits OUTSIDE the
-  # "Suona la ..." collision region (profile-nlu verified 2026-09-01, JF-438).
-  # Same JF-438 class as above (measured 2026-11-23): musician-shaped title
-  # on the carrier, catalog-flipped to the artist intent, JF-439 fallback
-  # serves the song.
+  # "Metti il brano {librarySong}" (JF-940 re-anchor; same 2026-11-24 song-
+  # catalog state as the row above: the twin intent holds the carrier on all
+  # three simulate probes).
   - utterance: "metti il brano sugar free jazz"
-    expected_intent: PlayArtistSongsIntent
+    expected_intent: PlayLibrarySongIntent
     expected_slots:
       musician: {}
     expected_response_type: any
@@ -540,13 +540,16 @@ tests:
     expected_response_type: any
 
   # --- Play specific song (carrier phrase stripping) ---
-  # JF-940 note: FAMOUS titles on the carrier stay on free-text
-  # PlaySongIntent (measured live 2026-11-22, same as de-DE); only
-  # NON-FAMOUS titles land on the twin (see the it-IT NLU fixtures).
+  # JF-940 note SUPERSEDED (2026-11-24): with the SongTitle catalog armed on
+  # the household skill (JF-946 opt-in), even FAMOUS titles on the carrier
+  # now land on the twin (simulate probe: PlayLibrarySongIntent,
+  # librarySong=bohemian rhapsody with ER_SUCCESS_MATCH on the SongTitle
+  # authority). The 2026-11-22 free-text-PlaySong reading described the
+  # pre-song-catalog window.
   - utterance: "suona la canzone bohemian rhapsody"
-    expected_intent: PlaySongIntent
+    expected_intent: PlayLibrarySongIntent
     expected_slots:
-      song: {}
+      librarySong: {}
     expected_response_type: any
 
   # --- Play album ---
