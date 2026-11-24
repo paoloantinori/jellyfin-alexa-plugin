@@ -55,7 +55,7 @@ Invocation name: **"jellyfin player"**
 | Play Next Episode | `شغل الحلقة {episode_position} من {series_name}` · `أكمل مشاهدة {series_name}` · `شغل {episode_position} حلقة من {series_name}` |
 | Play Playlist | `شغل قائمة التشغيل {playlist}` · `شغل قائمة تشغيلي {playlist}` · `ابدأ قائمة التشغيل {playlist}` · `استمع إلى قائمة التشغيل {playlist}` · `هل يمكنك تشغيل قائمة التشغيل {playlist}` · `أريد سماع قائمة التشغيل {playlist}` |
 | Play Podcast | `شغل البودكاست {podcast_name}` · `استمع إلى البودكاست {podcast_name}` · `شغل آخر حلقة من {podcast_name}` · `شغل أحدث حلقة من {podcast_name}` · `ابدأ البودكاست {podcast_name}` · `تشغيل بودكاست {podcast_name}` |
-| Play Radio | `شغل الراديو` · `شغل محطة الراديو {station}` · `شغل وضع الراديو` · `ابدأ الراديو` · `شغل موسيقى مشابهة` · `شغل أغانٍ مشابهة` |
+| Play Radio | `ابدأ الراديو` · `شغل محطة الراديو {station}` · `شغل موسيقى مشابهة` · `شغل أغانٍ مشابهة` · `ابدأ محطة راديو` |
 | Play Random | `شغل {media_type} عشوائي` · `شغل شيء عشوائي` · `شغل {media_type} عشوائي من {genre}` · `شغل {genre} عشوائي` · `اخلط {media_type}` · `شغل أغانٍ عشوائية` |
 | Play Song | `شغل {song}` · `شغل {song} لـ {musician}` · `شغل الأغنية {song}` · `شغل أغنية {song}` · `شغل الأغنية {song} لـ {musician}` · `شغل أغنية {song} لـ {musician}` |
 | Play Video | `شغل الفيديو {title}` · `شغل {title}` · `شاهد {title}` · `هل يمكنك تشغيل {title}` · `أريد مشاهدة {title}` · `شغل الفيلم {title}` |
@@ -89,7 +89,7 @@ Invocation name: **"jellyfin player"**
 | Add To Queue | `Füge {song} zur Wiedergabeliste hinzu` · `Füge {song} von {musician} zur Wiedergabeliste hinzu` · `Setze {song} auf die Warteschlange` · `Setze {song} von {musician} auf die Warteschlange` · `Stelle {song} hinten an` · `Füge {song} hinzu` |
 | Browse Library | `{browse_category}` · `durchsuche genres {filter}` · `nur {browse_category}` · `ich möchte {browse_category}` · `durchsuche {browse_category}` · `zeige mir {browse_category}` |
 | Clear Queue | `Lösche meine Warteschlange` · `Lösche die Warteschlange` · `Leere meine Warteschlange` · `Leere die Warteschlange` · `Entferne alles aus der Warteschlange` · `Lösche meine Playlist` |
-| Continue Watching | `Weiter schauen` · `Weiter hören` · `Mach da weiter wo ich war` · `Weiter` |
+| Continue Watching | `Weiter schauen` · `Weiter hören` · `Mach da weiter wo ich war` |
 | Create Playlist | `Erstelle eine Playlist namens {playlist}` · `Erstelle eine neue Playlist namens {playlist}` · `Neue Playlist namens {playlist}` · `Erstelle eine Playlist {playlist}` · `Erstelle Playlist {playlist}` · `Neue Playlist {playlist}` |
 | Find Song | `finde ein lied` · `finde ein lied namens {titleKeywords}` · `hilf mir ein lied zu finden` · `suche ein lied` · `ich suche ein lied` · `suche ein lied namens {titleKeywords}` |
 | Find Song By Artist | `finde ein lied von {musician}` · `hilf mir ein lied zu finden von {musician}` · `suche ein lied von {musician}` · `ich suche ein lied von {musician}` · `ich will ein lied von {musician} finden` · `ich moechte ein lied von {musician} finden` |
@@ -155,13 +155,13 @@ Invocation name: **"jellyfin player"**
 | Add To Queue | `add {song} to my queue` · `add {song} by {musician} to my queue` · `add {song} to the queue` · `add {song} by {musician} to the queue` · `queue {song}` · `queue {song} by {musician}` |
 | Browse Library | `{browse_category}` · `browse genres {filter}` · `just {browse_category}` · `I want {browse_category}` · `browse {browse_category}` · `show me {browse_category}` |
 | Clear Queue | `clear my queue` · `clear the queue` · `empty my queue` · `empty the queue` · `remove everything from my queue` · `clear my playlist` |
-| Continue Watching | `Continue watching` · `Continue listening` · `Resume where I left off` · `What was I watching` · `Keep playing` · `Continue` |
+| Continue Watching | `Continue watching` · `Continue listening` · `Resume where I left off` · `What was I watching` |
 | Create Playlist | `create a playlist called {playlist}` · `create a new playlist called {playlist}` · `make a playlist called {playlist}` · `create a playlist {playlist}` · `create playlist {playlist}` · `new playlist {playlist}` |
 | Find Song | `find a song` · `find a song called {titleKeywords}` · `help me find a song` · `search for a song` · `I'm looking for a song` · `I need to find a song` |
 | Find Song By Artist | `find a song by {musician}` · `help me find a song by {musician}` · `search for a song by {musician}` · `I'm looking for a song by {musician}` · `I want to find a song by {musician}` · `I need to find a song by {musician}` |
 | Follow Me | `follow me` · `continue playing` · `resume from where I left off` · `take over playback` · `keep playing` · `pick up where I left off` |
 | Go To Chapter | `Next chapter` · `Go to chapter {chapter_number}` · `Previous chapter` · `Skip to chapter {chapter_number}` · `Go forward a chapter` · `Go back a chapter` |
-| In Progress Media List | `what am i listening to` · `what am i watching` · `what's in progress` · `what is in progress` · `show my progress` · `what was i playing` |
+| In Progress Media List | `what's in progress` · `what is in progress` · `show my progress` · `what was i playing` · `list my in progress media` · `what have i started` |
 | Learn My Voice | `learn my voice` · `remember my voice` · `recognize me` · `link my voice` · `this is my voice` · `set up my voice profile` |
 | List Queue | `what's in my queue` · `what's in the queue` · `what's coming up` · `what's up next` · `show my queue` · `list my queue` |
 | Loop All On | `repeat the queue` · `repeat the whole queue` · `loop the queue` · `to repeat the queue` |
@@ -216,13 +216,13 @@ Invocation name: **"jellyfin player"**
 | Add To Queue | `add {song} to my queue` · `add {song} by {musician} to my queue` · `add {song} to the queue` · `add {song} by {musician} to the queue` · `queue {song}` · `queue {song} by {musician}` |
 | Browse Library | `browse {browse_category}` · `browse genres {filter}` · `show me {browse_category}` · `list {browse_category}` · `what {browse_category} do i have` · `list genres {filter}` |
 | Clear Queue | `clear my queue` · `clear the queue` · `empty my queue` · `empty the queue` · `remove everything from my queue` · `clear my playlist` |
-| Continue Watching | `Continue watching` · `Continue listening` · `Resume where I left off` · `What was I watching` · `Keep playing` · `Continue` |
+| Continue Watching | `Continue watching` · `Continue listening` · `Resume where I left off` · `What was I watching` |
 | Create Playlist | `create a playlist called {playlist}` · `create a new playlist called {playlist}` · `make a playlist called {playlist}` · `create a playlist {playlist}` · `create playlist {playlist}` · `new playlist {playlist}` |
 | Find Song | `find a song` · `find a song called {titleKeywords}` · `help me find a song` · `search for a song` · `I'm looking for a song` · `I need to find a song` |
 | Find Song By Artist | `find a song by {musician}` · `help me find a song by {musician}` · `search for a song by {musician}` · `I'm looking for a song by {musician}` · `I want to find a song by {musician}` · `I need to find a song by {musician}` |
 | Follow Me | `follow me` · `continue playing` · `resume from where I left off` · `take over playback` · `keep playing` |
 | Go To Chapter | `Next chapter` · `Go to chapter {chapter_number}` · `Previous chapter` · `Skip to chapter {chapter_number}` · `Go forward a chapter` · `Go back a chapter` |
-| In Progress Media List | `what am i listening to` · `what am i watching` · `what's in progress` · `what is in progress` · `show my progress` · `what was i playing` |
+| In Progress Media List | `what's in progress` · `what is in progress` · `show my progress` · `what was i playing` · `list my in progress media` · `what have i started` |
 | Learn My Voice | `learn my voice` · `remember my voice` · `recognize me` · `link my voice` · `this is my voice` · `set up my voice profile` |
 | List Queue | `what's in my queue` · `what's in the queue` · `what's coming up` · `what's up next` · `show my queue` · `list my queue` |
 | Loop All On | `repeat the queue` · `repeat the whole queue` · `loop the queue` · `to repeat the queue` |
@@ -277,13 +277,13 @@ Invocation name: **"jellyfin player"**
 | Add To Queue | `add {song} to my queue` · `add {song} by {musician} to my queue` · `add {song} to the queue` · `add {song} by {musician} to the queue` · `queue {song}` · `queue {song} by {musician}` |
 | Browse Library | `{browse_category}` · `browse genres {filter}` · `just {browse_category}` · `I want {browse_category}` · `browse {browse_category}` · `show me {browse_category}` |
 | Clear Queue | `clear my queue` · `clear the queue` · `empty my queue` · `empty the queue` · `remove everything from my queue` · `clear my playlist` |
-| Continue Watching | `Continue watching` · `Continue listening` · `Resume where I left off` · `What was I watching` · `Keep playing` · `Continue` |
+| Continue Watching | `Continue watching` · `Continue listening` · `Resume where I left off` · `What was I watching` |
 | Create Playlist | `create a playlist called {playlist}` · `create a new playlist called {playlist}` · `make a playlist called {playlist}` · `create a playlist {playlist}` · `create playlist {playlist}` · `new playlist {playlist}` |
 | Find Song | `find a song` · `find a song called {titleKeywords}` · `help me find a song` · `search for a song` · `I'm looking for a song` · `I need to find a song` |
 | Find Song By Artist | `find a song by {musician}` · `help me find a song by {musician}` · `search for a song by {musician}` · `I'm looking for a song by {musician}` · `I want to find a song by {musician}` · `I need to find a song by {musician}` |
 | Follow Me | `follow me` · `continue playing` · `resume from where I left off` · `take over playback` · `move playback here` · `keep playing` |
 | Go To Chapter | `Next chapter` · `Go to chapter {chapter_number}` · `Previous chapter` · `Skip to chapter {chapter_number}` · `Go forward a chapter` · `Go back a chapter` |
-| In Progress Media List | `what am i listening to` · `what am i watching` · `what's in progress` · `what is in progress` · `show my progress` · `what was i playing` |
+| In Progress Media List | `what's in progress` · `what is in progress` · `show my progress` · `what was i playing` · `list my in progress media` · `what have i started` |
 | Learn My Voice | `learn my voice` · `remember my voice` · `recognize me` · `link my voice` · `this is my voice` · `set up my voice profile` |
 | List Queue | `what's in my queue` · `what's in the queue` · `what's coming up` · `what's up next` · `show my queue` · `list my queue` |
 | Loop All On | `repeat the queue` · `repeat the whole queue` · `loop the queue` · `to repeat the queue` |
@@ -338,13 +338,13 @@ Invocation name: **"jellyfin player"**
 | Add To Queue | `add {song} to my queue` · `add {song} by {musician} to my queue` · `add {song} to the queue` · `add {song} by {musician} to the queue` · `queue {song}` · `queue {song} by {musician}` |
 | Browse Library | `{browse_category}` · `browse genres {filter}` · `just {browse_category}` · `I want {browse_category}` · `browse {browse_category}` · `show me {browse_category}` |
 | Clear Queue | `clear my queue` · `clear the queue` · `empty my queue` · `empty the queue` · `remove everything from my queue` · `clear my playlist` |
-| Continue Watching | `Continue watching` · `Continue listening` · `Resume where I left off` · `What was I watching` · `Keep playing` · `Continue` |
+| Continue Watching | `Continue watching` · `Continue listening` · `Resume where I left off` · `What was I watching` |
 | Create Playlist | `create a playlist called {playlist}` · `create a new playlist called {playlist}` · `make a playlist called {playlist}` · `create a playlist {playlist}` · `create playlist {playlist}` · `new playlist {playlist}` |
 | Find Song | `find a song` · `find a song called {titleKeywords}` · `help me find a song` · `search for a song` · `I'm looking for a song` · `I need to find a song` |
 | Find Song By Artist | `find a song by {musician}` · `help me find a song by {musician}` · `search for a song by {musician}` · `I'm looking for a song by {musician}` · `I want to find a song by {musician}` · `I need to find a song by {musician}` |
 | Follow Me | `follow me` · `continue playing` · `resume from where I left off` · `take over playback` |
 | Go To Chapter | `Next chapter` · `Go to chapter {chapter_number}` · `Previous chapter` · `Skip to chapter {chapter_number}` · `Go forward a chapter` · `Go back a chapter` |
-| In Progress Media List | `what am i listening to` · `what am i watching` · `what's in progress` · `what is in progress` · `show my progress` · `what was i playing` |
+| In Progress Media List | `what's in progress` · `what is in progress` · `show my progress` · `what was i playing` · `list my in progress media` · `what have i started` |
 | Learn My Voice | `learn my voice` · `remember my voice` · `recognize me` · `link my voice` · `this is my voice` · `set up my voice profile` |
 | List Queue | `what's in my queue` · `what's in the queue` · `what's coming up` · `what's up next` · `show my queue` · `list my queue` |
 | Loop All On | `repeat the queue` · `repeat the whole queue` · `loop the queue` · `to repeat the queue` |
@@ -399,13 +399,13 @@ Invocation name: **"jellyfin player"**
 | Add To Queue | `add {song} to my queue` · `add {song} by {musician} to my queue` · `add {song} to the queue` · `add {song} by {musician} to the queue` · `queue {song}` · `queue {song} by {musician}` |
 | Browse Library | `{browse_category}` · `browse genres {filter}` · `just {browse_category}` · `I want {browse_category}` · `browse {browse_category}` · `show me {browse_category}` |
 | Clear Queue | `clear my queue` · `clear the queue` · `empty my queue` · `empty the queue` · `remove everything from my queue` · `clear my playlist` |
-| Continue Watching | `Continue watching` · `Continue listening` · `Resume where I left off` · `What was I watching` · `Keep playing` · `Continue` |
+| Continue Watching | `Continue watching` · `Continue listening` · `Resume where I left off` · `What was I watching` |
 | Create Playlist | `create a playlist called {playlist}` · `create a new playlist called {playlist}` · `make a playlist called {playlist}` · `create a playlist {playlist}` · `create playlist {playlist}` · `new playlist {playlist}` |
 | Find Song | `find a song` · `find a song called {titleKeywords}` · `help me find a song` · `search for a song` · `I'm looking for a song` · `I need to find a song` |
 | Find Song By Artist | `find a song by {musician}` · `help me find a song by {musician}` · `search for a song by {musician}` · `I'm looking for a song by {musician}` · `I want to find a song by {musician}` · `I need to find a song by {musician}` |
 | Follow Me | `follow me` · `continue playing` · `resume from where I left off` · `take over playback` · `move playback here` · `keep playing` |
 | Go To Chapter | `Next chapter` · `Go to chapter {chapter_number}` · `Previous chapter` · `Skip to chapter {chapter_number}` · `Go forward a chapter` · `Go back a chapter` |
-| In Progress Media List | `what am i listening to` · `what am i watching` · `what's in progress` · `what is in progress` · `show my progress` · `what was i playing` |
+| In Progress Media List | `what's in progress` · `what is in progress` · `show my progress` · `what was i playing` · `list my in progress media` · `what have i started` |
 | Jump To Position | `jump to {position_hours} hour {position_minutes} minutes` · `jump to {position_minutes} minutes` · `skip to {position_hours} hours` · `jump to {position_hours} hours {position_minutes} minutes {position_seconds} seconds` · `jump to {position_minutes} minutes {position_seconds} seconds` · `go to {position_hours} hour {position_minutes} minutes` |
 | Learn My Voice | `learn my voice` · `remember my voice` · `recognize me` · `link my voice` · `this is my voice` · `set up my voice profile` |
 | List Queue | `what's in my queue` · `what's in the queue` · `what's coming up` · `what's up next` · `show my queue` · `list my queue` |
@@ -461,7 +461,7 @@ Invocation name: **"jellyfin player"**
 | Add To Queue | `Añade {song} a mi cola` · `Añade {song} de {musician} a mi cola` · `Añade {song} a la cola` · `Añade {song} de {musician} a la cola` · `Pon {song} en la cola` · `Pon {song} de {musician} en la cola` |
 | Browse Library | `{browse_category}` · `explorar géneros {filter}` · `solo {browse_category}` · `quiero {browse_category}` · `explorar {browse_category}` · `muéstrame {browse_category}` |
 | Clear Queue | `Borra mi cola` · `Borra la cola` · `Vacía mi cola` · `Vacía la cola` · `Quita todo de mi cola` · `Limpia mi lista` |
-| Continue Watching | `Continuar viendo` · `Continuar escuchando` · `Seguir donde lo dejé` · `Continuar` |
+| Continue Watching | `Continuar viendo` · `Continuar escuchando` · `Seguir donde lo dejé` |
 | Create Playlist | `Crea una lista llamada {playlist}` · `Crea una nueva lista llamada {playlist}` · `Nueva lista llamada {playlist}` · `Crea una lista {playlist}` · `Crea lista {playlist}` · `Nueva lista {playlist}` |
 | Find Song | `busca una cancion` · `busca una cancion llamada {titleKeywords}` · `ayudame a encontrar una cancion` · `estoy buscando una cancion` · `encuentra una cancion llamada {titleKeywords}` · `encuentra una cancion` |
 | Find Song By Artist | `busca una cancion de {musician}` · `ayudame a encontrar una cancion de {musician}` · `estoy buscando una cancion de {musician}` · `encuentra una cancion de {musician}` · `quiero encontrar una cancion de {musician}` · `busco una cancion de {musician}` |
@@ -522,7 +522,7 @@ Invocation name: **"jellyfin player"**
 | Add To Queue | `Añade {song} a mi cola` · `Añade {song} de {musician} a mi cola` · `Añade {song} a la cola` · `Añade {song} de {musician} a la cola` · `Pon {song} en la cola` · `Pon {song} de {musician} en la cola` |
 | Browse Library | `{browse_category}` · `explorar géneros {filter}` · `solo {browse_category}` · `quiero {browse_category}` · `explorar {browse_category}` · `muéstrame {browse_category}` |
 | Clear Queue | `Borra mi cola` · `Borra la cola` · `Vacía mi cola` · `Vacía la cola` · `Quita todo de mi cola` · `Limpia mi lista` |
-| Continue Watching | `Continuar viendo` · `Continuar escuchando` · `Seguir donde lo dejé` · `Continuar` |
+| Continue Watching | `Continuar viendo` · `Continuar escuchando` · `Seguir donde lo dejé` |
 | Create Playlist | `Crea una lista llamada {playlist}` · `Crea una nueva lista llamada {playlist}` · `Nueva lista llamada {playlist}` · `Crea una lista {playlist}` · `Crea lista {playlist}` · `Nueva lista {playlist}` |
 | Find Song | `busca una cancion` · `busca una cancion llamada {titleKeywords}` · `ayudame a encontrar una cancion` · `estoy buscando una cancion` · `encuentra una cancion llamada {titleKeywords}` · `encuentra una cancion` |
 | Find Song By Artist | `busca una cancion de {musician}` · `ayudame a encontrar una cancion de {musician}` · `estoy buscando una cancion de {musician}` · `encuentra una cancion de {musician}` · `quiero encontrar una cancion de {musician}` · `busco una cancion de {musician}` |
@@ -583,7 +583,7 @@ Invocation name: **"jellyfin player"**
 | Add To Queue | `Añade {song} a mi cola` · `Añade {song} de {musician} a mi cola` · `Añade {song} a la cola` · `Añade {song} de {musician} a la cola` · `Pon {song} en la cola` · `Pon {song} de {musician} en la cola` |
 | Browse Library | `explorar {browse_category}` · `explorar géneros {filter}` · `muéstrame {browse_category}` · `lista {browse_category}` · `qué {browse_category} tengo` · `qué {browse_category} hay` |
 | Clear Queue | `Borra mi cola` · `Borra la cola` · `Vacía mi cola` · `Vacía la cola` · `Quita todo de mi cola` · `Limpia mi lista` |
-| Continue Watching | `Continuar viendo` · `Continuar escuchando` · `Seguir donde lo dejé` · `Continuar` |
+| Continue Watching | `Continuar viendo` · `Continuar escuchando` · `Seguir donde lo dejé` |
 | Create Playlist | `Crea una lista llamada {playlist}` · `Crea una nueva lista llamada {playlist}` · `Nueva lista llamada {playlist}` · `Crea una lista {playlist}` · `Crea lista {playlist}` · `Nueva lista {playlist}` |
 | Find Song | `busca una cancion` · `busca una cancion llamada {titleKeywords}` · `ayudame a encontrar una cancion` · `estoy buscando una cancion` · `encuentra una cancion llamada {titleKeywords}` · `encuentra una cancion` |
 | Find Song By Artist | `busca una cancion de {musician}` · `ayudame a encontrar una cancion de {musician}` · `estoy buscando una cancion de {musician}` · `encuentra una cancion de {musician}` · `quiero encontrar una cancion de {musician}` · `busco una cancion de {musician}` |
@@ -644,7 +644,7 @@ Invocation name: **"jellyfin player"**
 | Add To Queue | `Ajoute {song} à ma file d'attente` · `Ajoute {song} de {musician} à ma file d'attente` · `Ajoute {song} à la file d'attente` · `Ajoute {song} de {musician} à la file d'attente` · `Mets {song} dans la file d'attente` · `Mets {song} de {musician} dans la file d'attente` |
 | Browse Library | `{browse_category}` · `parcourir genres {filter}` · `juste {browse_category}` · `je veux {browse_category}` · `parcourir {browse_category}` · `montre-moi {browse_category}` |
 | Clear Queue | `Efface ma file d'attente` · `Efface la file d'attente` · `Vide ma file d'attente` · `Vide la file d'attente` · `Supprime tout de ma file d'attente` · `Efface ma liste` |
-| Continue Watching | `Continuer à regarder` · `Continuer à écouter` · `Reprendre où j'en étais` · `Continuer` |
+| Continue Watching | `Continuer à regarder` · `Continuer à écouter` |
 | Create Playlist | `Crée une liste de lecture appelée {playlist}` · `Crée une nouvelle liste de lecture appelée {playlist}` · `Crée une liste de lecture {playlist}` · `Nouvelle liste de lecture {playlist}` |
 | Find Song | `trouve une chanson` · `trouve une chanson appelee {titleKeywords}` · `aide moi a trouver une chanson` · `je cherche une chanson` · `cherche une chanson appelee {titleKeywords}` · `cherche une chanson` |
 | Find Song By Artist | `trouve une chanson de {musician}` · `aide moi a trouver une chanson de {musician}` · `je cherche une chanson de {musician}` · `cherche une chanson de {musician}` · `je veux trouver une chanson de {musician}` · `je voudrais trouver une chanson de {musician}` |
@@ -709,7 +709,7 @@ Invocation name: **"jellyfin player"**
 | Add To Queue | `Ajoute {song} à ma file d'attente` · `Ajoute {song} de {musician} à ma file d'attente` · `Ajoute {song} à la file d'attente` · `Ajoute {song} de {musician} à la file d'attente` · `Mets {song} dans la file d'attente` · `Mets {song} de {musician} dans la file d'attente` |
 | Browse Library | `{browse_category}` · `parcourir genres {filter}` · `juste {browse_category}` · `je veux {browse_category}` · `parcourir {browse_category}` · `montre-moi {browse_category}` |
 | Clear Queue | `Efface ma file d'attente` · `Efface la file d'attente` · `Vide ma file d'attente` · `Vide la file d'attente` · `Supprime tout de ma file d'attente` · `Efface ma liste` |
-| Continue Watching | `Continuer à regarder` · `Continuer à écouter` · `Reprendre où j'en étais` · `Continuer` |
+| Continue Watching | `Continuer à regarder` · `Continuer à écouter` |
 | Create Playlist | `Crée une liste de lecture appelée {playlist}` · `Crée une nouvelle liste de lecture appelée {playlist}` · `Crée une liste de lecture {playlist}` · `Nouvelle liste de lecture {playlist}` |
 | Find Song | `trouve une chanson` · `trouve une chanson appelee {titleKeywords}` · `aide moi a trouver une chanson` · `je cherche une chanson` · `cherche une chanson appelee {titleKeywords}` · `cherche une chanson` |
 | Find Song By Artist | `trouve une chanson de {musician}` · `aide moi a trouver une chanson de {musician}` · `je cherche une chanson de {musician}` · `cherche une chanson de {musician}` · `je veux trouver une chanson de {musician}` · `je voudrais trouver une chanson de {musician}` |
@@ -865,7 +865,7 @@ Invocation name: **"mia collezione"**
 | Play Next Episode | `Riproduci {episode_position} episodio di {series_name}` · `Continua a guardare {series_name}` · `Metti {episode_position} episodio di {series_name}` · `Guarda {episode_position} episodio di {series_name}` · `Guarda l'episodio {episode_position} di {series_name}` · `Continua a guardare la serie {series_name}` |
 | Play Playlist | `Riproduci playlist {playlist}` · `Suona playlist {playlist}` · `Metti playlist {playlist}` · `Pleia playlist {playlist}` · `Ascolta playlist {playlist}` · `Riproduci la playlist {playlist}` |
 | Play Podcast | `Riproduci il podcast {podcast_name}` · `Suona il podcast {podcast_name}` · `Ascolta il podcast {podcast_name}` · `Metti il podcast {podcast_name}` · `Ascolta l'ultimo episodio di {podcast_name}` · `Di riprodurre il podcast {podcast_name}` |
-| Play Radio | `riproduci la radio` · `riproduci la stazione radio {station}` · `suona la radio` · `metti la radio` · `attiva la radio` · `modalità radio` |
+| Play Radio | `riproduci la radio` · `riproduci la stazione radio {station}` · `suona la radio` · `metti la radio` · `modalità radio` · `riproduci musica simile` |
 | Play Random | `Riproduci {media_type} casuali` · `Riproduci {media_type} a caso` · `Suona {media_type} casuali` · `Suona {media_type} a caso` · `Metti {media_type} casuali` · `Metti {media_type} a caso` |
 | Play Song | `Riproduci {song} di {musician}` · `riprodurre {song}` · `Riproduci {song} dei {musician}` · `Riproduci {song} degli {musician}` · `Riproduci {song} delle {musician}` · `Suona {song} di {musician}` |
 | Play Video | `Riproduci {title}` · `Riproduci un film` · `Suona {title}` · `Metti {title}` · `Pleia {title}` · `Riproduci un video` |
@@ -1024,13 +1024,13 @@ Invocation name: **"jellyfin player"**
 | Add To Queue | `adicionar {song} à minha fila` · `adicionar {song} de {musician} à minha fila` · `adicionar {song} à fila` · `adicionar {song} de {musician} à fila` · `enfileirar {song}` · `enfileirar {song} de {musician}` |
 | Browse Library | `{browse_category}` · `navegar gêneros {filter}` · `só {browse_category}` · `quero {browse_category}` · `navegar {browse_category}` · `mostrar {browse_category}` |
 | Clear Queue | `limpar minha fila` · `limpar a fila` · `esvaziar minha fila` · `esvaziar a fila` · `remover tudo da minha fila` · `limpar minha playlist` |
-| Continue Watching | `continuar assistindo` · `continuar ouvindo` · `retomar de onde parei` · `o que eu estava assistindo` · `continuar tocando` · `continuar` |
+| Continue Watching | `continuar assistindo` · `continuar ouvindo` · `retomar de onde parei` |
 | Create Playlist | `Crie uma playlist chamada {playlist}` · `Crie uma nova playlist chamada {playlist}` · `Crie uma playlist {playlist}` · `Crie playlist {playlist}` · `Nova playlist {playlist}` |
 | Find Song | `encontre uma musica` · `encontre uma musica chamada {titleKeywords}` · `me ajude a encontrar uma musica` · `estou procurando uma musica` · `procure uma musica chamada {titleKeywords}` · `procure uma musica` |
 | Find Song By Artist | `encontre uma musica de {musician}` · `me ajude a encontrar uma musica de {musician}` · `estou procurando uma musica de {musician}` · `procure uma musica de {musician}` · `quero encontrar uma musica de {musician}` · `quero achar uma musica de {musician}` |
 | Follow Me | `me siga` · `continuar tocando` · `retomar a reprodução` · `transferir a música` |
 | Go To Chapter | `próximo capítulo` · `ir para o capítulo {chapter_number}` · `capítulo anterior` · `pular para o capítulo {chapter_number}` · `avançar um capítulo` · `voltar um capítulo` |
-| In Progress Media List | `o que eu estava ouvindo` · `o que eu estava assistindo` · `o que está em andamento` · `mostrar meu progresso` · `o que eu estava tocando` · `listar mídias em andamento` |
+| In Progress Media List | `o que eu estava ouvindo` · `o que está em andamento` · `mostrar meu progresso` · `o que eu estava tocando` · `listar mídias em andamento` |
 | Learn My Voice | `aprender minha voz` · `lembrar minha voz` · `me reconhecer` · `vincular minha voz` · `essa é minha voz` · `configurar meu perfil de voz` |
 | List Queue | `o que tem na minha fila` · `o que tem na fila` · `o que vem aí` · `o que vem depois` · `mostrar minha fila` · `listar minha fila` |
 | Loop All On | `repetir a fila` · `repetir toda a fila` · `colocar a fila em loop` |

@@ -73,7 +73,7 @@ Placeholder legend:
 | `<كلمات من عنوان الأغنية>` | `{titleKeywords}` |
 | `<اسم المستخدم>` | `{username}` |
 
-Complete phrase list (354 phrases across 70 commands):
+Complete phrase list (352 phrases across 70 commands):
 
 #### Play music
 
@@ -277,8 +277,6 @@ Complete phrase list (354 phrases across 70 commands):
 
 **Start radio mode**
 
-- `شغل الراديو`
-- `شغل وضع الراديو`
 - `ابدأ الراديو`
 - `شغل موسيقى مشابهة`
 - `شغل أغانٍ مشابهة`
@@ -1347,7 +1345,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (516 phrases across 70 commands):
+Complete phrase list (512 phrases across 70 commands):
 
 #### Play music
 
@@ -1968,13 +1966,9 @@ Complete phrase list (516 phrases across 70 commands):
 - `Continue listening`
 - `Resume where I left off`
 - `What was I watching`
-- `Keep playing`
-- `Continue`
 
 **List what is in progress**
 
-- `what am i listening to`
-- `what am i watching`
 - `what's in progress`
 - `what is in progress`
 - `show my progress`
@@ -2114,7 +2108,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (518 phrases across 70 commands):
+Complete phrase list (514 phrases across 70 commands):
 
 #### Play music
 
@@ -2738,13 +2732,9 @@ Complete phrase list (518 phrases across 70 commands):
 - `Continue listening`
 - `Resume where I left off`
 - `What was I watching`
-- `Keep playing`
-- `Continue`
 
 **List what is in progress**
 
-- `what am i listening to`
-- `what am i watching`
 - `what's in progress`
 - `what is in progress`
 - `show my progress`
@@ -2883,7 +2873,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (605 phrases across 70 commands):
+Complete phrase list (600 phrases across 70 commands):
 
 #### Play music
 
@@ -3088,7 +3078,6 @@ Complete phrase list (605 phrases across 70 commands):
 - `play <media type (music, video)> I just added`
 - `play recently added`
 - `play new arrivals`
-- `anything new lately`
 - `play what's just been added`
 - `have we got anything new`
 
@@ -3589,13 +3578,9 @@ Complete phrase list (605 phrases across 70 commands):
 - `Continue listening`
 - `Resume where I left off`
 - `What was I watching`
-- `Keep playing`
-- `Continue`
 
 **List what is in progress**
 
-- `what am i listening to`
-- `what am i watching`
 - `what's in progress`
 - `what is in progress`
 - `show my progress`
@@ -3739,7 +3724,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (520 phrases across 70 commands):
+Complete phrase list (516 phrases across 70 commands):
 
 #### Play music
 
@@ -4366,13 +4351,9 @@ Complete phrase list (520 phrases across 70 commands):
 - `Continue listening`
 - `Resume where I left off`
 - `What was I watching`
-- `Keep playing`
-- `Continue`
 
 **List what is in progress**
 
-- `what am i listening to`
-- `what am i watching`
 - `what's in progress`
 - `what is in progress`
 - `show my progress`
@@ -4514,7 +4495,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (778 phrases across 71 commands):
+Complete phrase list (774 phrases across 71 commands):
 
 #### Play music
 
@@ -5380,13 +5361,9 @@ Complete phrase list (778 phrases across 71 commands):
 - `Continue listening`
 - `Resume where I left off`
 - `What was I watching`
-- `Keep playing`
-- `Continue`
 
 **List what is in progress**
 
-- `what am i listening to`
-- `what am i watching`
 - `what's in progress`
 - `what is in progress`
 - `show my progress`
@@ -5546,7 +5523,7 @@ Placeholder legend:
 | `<mots du titre de la chanson>` | `{titleKeywords}` |
 | `<nom d'utilisateur>` | `{username}` |
 
-Complete phrase list (482 phrases across 74 commands):
+Complete phrase list (480 phrases across 74 commands):
 
 #### Play music
 
@@ -6155,8 +6132,6 @@ Complete phrase list (482 phrases across 74 commands):
 
 - `Continuer à regarder`
 - `Continuer à écouter`
-- `Reprendre où j'en étais`
-- `Continuer`
 
 **List what is in progress**
 
@@ -6291,7 +6266,7 @@ Placeholder legend:
 | `<mots du titre de la chanson>` | `{titleKeywords}` |
 | `<nom d'utilisateur>` | `{username}` |
 
-Complete phrase list (495 phrases across 74 commands):
+Complete phrase list (493 phrases across 74 commands):
 
 #### Play music
 
@@ -6912,8 +6887,6 @@ Complete phrase list (495 phrases across 74 commands):
 
 - `Continuer à regarder`
 - `Continuer à écouter`
-- `Reprendre où j'en étais`
-- `Continuer`
 
 **List what is in progress**
 
@@ -7050,7 +7023,7 @@ Placeholder legend:
 | `<Wörter aus dem Songtitel>` | `{titleKeywords}` |
 | `<Benutzername>` | `{username}` |
 
-Complete phrase list (495 phrases across 75 commands):
+Complete phrase list (494 phrases across 75 commands):
 
 #### Play music
 
@@ -7676,7 +7649,6 @@ Complete phrase list (495 phrases across 75 commands):
 - `Weiter schauen`
 - `Weiter hören`
 - `Mach da weiter wo ich war`
-- `Weiter`
 
 **List what is in progress**
 
@@ -8456,7 +8428,7 @@ Placeholder legend:
 | `<titolo del video o del film>` | `{title}` |
 | `<parole del titolo del brano>` | `{titleKeywords}` |
 
-Complete phrase list (1860 phrases across 76 commands):
+Complete phrase list (1859 phrases across 76 commands):
 
 #### Play music
 
@@ -9947,7 +9919,6 @@ Complete phrase list (1860 phrases across 76 commands):
 - `riproduci la radio`
 - `suona la radio`
 - `metti la radio`
-- `attiva la radio`
 - `modalità radio`
 - `riproduci musica simile`
 - `suona brani simili`
@@ -11189,7 +11160,7 @@ Placeholder legend:
 | `<palavras do título da música>` | `{titleKeywords}` |
 | `<nome do usuário>` | `{username}` |
 
-Complete phrase list (425 phrases across 70 commands):
+Complete phrase list (421 phrases across 70 commands):
 
 #### Play music
 
@@ -11728,14 +11699,10 @@ Complete phrase list (425 phrases across 70 commands):
 - `continuar assistindo`
 - `continuar ouvindo`
 - `retomar de onde parei`
-- `o que eu estava assistindo`
-- `continuar tocando`
-- `continuar`
 
 **List what is in progress**
 
 - `o que eu estava ouvindo`
-- `o que eu estava assistindo`
 - `o que está em andamento`
 - `mostrar meu progresso`
 - `o que eu estava tocando`
@@ -11865,7 +11832,7 @@ Placeholder legend:
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (485 phrases across 70 commands):
+Complete phrase list (484 phrases across 70 commands):
 
 #### Play music
 
@@ -12462,7 +12429,6 @@ Complete phrase list (485 phrases across 70 commands):
 - `Continuar viendo`
 - `Continuar escuchando`
 - `Seguir donde lo dejé`
-- `Continuar`
 
 **List what is in progress**
 
@@ -12601,7 +12567,7 @@ Placeholder legend:
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (484 phrases across 70 commands):
+Complete phrase list (483 phrases across 70 commands):
 
 #### Play music
 
@@ -13198,7 +13164,6 @@ Complete phrase list (484 phrases across 70 commands):
 - `Continuar viendo`
 - `Continuar escuchando`
 - `Seguir donde lo dejé`
-- `Continuar`
 
 **List what is in progress**
 
@@ -13336,7 +13301,7 @@ Placeholder legend:
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (474 phrases across 70 commands):
+Complete phrase list (473 phrases across 70 commands):
 
 #### Play music
 
@@ -13923,7 +13888,6 @@ Complete phrase list (474 phrases across 70 commands):
 - `Continuar viendo`
 - `Continuar escuchando`
 - `Seguir donde lo dejé`
-- `Continuar`
 
 **List what is in progress**
 

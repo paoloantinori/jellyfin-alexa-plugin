@@ -1,1270 +1,1145 @@
-# Hindi (India) interaction model template for the Alexa skill.
-#
-# JF-316 milestone 5 (final): golden master. Faithful transcription of
-# the hand-grown model_hi-IN.json (60 intents, 322 samples after the JF-399
-# PlaySong enrichment 2026-09-12);
-# `python3 scripts/generate_interaction_model.py hi-IN` reproduces it
-# byte-identically. Every sample is verbatim in the committed order:
-# plain transcription over compression (the milestone-2 decision; no
-# vocabulary section).
-#
-# Run: python3 scripts/generate_interaction_model.py hi-IN
-#
-# JF-399 (2026-09-27): PlayPlaylistIntent enriched 7 -> 14 (this
-# locale's own PlaySong tails लगाओ / शुरू करो / सुनो / बजाओ / सुनाओ
-# crossed with the मेरी प्लेलिस्ट my-variant noun, plus the मैं / क्या
-# तुम openers on the same noun) and PlayArtistSongsIntent enriched
-# 15 -> 23 (the bare-artist tails लगाओ / बजाओ / सुनाओ / सुनो / शुरू
-# करो / मैं ... सुनना चाहता हूँ / क्या तुम ... चला सकते हो crossed with
-# the के गाने / की म्यूज़िक / के ट्रैक nouns the चलाओ and सुनो forms
-# already carry). Skipped carrier families: no second playlist noun
-# exists (प्लेलिस्ट only; सूची is not attested as a playlist noun
-# here) and the के ट्रैक crossings stop at सुनो (ट्रैक is a light noun
-# in this vocabulary).
-#
-# JF-399 (2026-09-26): FindSongByArtistIntent enriched 4 -> 8 (FindSong
-# openers crossed with the ka-gaana tail). Skipped carrier family: no
-# second song noun exists in this vocabulary (गाना only; गीत is unused),
-# so it-IT's brano twin has no equivalent.
-#
-# Invariants carried by this file:
-# - The intent order is IDENTICAL to pt-BR's: PlayByDecade right after
-#   PlayByGenre (before ContinueWatching), PlayPodcast after
-#   PlayNextEpisode (before BrowseLibrary), SearchMedia after
-#   QueryArtistLibrary (before PlayBook). The loop shape follows the
-#   en/es families (bare AMAZON.LoopOnIntent / AMAZON.LoopOffIntent +
-#   LoopSongOnIntent right after them; since JF-904 the queue-loop
-#   carrier LoopAllOnIntent sits right after LoopSongOn in the 13
-#   built-in-only locales; the de/fr/it trio keeps its own order),
-#   while the de/fr/it LoopAllOff/RepeatSingleOn customs stay absent
-#   here.
-# - Script reality, preserved code point for code point (any
-#   normalization is a byte-diff; the regen check will catch it):
-#   Devanagari throughout with combining matras (Mn) and vowel signs
-#   (Mc); the nukta U+093C runs through the Perso-Arabic loanwords
-#   (म्यूज़िक, सीज़न, रेटिंग, ज़ class; no fixed count, the regen
-#   byte-diff is the guard); NO ZWJ/U+200D or ZWNJ/U+200C
-#   anywhere, so no conjunct depends on joiners; NO danda (।)
-#   punctuation (samples carry no sentence-final marks at all).
-# - English inertia MOSTLY RESOLVED 2026-09-12 (JF-399 executable half):
-#   the former 24 pure-English samples (PlayBook 8, FindSong 12,
-#   FindSongByArtist 4) are now native Hindi. The Decade VALUES remain
-#   English-with-Devanagari-synonyms: swapping value/synonym needs
-#   handler-side decade-resolution work first (the open sub-item).
-# - The 10-type roster and order match pt-BR's (JF-583 adds
-#   EpisodePosition after SeriesName everywhere): Mood, LibraryQueryType,
-#   MediaType, BrowseCategory, SeriesName, TimePeriod, MediaInfoType,
-#   Decade, AudiobookTitle. SeriesName carries 8 values with 'Money
-#   Heist' UNTRANSLATED (pt-BR localizes it as La Casa de Papel);
-#   Sherlock last. TimePeriod is id-first (आज / इस सप्ताह / इस महीने)
-#   with oblique past-period synonyms.
-# - Type-value key order is load-bearing for byte-identity: 31
-#   id-first, 27 name-only, 3 name-first-then-id (BrowseCategory's
-#   कलाकार / एल्बम / गाने, mirroring pt-BR's artists/albums/songs
-#   trio).
-# - dialog roster and order are IDENTICAL to en-US's (PlayEpisode
-#   first, its three slots elicitationRequired:true with Elicit.*
-#   prompts). The two orphan prompt definitions the golden master
-#   transcribed (Elicit.SongName / Elicit.AlbumName, referenced by no
-#   dialog slot) were dropped in the JF-542 cleanup (2026-09-12):
-#   inert on SMAPI, and the code-driven ElicitSlot flow uses
-#   ResponseStrings text, never these ids.
-# - Key order is load-bearing for byte-identity: 13 name/samples-only,
-#   15 bare, 19 name/samples/slots, 12 name/slots/samples. Only
-#   ShowMoreIntent carries `slots: []`; the other 13 sample-bearing
-#   intents have NO slots key at all. BrowseLibraryIntent opens with
-#   the lone slot-only sample '{browse_category}'.
-# - NO modelConfiguration; musician slots are the BUILT-IN
-#   AMAZON.Musician everywhere (no JellyfinArtist type, no JF-415
-#   seed).
-# - The Mood type and the slotted-only PlayMoodMusic samples are
-#   OWNED HERE (JF-316 final milestone mood consolidation): the 14
-#   Devanagari values (आराम ... नींद, loanwords रोमांटिक / पार्टी /
-#   वर्कआउट among them; खुशी carries synonym खुश and नींद carries
-#   स्लीप) transcribe generate_mood_slot.py's former LOCALE_MOODS
-#   hi-IN table; that script and its table were deleted in this
-#   milestone with the content preserved here value-for-value. Every
-#   value AND synonym resolves through LocalizedMoodMap in
-#   PlayMoodMusicIntentHandler.cs (JF-356 added the hi-IN block).
-# - Every PlayAlbum carrier names the media एल्बम (anti-pattern #11).
-# - AMAZON.StopIntent has NO custom samples; the it-IT "ferma"
-#   samples are a JF-402 it-IT-only exception.
-# JF-583: PlayNextEpisodeIntent carries the episode_position slot
-# (custom EpisodePosition type, the Mood architecture) distinguishing
-# 'next' (NextUp, the empty-slot default) from 'latest' (recency,
-# PremiereDate desc); see the intent and type blocks for this locale's
-# values.
 invocationName: मेरी कलेक्शन
 intents:
-  - name: ShowLyricsIntent
-    samples:
-      - बोल दिखाओ
-      - गाने के बोल दिखाओ
-  - name: QueryRecentlyAddedIntent
-    samples:
-      - क्या नया है
-      - हाल ही में क्या जोड़ा गया
-      - मेरी लाइब्रेरी में क्या नया है
-      - हाल ही में जोड़े गए दिखाओ
-      - कुछ नया है क्या
-      - नए जोड़े गए आइटम दिखाओ
-      - सबसे नए आइटम क्या हैं
-  - name: FollowMeIntent
-    samples:
-      - मेरे साथ आओ
-      - चलाना जारी रखो
-      - जहां छोड़ा थे वहां से शुरू करो
-  - AMAZON.CancelIntent
-  - AMAZON.HelpIntent
-  - AMAZON.StopIntent
-  - AMAZON.FallbackIntent
-  - AMAZON.PauseIntent
-  - AMAZON.ResumeIntent
-  - AMAZON.NextIntent
-  - AMAZON.PreviousIntent
-  - AMAZON.YesIntent
-  - AMAZON.NoIntent
-  - AMAZON.LoopOnIntent
-  - AMAZON.LoopOffIntent
-  - name: LoopSongOnIntent
-    samples:
-      - इस गाने को लूप करो
-      - इस गाने को हमेशा लूप करो
-      - गाना दोहराओ
-      - इस गाने को दोहराओ
-      - इस गाने को हमेशा दोहराओ
-  - name: LoopAllOnIntent
-    samples:
-      # JF-904 queue-scoped repeat-ALL carriers (rationale: the loop
-      # constants in IntentNames). This locale carries no one-shot
-      # wrapper compositions (the JF-844 family), so there is no
-      # wrapper twin.
-      - कतार दोहराओ
-      - पूरी कतार दोहराओ
-      - कतार लूप करो
-  - AMAZON.ShuffleOnIntent
-  - AMAZON.ShuffleOffIntent
-  - AMAZON.StartOverIntent
-  - AMAZON.RepeatIntent
-  - name: PlayChannelIntent
-    samples:
-      - चैनल {channel} चलाओ
-      - रेडियो {channel} चलाओ
-    slots:
-      - name: channel
-        type: AMAZON.SearchQuery
-  - name: PlaySongIntent
-    samples:
-      # JF-771: the bare slot-initial song forms STAY: load-bearing for the
-      # bare song ask ('bohemian rhapsody चलाओ' PlaySong 4/4 live 2026-10-10;
-      # removal breaks the primary song one-shot, JF-399 recall class). The
-      # फिल्म/मूवी-carried movie steals are fixed carrier-side in
-      # PlayVideoIntent, never by removing these; guard pin in the hi-IN
-      # fixtures.
-      - '{song} चलाओ'
-      - गाना {song} चलाओ
-      - '{song} गाना चलाओ'
-      - '{musician} का {song} चलाओ'
-      - गाना {song} {musician} का चलाओ
-      - '{song} सुनो'
-      - गाना {song} सुनो
-      - '{musician} का {song} सुनो'
-      - '{song} लगाओ'
-      - मैं {song} सुनना चाहता हूँ
-      - क्या तुम {song} चला सकते हो
-      - '{song} शुरू करो'
-      - ट्रैक {song} चलाओ
-      - '{musician} का ट्रैक {song} चलाओ'
-      - गाना {song} लगाओ
-      - '{musician} का गाना {song} लगाओ'
-      - '{song} बजाओ'
-      - गाना {song} बजाओ
-      - '{musician} का {song} बजाओ'
-      - '{song} सुनाओ'
-      - '{musician} का {song} सुनाओ'
-      - मैं {musician} का {song} सुनना चाहता हूँ
-    slots:
-      - name: song
-        type: AMAZON.MusicRecording
-      - name: musician
-        type: AMAZON.Musician
-  - name: PlayAlbumIntent
-    samples:
-      - एल्बम {album} चलाओ
-      - एल्बम {album} {musician} का चलाओ
-      - एल्बम {album} सुनो
-      - '{musician} का एल्बम चलाओ'
-      - '{musician} का एल्बम सुनो'
-    slots:
-      - name: album
-        type: AMAZON.MusicRecording
-      - name: musician
-        type: AMAZON.Musician
-  - name: PlayVideoIntent
-    samples:
-      - वीडियो {title} चलाओ
-      - वीडियो {title} लगाओ
-      - '{title} शुरू करो'
-      # JF-766: the BARE '{title} देखो' is REMOVED, the hi-IN twin of the
-      # JF-761 ja removal (same SearchQuery-absorption class): it absorbed
-      # the committed PlayEpisode episode address '{series_name} सीज़न N
-      # एपिसोड M देखो' wholesale into title (live profile-nlu 2026-10-05,
-      # 4/4 on the 'game of thrones' and 'breaking bad' legs). hi-IN
-      # nuance vs ja: the
-      # steal is ER-status-dependent here (catalog-matched 'the bear' routed
-      # PlayEpisode clean 4/4 while the ER_NO_MATCH legs were stolen), so the
-      # library-wired SeriesName catalog masks it only for matched series.
-      # The qualified फिल्म {title} देखो below keeps the watch-verb carrier
-      # anchored. '{title} शुरू करो' STAYS: no committed sample shares its
-      # tail, no steal recorded; removal would be speculative recall loss.
-      - क्या तुम {title} चला सकते हो
-      - मैं {title} देखना चाहता हूँ
-      - चलो {title} देखते हैं
-      - फिल्म {title} चलाओ
-      - वीडियो {title} शुरू करो
-      - फिल्म {title} देखो
-      # JF-770: the JF-766 bare removal cost the देखो tail its second
-      # member and the qualified anchor stopped routing (live profile-nlu
-      # 2026-10-05: 'फिल्म इंसेप्शन देखो' Fallback 4/4 with the exact
-      # sample live in the model; an identical-content rebuild did NOT
-      # recover, ruling out trainer nondeterminism). The probe map
-      # (task JF-770) localizes the weakness to फिल्म-carried short
-      # forms: every non-फिल्म short form probed routes clean (the
-      # bare '{title} देखो' shape itself reads NO_SELECTION, the
-      # JF-766-accepted recall cost), and the other फिल्म-led failures
-      # are filed JF-771. Remediation: three more
-      # QUALIFIED देखो variants (the probe-proven वीडियो carrier, the
-      # fresh मूवी carrier, a फिल्म word-order twin), never bare
-      # (JF-459/JF-766 discipline).
-      - वीडियो {title} देखो
-      - मूवी {title} देखो
-      - फिल्म देखो {title}
-      - मैं फिल्म {title} देखना चाहता हूँ
-      - फिल्म {title} खोजो
-      # JF-771: the strong carriers lacked these carrier x tail crossings
-      # entirely, so the forms failed ('वीडियो इंसेप्शन खोजो' NO_SELECTION
-      # 4/4; 'मूवी इंसेप्शन चलाओ' and 'मूवी इंसेप्शन लगाओ' PlaySong-stolen with
-      # song whole-absorbed; live 2026-10-10, full map in task JF-771). The
-      # JF-770 L1b precedent: strong carrier + sample routes ('वीडियो/मूवी
-      # इंसेप्शन देखो' PlayVideo 4/4 live). NO फिल्म-carried additions: that
-      # carrier is trainer-anomalous (JF-770 above; even SearchMedia's exact
-      # 'एक फिल्म {query} खोजो' reads Fallback). Two-failed-fixes rule
-      # (superseded once, dispatch-authorized 2026-10-17, by the round-2
-      # batch below).
-      # 'मूवी इंसेप्शन शुरू करो' already routes PlayVideo via the bare
-      # '{title} शुरू करो' above (title whole-absorbed, the JF-770 मैं-फिल्म
-      # nuance, accepted there too): deliberately not duplicated here.
-      - वीडियो {title} खोजो
-      - मूवी {title} खोजो
-      - मूवी {title} चलाओ
-      - मूवी {title} लगाओ
-      # JF-770 round 2 (2026-10-17): the anchor 'फिल्म इंसेप्शन देखो'
-      # still read Fallback 4/4 across six rebuilds incl. that day's
-      # JF-904 roll (re-baseline map in task JF-770), so one FINAL
-      # thickening with shapes round 1 never tried: the NUKTA twin (a
-      # different token sequence, header script convention), the
-      # POST-POSITION twin (फिल्म mid-phrase; every known-failing
-      # shape is फिल्म-initial), and the fresh दिखाओ tail crossed with
-      # the weak फिल्म and the proven-strong वीडियो carrier (the
-      # JF-771 crossing pattern). Each row requires its literal carrier
-      # token, so the JF-766 episode steal cannot recur. If the anchor
-      # still reads Fallback post-deploy, the two-failed-fixes bar is
-      # met: park on the device round, no further template patches.
-      - फ़िल्म {title} देखो
-      - '{title} फिल्म देखो'
-      - फिल्म {title} दिखाओ
-      - वीडियो {title} दिखाओ
-    slots:
-      - name: title
-        type: AMAZON.SearchQuery
-  - name: PlayArtistSongsIntent
-    samples:
-      - '{musician} के गाने चलाओ'
-      - '{musician} की म्यूज़िक चलाओ'
-      - '{musician} के ट्रैक चलाओ'
-      - '{musician} सुनो'
-      - '{musician} के गाने सुनो'
-      - '{musician} की म्यूज़िक सुनो'
-      - '{musician} लगाओ'
-      - मैं {musician} सुनना चाहता हूँ
-      - क्या तुम {musician} चला सकते हो
-      - '{musician} शुरू करो'
-      - '{musician} को शफल करो'
-      - '{musician} चलाओ'
-      - कुछ {musician} चलाओ
-      - '{musician} बजाओ'
-      - '{musician} सुनाओ'
-      # JF-399 PlayArtistSongs parity: this locale sat at 15 samples vs
-      # the family carrier space (34-43 in the de/fr/en/es families).
-      # The additions are this locale's own bare-artist tails crossed
-      # with the nouns the चलाओ and सुनो forms already carry.
-      - '{musician} के गाने लगाओ'
-      - '{musician} की म्यूज़िक लगाओ'
-      - '{musician} के गाने बजाओ'
-      - '{musician} के गाने सुनाओ'
-      - '{musician} के ट्रैक सुनो'
-      - मैं {musician} के गाने सुनना चाहता हूँ
-      - क्या तुम {musician} के गाने चला सकते हो
-      - '{musician} के गाने शुरू करो'
-    slots:
-      - name: musician
-        type: AMAZON.Musician
-  - name: PlayLastAddedIntent
-    samples:
-      - आखिरी जोड़े {media_type} चलाओ
-      - हाल ही में जोड़े {media_type} चलाओ
-      - नया मीडिया चलाओ
-      - कुछ नया चलाओ
-      - '{media_type} जोड़े {time_period} चलाओ'
-      - हाल ही में जोड़े {media_type} {time_period} चलाओ
-      - नए {media_type} {time_period} चलाओ
-      - '{media_type} में क्या नया है'
-      - ताज़ा {media_type} चलाओ
-      - नए {media_type} दिखाओ
-    slots:
-      - name: media_type
-        type: MediaType
-      - name: time_period
-        type: TimePeriod
-  - name: PlayRandomIntent
-    samples:
-      - रैंडम {media_type} चलाओ
-      - अपने {media_type} शफल करो
-      - कुछ रैंडम चलाओ
-      - रैंडम {media_type} {genre} से चलाओ
-      - रैंडम गाने चलाओ
-      - रैंडम म्यूज़िक चलाओ
-      - मुझे रैंडम {media_type} दो
-      - मुझे कुछ रैंडम चाहिए
-      - '{media_type} शफल करो'
-      - '{media_type} से मुझे चौंकाओ'
-    slots:
-      - name: media_type
-        type: MediaType
-      - name: genre
-        type: AMAZON.Genre
-  - name: PlayByGenreIntent
-    samples:
-      - '{genre} म्यूज़िक चलाओ'
-      - '{genre} गाने चलाओ'
-      - मुझे {genre} म्यूज़िक चलाओ
-      - मैं {genre} सुनना चाहता हूँ
-      - '{genre} चलाओ'
-      - मुझे {genre} म्यूज़िक दो
-      - '{genre} म्यूज़िक सुनो'
-    slots:
-      - name: genre
-        type: AMAZON.Genre
-  - name: PlayByDecadeIntent
-    samples:
-      - '{decade} के गाने चलाओ'
-      - '{decade} के ट्रैक चलाओ'
-      - '{decade} की म्यूज़िक चलाओ'
-      - '{decade} हिट्स चलाओ'
-      - '{genre} {decade} से चलाओ'
-      - मैं {decade} म्यूज़िक सुनना चाहता हूँ
-      - '{decade} से कुछ चलाओ'
-      - '{decade} म्यूज़िक सुनो'
-      - '{decade} हिट्स सुनो'
-    slots:
-      - name: decade
-        type: Decade
-      - name: genre
-        type: AMAZON.Genre
-  - name: ContinueWatchingIntent
-    samples:
-      - देखना जारी रखो
-      - सुनना जारी रखो
-      - जहाँ छोड़ा था वहाँ से फिर से शुरू करो
-      - मैं क्या देख रहा था
-      - जारी रखो
-      - जारी
-  - name: GoToChapterIntent
-    samples:
-      - अगला चैप्टर
-      - पिछला चैप्टर
-      - चैप्टर {chapter_number} पर जाओ
-      - चैप्टर {chapter_number} पर स्किप करो
-      - एक चैप्टर आगे जाओ
-      - एक चैप्टर पीछे जाओ
-      - चैप्टर स्किप करो
-    slots:
-      - name: chapter_number
-        type: AMAZON.NUMBER
-  # JF-875 (2026-10-12): the SkipForwardBack family (en-US + it-IT carried it
-  # until now; this locale was the JF-684 no-selection class for every
-  # skip-forward/back-style ask). The family ships in the JF-869 it-IT shape:
-  # the direction word rides ONLY the slotted {seek_direction} position (a
-  # direction-literal row delivers an empty slot and the handler's forward
-  # default seeks the wrong way, the en-US wrong-way bug this rollout must not
-  # re-import), no bare direction-only rows (the it-IT transport-steal
-  # lesson: bare direction words steal the built-in Next/Previous routing),
-  # and verbs that ARE the direction (the locale's rewind-class verbs) ride
-  # the slot as SeekDirection synonyms (the rewind-as-synonym mechanism) on
-  # the verb-initial bare row.
-  # Hindi word order follows the locale's GoToChapter shape (एक चैप्टर आगे
-  # जाओ): amount, unit, direction, verb. स्किप करो is the established skip
-  # verb (चैप्टर स्किप करो).
-  - name: SkipForwardBackIntent
-    samples:
-      - '{seek_amount} {seek_unit} {seek_direction} जाओ'
-      - '{seek_amount} {seek_unit} {seek_direction} स्किप करो'
-      - '{seek_direction} स्किप करो'
-      - '{seek_amount} {seek_unit} स्किप करो'
-    slots:
-      - name: seek_direction
-        type: SeekDirection
-      - name: seek_amount
-        type: AMAZON.NUMBER
-      - name: seek_unit
-        type: SeekUnit
-  - name: PlayPlaylistIntent
-    samples:
-      - प्लेलिस्ट {playlist} चलाओ
-      - मेरी प्लेलिस्ट {playlist} चलाओ
-      - प्लेलिस्ट {playlist} लगाओ
-      - प्लेलिस्ट {playlist} शुरू करो
-      - प्लेलिस्ट {playlist} सुनो
-      - क्या तुम प्लेलिस्ट {playlist} चला सकते हो
-      - मैं प्लेलिस्ट {playlist} सुनना चाहता हूँ
-      # JF-399 PlayPlaylist parity: this locale sat at 7 samples vs the
-      # family carrier space (en-US 20, es-ES 12). The additions are
-      # this locale's own PlaySong tails crossed with the playlist noun
-      # (bare and मेरी my-variant); every carrier names the media (the
-      # playlist slot is free-text SearchQuery).
-      - मेरी प्लेलिस्ट {playlist} लगाओ
-      - मेरी प्लेलिस्ट {playlist} शुरू करो
-      - मेरी प्लेलिस्ट {playlist} सुनो
-      - प्लेलिस्ट {playlist} बजाओ
-      - प्लेलिस्ट {playlist} सुनाओ
-      - क्या तुम मेरी प्लेलिस्ट {playlist} चला सकते हो
-      - मैं मेरी प्लेलिस्ट {playlist} सुनना चाहता हूँ
-    slots:
-      - name: playlist
-        type: AMAZON.SearchQuery
-  - name: AddCurrentToPlaylistIntent
-    samples:
-      - इस गाने को प्लेलिस्ट {playlist} में जोड़ो
-      - यह गाना प्लेलिस्ट {playlist} में जोड़ें
-      - मौजूदा गाना प्लेलिस्ट {playlist} में जोड़ो
-    slots:
-      - name: playlist
-        type: AMAZON.SearchQuery
-  - name: AddSongToPlaylistIntent
-    samples:
-      - गाना {song_query} को जोड़ो
-      - '{song_query} को जोड़ें'
-      - प्लेलिस्ट {playlist_target} में जोड़ो
-    slots:
-      - name: song_query
-        type: AMAZON.SearchQuery
-      - name: playlist_target
-        type: AMAZON.SearchQuery
-  - name: RemoveCurrentFromPlaylistIntent
-    samples:
-      - यह गाना प्लेलिस्ट {playlist} से हटाओ
-      - मौजूदा गाना प्लेलिस्ट {playlist} से हटाओ
-    slots:
-      - name: playlist
-        type: AMAZON.SearchQuery
-  - name: CreatePlaylistIntent
-    samples:
-      - '{playlist} नाम की प्लेलिस्ट बनाओ'
-      - नई प्लेलिस्ट {playlist} बनाओ
-      - प्लेलिस्ट {playlist} बनाओ
-    slots:
-      - name: playlist
-        type: AMAZON.SearchQuery
-  - name: PlayFavoritesIntent
-    samples:
-      - मेरी पसंदीदा {media_type} चलाओ
-      - मेरी पसंदीदा चलाओ
-      - मेरे पसंदीदा गाने चलाओ
-      - मेरी पसंदीदा म्यूज़िक चलाओ
-      - '{username} की पसंदीदा चलाओ'
-      - '{username} की पसंदीदा {media_type} चलाओ'
-    slots:
-      - name: media_type
-        type: MediaType
-      - name: username
-        type: AMAZON.Person
-  - name: MarkFavoriteIntent
-    samples:
-      - मुझे यह पसंद है
-      - मुझे वीडियो पसंद है
-      - मुझे गाना पसंद है
-      - मुझे म्यूज़िक पसंद है
-      - मुझे यह गाना पसंद है
-      - वीडियो को पसंदीदा में जोड़ो
-      - गाने को पसंदीदा में जोड़ो
-      - इसे पसंदीदा में सेव करो
-      - इसे पसंदीदा करो
-  - name: UnmarkFavoriteIntent
-    samples:
-      - मुझे यह पसंद नहीं है
-      - मुझे वीडियो पसंद नहीं है
-      - मुझे गाना पसंद नहीं है
-      - मुझे म्यूज़िक पसंद नहीं है
-      - वीडियो को पसंदीदा से हटाओ
-      - गाने को पसंदीदा से हटाओ
-  - name: RateItemIntent
-    samples:
-      - इसे {star_rating} स्टार दो
-      - इस गाने को {star_rating} स्टार दो
-      - इसे {star_rating} स्टार से रेट करो
-      - इस गाने को {star_rating} स्टार रेटिंग दो
-      - इस वीडियो को {star_rating} स्टार दो
-    slots:
-      - name: star_rating
-        type: AMAZON.NUMBER
-  - name: MediaInfoIntent
-    slots:
-      - name: media_info_type
-        type: MediaInfoType
-    samples:
-      - गाने का नाम क्या है
-      - वीडियो का नाम क्या है
-      - म्यूज़िक का नाम क्या है
-      - गाने का शीर्षक क्या है
-      - अभी क्या चल रहा है
-      - यह {media_info_type} क्या है
-      - मुझे {media_info_type} बताओ
-      - '{media_info_type} क्या है'
-      - यह गाना कितना लंबा है
-      - यह कौन गा रहा है
-      - यह कौन कर रहा है
-      - यह किस शैली का है
-      - यह कब रिलीज़ हुआ
-      - इस कलाकार के बारे में बताओ
-      - यह किस एल्बम का है
-      - यह कौन सा सीज़न है
-      - यह कौन सा एपिसोड है
-      - यह कौन सी सीरीज़ है
-      - इसे किसने डायरेक्ट किया
-      - निर्देशक कौन है
-      - इसमें कौन काम कर रहा है
-      - कलाकार कौन हैं
-      - लेखक कौन है
-      - इसे किसने लिखा
-      - कथावाचक कौन है
-      - यह कौन सुना रहा है
-      - रेटिंग क्या है
-      - इसकी रेटिंग बताओ
-      - यह कितने सितारे का है
-      - कास्ट में कौन है
-      - इसका मूल्यांकन क्या है
-  - name: InProgressMediaListIntent
-    samples:
-      - मैं क्या सुन रहा हूँ
-      - मैं क्या देख रहा हूँ
-      - क्या प्रगति पर है
-      - मेरी प्रगति दिखाओ
-      - मैं क्या चला रहा था
-      - मेरी प्रगति पर मीडिया दिखाओ
-  - name: PlayEpisodeIntent
-    slots:
-      - name: series_name
-        type: SeriesName
-      - name: season_number
-        type: AMAZON.NUMBER
-      - name: episode_number
-        type: AMAZON.NUMBER
-    samples:
-      - '{series_name} सीज़न {season_number} एपिसोड {episode_number} चलाओ'
-      - सीज़न {season_number} एपिसोड {episode_number} {series_name} का चलाओ
-      - '{series_name} सीज़न {season_number} एपिसोड {episode_number} देखो'
-      # JF-814: season-less family; the handler elicits the missing season.
-      - '{series_name} का एपिसोड {episode_number} चलाओ'
-      - '{series_name} का एपिसोड {episode_number} देखो'
-  # JF-583: the अगला/नवीनतम carriers are slotted ({episode_position},
-  # custom EpisodePosition type): अगला keeps NextUp, नवीनतम resolves by
-  # recency; the continue-watching sample carries no position (NextUp by
-  # design).
-  - name: PlayNextEpisodeIntent
-    slots:
-      - name: series_name
-        type: SeriesName
-      - name: episode_position
-        type: EpisodePosition
-    samples:
-      - '{series_name} का {episode_position} एपिसोड चलाओ'
-      - '{series_name} देखना जारी रखो'
-  - name: PlayPodcastIntent
-    samples:
-      - पॉडकास्ट {podcast_name} चलाओ
-      - पॉडकास्ट {podcast_name} सुनो
-      - '{podcast_name} का ताज़ा एपिसोड चलाओ'
-      - पॉडकास्ट {podcast_name} शुरू करो
-      - मैं {podcast_name} पॉडकास्ट सुनना चाहता हूँ
-    slots:
-      - name: podcast_name
-        type: AMAZON.SearchQuery
-  - name: SetPlaybackSpeedIntent
-    slots:
-      - name: speed
-        type: SpeedRate
-    samples:
-      - गति {speed}
-      - गति {speed} पर
-      - "{speed} गति पर"
-      - "{speed} करो"
-  - name: BrowseLibraryIntent
-    slots:
-      - name: browse_category
-        type: BrowseCategory
-      # JF-557: the genre filter. AMAZON.SearchQuery coexists with the
-      # browse_category slot ONLY because no single sample carries both
-      # (anti-pattern #2); the genre carriers below name the category
-      # literally.
-      - name: filter
-        type: AMAZON.SearchQuery
-    samples:
-      - '{browse_category}'
-      - '{browse_category} ब्राउज़ करो'
-      - मुझे {browse_category} दिखाओ
-      - '{browse_category} की लिस्ट दो'
-      - मेरे पास कौन से {browse_category} हैं
-      - क्या {browse_category} हैं
-      # JF-557: genre-filter carriers (literal category + free-text filter).
-      - शैलियाँ {filter} ब्राउज़ करो
-      - मुझे शैलियाँ {filter} दिखाओ
-  - name: RecommendIntent
-    slots:
-      - name: media_type
-        type: MediaType
-    samples:
-      - कुछ सुझाव दो
-      - कुछ म्यूज़िक सुझाओ
-      - एक फिल्म सुझाओ
-      - देखने के लिए कुछ सुझाओ
-      - '{media_type} सुझाओ'
-  - name: SleepTimerIntent
-    slots:
-      - name: sleep_duration
-        type: AMAZON.DURATION
-    samples:
-      - '{sleep_duration} में बंद करो'
-      - स्लीप टाइमर {sleep_duration} सेट करो
-      - स्लीप टाइमर {sleep_duration}
-      - '{sleep_duration} बाद बंद करो'
-  - name: SetReminderIntent
-    slots:
-      - name: reminder_duration
-        type: AMAZON.DURATION
-      - name: reminder_time
-        type: AMAZON.TIME
-    samples:
-      - '{reminder_duration} में मुझे याद दिलाओ'
-      - '{reminder_duration} का रिमाइंडर सेट करो'
-      - '{reminder_time} पर मुझे याद दिलाओ'
-      - '{reminder_time} का रिमाइंडर सेट करो'
-  - name: PlayMoodMusicIntent
-    slots:
-      - name: mood
-        type: Mood
-    samples:
-      - '{mood} म्यूज़िक चलाओ'
-      - कुछ {mood} चलाओ
-      - '{mood} गाने चलाओ'
-      - मुझे {mood} म्यूज़िक चाहिए
-  - name: AddToQueueIntent
-    slots:
-      - name: song
-        type: AMAZON.MusicRecording
-      - name: musician
-        type: AMAZON.Musician
-    samples:
-      - '{song} कतार में जोड़ो'
-      - '{musician} का {song} कतार में जोड़ो'
-      - '{song} कतार में डालो'
-      - '{musician} का {song} कतार में डालो'
-  - name: PlayNextIntent
-    slots:
-      - name: song
-        type: AMAZON.MusicRecording
-      - name: musician
-        type: AMAZON.Musician
-    samples:
-      - '{song} अगला चलाओ'
-      - '{musician} का {song} अगला चलाओ'
-      - मैं {song} अगला सुनना चाहता हूँ
-      - '{song} इसके बाद चलाओ'
-  - name: ClearQueueIntent
-    samples:
-      - कतार साफ़ करो
-      - कतार खाली करो
-      - कतार से सब हटाओ
-  - name: ListQueueIntent
-    samples:
-      - कतार में क्या है
-      - क्या आने वाला है
-      - क्या अगला है
-      - कतार दिखाओ
-      - अगला क्या चलेगा
-  - name: PlayRadioIntent
-    samples:
-      - रेडियो चलाओ
-      - रेडियो मोड चलाओ
-      - रेडियो शुरू करो
-      - ऐसा ही और चलाओ
-      - समान म्यूज़िक चलाते रहो
-      - समान गाने चलाओ
-      - रेडियो स्टेशन शुरू करो
-      - रेडियो स्टेशन {station} चलाओ
-    slots:
-      - name: station
-        type: AMAZON.SearchQuery
-  - name: TurnRadioOnIntent
-    samples:
-      - रेडियो मोड चालू करो
-      - रेडियो मोड एनेबल करो
-      - रेडियो मोड ऑन
-      - रेडियो चालू करो
-      - रेडियो एनेबल करो
-  - name: TurnRadioOffIntent
-    samples:
-      - रेडियो मोड बंद करो
-      - रेडियो मोड डिसेबल करो
-      - रेडियो मोड ऑफ
-      - रेडियो बंद करो
-      - रेडियो डिसेबल करो
-  - name: LearnMyVoiceIntent
-    samples:
-      - मेरी आवाज़ सीखो
-      - मेरी आवाज़ याद रखो
-      - मुझे पहचानो
-      - मेरी आवाज़ लिंक करो
-      - यह मेरी आवाज़ है
-      - मेरा वॉइस प्रोफाइल सेटअप करो
-      - मेरी आवाज़ जोड़ो
-  - name: WhoAmIIntent
-    samples:
-      - मैं कौन हूँ
-      - यह कौन सा खाता है
-      - मैं कौन सा खाता इस्तेमाल कर रहा हूँ
-      - कौन बोल रहा है
-      - कौन सा प्रोफाइल एक्टिव है
-  - name: QueryArtistLibraryIntent
-    samples:
-      - '{musician} के कौन से ट्रैक हैं'
-      - '{musician} के कौन से गाने हैं'
-      - '{musician} के कौन से एल्बम हैं'
-      - '{musician} के पास क्या है'
-      - '{musician} के ट्रैक दिखाओ'
-      - '{musician} के एल्बम दिखाओ'
-      - '{musician} के {query_type} दिखाओ'
-      - '{musician} के कौन से {query_type} हैं'
-    slots:
-      - name: musician
-        type: AMAZON.Musician
-      - name: query_type
-        type: LibraryQueryType
-  - name: SearchMediaIntent
-    slots:
-      - name: query
-        type: AMAZON.SearchQuery
-    samples:
-      - एक फिल्म {query} खोजो
-      - कंटेंट {query} खोजो
-      - एक वीडियो {query} खोजो
-      - एक फिल्म {query} ढूंढो
-      - कंटेंट {query} ढूंढो
-      - एक वीडियो {query} ढूंढो
-      - एक फिल्म {query} देखो
-      - कंटेंट {query} देखो
-      - क्या तुम्हारे पास एक फिल्म {query} है
-      - क्या तुम्हारे पास कंटेंट {query} है
-      - मैं एक फिल्म {query} खोजना चाहता हूँ
-      - मैं कंटेंट {query} खोजना चाहता हूँ
-      - क्या तुम एक फिल्म {query} ढूंढ सकते हो
-      - क्या तुम कंटेंट {query} ढूंढ सकते हो
-      - मुझे एक फिल्म {query} ढूंढो
-      - मुझे कंटेंट {query} ढूंढो
-  - name: PlayBookIntent
-    slots:
-      - name: book
-        type: AudiobookTitle
-    samples:
-      - '{book} चलाओ'
-      - 'किताब {book} चलाओ'
-      - 'ऑडियोबुक {book} चलाओ'
-      - '{book} सुनो'
-      - 'किताब {book} सुनो'
-      - 'ऑडियोबुक {book} सुनो'
-      - 'मैं {book} सुनना चाहता हूँ'
-      - 'ऑडियोबुक {book} सुनाओ'
-  - name: ShowMoreIntent
-    samples:
-      - और दिखाओ
-      - अगला पेज
-      - और
-      - जारी रखो
-      - आगे
-      - क्या और है
-      - और परिणाम
-    slots: []
-  - name: FindSongIntent
-    samples:
-      - गाना खोजो
-      - मेरे गाना खोजने में मदद करो
-      - गाना खोजना है
-      - मैं गाना खोज रहा हूँ
-      - मुझे गाना खोजना है
-      - मेरे लिए गाना खोजो
-      - मैं गाना खोजना चाहता हूँ
-      - '{titleKeywords} नाम का गाना खोजो'
-      - '{titleKeywords} वाला गाना खोजो'
-      - '{titleKeywords} नाम का गाना खोज रहा हूँ'
-      - गाना ढूंढो
-      - एक गाना खोजो
-    slots:
-      - name: titleKeywords
-        type: AMAZON.SearchQuery
-  - name: FindSongByArtistIntent
-    samples:
-      - '{musician} का गाना खोजो'
-      - '{musician} का गाना खोजने में मदद करो'
-      - '{musician} का गाना ढूंढो'
-      - 'मैं {musician} का गाना खोज रहा हूँ'
-      # JF-399 FindSongByArtist parity: it-IT carries 16 samples here while
-      # this locale sat at 4 (the JF-391 starvation class). The additions are
-      # this locale's own FindSong openers (मुझे खोजना है / खोजना चाहता हूँ /
-      # मेरे लिए खोजो / एक गाना खोजो) crossed with the का गाना tail. This
-      # template's noun axis is गाना only (गीत unused), so there is no it-IT
-      # brano twin here, see the header.
-      - 'मुझे {musician} का गाना खोजना है'
-      - 'मैं {musician} का गाना खोजना चाहता हूँ'
-      - 'मेरे लिए {musician} का गाना खोजो'
-      - '{musician} का एक गाना खोजो'
-    slots:
-      - name: musician
-        type: AMAZON.Musician
-  - name: ShufflePlayIntent
-    samples:
-      - प्लेलिस्ट {playlist} शफल में चलाओ
-      - प्लेलिस्ट {playlist} शफल करो
-    slots:
-      - name: playlist
-        type: AMAZON.SearchQuery
-  - name: ShowPhotoAlbumIntent
-    # JF-329 photo slideshow. Optional-slot intent (the JF-403 boundary): the
-    # static forms deliver the working default (the handler shows the most
-    # recent photos of the whole photo library). Every slotted carrier names
-    # the photo media so the free-text carriers of PlayVideo/PlaySong cannot
-    # steal these utterances. photoAlbum is this intent's own slot name; its
-    # AMAZON.SearchQuery type never shares a sample with another slot.
-    samples:
-      - मेरी फ़ोटो दिखाओ
-      - मुझे मेरी फ़ोटो दिखाओ
-      - "{photoAlbum} की फ़ोटो दिखाओ"
-      - "{photoAlbum} की तस्वीरें दिखाओ"
-      - "{photoAlbum} का फ़ोटो एल्बम दिखाओ"
-      - मेरी फ़ोटो की स्लाइडशो शुरू करो
-      - "{photoAlbum} की स्लाइडशो शुरू करो"
-    slots:
-      - name: photoAlbum
-        type: AMAZON.SearchQuery
-
+- name: ShowLyricsIntent
+  samples:
+  - बोल दिखाओ
+  - गाने के बोल दिखाओ
+- name: QueryRecentlyAddedIntent
+  samples:
+  - क्या नया है
+  - हाल ही में क्या जोड़ा गया
+  - मेरी लाइब्रेरी में क्या नया है
+  - हाल ही में जोड़े गए दिखाओ
+  - कुछ नया है क्या
+  - नए जोड़े गए आइटम दिखाओ
+  - सबसे नए आइटम क्या हैं
+- name: FollowMeIntent
+  samples:
+  - मेरे साथ आओ
+  - चलाना जारी रखो
+  - जहां छोड़ा थे वहां से शुरू करो
+- AMAZON.CancelIntent
+- AMAZON.HelpIntent
+- AMAZON.StopIntent
+- AMAZON.FallbackIntent
+- AMAZON.PauseIntent
+- AMAZON.ResumeIntent
+- AMAZON.NextIntent
+- AMAZON.PreviousIntent
+- AMAZON.YesIntent
+- AMAZON.NoIntent
+- AMAZON.LoopOnIntent
+- AMAZON.LoopOffIntent
+- name: LoopSongOnIntent
+  samples:
+  - इस गाने को लूप करो
+  - इस गाने को हमेशा लूप करो
+  - गाना दोहराओ
+  - इस गाने को दोहराओ
+  - इस गाने को हमेशा दोहराओ
+- name: LoopAllOnIntent
+  samples:
+  - कतार दोहराओ
+  - पूरी कतार दोहराओ
+  - कतार लूप करो
+- AMAZON.ShuffleOnIntent
+- AMAZON.ShuffleOffIntent
+- AMAZON.StartOverIntent
+- AMAZON.RepeatIntent
+- name: PlayChannelIntent
+  samples:
+  - चैनल {channel} चलाओ
+  - रेडियो {channel} चलाओ
+  slots:
+  - name: channel
+    type: AMAZON.SearchQuery
+- name: PlaySongIntent
+  samples:
+  - '{song} चलाओ'
+  - गाना {song} चलाओ
+  - '{song} गाना चलाओ'
+  - '{musician} का {song} चलाओ'
+  - गाना {song} {musician} का चलाओ
+  - '{song} सुनो'
+  - गाना {song} सुनो
+  - '{musician} का {song} सुनो'
+  - '{song} लगाओ'
+  - मैं {song} सुनना चाहता हूँ
+  - क्या तुम {song} चला सकते हो
+  - '{song} शुरू करो'
+  - ट्रैक {song} चलाओ
+  - '{musician} का ट्रैक {song} चलाओ'
+  - गाना {song} लगाओ
+  - '{musician} का गाना {song} लगाओ'
+  - '{song} बजाओ'
+  - गाना {song} बजाओ
+  - '{musician} का {song} बजाओ'
+  - '{song} सुनाओ'
+  - '{musician} का {song} सुनाओ'
+  - मैं {musician} का {song} सुनना चाहता हूँ
+  slots:
+  - name: song
+    type: AMAZON.MusicRecording
+  - name: musician
+    type: AMAZON.Musician
+- name: PlayAlbumIntent
+  samples:
+  - एल्बम {album} चलाओ
+  - एल्बम {album} {musician} का चलाओ
+  - एल्बम {album} सुनो
+  - '{musician} का एल्बम चलाओ'
+  - '{musician} का एल्बम सुनो'
+  slots:
+  - name: album
+    type: AMAZON.MusicRecording
+  - name: musician
+    type: AMAZON.Musician
+- name: PlayVideoIntent
+  samples:
+  - वीडियो {title} चलाओ
+  - वीडियो {title} लगाओ
+  - '{title} शुरू करो'
+  - क्या तुम {title} चला सकते हो
+  - मैं {title} देखना चाहता हूँ
+  - चलो {title} देखते हैं
+  - फिल्म {title} चलाओ
+  - वीडियो {title} शुरू करो
+  - फिल्म {title} देखो
+  - वीडियो {title} देखो
+  - मूवी {title} देखो
+  - फिल्म देखो {title}
+  - मैं फिल्म {title} देखना चाहता हूँ
+  - फिल्म {title} खोजो
+  - वीडियो {title} खोजो
+  - मूवी {title} खोजो
+  - मूवी {title} चलाओ
+  - मूवी {title} लगाओ
+  - फ़िल्म {title} देखो
+  - '{title} फिल्म देखो'
+  - फिल्म {title} दिखाओ
+  - वीडियो {title} दिखाओ
+  slots:
+  - name: title
+    type: AMAZON.SearchQuery
+- name: PlayArtistSongsIntent
+  samples:
+  - '{musician} के गाने चलाओ'
+  - '{musician} की म्यूज़िक चलाओ'
+  - '{musician} के ट्रैक चलाओ'
+  - '{musician} सुनो'
+  - '{musician} के गाने सुनो'
+  - '{musician} की म्यूज़िक सुनो'
+  - '{musician} लगाओ'
+  - मैं {musician} सुनना चाहता हूँ
+  - क्या तुम {musician} चला सकते हो
+  - '{musician} शुरू करो'
+  - '{musician} को शफल करो'
+  - '{musician} चलाओ'
+  - कुछ {musician} चलाओ
+  - '{musician} बजाओ'
+  - '{musician} सुनाओ'
+  - '{musician} के गाने लगाओ'
+  - '{musician} की म्यूज़िक लगाओ'
+  - '{musician} के गाने बजाओ'
+  - '{musician} के गाने सुनाओ'
+  - '{musician} के ट्रैक सुनो'
+  - मैं {musician} के गाने सुनना चाहता हूँ
+  - क्या तुम {musician} के गाने चला सकते हो
+  - '{musician} के गाने शुरू करो'
+  slots:
+  - name: musician
+    type: AMAZON.Musician
+- name: PlayLastAddedIntent
+  samples:
+  - आखिरी जोड़े {media_type} चलाओ
+  - हाल ही में जोड़े {media_type} चलाओ
+  - नया मीडिया चलाओ
+  - कुछ नया चलाओ
+  - '{media_type} जोड़े {time_period} चलाओ'
+  - हाल ही में जोड़े {media_type} {time_period} चलाओ
+  - नए {media_type} {time_period} चलाओ
+  - '{media_type} में क्या नया है'
+  - ताज़ा {media_type} चलाओ
+  - नए {media_type} दिखाओ
+  slots:
+  - name: media_type
+    type: MediaType
+  - name: time_period
+    type: TimePeriod
+- name: PlayRandomIntent
+  samples:
+  - रैंडम {media_type} चलाओ
+  - अपने {media_type} शफल करो
+  - कुछ रैंडम चलाओ
+  - रैंडम {media_type} {genre} से चलाओ
+  - रैंडम गाने चलाओ
+  - रैंडम म्यूज़िक चलाओ
+  - मुझे रैंडम {media_type} दो
+  - मुझे कुछ रैंडम चाहिए
+  - '{media_type} शफल करो'
+  - '{media_type} से मुझे चौंकाओ'
+  slots:
+  - name: media_type
+    type: MediaType
+  - name: genre
+    type: AMAZON.Genre
+- name: PlayByGenreIntent
+  samples:
+  - '{genre} म्यूज़िक चलाओ'
+  - '{genre} गाने चलाओ'
+  - मुझे {genre} म्यूज़िक चलाओ
+  - मैं {genre} सुनना चाहता हूँ
+  - '{genre} चलाओ'
+  - मुझे {genre} म्यूज़िक दो
+  - '{genre} म्यूज़िक सुनो'
+  slots:
+  - name: genre
+    type: AMAZON.Genre
+- name: PlayByDecadeIntent
+  samples:
+  - '{decade} के गाने चलाओ'
+  - '{decade} के ट्रैक चलाओ'
+  - '{decade} की म्यूज़िक चलाओ'
+  - '{decade} हिट्स चलाओ'
+  - '{genre} {decade} से चलाओ'
+  - मैं {decade} म्यूज़िक सुनना चाहता हूँ
+  - '{decade} से कुछ चलाओ'
+  - '{decade} म्यूज़िक सुनो'
+  - '{decade} हिट्स सुनो'
+  slots:
+  - name: decade
+    type: Decade
+  - name: genre
+    type: AMAZON.Genre
+- name: ContinueWatchingIntent
+  samples:
+  - देखना जारी रखो
+  - सुनना जारी रखो
+  - जहाँ छोड़ा था वहाँ से फिर से शुरू करो
+  - मैं क्या देख रहा था
+  - जारी
+- name: GoToChapterIntent
+  samples:
+  - अगला चैप्टर
+  - पिछला चैप्टर
+  - चैप्टर {chapter_number} पर जाओ
+  - चैप्टर {chapter_number} पर स्किप करो
+  - एक चैप्टर आगे जाओ
+  - एक चैप्टर पीछे जाओ
+  - चैप्टर स्किप करो
+  slots:
+  - name: chapter_number
+    type: AMAZON.NUMBER
+- name: SkipForwardBackIntent
+  samples:
+  - '{seek_amount} {seek_unit} {seek_direction} जाओ'
+  - '{seek_amount} {seek_unit} {seek_direction} स्किप करो'
+  - '{seek_direction} स्किप करो'
+  - '{seek_amount} {seek_unit} स्किप करो'
+  slots:
+  - name: seek_direction
+    type: SeekDirection
+  - name: seek_amount
+    type: AMAZON.NUMBER
+  - name: seek_unit
+    type: SeekUnit
+- name: PlayPlaylistIntent
+  samples:
+  - प्लेलिस्ट {playlist} चलाओ
+  - मेरी प्लेलिस्ट {playlist} चलाओ
+  - प्लेलिस्ट {playlist} लगाओ
+  - प्लेलिस्ट {playlist} शुरू करो
+  - प्लेलिस्ट {playlist} सुनो
+  - क्या तुम प्लेलिस्ट {playlist} चला सकते हो
+  - मैं प्लेलिस्ट {playlist} सुनना चाहता हूँ
+  - मेरी प्लेलिस्ट {playlist} लगाओ
+  - मेरी प्लेलिस्ट {playlist} शुरू करो
+  - मेरी प्लेलिस्ट {playlist} सुनो
+  - प्लेलिस्ट {playlist} बजाओ
+  - प्लेलिस्ट {playlist} सुनाओ
+  - क्या तुम मेरी प्लेलिस्ट {playlist} चला सकते हो
+  - मैं मेरी प्लेलिस्ट {playlist} सुनना चाहता हूँ
+  slots:
+  - name: playlist
+    type: AMAZON.SearchQuery
+- name: AddCurrentToPlaylistIntent
+  samples:
+  - इस गाने को प्लेलिस्ट {playlist} में जोड़ो
+  - यह गाना प्लेलिस्ट {playlist} में जोड़ें
+  - मौजूदा गाना प्लेलिस्ट {playlist} में जोड़ो
+  slots:
+  - name: playlist
+    type: AMAZON.SearchQuery
+- name: AddSongToPlaylistIntent
+  samples:
+  - गाना {song_query} को जोड़ो
+  - '{song_query} को जोड़ें'
+  - प्लेलिस्ट {playlist_target} में जोड़ो
+  slots:
+  - name: song_query
+    type: AMAZON.SearchQuery
+  - name: playlist_target
+    type: AMAZON.SearchQuery
+- name: RemoveCurrentFromPlaylistIntent
+  samples:
+  - यह गाना प्लेलिस्ट {playlist} से हटाओ
+  - मौजूदा गाना प्लेलिस्ट {playlist} से हटाओ
+  slots:
+  - name: playlist
+    type: AMAZON.SearchQuery
+- name: CreatePlaylistIntent
+  samples:
+  - '{playlist} नाम की प्लेलिस्ट बनाओ'
+  - नई प्लेलिस्ट {playlist} बनाओ
+  - प्लेलिस्ट {playlist} बनाओ
+  slots:
+  - name: playlist
+    type: AMAZON.SearchQuery
+- name: PlayFavoritesIntent
+  samples:
+  - मेरी पसंदीदा {media_type} चलाओ
+  - मेरी पसंदीदा चलाओ
+  - मेरे पसंदीदा गाने चलाओ
+  - मेरी पसंदीदा म्यूज़िक चलाओ
+  - '{username} की पसंदीदा चलाओ'
+  - '{username} की पसंदीदा {media_type} चलाओ'
+  slots:
+  - name: media_type
+    type: MediaType
+  - name: username
+    type: AMAZON.Person
+- name: MarkFavoriteIntent
+  samples:
+  - मुझे यह पसंद है
+  - मुझे वीडियो पसंद है
+  - मुझे गाना पसंद है
+  - मुझे म्यूज़िक पसंद है
+  - मुझे यह गाना पसंद है
+  - वीडियो को पसंदीदा में जोड़ो
+  - गाने को पसंदीदा में जोड़ो
+  - इसे पसंदीदा में सेव करो
+  - इसे पसंदीदा करो
+- name: UnmarkFavoriteIntent
+  samples:
+  - मुझे यह पसंद नहीं है
+  - मुझे वीडियो पसंद नहीं है
+  - मुझे गाना पसंद नहीं है
+  - मुझे म्यूज़िक पसंद नहीं है
+  - वीडियो को पसंदीदा से हटाओ
+  - गाने को पसंदीदा से हटाओ
+- name: RateItemIntent
+  samples:
+  - इसे {star_rating} स्टार दो
+  - इस गाने को {star_rating} स्टार दो
+  - इसे {star_rating} स्टार से रेट करो
+  - इस गाने को {star_rating} स्टार रेटिंग दो
+  - इस वीडियो को {star_rating} स्टार दो
+  slots:
+  - name: star_rating
+    type: AMAZON.NUMBER
+- name: MediaInfoIntent
+  slots:
+  - name: media_info_type
+    type: MediaInfoType
+  samples:
+  - गाने का नाम क्या है
+  - वीडियो का नाम क्या है
+  - म्यूज़िक का नाम क्या है
+  - गाने का शीर्षक क्या है
+  - अभी क्या चल रहा है
+  - यह {media_info_type} क्या है
+  - मुझे {media_info_type} बताओ
+  - '{media_info_type} क्या है'
+  - यह गाना कितना लंबा है
+  - यह कौन गा रहा है
+  - यह कौन कर रहा है
+  - यह किस शैली का है
+  - यह कब रिलीज़ हुआ
+  - इस कलाकार के बारे में बताओ
+  - यह किस एल्बम का है
+  - यह कौन सा सीज़न है
+  - यह कौन सा एपिसोड है
+  - यह कौन सी सीरीज़ है
+  - इसे किसने डायरेक्ट किया
+  - निर्देशक कौन है
+  - इसमें कौन काम कर रहा है
+  - कलाकार कौन हैं
+  - लेखक कौन है
+  - इसे किसने लिखा
+  - कथावाचक कौन है
+  - यह कौन सुना रहा है
+  - रेटिंग क्या है
+  - इसकी रेटिंग बताओ
+  - यह कितने सितारे का है
+  - कास्ट में कौन है
+  - इसका मूल्यांकन क्या है
+- name: InProgressMediaListIntent
+  samples:
+  - मैं क्या सुन रहा हूँ
+  - मैं क्या देख रहा हूँ
+  - क्या प्रगति पर है
+  - मेरी प्रगति दिखाओ
+  - मैं क्या चला रहा था
+  - मेरी प्रगति पर मीडिया दिखाओ
+- name: PlayEpisodeIntent
+  slots:
+  - name: series_name
+    type: SeriesName
+  - name: season_number
+    type: AMAZON.NUMBER
+  - name: episode_number
+    type: AMAZON.NUMBER
+  samples:
+  - '{series_name} सीज़न {season_number} एपिसोड {episode_number} चलाओ'
+  - सीज़न {season_number} एपिसोड {episode_number} {series_name} का चलाओ
+  - '{series_name} सीज़न {season_number} एपिसोड {episode_number} देखो'
+  - '{series_name} का एपिसोड {episode_number} चलाओ'
+  - '{series_name} का एपिसोड {episode_number} देखो'
+- name: PlayNextEpisodeIntent
+  slots:
+  - name: series_name
+    type: SeriesName
+  - name: episode_position
+    type: EpisodePosition
+  samples:
+  - '{series_name} का {episode_position} एपिसोड चलाओ'
+  - '{series_name} देखना जारी रखो'
+- name: PlayPodcastIntent
+  samples:
+  - पॉडकास्ट {podcast_name} चलाओ
+  - पॉडकास्ट {podcast_name} सुनो
+  - '{podcast_name} का ताज़ा एपिसोड चलाओ'
+  - पॉडकास्ट {podcast_name} शुरू करो
+  - मैं {podcast_name} पॉडकास्ट सुनना चाहता हूँ
+  slots:
+  - name: podcast_name
+    type: AMAZON.SearchQuery
+- name: SetPlaybackSpeedIntent
+  slots:
+  - name: speed
+    type: SpeedRate
+  samples:
+  - गति {speed}
+  - गति {speed} पर
+  - '{speed} गति पर'
+  - '{speed} करो'
+- name: BrowseLibraryIntent
+  slots:
+  - name: browse_category
+    type: BrowseCategory
+  - name: filter
+    type: AMAZON.SearchQuery
+  samples:
+  - '{browse_category}'
+  - '{browse_category} ब्राउज़ करो'
+  - मुझे {browse_category} दिखाओ
+  - '{browse_category} की लिस्ट दो'
+  - मेरे पास कौन से {browse_category} हैं
+  - क्या {browse_category} हैं
+  - शैलियाँ {filter} ब्राउज़ करो
+  - मुझे शैलियाँ {filter} दिखाओ
+- name: RecommendIntent
+  slots:
+  - name: media_type
+    type: MediaType
+  samples:
+  - कुछ सुझाव दो
+  - कुछ म्यूज़िक सुझाओ
+  - एक फिल्म सुझाओ
+  - देखने के लिए कुछ सुझाओ
+  - '{media_type} सुझाओ'
+- name: SleepTimerIntent
+  slots:
+  - name: sleep_duration
+    type: AMAZON.DURATION
+  samples:
+  - '{sleep_duration} में बंद करो'
+  - स्लीप टाइमर {sleep_duration} सेट करो
+  - स्लीप टाइमर {sleep_duration}
+  - '{sleep_duration} बाद बंद करो'
+- name: SetReminderIntent
+  slots:
+  - name: reminder_duration
+    type: AMAZON.DURATION
+  - name: reminder_time
+    type: AMAZON.TIME
+  samples:
+  - '{reminder_duration} में मुझे याद दिलाओ'
+  - '{reminder_duration} का रिमाइंडर सेट करो'
+  - '{reminder_time} पर मुझे याद दिलाओ'
+  - '{reminder_time} का रिमाइंडर सेट करो'
+- name: PlayMoodMusicIntent
+  slots:
+  - name: mood
+    type: Mood
+  samples:
+  - '{mood} म्यूज़िक चलाओ'
+  - कुछ {mood} चलाओ
+  - '{mood} गाने चलाओ'
+  - मुझे {mood} म्यूज़िक चाहिए
+- name: AddToQueueIntent
+  slots:
+  - name: song
+    type: AMAZON.MusicRecording
+  - name: musician
+    type: AMAZON.Musician
+  samples:
+  - '{song} कतार में जोड़ो'
+  - '{musician} का {song} कतार में जोड़ो'
+  - '{song} कतार में डालो'
+  - '{musician} का {song} कतार में डालो'
+- name: PlayNextIntent
+  slots:
+  - name: song
+    type: AMAZON.MusicRecording
+  - name: musician
+    type: AMAZON.Musician
+  samples:
+  - '{song} अगला चलाओ'
+  - '{musician} का {song} अगला चलाओ'
+  - मैं {song} अगला सुनना चाहता हूँ
+  - '{song} इसके बाद चलाओ'
+- name: ClearQueueIntent
+  samples:
+  - कतार साफ़ करो
+  - कतार खाली करो
+  - कतार से सब हटाओ
+- name: ListQueueIntent
+  samples:
+  - कतार में क्या है
+  - क्या आने वाला है
+  - क्या अगला है
+  - कतार दिखाओ
+  - अगला क्या चलेगा
+- name: PlayRadioIntent
+  samples:
+  - रेडियो चलाओ
+  - रेडियो मोड चलाओ
+  - रेडियो शुरू करो
+  - ऐसा ही और चलाओ
+  - समान म्यूज़िक चलाते रहो
+  - समान गाने चलाओ
+  - रेडियो स्टेशन शुरू करो
+  - रेडियो स्टेशन {station} चलाओ
+  slots:
+  - name: station
+    type: AMAZON.SearchQuery
+- name: TurnRadioOnIntent
+  samples:
+  - रेडियो मोड चालू करो
+  - रेडियो मोड एनेबल करो
+  - रेडियो मोड ऑन
+  - रेडियो चालू करो
+  - रेडियो एनेबल करो
+- name: TurnRadioOffIntent
+  samples:
+  - रेडियो मोड बंद करो
+  - रेडियो मोड डिसेबल करो
+  - रेडियो मोड ऑफ
+  - रेडियो बंद करो
+  - रेडियो डिसेबल करो
+- name: LearnMyVoiceIntent
+  samples:
+  - मेरी आवाज़ सीखो
+  - मेरी आवाज़ याद रखो
+  - मुझे पहचानो
+  - मेरी आवाज़ लिंक करो
+  - यह मेरी आवाज़ है
+  - मेरा वॉइस प्रोफाइल सेटअप करो
+  - मेरी आवाज़ जोड़ो
+- name: WhoAmIIntent
+  samples:
+  - मैं कौन हूँ
+  - यह कौन सा खाता है
+  - मैं कौन सा खाता इस्तेमाल कर रहा हूँ
+  - कौन बोल रहा है
+  - कौन सा प्रोफाइल एक्टिव है
+- name: QueryArtistLibraryIntent
+  samples:
+  - '{musician} के कौन से ट्रैक हैं'
+  - '{musician} के कौन से गाने हैं'
+  - '{musician} के कौन से एल्बम हैं'
+  - '{musician} के पास क्या है'
+  - '{musician} के ट्रैक दिखाओ'
+  - '{musician} के एल्बम दिखाओ'
+  - '{musician} के {query_type} दिखाओ'
+  - '{musician} के कौन से {query_type} हैं'
+  slots:
+  - name: musician
+    type: AMAZON.Musician
+  - name: query_type
+    type: LibraryQueryType
+- name: SearchMediaIntent
+  slots:
+  - name: query
+    type: AMAZON.SearchQuery
+  samples:
+  - एक फिल्म {query} खोजो
+  - कंटेंट {query} खोजो
+  - एक वीडियो {query} खोजो
+  - एक फिल्म {query} ढूंढो
+  - कंटेंट {query} ढूंढो
+  - एक वीडियो {query} ढूंढो
+  - एक फिल्म {query} देखो
+  - कंटेंट {query} देखो
+  - क्या तुम्हारे पास एक फिल्म {query} है
+  - क्या तुम्हारे पास कंटेंट {query} है
+  - मैं एक फिल्म {query} खोजना चाहता हूँ
+  - मैं कंटेंट {query} खोजना चाहता हूँ
+  - क्या तुम एक फिल्म {query} ढूंढ सकते हो
+  - क्या तुम कंटेंट {query} ढूंढ सकते हो
+  - मुझे एक फिल्म {query} ढूंढो
+  - मुझे कंटेंट {query} ढूंढो
+- name: PlayBookIntent
+  slots:
+  - name: book
+    type: AudiobookTitle
+  samples:
+  - '{book} चलाओ'
+  - किताब {book} चलाओ
+  - ऑडियोबुक {book} चलाओ
+  - '{book} सुनो'
+  - किताब {book} सुनो
+  - ऑडियोबुक {book} सुनो
+  - मैं {book} सुनना चाहता हूँ
+  - ऑडियोबुक {book} सुनाओ
+- name: ShowMoreIntent
+  samples:
+  - और दिखाओ
+  - अगला पेज
+  - और
+  - जारी रखो
+  - आगे
+  - क्या और है
+  - और परिणाम
+  slots: []
+- name: FindSongIntent
+  samples:
+  - गाना खोजो
+  - मेरे गाना खोजने में मदद करो
+  - गाना खोजना है
+  - मैं गाना खोज रहा हूँ
+  - मुझे गाना खोजना है
+  - मेरे लिए गाना खोजो
+  - मैं गाना खोजना चाहता हूँ
+  - '{titleKeywords} नाम का गाना खोजो'
+  - '{titleKeywords} वाला गाना खोजो'
+  - '{titleKeywords} नाम का गाना खोज रहा हूँ'
+  - गाना ढूंढो
+  - एक गाना खोजो
+  slots:
+  - name: titleKeywords
+    type: AMAZON.SearchQuery
+- name: FindSongByArtistIntent
+  samples:
+  - '{musician} का गाना खोजो'
+  - '{musician} का गाना खोजने में मदद करो'
+  - '{musician} का गाना ढूंढो'
+  - मैं {musician} का गाना खोज रहा हूँ
+  - मुझे {musician} का गाना खोजना है
+  - मैं {musician} का गाना खोजना चाहता हूँ
+  - मेरे लिए {musician} का गाना खोजो
+  - '{musician} का एक गाना खोजो'
+  slots:
+  - name: musician
+    type: AMAZON.Musician
+- name: ShufflePlayIntent
+  samples:
+  - प्लेलिस्ट {playlist} शफल में चलाओ
+  - प्लेलिस्ट {playlist} शफल करो
+  slots:
+  - name: playlist
+    type: AMAZON.SearchQuery
+- name: ShowPhotoAlbumIntent
+  samples:
+  - मेरी फ़ोटो दिखाओ
+  - मुझे मेरी फ़ोटो दिखाओ
+  - '{photoAlbum} की फ़ोटो दिखाओ'
+  - '{photoAlbum} की तस्वीरें दिखाओ'
+  - '{photoAlbum} का फ़ोटो एल्बम दिखाओ'
+  - मेरी फ़ोटो की स्लाइडशो शुरू करो
+  - '{photoAlbum} की स्लाइडशो शुरू करो'
+  slots:
+  - name: photoAlbum
+    type: AMAZON.SearchQuery
 types:
-  # JF-636: playback-speed vocabulary (the JF-354 Mood architecture). Ids are
-  # the shared cross-locale key space (per-mille strings + faster/slower).
   SpeedRate:
     values:
-      - value: तीन चौथाई
-        id: "750"
-      - value: सामान्य गति
-        id: "1000"
-        synonyms: [सामान्य, "एक गति"]
-      - value: एक और एक चौथाई
-        id: "1250"
-      - value: "डेढ़"
-        id: "1500"
-        synonyms: ["एक और आधा"]
-      - value: एक और तीन चौथाई
-        id: "1750"
-      - value: दोगुनी गति
-        id: "2000"
-        synonyms: [दोगुना]
-      - value: "तेज़"
-        id: faster
-        synonyms: ["और तेज़"]
-      - value: "धीमा"
-        id: slower
-        synonyms: ["और धीमा"]
+    - value: तीन चौथाई
+      id: '750'
+    - value: सामान्य गति
+      id: '1000'
+      synonyms:
+      - सामान्य
+      - एक गति
+    - value: एक और एक चौथाई
+      id: '1250'
+    - value: डेढ़
+      id: '1500'
+      synonyms:
+      - एक और आधा
+    - value: एक और तीन चौथाई
+      id: '1750'
+    - value: दोगुनी गति
+      id: '2000'
+      synonyms:
+      - दोगुना
+    - value: तेज़
+      id: faster
+      synonyms:
+      - और तेज़
+    - value: धीमा
+      id: slower
+      synonyms:
+      - और धीमा
   Mood:
     values:
-      - value: आराम
-      - value: शांत
-      - value: उत्साही
-      - value: ऊर्जावान
-      - value: ध्यान
-      - value: रोमांटिक
-      - value: खुशी
-        synonyms: [खुश]
-      - value: उदास
-      - value: पार्टी
-      - value: वर्कआउट
-      - value: सुबह
-      - value: शाम
-      - value: डिनर
-      - value: नींद
-        synonyms: [स्लीप]
+    - value: आराम
+    - value: शांत
+    - value: उत्साही
+    - value: ऊर्जावान
+    - value: ध्यान
+    - value: रोमांटिक
+    - value: खुशी
+      synonyms:
+      - खुश
+    - value: उदास
+    - value: पार्टी
+    - value: वर्कआउट
+    - value: सुबह
+    - value: शाम
+    - value: डिनर
+    - value: नींद
+      synonyms:
+      - स्लीप
   LibraryQueryType:
     values:
-      - id: tracks
-        value: ट्रैक
-        synonyms: [गाने, म्यूज़िक, गाना]
-      - id: albums
-        value: एल्बम
-        synonyms: [रिकॉर्ड]
+    - id: tracks
+      value: ट्रैक
+      synonyms:
+      - गाने
+      - म्यूज़िक
+      - गाना
+    - id: albums
+      value: एल्बम
+      synonyms:
+      - रिकॉर्ड
   MediaType:
     values:
-      - id: media
-        value: मीडिया
-      - id: video
-        value: वीडियो
-      - id: audio
-        value: ऑडियो
-        synonyms: [म्यूज़िक, गाना]
+    - id: media
+      value: मीडिया
+    - id: video
+      value: वीडियो
+    - id: audio
+      value: ऑडियो
+      synonyms:
+      - म्यूज़िक
+      - गाना
   BrowseCategory:
     values:
-      - value: कलाकार
-        id: artists
-      - value: एल्बम
-        synonyms: [रिकॉर्ड]
-        id: albums
-      - value: फिल्में
-      - value: गाने
-        synonyms: [गाना, म्यूज़िक, ट्रैक]
-        id: songs
-      - value: शैलियाँ
-      - value: सीरीज़
-      - value: किताबें
+    - value: कलाकार
+      id: artists
+    - value: एल्बम
+      synonyms:
+      - रिकॉर्ड
+      id: albums
+    - value: फिल्में
+    - value: गाने
+      synonyms:
+      - गाना
+      - म्यूज़िक
+      - ट्रैक
+      id: songs
+    - value: शैलियाँ
+    - value: सीरीज़
+    - value: किताबें
   SeriesName:
     values:
-      - value: Breaking Bad
-      - value: Game of Thrones
-      - value: Stranger Things
-      - value: Money Heist
-      - value: Peaky Blinders
-      - value: The Walking Dead
-      - value: Dark
-      - value: Sherlock
-  # JF-583: restricted episode-position vocabulary on PlayNextEpisodeIntent
-  # (the Mood architecture). Ids are the shared cross-locale key space the
-  # handler's entity resolution reads.
+    - value: Breaking Bad
+    - value: Game of Thrones
+    - value: Stranger Things
+    - value: Money Heist
+    - value: Peaky Blinders
+    - value: The Walking Dead
+    - value: Dark
+    - value: Sherlock
   EpisodePosition:
     values:
-      - value: अगला
-        id: "next"
-        synonyms: [आगामी]
-      - value: नवीनतम
-        id: latest
-        synonyms: [सबसे नया, नया, आख़िरी]
-  # JF-875: seek vocabulary for SkipForwardBackIntent (the EpisodePosition
-  # shape: localized values over the shared English id key space the
-  # handler's entity resolution reads; SeekVocabulary.cs is the consuming
-  # half, its raw word sets carry these locale words as the no-ER
-  # fallback).
+    - value: अगला
+      id: next
+      synonyms:
+      - आगामी
+    - value: नवीनतम
+      id: latest
+      synonyms:
+      - सबसे नया
+      - नया
+      - आख़िरी
   SeekDirection:
     values:
-      - value: आगे
-        id: "forward"
-      - value: पीछे
-        id: "back"
+    - value: आगे
+      id: forward
+    - value: पीछे
+      id: back
   SeekUnit:
     values:
-      - value: सेकंड
-        id: "seconds"
-        synonyms: [सेकंड्स]
-      - value: मिनट
-        id: "minutes"
-        synonyms: [मिनटों, मिनट्स]
+    - value: सेकंड
+      id: seconds
+      synonyms:
+      - सेकंड्स
+    - value: मिनट
+      id: minutes
+      synonyms:
+      - मिनटों
+      - मिनट्स
   TimePeriod:
     values:
-      - id: today
-        value: आज
-        synonyms: [आज पहले]
-      - id: this_week
-        value: इस सप्ताह
-        synonyms: [पिछला सप्ताह, पिछले सप्ताह]
-      - id: this_month
-        value: इस महीने
-        synonyms: [पिछला महीना, पिछले महीने]
+    - id: today
+      value: आज
+      synonyms:
+      - आज पहले
+    - id: this_week
+      value: इस सप्ताह
+      synonyms:
+      - पिछला सप्ताह
+      - पिछले सप्ताह
+    - id: this_month
+      value: इस महीने
+      synonyms:
+      - पिछला महीना
+      - पिछले महीने
   MediaInfoType:
     values:
-      - id: title
-        value: शीर्षक
-        synonyms: [नाम]
-      - id: album
-        value: एल्बम
-        synonyms: [रिकॉर्ड]
-      - id: artist
-        value: कलाकार
-        synonyms: [गायक, बैंड, म्यूज़िशियन]
-      - id: year
-        value: साल
-        synonyms: [रिलीज़ साल]
-      - id: duration
-        value: अवधि
-        synonyms: [लंबाई, चलने का समय]
-      - id: genre
-        value: शैली
-        synonyms: [स्टाइल, म्यूज़िक का प्रकार]
-      - id: biography
-        value: जीवनी
-        synonyms: [बायो, कलाकार के बारे में]
-      - id: director
-        value: निर्देशक
-        synonyms: [डायरेक्टर, director]
-      - id: cast
-        value: अभिनेता
-        synonyms: [कलाकार मंडल, कास्ट, cast]
-      - id: season
-        value: सीज़न
-        synonyms: [season]
-      - id: episode
-        value: एपिसोड
-        synonyms: [कड़ी, episode]
-      - id: series
-        value: सीरीज़
-        synonyms: [श्रृंखला, series]
-      - id: author
-        value: लेखक
-        synonyms: [ऑथर, author]
-      - id: narrator
-        value: कथावाचक
-        synonyms: [नैरेटर, narrator]
-      - id: rating
-        value: रेटिंग
-        synonyms: [मूल्यांकन, rating]
+    - id: title
+      value: शीर्षक
+      synonyms:
+      - नाम
+    - id: album
+      value: एल्बम
+      synonyms:
+      - रिकॉर्ड
+    - id: artist
+      value: कलाकार
+      synonyms:
+      - गायक
+      - बैंड
+      - म्यूज़िशियन
+    - id: year
+      value: साल
+      synonyms:
+      - रिलीज़ साल
+    - id: duration
+      value: अवधि
+      synonyms:
+      - लंबाई
+      - चलने का समय
+    - id: genre
+      value: शैली
+      synonyms:
+      - स्टाइल
+      - म्यूज़िक का प्रकार
+    - id: biography
+      value: जीवनी
+      synonyms:
+      - बायो
+      - कलाकार के बारे में
+    - id: director
+      value: निर्देशक
+      synonyms:
+      - डायरेक्टर
+      - director
+    - id: cast
+      value: अभिनेता
+      synonyms:
+      - कलाकार मंडल
+      - कास्ट
+      - cast
+    - id: season
+      value: सीज़न
+      synonyms:
+      - season
+    - id: episode
+      value: एपिसोड
+      synonyms:
+      - कड़ी
+      - episode
+    - id: series
+      value: सीरीज़
+      synonyms:
+      - श्रृंखला
+      - series
+    - id: author
+      value: लेखक
+      synonyms:
+      - ऑथर
+      - author
+    - id: narrator
+      value: कथावाचक
+      synonyms:
+      - नैरेटर
+      - narrator
+    - id: rating
+      value: रेटिंग
+      synonyms:
+      - मूल्यांकन
+      - rating
   Decade:
     values:
-      - id: 50s
-        value: पचासवां दशक
-        synonyms: [50s, fifties, the fifties, '1950']
-      - id: 60s
-        value: साठवां दशक
-        synonyms: [60s, sixties, the sixties, '1960']
-      - id: 70s
-        value: सत्तरवां दशक
-        synonyms: [70s, seventies, the seventies, '1970']
-      - id: 80s
-        value: अस्सी का दशक
-        synonyms: [80s, eighties, the eighties, '1980']
-      - id: 90s
-        value: नब्बे का दशक
-        synonyms: [90s, nineties, the nineties, '1990']
-      - id: 2000s
-        value: दो हज़ार
-        synonyms: [2000s, two thousands, the 2000s, '2000']
-      - id: 2010s
-        value: दो हज़ार दस
-        synonyms: [2010s, twenty tens, '2010']
-      - id: 2020s
-        value: दो हज़ार बीस
-        synonyms: [2020s, twenty twenties, '2020']
+    - id: 50s
+      value: पचासवां दशक
+      synonyms:
+      - 50s
+      - fifties
+      - the fifties
+      - '1950'
+    - id: 60s
+      value: साठवां दशक
+      synonyms:
+      - 60s
+      - sixties
+      - the sixties
+      - '1960'
+    - id: 70s
+      value: सत्तरवां दशक
+      synonyms:
+      - 70s
+      - seventies
+      - the seventies
+      - '1970'
+    - id: 80s
+      value: अस्सी का दशक
+      synonyms:
+      - 80s
+      - eighties
+      - the eighties
+      - '1980'
+    - id: 90s
+      value: नब्बे का दशक
+      synonyms:
+      - 90s
+      - nineties
+      - the nineties
+      - '1990'
+    - id: 2000s
+      value: दो हज़ार
+      synonyms:
+      - 2000s
+      - two thousands
+      - the 2000s
+      - '2000'
+    - id: 2010s
+      value: दो हज़ार दस
+      synonyms:
+      - 2010s
+      - twenty tens
+      - '2010'
+    - id: 2020s
+      value: दो हज़ार बीस
+      synonyms:
+      - 2020s
+      - twenty twenties
+      - '2020'
   AudiobookTitle:
     values:
-      - value: ऑडियोबुक
-        synonyms: []
+    - value: ऑडियोबुक
+      synonyms: []
 dialog:
   intents:
-    - name: SetPlaybackSpeedIntent
+  - name: SetPlaybackSpeedIntent
+    confirmationRequired: false
+    slots:
+    - name: speed
+      type: SpeedRate
       confirmationRequired: false
-      slots:
-        - name: speed
-          type: SpeedRate
-          confirmationRequired: false
-          elicitationRequired: false
-    - name: RateItemIntent
+      elicitationRequired: false
+  - name: RateItemIntent
+    confirmationRequired: false
+    slots:
+    - name: star_rating
+      type: AMAZON.NUMBER
       confirmationRequired: false
-      slots:
-        - name: star_rating
-          type: AMAZON.NUMBER
-          confirmationRequired: false
-          elicitationRequired: false
-    - name: PlayVideoIntent
+      elicitationRequired: false
+  - name: PlayVideoIntent
+    confirmationRequired: false
+    slots:
+    - name: title
+      type: AMAZON.SearchQuery
       confirmationRequired: false
-      slots:
-        - name: title
-          type: AMAZON.SearchQuery
-          confirmationRequired: false
-          elicitationRequired: false
-    - name: PlayEpisodeIntent
+      elicitationRequired: false
+  - name: PlayEpisodeIntent
+    confirmationRequired: false
+    slots:
+    - name: series_name
+      type: SeriesName
       confirmationRequired: false
-      slots:
-        - name: series_name
-          type: SeriesName
-          confirmationRequired: false
-          elicitationRequired: false
-        - name: season_number
-          type: AMAZON.NUMBER
-          confirmationRequired: false
-          elicitationRequired: false
-        - name: episode_number
-          type: AMAZON.NUMBER
-          confirmationRequired: false
-          elicitationRequired: false
-    - name: PlaySongIntent
+      elicitationRequired: false
+    - name: season_number
+      type: AMAZON.NUMBER
       confirmationRequired: false
-      slots:
-        - name: song
-          type: AMAZON.MusicRecording
-          confirmationRequired: false
-          elicitationRequired: false
-        - name: musician
-          type: AMAZON.Musician
-          confirmationRequired: false
-          elicitationRequired: false
-    - name: PlayAlbumIntent
+      elicitationRequired: false
+    - name: episode_number
+      type: AMAZON.NUMBER
       confirmationRequired: false
-      slots:
-        - name: album
-          type: AMAZON.MusicRecording
-          confirmationRequired: false
-          elicitationRequired: false
-        - name: musician
-          type: AMAZON.Musician
-          confirmationRequired: false
-          elicitationRequired: false
-    - name: FindSongIntent
+      elicitationRequired: false
+  - name: PlaySongIntent
+    confirmationRequired: false
+    slots:
+    - name: song
+      type: AMAZON.MusicRecording
       confirmationRequired: false
-      slots:
-        - name: titleKeywords
-          type: AMAZON.SearchQuery
-          confirmationRequired: false
-          elicitationRequired: false
-    - name: FindSongByArtistIntent
+      elicitationRequired: false
+    - name: musician
+      type: AMAZON.Musician
       confirmationRequired: false
-      slots:
-        - name: musician
-          type: AMAZON.Musician
-          confirmationRequired: false
-          elicitationRequired: false
-    - name: ShufflePlayIntent
+      elicitationRequired: false
+  - name: PlayAlbumIntent
+    confirmationRequired: false
+    slots:
+    - name: album
+      type: AMAZON.MusicRecording
       confirmationRequired: false
-      slots:
-        - name: playlist
-          type: AMAZON.SearchQuery
-          confirmationRequired: false
-          elicitationRequired: false
-    - name: PlayRadioIntent
+      elicitationRequired: false
+    - name: musician
+      type: AMAZON.Musician
       confirmationRequired: false
-      slots:
-        - name: station
-          type: AMAZON.SearchQuery
-          confirmationRequired: false
-          elicitationRequired: false
-    - name: PlayNextEpisodeIntent
+      elicitationRequired: false
+  - name: FindSongIntent
+    confirmationRequired: false
+    slots:
+    - name: titleKeywords
+      type: AMAZON.SearchQuery
       confirmationRequired: false
-      slots:
-        - name: series_name
-          type: SeriesName
-          confirmationRequired: false
-          elicitationRequired: false
-        - name: episode_position
-          type: EpisodePosition
-          confirmationRequired: false
-          elicitationRequired: false
-    - name: PlayPodcastIntent
+      elicitationRequired: false
+  - name: FindSongByArtistIntent
+    confirmationRequired: false
+    slots:
+    - name: musician
+      type: AMAZON.Musician
       confirmationRequired: false
-      slots:
-        - name: podcast_name
-          type: AMAZON.SearchQuery
-          confirmationRequired: false
-          elicitationRequired: false
-    - name: SleepTimerIntent
+      elicitationRequired: false
+  - name: ShufflePlayIntent
+    confirmationRequired: false
+    slots:
+    - name: playlist
+      type: AMAZON.SearchQuery
       confirmationRequired: false
-      slots:
-        - name: sleep_duration
-          type: AMAZON.DURATION
-          confirmationRequired: false
-          elicitationRequired: false
-    - name: SetReminderIntent
+      elicitationRequired: false
+  - name: PlayRadioIntent
+    confirmationRequired: false
+    slots:
+    - name: station
+      type: AMAZON.SearchQuery
       confirmationRequired: false
-      slots:
-        - name: reminder_duration
-          type: AMAZON.DURATION
-          confirmationRequired: false
-          elicitationRequired: false
-        - name: reminder_time
-          type: AMAZON.TIME
-          confirmationRequired: false
-          elicitationRequired: false
-    - name: AddToQueueIntent
+      elicitationRequired: false
+  - name: PlayNextEpisodeIntent
+    confirmationRequired: false
+    slots:
+    - name: series_name
+      type: SeriesName
       confirmationRequired: false
-      slots:
-        - name: song
-          type: AMAZON.MusicRecording
-          confirmationRequired: false
-          elicitationRequired: false
-        - name: musician
-          type: AMAZON.Musician
-          confirmationRequired: false
-          elicitationRequired: false
-    - name: PlayNextIntent
+      elicitationRequired: false
+    - name: episode_position
+      type: EpisodePosition
       confirmationRequired: false
-      slots:
-        - name: song
-          type: AMAZON.MusicRecording
-          confirmationRequired: false
-          elicitationRequired: false
-        - name: musician
-          type: AMAZON.Musician
-          confirmationRequired: false
-          elicitationRequired: false
-    - name: QueryArtistLibraryIntent
+      elicitationRequired: false
+  - name: PlayPodcastIntent
+    confirmationRequired: false
+    slots:
+    - name: podcast_name
+      type: AMAZON.SearchQuery
       confirmationRequired: false
-      slots:
-        - name: musician
-          type: AMAZON.Musician
-          confirmationRequired: false
-          elicitationRequired: false
-        - name: query_type
-          type: LibraryQueryType
-          confirmationRequired: false
-          elicitationRequired: false
-    - name: PlayArtistSongsIntent
+      elicitationRequired: false
+  - name: SleepTimerIntent
+    confirmationRequired: false
+    slots:
+    - name: sleep_duration
+      type: AMAZON.DURATION
       confirmationRequired: false
-      slots:
-        - name: musician
-          type: AMAZON.Musician
-          confirmationRequired: false
-          elicitationRequired: false
-    - name: BrowseLibraryIntent
+      elicitationRequired: false
+  - name: SetReminderIntent
+    confirmationRequired: false
+    slots:
+    - name: reminder_duration
+      type: AMAZON.DURATION
       confirmationRequired: false
-      slots:
-        - name: browse_category
-          type: BrowseCategory
-          confirmationRequired: false
-          elicitationRequired: false
-        - name: filter
-          type: AMAZON.SearchQuery
-          confirmationRequired: false
-          elicitationRequired: false
-    - name: PlayMoodMusicIntent
+      elicitationRequired: false
+    - name: reminder_time
+      type: AMAZON.TIME
       confirmationRequired: false
-      slots:
-        - name: mood
-          type: Mood
-          confirmationRequired: false
-          elicitationRequired: false
-    - name: PlayPlaylistIntent
+      elicitationRequired: false
+  - name: AddToQueueIntent
+    confirmationRequired: false
+    slots:
+    - name: song
+      type: AMAZON.MusicRecording
       confirmationRequired: false
-      slots:
-        - name: playlist
-          type: AMAZON.SearchQuery
-          confirmationRequired: false
-          elicitationRequired: false
-    - name: AddSongToPlaylistIntent
+      elicitationRequired: false
+    - name: musician
+      type: AMAZON.Musician
       confirmationRequired: false
-      slots:
-        - name: song_query
-          type: AMAZON.SearchQuery
-          confirmationRequired: false
-          elicitationRequired: false
-        - name: playlist_target
-          type: AMAZON.SearchQuery
-          confirmationRequired: false
-          elicitationRequired: false
+      elicitationRequired: false
+  - name: PlayNextIntent
+    confirmationRequired: false
+    slots:
+    - name: song
+      type: AMAZON.MusicRecording
+      confirmationRequired: false
+      elicitationRequired: false
+    - name: musician
+      type: AMAZON.Musician
+      confirmationRequired: false
+      elicitationRequired: false
+  - name: QueryArtistLibraryIntent
+    confirmationRequired: false
+    slots:
+    - name: musician
+      type: AMAZON.Musician
+      confirmationRequired: false
+      elicitationRequired: false
+    - name: query_type
+      type: LibraryQueryType
+      confirmationRequired: false
+      elicitationRequired: false
+  - name: PlayArtistSongsIntent
+    confirmationRequired: false
+    slots:
+    - name: musician
+      type: AMAZON.Musician
+      confirmationRequired: false
+      elicitationRequired: false
+  - name: BrowseLibraryIntent
+    confirmationRequired: false
+    slots:
+    - name: browse_category
+      type: BrowseCategory
+      confirmationRequired: false
+      elicitationRequired: false
+    - name: filter
+      type: AMAZON.SearchQuery
+      confirmationRequired: false
+      elicitationRequired: false
+  - name: PlayMoodMusicIntent
+    confirmationRequired: false
+    slots:
+    - name: mood
+      type: Mood
+      confirmationRequired: false
+      elicitationRequired: false
+  - name: PlayPlaylistIntent
+    confirmationRequired: false
+    slots:
+    - name: playlist
+      type: AMAZON.SearchQuery
+      confirmationRequired: false
+      elicitationRequired: false
+  - name: AddSongToPlaylistIntent
+    confirmationRequired: false
+    slots:
+    - name: song_query
+      type: AMAZON.SearchQuery
+      confirmationRequired: false
+      elicitationRequired: false
+    - name: playlist_target
+      type: AMAZON.SearchQuery
+      confirmationRequired: false
+      elicitationRequired: false

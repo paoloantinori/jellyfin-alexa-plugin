@@ -480,7 +480,6 @@ explicit_intents:
     samples:
       - Cosa stavo guardando
       - Mostrami i video in corso
-      - Riprendi a guardare
       - Cosa ho lasciato a metà
       - Cosa ho lasciato a meta
       - quali video non ho finito
@@ -978,7 +977,6 @@ explicit_intents:
       - riproduci la radio
       - suona la radio
       - metti la radio
-      - attiva la radio
       - modalità radio
       - riproduci musica simile
       - suona brani simili

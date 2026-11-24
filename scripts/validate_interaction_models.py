@@ -284,6 +284,13 @@ def validate_single_model(locale: str, lm: dict) -> tuple[list[str], list[str]]:
     warnings: list[str] = []
     prefix = f"  [{locale}]"
 
+    # Cross-intent exact-duplicate collector (the collision audit's fix,
+    # 2026-11-24: fires at ERROR level because no legitimate reason exists
+    # for the same exact sample on two different intents; the trainer coin
+    # decides the winner per locale and per build, which is the documented
+    # whack-a-mole pattern).
+    cross_intent_samples: dict[str, str] = {}
+
     # 1. Required fields
     invocation = lm.get("invocationName")
     if not invocation or not invocation.strip():
@@ -316,6 +323,15 @@ def validate_single_model(locale: str, lm: dict) -> tuple[list[str], list[str]]:
                 if s in seen:
                     warnings.append(f"{prefix} Intent '{name}': duplicate sample '{s[:60]}'")
                 seen.add(s)
+                # Cross-intent collection
+                key = s.lower().strip()
+                if key in cross_intent_samples and cross_intent_samples[key] != name:
+                    errors.append(
+                        f"{prefix} Exact duplicate sample '{s[:60]}' on both "
+                        f"'{cross_intent_samples[key]}' and '{name}': no legitimate "
+                        f"reason exists for the same utterance on two intents")
+                else:
+                    cross_intent_samples[key] = name
 
         # 4. Slot validation
         slots = intent.get("slots", [])

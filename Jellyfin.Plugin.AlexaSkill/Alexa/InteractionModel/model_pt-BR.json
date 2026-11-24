@@ -341,10 +341,7 @@
         "samples": [
           "continuar assistindo",
           "continuar ouvindo",
-          "retomar de onde parei",
-          "o que eu estava assistindo",
-          "continuar tocando",
-          "continuar"
+          "retomar de onde parei"
         ]
       },
       {
@@ -574,7 +571,6 @@
         "name": "InProgressMediaListIntent",
         "samples": [
           "o que eu estava ouvindo",
-          "o que eu estava assistindo",
           "o que está em andamento",
           "mostrar meu progresso",
           "o que eu estava tocando",

@@ -1,1310 +1,1282 @@
-# French (Canada) interaction model template for the Alexa skill.
-#
-# JF-316 milestone 4: golden master. Faithful transcription of the
-# hand-grown model_fr-CA.json (63 intents, 411 samples);
-# `python3 scripts/generate_interaction_model.py fr-CA` reproduces it
-# byte-identically.
-#
-# Run: python3 scripts/generate_interaction_model.py fr-CA
-#
-# JF-399 (2026-09-26): FindSongByArtistIntent enriched 3 -> 11 (FindSong
-# openers crossed with the de-artist tail; the chanson/morceau noun pair
-# mirrors it-IT's canzone/brano; bare-noun wrapper shape). Skipped carrier
-# family: the is-there opener ("c'e una canzone di X") is not part of this
-# locale's FindSong opener set. Identical to fr-FR's enrichment.
-#
-# fr-CA is identical to fr-FR (intent sequence, key orders, types,
-# dialog, Mood block) except exactly:
-# - FollowMe drops "reprendre où j'en étais" (4 samples vs fr-FR's 5).
-# - PlayArtistSongs drops its last 6 samples (the "des {musician}"
-#   variants and the J'écoute / Je veux écouter la musique de forms),
-#   keeping 36 of fr-FR's 42 (the JF-907 LIRE twin rides both locales).
-# - PlayPlaylist drops "Démarrer ma playlist {playlist}" and "Mettre
-#   la playlist {playlist}", keeping 10 of fr-FR's 12.
-# - MediaInfo drops "Qu'est-ce qui est en cours" (44 samples vs
-#   fr-FR's 45).
-# - Recommend drops "suggère {media_type}" (6 samples vs fr-FR's 7).
-# - MediaType's synonym lists are trimmed: vidéo carries [film, clip,
-#   épisode] (fr-FR also has films / clips / épisodes) and Audio
-#   carries [musique, chanson, morceau] (fr-FR has 5).
-# Every dropped sample is removed at its position; nothing is added
-# or reordered. Everything else (the AMAZON.Musician built-in
-# musician slots with no JellyfinArtist type and no JF-415 seed, the
-# 8-type roster before JF-583, the absent modelConfiguration, the no-prompts
-# dialog) is verbatim fr-FR. See fr-FR.yaml for the family
-# invariants.
-#
-# The Mood type is OWNED HERE since JF-316 milestone 4:
-# generate_mood_slot.py no longer writes this locale (fr-CA was an
-# alias of the deleted fr-FR LOCALE_MOODS entry, and the committed
-# block is value-for-value the fr-FR one); a mood-word change is an
-# edit to this template + regen.
-# JF-583: PlayNextEpisodeIntent carries the episode_position slot
-# (custom EpisodePosition type, the Mood architecture) distinguishing
-# 'next' (NextUp, the empty-slot default) from 'latest' (recency,
-# PremiereDate desc); see the intent and type blocks for this locale's
-# values.
 invocationName: mon serveur
 intents:
-  - name: ShowLyricsIntent
-    samples:
-      - affiche les paroles
-      - montre les paroles
-      - lis les paroles
-  - name: QueryRecentlyAddedIntent
-    samples:
-      - quoi de neuf
-      - qu'est-ce qui a été ajouté récemment
-      - montre-moi les nouveautés
-      - y a-t-il du nouveau
-      - quels sont les derniers ajouts
-      - quoi de neuf dans ma bibliothèque
-      - lister les éléments récents
-  - name: FollowMeIntent
-    samples:
-      - suis-moi
-      - continuer la lecture
-      - reprendre la lecture
-      - transférer la lecture
-  - AMAZON.CancelIntent
-  - AMAZON.HelpIntent
-  - AMAZON.StopIntent
-  - AMAZON.FallbackIntent
-  - AMAZON.PauseIntent
-  - AMAZON.ResumeIntent
-  - AMAZON.NextIntent
-  - AMAZON.PreviousIntent
-  - AMAZON.YesIntent
-  - AMAZON.NoIntent
-  - name: ShuffleAllOnIntent
-    samples:
-      # Live-probed 2026-09-23: local shuffle words do NOT route via the built-in
-      # (active la lecture aléatoire -> FollowMeIntent); custom twins per the
-      # loop-family precedent (JF-450).
-      - active la lecture aléatoire
-      - mélange la file d'attente
-      - lecture aléatoire
-  - name: ShuffleAllOffIntent
-    samples:
-      - désactive la lecture aléatoire
-      - arrête la lecture aléatoire
-  - name: LoopAllOffIntent
-    samples:
-      - Désactive la boucle
-      - Désactive la répétition
-  - name: LoopAllOnIntent
-    samples:
-      # JF-902: queue-scoped wording ONLY (JF-901 made bare loop-activation
-      # mean repeat-ONE; 'Active la boucle'/'Active la répétition' moved to
-      # LoopSongOnIntent below instead of being dropped: without an exact row
-      # the local loop words have no reliable claim, the same built-in gap the
-      # shuffle probes documented live 2026-09-23). Naming the queue keeps
-      # repeat-ALL reachable by voice, mirroring 'mélange la file d'attente'.
-      - Répète la file d'attente
-      - Répète toute la file d'attente
-      - Mets la file d'attente en boucle
-      # The De-infinitive wrapper twins (this template's 'De jouer le film'
-      # convention; the JF-844 wrapper discipline, JF-902 code-review round):
-      # without them the one-shot tail generalizes into the repeat-one
-      # 'Répète la chanson'/'Répète' region.
-      - De répéter la file d'attente
-      - De répéter toute la file d'attente
-  - name: RepeatSingleOnIntent
-    samples:
-      - Répète la chanson
-      - Répète le morceau
-      - Répète la vidéo
-      - Répète
-  # JF-562: the Loop* built-ins ride next to the custom loop trio above. The
-  # OFF pair still dual-accepts both names (do not remove it: Amazon-side
-  # models built before the JF-562 declarations still deliver only the custom
-  # names); the ON pair's dual accept ended at JF-901 (do not re-add it). The
-  # JF-902 sample split and its full rationale live on the loop intent
-  # constants in IntentNames.
-  - AMAZON.LoopOnIntent
-  - AMAZON.LoopOffIntent
-  - AMAZON.ShuffleOnIntent
-  - AMAZON.ShuffleOffIntent
-  - AMAZON.StartOverIntent
-  - AMAZON.RepeatIntent
-  - name: PlayChannelIntent
-    samples:
-      - Chaîne {channel}
-      - Lis la radio {channel}
-      - Radio {channel}
-    slots:
-      - name: channel
-        type: AMAZON.SearchQuery
-  - name: PlaySongIntent
-    samples:
-      - Lis {song}
-      - Lis la chanson {song}
-      - Lis chanson {song}
-      - Lis {song} de {musician}
-      - Lis la chanson {song} de {musician}
-      - Écoute {song}
-      - Écoute la chanson {song}
-      - Écoute {song} de {musician}
-      - Écoute la chanson {song} de {musician}
-      - Mets {song}
-      - Mets la chanson {song}
-      - Mets {song} de {musician}
-      - Je veux écouter {song}
-      - Lance {song}
-      - Lance la chanson {song}
-      - Passe {song}
-      - Diffuse {song}
-      - Je veux entendre {song}
-      - Mets le morceau {song}
-      - Lis le titre {song}
-      - Commence {song}
-    slots:
-      - name: song
-        type: AMAZON.MusicRecording
-      - name: musician
-        type: AMAZON.Musician
-  - name: PlayAlbumIntent
-    samples:
-      - Lis l'album {album}
-      - Lis album {album}
-      - Lis l'album {album} de {musician}
-      - Écoute l'album {album}
-      - Écoute l'album {album} de {musician}
-      - Mets l'album {album}
-      - Lance l'album {album}
-      - Mets le disque {album}
-      - un album de {musician}
-      - Lis un album de {musician}
-      - Écoute un album de {musician}
-    slots:
-      - name: album
-        type: AMAZON.MusicRecording
-      - name: musician
-        type: AMAZON.Musician
-  - name: PlayVideoIntent
-    samples:
-      - Lis la vidéo {title}
-      - Je veux regarder {title}
-      - On regarde {title}
-      - Je voudrais voir {title}
-      - montre-moi {title}
-      - peux-tu me montrer {title}
-      - mets le film {title}
-      - je veux voir {title}
-      - diffuse le film {title}
-      - De jouer le film {title}
-      # JF-907: the METTRE twin (the JF-900 fallback maps mets->mettre, so
-      # the smoke one-shot composes 'de mettre le film X'; the bare
-      # 'mets le film {title}' row above is its imperative twin).
-      - De mettre le film {title}
-      - Je veux regarder le film {title}
-      - Cherche le film {title}
-    slots:
-      - name: title
-        type: AMAZON.SearchQuery
-  - name: PlayArtistSongsIntent
-    samples:
-      - Lis les chansons de {musician}
-      - Lis la musique de {musician}
-      - Lis les titres de {musician}
-      - Lis les morceaux de {musician}
-      - Lis {musician}
-      - Écoute {musician}
-      - Écoute les chansons de {musician}
-      - Écoute la musique de {musician}
-      - Écoute les titres de {musician}
-      - Mets {musician}
-      - Mets les chansons de {musician}
-      - Mets la musique de {musician}
-      - Je veux écouter {musician}
-      - Je veux entendre {musician}
-      - Lance {musician}
-      - Lance les chansons de {musician}
-      - Lance la musique de {musician}
-      - Diffuse {musician}
-      - Diffuse les chansons de {musician}
-      - Mets des titres de {musician}
-      - Passe {musician}
-      - Passe les chansons de {musician}
-      - Commence {musician}
-      - Joue les {musician}
-      - Mets les {musician}
-      - Passe les {musician}
-      - Écoute les {musician}
-      - Lance les {musician}
-      - Diffuse les {musician}
-      - De jouer les {musician}
-      - De mettre les {musician}
-      - De passer les {musician}
-      - D'écouter les {musician}
-      - De lancer les {musician}
-      - De diffuser les {musician}
-      # JF-907: the LIRE twin of the 'Lis les chansons de' family above. The
-      # JF-900 fallback composes 'de lire les chansons de X'; without this
-      # row that one-shot is stolen by QueryArtistLibraryIntent (live steal
-      # 2026-10-17; profile-nlu reproduced it for the composed form in both
-      # locales).
-      - De lire les chansons de {musician}
-    slots:
-      - name: musician
-        type: AMAZON.Musician
-  - name: PlayLastAddedIntent
-    samples:
-      - Lis les derniers {media_type} ajoutés
-      - Lis les nouveautés {media_type}
-      - Lis les nouveaux médias
-    slots:
-      - name: media_type
-        type: MediaType
-  - name: PlayRandomIntent
-    samples:
-      - Joue un {media_type} aléatoire
-      - Joue des {media_type} au hasard
-      - Lance un {media_type} aléatoire
-      - Joue quelque chose au hasard
-      - Joue un {media_type} aléatoire de {genre}
-      - Surprends-moi avec des {media_type}
-    slots:
-      - name: media_type
-        type: MediaType
-      - name: genre
-        type: AMAZON.Genre
-  - name: PlayByGenreIntent
-    samples:
-      - Joue de la musique {genre}
-      - Joue du {genre}
-      - Je veux écouter du {genre}
-      - Mets du {genre}
-      - Joue des chansons {genre}
-    slots:
-      - name: genre
-        type: AMAZON.Genre
-  - name: ContinueWatchingIntent
-    samples:
-      - Continuer à regarder
-      - Continuer à écouter
-      - Reprendre où j'en étais
-      - Continuer
-  - name: GoToChapterIntent
-    samples:
-      - Chapitre suivant
-      - Chapitre précédent
-      - Aller au chapitre {chapter_number}
-      - Sauter au chapitre {chapter_number}
-      - Avancer d'un chapitre
-      - Reculer d'un chapitre
-    slots:
-      - name: chapter_number
-        type: AMAZON.NUMBER
-  # JF-875 (2026-10-12): the SkipForwardBack family (en-US + it-IT carried it
-  # until now; this locale was the JF-684 no-selection class for every
-  # skip-forward/back-style ask). The family ships in the JF-869 it-IT shape:
-  # the direction word rides ONLY the slotted {seek_direction} position (a
-  # direction-literal row delivers an empty slot and the handler's forward
-  # default seeks the wrong way, the en-US wrong-way bug this rollout must not
-  # re-import), no bare direction-only rows (the it-IT transport-steal
-  # lesson: bare direction words steal the built-in Next/Previous routing),
-  # and verbs that ARE the direction (the locale's rewind-class verbs) ride
-  # the slot as SeekDirection synonyms (the rewind-as-synonym mechanism) on
-  # the verb-initial bare row.
-  # The de-connector carries the amount (the locale's GoToChapter uses the
-  # same d'un-chapter shape); the bare row's avance/recule verb-direction
-  # synonyms are the natural spoken forms ("avance de trente secondes").
-  # skip family; the it-IT "salta di {seek_amount} {seek_unit}" direction-less
-  # default-forward twin is deliberately OMITTED: the direction phrase is
-  # grammatical in French only with it ("saute 30 secondes" sans en avant
-  # tronque), so a direction-less row would only harvest misalignments.
-  # JF-877 (2026-10-19): the bare-infinitive wrapper-tail twins at the tail of
-  # the sample list (the it-IT saltare precedent). Live probe (profile-nlu
-  # 2026-10-19 23:05, skill 33dfacd5): the composed direction-only wrapper
-  # "demande à mon serveur de sauter en arrière" read AMAZON.FallbackIntent
-  # 1/1 here (3/3 on fr-FR), the condemned row; the composed amount wrapper
-  # "demande à mon serveur de sauter en avant de trente secondes" already
-  # routes SkipForwardBackIntent via trainer generalization from the JF-875
-  # base rows, and its explicit twin pins that routing. The JF-869/JF-875
-  # rules above still bind: no bare direction-only row, no direction-literal
-  # row, no new slot.
-  - name: SkipForwardBackIntent
-    samples:
-      - saute {seek_direction}
-      - saute {seek_direction} de {seek_amount} {seek_unit}
-      - '{seek_direction} de {seek_amount} {seek_unit}'
-      - sauter {seek_direction}
-      - sauter {seek_direction} de {seek_amount} {seek_unit}
-      # The prefixed wrapper twin, the it-IT 'di saltare {seek_direction}'
-      # precedent verbatim: the composed one-shot's "de sauter ..." tail
-      # aligns on an EXPLICIT row (it-IT live A/B: the bare-infinitive twins
-      # alone left the wrapper on trainer generalization, which flipped red;
-      # code-review F1 2026-10-20). Direction-only, mirroring it-IT: the
-      # amount shape stays on the bare-infinitive twin above.
-      - de sauter {seek_direction}
-    slots:
-      - name: seek_direction
-        type: SeekDirection
-      - name: seek_amount
-        type: AMAZON.NUMBER
-      - name: seek_unit
-        type: SeekUnit
-  - name: PlayPlaylistIntent
-    samples:
-      - Lis la playlist {playlist}
-      - Lis ma playlist {playlist}
-      - Joue la playlist {playlist}
-      - Joue ma playlist {playlist}
-      - Mets la playlist {playlist}
-      - Lance la playlist {playlist}
-      - Lance ma playlist {playlist}
-      - Démarrer la playlist {playlist}
-      - De jouer la playlist {playlist}
-      - De lancer la playlist {playlist}
-    slots:
-      - name: playlist
-        type: AMAZON.SearchQuery
-  - name: AddCurrentToPlaylistIntent
-    samples:
-      - Ajoute ce titre à la liste de lecture {playlist}
-      - Ajoute la chanson en cours à la liste de lecture {playlist}
-      - Mets ce titre dans la liste de lecture {playlist}
-    slots:
-      - name: playlist
-        type: AMAZON.SearchQuery
-  - name: AddSongToPlaylistIntent
-    samples:
-      - Ajoute la chanson {song_query}
-      - Ajoute {song_query}
-      - ajoute à la liste de lecture {playlist_target}
-    slots:
-      - name: song_query
-        type: AMAZON.SearchQuery
-      - name: playlist_target
-        type: AMAZON.SearchQuery
-  - name: RemoveCurrentFromPlaylistIntent
-    samples:
-      - Retire ce titre de la liste de lecture {playlist}
-      - Enlève la chanson en cours de la liste de lecture {playlist}
-    slots:
-      - name: playlist
-        type: AMAZON.SearchQuery
-  - name: CreatePlaylistIntent
-    samples:
-      - Crée une liste de lecture appelée {playlist}
-      - Crée une nouvelle liste de lecture appelée {playlist}
-      - Crée une liste de lecture {playlist}
-      - Nouvelle liste de lecture {playlist}
-    slots:
-      - name: playlist
-        type: AMAZON.SearchQuery
-  - name: PlayFavoritesIntent
-    samples:
-      - Lis mes {media_type} préférés
-      - Lis mes favoris
-      # JF-907: De-infinitive wrapper twin of the row above (the JF-900
-      # fallback composes 'de lire mes favoris'; the slotless twin shape is
-      # the proven full-form fix, cf. 'De répéter la file d'attente').
-      - De lire mes favoris
-      - joue les favoris de {username}
-      - mets les favoris de {username}
-      - écoute les favoris de {username}
-      - joue les chansons favorites de {username}
-      - joue {media_type} favoris de {username}
-    slots:
-      - name: media_type
-        type: MediaType
-      - name: username
-        type: AMAZON.Person
-  - name: MarkFavoriteIntent
-    samples:
-      - J'aime bien
-      - J'aime cette vidéo
-      - J'aime cette chanson
-      - J'aime cette musique
-      - Ajoute la vidéo aux favoris
-      - Ajoute la chanson aux favoris
-  - name: UnmarkFavoriteIntent
-    samples:
-      - Je n'aime pas ça
-      - Je n'aime pas cette vidéo
-      - Je n'aime pas cette chanson
-      - Je n'aime pas cette musique
-      - Retire la vidéo des favoris
-      - Retire la chanson des favoris
-  - name: RateItemIntent
-    samples:
-      - Mets {star_rating} étoiles
-      - Mets {star_rating} étoiles à cette chanson
-      - Donne {star_rating} étoiles à cette chanson
-      - Évalue cette chanson avec {star_rating} étoiles
-      - Mets {star_rating} étoiles à ce titre
-    slots:
-      - name: star_rating
-        type: AMAZON.NUMBER
-  - name: MediaInfoIntent
-    slots:
-      - name: media_info_type
-        type: MediaInfoType
-    samples:
-      - Quel est le {media_info_type}
-      - Quelle est la {media_info_type}
-      - Dis-moi le {media_info_type}
-      - Dis-moi la {media_info_type}
-      - Quel {media_info_type} est-ce
-      - Quelle {media_info_type} est-ce
-      - Qu'est-ce qui joue
-      - Quelle est cette chanson
-      - Qui chante
-      - Qui chante cette chanson
-      - De quel album
-      - De quelle année
-      - Quand est-ce sorti
-      - Combien de temps
-      - Combien de temps dure cette chanson
-      - Quel genre est-ce
-      - Parle-moi de l'artiste
-      - Raconte-moi l'artiste
-      - quelle chanson est en train de jouer
-      - quel est le nom de cette chanson
-      - qui a fait cette chanson
-      - quel est le nom de l'album
-      - quand est sortie cette chanson
-      - quel est le genre de cette musique
-      - donne-moi des infos sur ce morceau
-      - dis-moi le nom de l'artiste
-      - de quel album vient cette chanson
-      - qui est l'artiste de ce morceau
-      - quelle saison est-ce
-      - c'est quelle saison
-      - quel épisode est-ce
-      - c'est quel épisode
-      - c'est quelle série
-      - qui a réalisé ça
-      - qui est le réalisateur
-      - qui joue dedans
-      - qui sont les acteurs
-      - qui est l'auteur
-      - qui a écrit ça
-      - qui est le narrateur
-      - qui raconte ça
-      - quelle est la note
-      - comment est-ce noté
-      - quelle est l'évaluation
-  - name: InProgressMediaListIntent
-    samples:
-      - qu'est-ce que j'écoute
-      - qu'est-ce que je regarde
-      - quoi en cours
-      - afficher ma progression
-      - qu'ai-je commencé
-  - name: PlayEpisodeIntent
-    slots:
-      - name: series_name
-        type: SeriesName
-      - name: season_number
-        type: AMAZON.NUMBER
-      - name: episode_number
-        type: AMAZON.NUMBER
-    samples:
-      - joue la saison {season_number} épisode {episode_number} de {series_name}
-      - joue {series_name} saison {season_number} épisode {episode_number}
-      - regarde la saison {season_number} épisode {episode_number} de {series_name}
-      - De jouer la saison {season_number} épisode {episode_number} de {series_name}
-      - De regarder la saison {season_number} épisode {episode_number} de {series_name}
-      # JF-549: series-first one-shot twins (series-last alone dropped series_name; it-IT live 2026-09-12).
-      - De jouer {series_name} saison {season_number} épisode {episode_number}
-      - De regarder {series_name} saison {season_number} épisode {episode_number}
-      # JF-814: season-less family; the handler elicits the missing season.
-      - joue l'épisode {episode_number} de {series_name}
-      - regarde l'épisode {episode_number} de {series_name}
-      - De jouer l'épisode {episode_number} de {series_name}
-  # JF-583: the prochain/dernier carriers are slotted ({episode_position},
-  # custom EpisodePosition type): prochain keeps NextUp, dernier resolves by
-  # recency; 'continue à regarder' carries no position (NextUp by design).
-  - name: PlayNextEpisodeIntent
-    slots:
-      - name: series_name
-        type: SeriesName
-      - name: episode_position
-        type: EpisodePosition
-    samples:
-      - joue {episode_position} épisode de {series_name}
-      - joue {episode_position} épisode de la série {series_name}
-      - mets {episode_position} épisode de {series_name}
-      # JF-814 competition steal audit: the articled noun-first twins claim
-      # "l'épisode prochain de X" back from the season-less PlayEpisode
-      # family (full rationale in the JF-814 notes; prochain fills the slot).
-      - joue l'épisode {episode_position} de {series_name}
-      - mets l'épisode {episode_position} de {series_name}
-      - regarde l'épisode {episode_position} de {series_name}
-      - continue à regarder {series_name}
-      - De jouer {episode_position} épisode de {series_name}
-      - De jouer {episode_position} épisode de la série {series_name}
-      - De mettre {episode_position} épisode de {series_name}
-      - De jouer l'épisode {episode_position} de {series_name}
-      - De mettre l'épisode {episode_position} de {series_name}
-      - De continuer à regarder {series_name}
-  - name: BrowseLibraryIntent
-    slots:
-      - name: browse_category
-        type: BrowseCategory
-      # JF-557: the genre filter. AMAZON.SearchQuery coexists with the
-      # browse_category slot ONLY because no single sample carries both
-      # (anti-pattern #2); the genre carriers below name the category
-      # literally.
-      - name: filter
-        type: AMAZON.SearchQuery
-    samples:
-      - '{browse_category}'
-      - juste {browse_category}
-      - je veux {browse_category}
-      - parcourir {browse_category}
-      - montre-moi {browse_category}
-      - lister {browse_category}
-      - quels {browse_category} ai-je
-      - quels {browse_category} y a-t-il
-      # JF-557: genre-filter carriers (literal category + free-text filter).
-      - parcourir genres {filter}
-      - montre-moi genres {filter}
-  - name: RecommendIntent
-    slots:
-      - name: media_type
-        type: MediaType
-    samples:
-      - recommande quelque chose
-      - recommande de la musique
-      - recommande un film
-      - suggère quelque chose
-      - joue quelque chose que j'aimerais
-      - recommande {media_type}
-  - name: SleepTimerIntent
-    slots:
-      - name: sleep_duration
-        type: AMAZON.DURATION
-    samples:
-      - arrêter dans {sleep_duration}
-      - minuterie {sleep_duration}
-      - arrêter après {sleep_duration}
-      - éteindre dans {sleep_duration}
-  - name: SetReminderIntent
-    slots:
-      - name: reminder_duration
-        type: AMAZON.DURATION
-      - name: reminder_time
-        type: AMAZON.TIME
-    samples:
-      - rappelle-moi dans {reminder_duration}
-      - mets un rappel de {reminder_duration}
-      - rappelle-moi à {reminder_time}
-      - crée un rappel pour {reminder_time}
-  - name: PlayMoodMusicIntent
-    slots:
-      - name: mood
-        type: Mood
-    samples:
-      - joue de la musique {mood}
-      - joue quelque chose de {mood}
-      - je veux de la musique {mood}
-      - joue-moi quelque chose de {mood}
-  - name: PlayPodcastIntent
-    samples:
-      - joue le podcast {podcast_name}
-      - écoute le podcast {podcast_name}
-      - lance le podcast {podcast_name}
-      - joue podcast {podcast_name}
-      - écoute le dernier épisode de {podcast_name}
-      - je veux écouter le podcast {podcast_name}
-      - joue {podcast_name} podcast
-      - ouvre le podcast {podcast_name}
-      - joue le dernier épisode de {podcast_name}
-      - continue le podcast {podcast_name}
-      - écoute l'épisode le plus récent de {podcast_name}
-      - reprends le podcast {podcast_name}
-      - mets le dernier épisode du podcast {podcast_name}
-      - je veux entendre le podcast {podcast_name}
-      - reprends le podcast {podcast_name} où j'en étais
-      - écoute le dernier épisode du podcast {podcast_name}
-      - lance le dernier épisode de {podcast_name}
-      - fais jouer le podcast {podcast_name}
-    slots:
-      - name: podcast_name
-        type: AMAZON.SearchQuery
-  - name: SetPlaybackSpeedIntent
-    slots:
-      - name: speed
-        type: SpeedRate
-    samples:
-      - à vitesse {speed}
-      - vitesse {speed}
-      - mets la vitesse à {speed}
-      - lis à vitesse {speed}
-      - "mets {speed}"
-  - name: SearchMediaIntent
-    slots:
-      - name: query
-        type: AMAZON.SearchQuery
-    samples:
-      - Cherche un film {query}
-      - Cherche un contenu {query}
-      - Cherche une série {query}
-      - Cherche un vidéo {query}
-      - Trouve un film {query}
-      - Trouve un contenu {query}
-      - Trouve une série {query}
-      - Recherche un film {query}
-      - Recherche un contenu {query}
-      - Est-ce que tu as un film {query}
-      - Est-ce que tu as un contenu {query}
-      - Je veux trouver un film {query}
-      - Je veux trouver un contenu {query}
-      - Peux-tu trouver un film {query}
-      - Peux-tu trouver un contenu {query}
-      - Cherche le contenu {query}
-      - cherche dans ma bibliothèque {query}
-      - recherche dans ma médiathèque {query}
-      - trouve {query} dans ma bibliothèque
-      - est-ce que {query} est dans ma bibliothèque
-      - j'ai {query} dans ma collection
-      - cherche {query} dans ma collection
-      - recherche {query} dans ma médiathèque
-      - vérifie si {query} est disponible
-  - name: AddToQueueIntent
-    slots:
-      - name: song
-        type: AMAZON.MusicRecording
-      - name: musician
-        type: AMAZON.Musician
-    samples:
-      - Ajoute {song} à ma file d'attente
-      - Ajoute {song} à la file d'attente
-      - Ajoute {song} de {musician} à ma file d'attente
-      - Ajoute {song} de {musician} à la file d'attente
-      - Mets {song} dans la file d'attente
-      - Mets {song} de {musician} dans la file d'attente
-      - Ajoute {song} à ma liste
-      - Ajoute {song} de {musician} à ma liste
-  - name: PlayNextIntent
-    slots:
-      - name: song
-        type: AMAZON.MusicRecording
-      - name: musician
-        type: AMAZON.Musician
-    samples:
-      - Lis {song} ensuite
-      - Lis {song} de {musician} ensuite
-      - Lis {song} après
-      - Lis {song} de {musician} après
-      - Je veux entendre {song} ensuite
-      - Passe {song} ensuite
-  - name: ClearQueueIntent
-    slots: []
-    samples:
-      - Efface ma file d'attente
-      - Efface la file d'attente
-      - Vide ma file d'attente
-      - Vide la file d'attente
-      - Supprime tout de ma file d'attente
-      - Efface ma liste
-  - name: ListQueueIntent
-    slots: []
-    samples:
-      - Qu'est-ce qu'il y a dans ma file d'attente
-      - Qu'est-ce qu'il y a dans la file d'attente
-      - Qu'est-ce qui vient après
-      - Qu'est-ce qui suit
-      - Affiche ma file d'attente
-      - Liste ma file d'attente
-      - Qu'est-ce qui passe ensuite
-  - name: PlayRadioIntent
-    slots:
-      - name: station
-        type: AMAZON.SearchQuery
-    samples:
-      - Lis la radio
-      - Démarre la radio
-      - Lis le mode radio
-      - Lis de la musique similaire
-      - Lis des chansons similaires
-      - Démarre une station de radio
-      - Continue avec de la musique similaire
-      - Lis des chansons comme celle-ci
-      - Lis la station de radio {station}
-  - name: TurnRadioOnIntent
-    slots: []
-    samples:
-      - Active le mode radio
-      - Allume le mode radio
-      - Mode radio activé
-      - Active la radio
-      - Allume la radio
-  - name: TurnRadioOffIntent
-    slots: []
-    samples:
-      - Désactive le mode radio
-      - Éteins le mode radio
-      - Mode radio désactivé
-      - Désactive la radio
-      - Éteins la radio
-      - Arrête le mode radio
-  - name: LearnMyVoiceIntent
-    slots: []
-    samples:
-      - Apprends ma voix
-      - Reconnais ma voix
-      - Lie ma voix
-      - C'est ma voix
-      - Reconnais-moi
-      - Configure mon profil vocal
-      - Associe ma voix
-  - name: WhoAmIIntent
-    slots: []
-    samples:
-      - Qui suis-je
-      - Quel compte est-ce
-      - Quel compte j'utilise
-      - Qui parle
-      - Quel profil est actif
-      - Suis-je reconnu
-  - name: QueryArtistLibraryIntent
-    slots:
-      - name: musician
-        type: AMAZON.Musician
-      - name: query_type
-        type: LibraryQueryType
-    samples:
-      - Quelles chansons avons-nous de {musician}
-      - Quels titres avons-nous de {musician}
-      - Quels albums avons-nous de {musician}
-      - Quels disques avons-nous de {musician}
-      - Qu'avons-nous de {musician}
-      - Affiche les chansons de {musician}
-      - Affiche les albums de {musician}
-      - Liste les chansons de {musician}
-      - Liste les albums de {musician}
-      - Quels {query_type} avons-nous de {musician}
-      - Affiche {query_type} de {musician}
-      - Quelles chansons y a-t-il de {musician}
-      - Quels albums y a-t-il de {musician}
-  - name: PlayByDecadeIntent
-    slots:
-      - name: decade
-        type: Decade
-      - name: genre
-        type: AMAZON.Genre
-    samples:
-      - Lis des chansons des {decade}
-      - Lis des titres des {decade}
-      - Lis des succès des {decade}
-      - Lis de la musique des {decade}
-      - Lis les succès des {decade}
-      - Lis les chansons des {decade}
-      - Lis du {genre} des {decade}
-      - Lis des chansons {genre} des {decade}
-      - Je veux entendre de la musique des {decade}
-      - Lis quelque chose des {decade}
-      - Écoute de la musique des {decade}
-      - Donne-moi des chansons des {decade}
-      - Mélange de la musique des {decade}
-  - name: PlayBookIntent
-    slots:
-      - name: book
-        type: AudiobookTitle
-    samples:
-      - lis {book}
-      - lis le livre {book}
-      - écoute {book}
-      - écoute le livre {book}
-      - écoute le livre audio {book}
-  - name: LoopSongOnIntent
-    samples:
-      - Répète cette chanson
-      - Répète ce morceau
-      - Mets cette chanson en boucle
-      - Loop cette chanson
-      - Répète indéfiniment
-      # JF-902: moved from LoopAllOnIntent (move rationale on that block).
-      - Active la boucle
-      - Active la répétition
-  - name: ShowMoreIntent
-    samples:
-      - montre plus
-      - encore
-      - plus de résultats
-      - continuer
-      - suivant
-      - quoi d'autre
-      - voir plus
-      - page suivante
-    slots: []
-  - name: FindSongIntent
-    samples:
-      - trouve une chanson
-      - aide moi a trouver une chanson
-      - je cherche une chanson
-      - trouve une chanson appelee {titleKeywords}
-      - cherche une chanson appelee {titleKeywords}
-      - cherche une chanson
-      - je voudrais trouver une chanson
-      - je veux trouver une chanson
-      - trouve une chanson qui s appelle {titleKeywords}
-      - cherche une chanson qui s appelle {titleKeywords}
-      - je cherche une chanson qui s appelle {titleKeywords}
-      - trouve une chanson sur {titleKeywords}
-      - cherche une chanson sur {titleKeywords}
-      - aide moi a chercher une chanson
-      - une chanson appelee {titleKeywords}
-    slots:
-      - name: titleKeywords
-        type: AMAZON.SearchQuery
-  - name: FindSongByArtistIntent
-    samples:
-      - trouve une chanson de {musician}
-      - aide moi a trouver une chanson de {musician}
-      - je cherche une chanson de {musician}
-      # JF-399 FindSongByArtist parity: it-IT carries 16 samples here while
-      # this locale sat at 3 (the JF-391 starvation class). The additions are
-      # this locale's own FindSong openers (cherche / je veux trouver / je
-      # voudrais trouver / aide moi a chercher) crossed with the de-artist
-      # tail, plus the chanson/morceau noun pair mirroring it-IT's
-      # canzone/brano and the bare-noun wrapper shape this locale's FindSong
-      # already uses (une chanson appelee {titleKeywords}).
-      - cherche une chanson de {musician}
-      - je veux trouver une chanson de {musician}
-      - je voudrais trouver une chanson de {musician}
-      - aide moi a chercher une chanson de {musician}
-      - trouve un morceau de {musician}
-      - cherche un morceau de {musician}
-      - je cherche un morceau de {musician}
-      - une chanson de {musician}
-    slots:
-      - name: musician
-        type: AMAZON.Musician
-  - name: ShufflePlayIntent
-    samples:
-      - lis la playlist {playlist} en mode aléatoire
-      - mélange la playlist {playlist}
-      - mets la playlist {playlist} en mode aléatoire
-    slots:
-      - name: playlist
-        type: AMAZON.SearchQuery
-  - name: ShowPhotoAlbumIntent
-    # JF-329 photo slideshow. Optional-slot intent (the JF-403 boundary): the
-    # static forms deliver the working default (the handler shows the most
-    # recent photos of the whole photo library). Every slotted carrier names
-    # the photo media so the free-text carriers of PlayVideo/PlaySong cannot
-    # steal these utterances. photoAlbum is this intent's own slot name; its
-    # AMAZON.SearchQuery type never shares a sample with another slot.
-    samples:
-      - montre mes photos
-      - montre-moi mes photos
-      - montre les photos de {photoAlbum}
-      - montre-moi les photos de {photoAlbum}
-      - affiche les photos de {photoAlbum}
-      - ouvre les photos de {photoAlbum}
-      - montre les photos de l'album {photoAlbum}
-      - lance un diaporama de mes photos
-      - lance un diaporama de {photoAlbum}
-    slots:
-      - name: photoAlbum
-        type: AMAZON.SearchQuery
-
+- name: ShowLyricsIntent
+  samples:
+  - affiche les paroles
+  - montre les paroles
+  - lis les paroles
+- name: QueryRecentlyAddedIntent
+  samples:
+  - quoi de neuf
+  - qu'est-ce qui a été ajouté récemment
+  - montre-moi les nouveautés
+  - y a-t-il du nouveau
+  - quels sont les derniers ajouts
+  - quoi de neuf dans ma bibliothèque
+  - lister les éléments récents
+- name: FollowMeIntent
+  samples:
+  - suis-moi
+  - continuer la lecture
+  - reprendre la lecture
+  - transférer la lecture
+- AMAZON.CancelIntent
+- AMAZON.HelpIntent
+- AMAZON.StopIntent
+- AMAZON.FallbackIntent
+- AMAZON.PauseIntent
+- AMAZON.ResumeIntent
+- AMAZON.NextIntent
+- AMAZON.PreviousIntent
+- AMAZON.YesIntent
+- AMAZON.NoIntent
+- name: ShuffleAllOnIntent
+  samples:
+  - active la lecture aléatoire
+  - mélange la file d'attente
+  - lecture aléatoire
+- name: ShuffleAllOffIntent
+  samples:
+  - désactive la lecture aléatoire
+  - arrête la lecture aléatoire
+- name: LoopAllOffIntent
+  samples:
+  - Désactive la boucle
+  - Désactive la répétition
+- name: LoopAllOnIntent
+  samples:
+  - Répète la file d'attente
+  - Répète toute la file d'attente
+  - Mets la file d'attente en boucle
+  - De répéter la file d'attente
+  - De répéter toute la file d'attente
+- name: RepeatSingleOnIntent
+  samples:
+  - Répète la chanson
+  - Répète le morceau
+  - Répète la vidéo
+  - Répète
+- AMAZON.LoopOnIntent
+- AMAZON.LoopOffIntent
+- AMAZON.ShuffleOnIntent
+- AMAZON.ShuffleOffIntent
+- AMAZON.StartOverIntent
+- AMAZON.RepeatIntent
+- name: PlayChannelIntent
+  samples:
+  - Chaîne {channel}
+  - Lis la radio {channel}
+  - Radio {channel}
+  slots:
+  - name: channel
+    type: AMAZON.SearchQuery
+- name: PlaySongIntent
+  samples:
+  - Lis {song}
+  - Lis la chanson {song}
+  - Lis chanson {song}
+  - Lis {song} de {musician}
+  - Lis la chanson {song} de {musician}
+  - Écoute {song}
+  - Écoute la chanson {song}
+  - Écoute {song} de {musician}
+  - Écoute la chanson {song} de {musician}
+  - Mets {song}
+  - Mets la chanson {song}
+  - Mets {song} de {musician}
+  - Je veux écouter {song}
+  - Lance {song}
+  - Lance la chanson {song}
+  - Passe {song}
+  - Diffuse {song}
+  - Je veux entendre {song}
+  - Mets le morceau {song}
+  - Lis le titre {song}
+  - Commence {song}
+  slots:
+  - name: song
+    type: AMAZON.MusicRecording
+  - name: musician
+    type: AMAZON.Musician
+- name: PlayAlbumIntent
+  samples:
+  - Lis l'album {album}
+  - Lis album {album}
+  - Lis l'album {album} de {musician}
+  - Écoute l'album {album}
+  - Écoute l'album {album} de {musician}
+  - Mets l'album {album}
+  - Lance l'album {album}
+  - Mets le disque {album}
+  - un album de {musician}
+  - Lis un album de {musician}
+  - Écoute un album de {musician}
+  slots:
+  - name: album
+    type: AMAZON.MusicRecording
+  - name: musician
+    type: AMAZON.Musician
+- name: PlayVideoIntent
+  samples:
+  - Lis la vidéo {title}
+  - Je veux regarder {title}
+  - On regarde {title}
+  - Je voudrais voir {title}
+  - montre-moi {title}
+  - peux-tu me montrer {title}
+  - mets le film {title}
+  - je veux voir {title}
+  - diffuse le film {title}
+  - De jouer le film {title}
+  - De mettre le film {title}
+  - Je veux regarder le film {title}
+  - Cherche le film {title}
+  slots:
+  - name: title
+    type: AMAZON.SearchQuery
+- name: PlayArtistSongsIntent
+  samples:
+  - Lis les chansons de {musician}
+  - Lis la musique de {musician}
+  - Lis les titres de {musician}
+  - Lis les morceaux de {musician}
+  - Lis {musician}
+  - Écoute {musician}
+  - Écoute les chansons de {musician}
+  - Écoute la musique de {musician}
+  - Écoute les titres de {musician}
+  - Mets {musician}
+  - Mets les chansons de {musician}
+  - Mets la musique de {musician}
+  - Je veux écouter {musician}
+  - Je veux entendre {musician}
+  - Lance {musician}
+  - Lance les chansons de {musician}
+  - Lance la musique de {musician}
+  - Diffuse {musician}
+  - Diffuse les chansons de {musician}
+  - Mets des titres de {musician}
+  - Passe {musician}
+  - Passe les chansons de {musician}
+  - Commence {musician}
+  - Joue les {musician}
+  - Mets les {musician}
+  - Passe les {musician}
+  - Écoute les {musician}
+  - Lance les {musician}
+  - Diffuse les {musician}
+  - De jouer les {musician}
+  - De mettre les {musician}
+  - De passer les {musician}
+  - D'écouter les {musician}
+  - De lancer les {musician}
+  - De diffuser les {musician}
+  - De lire les chansons de {musician}
+  slots:
+  - name: musician
+    type: AMAZON.Musician
+- name: PlayLastAddedIntent
+  samples:
+  - Lis les derniers {media_type} ajoutés
+  - Lis les nouveautés {media_type}
+  - Lis les nouveaux médias
+  slots:
+  - name: media_type
+    type: MediaType
+- name: PlayRandomIntent
+  samples:
+  - Joue un {media_type} aléatoire
+  - Joue des {media_type} au hasard
+  - Lance un {media_type} aléatoire
+  - Joue quelque chose au hasard
+  - Joue un {media_type} aléatoire de {genre}
+  - Surprends-moi avec des {media_type}
+  slots:
+  - name: media_type
+    type: MediaType
+  - name: genre
+    type: AMAZON.Genre
+- name: PlayByGenreIntent
+  samples:
+  - Joue de la musique {genre}
+  - Joue du {genre}
+  - Je veux écouter du {genre}
+  - Mets du {genre}
+  - Joue des chansons {genre}
+  slots:
+  - name: genre
+    type: AMAZON.Genre
+- name: ContinueWatchingIntent
+  samples:
+  - Continuer à regarder
+  - Continuer à écouter
+- name: GoToChapterIntent
+  samples:
+  - Chapitre suivant
+  - Chapitre précédent
+  - Aller au chapitre {chapter_number}
+  - Sauter au chapitre {chapter_number}
+  - Avancer d'un chapitre
+  - Reculer d'un chapitre
+  slots:
+  - name: chapter_number
+    type: AMAZON.NUMBER
+- name: SkipForwardBackIntent
+  samples:
+  - saute {seek_direction}
+  - saute {seek_direction} de {seek_amount} {seek_unit}
+  - '{seek_direction} de {seek_amount} {seek_unit}'
+  - sauter {seek_direction}
+  - sauter {seek_direction} de {seek_amount} {seek_unit}
+  - de sauter {seek_direction}
+  slots:
+  - name: seek_direction
+    type: SeekDirection
+  - name: seek_amount
+    type: AMAZON.NUMBER
+  - name: seek_unit
+    type: SeekUnit
+- name: PlayPlaylistIntent
+  samples:
+  - Lis la playlist {playlist}
+  - Lis ma playlist {playlist}
+  - Joue la playlist {playlist}
+  - Joue ma playlist {playlist}
+  - Mets la playlist {playlist}
+  - Lance la playlist {playlist}
+  - Lance ma playlist {playlist}
+  - Démarrer la playlist {playlist}
+  - De jouer la playlist {playlist}
+  - De lancer la playlist {playlist}
+  slots:
+  - name: playlist
+    type: AMAZON.SearchQuery
+- name: AddCurrentToPlaylistIntent
+  samples:
+  - Ajoute ce titre à la liste de lecture {playlist}
+  - Ajoute la chanson en cours à la liste de lecture {playlist}
+  - Mets ce titre dans la liste de lecture {playlist}
+  slots:
+  - name: playlist
+    type: AMAZON.SearchQuery
+- name: AddSongToPlaylistIntent
+  samples:
+  - Ajoute la chanson {song_query}
+  - Ajoute {song_query}
+  - ajoute à la liste de lecture {playlist_target}
+  slots:
+  - name: song_query
+    type: AMAZON.SearchQuery
+  - name: playlist_target
+    type: AMAZON.SearchQuery
+- name: RemoveCurrentFromPlaylistIntent
+  samples:
+  - Retire ce titre de la liste de lecture {playlist}
+  - Enlève la chanson en cours de la liste de lecture {playlist}
+  slots:
+  - name: playlist
+    type: AMAZON.SearchQuery
+- name: CreatePlaylistIntent
+  samples:
+  - Crée une liste de lecture appelée {playlist}
+  - Crée une nouvelle liste de lecture appelée {playlist}
+  - Crée une liste de lecture {playlist}
+  - Nouvelle liste de lecture {playlist}
+  slots:
+  - name: playlist
+    type: AMAZON.SearchQuery
+- name: PlayFavoritesIntent
+  samples:
+  - Lis mes {media_type} préférés
+  - Lis mes favoris
+  - De lire mes favoris
+  - joue les favoris de {username}
+  - mets les favoris de {username}
+  - écoute les favoris de {username}
+  - joue les chansons favorites de {username}
+  - joue {media_type} favoris de {username}
+  slots:
+  - name: media_type
+    type: MediaType
+  - name: username
+    type: AMAZON.Person
+- name: MarkFavoriteIntent
+  samples:
+  - J'aime bien
+  - J'aime cette vidéo
+  - J'aime cette chanson
+  - J'aime cette musique
+  - Ajoute la vidéo aux favoris
+  - Ajoute la chanson aux favoris
+- name: UnmarkFavoriteIntent
+  samples:
+  - Je n'aime pas ça
+  - Je n'aime pas cette vidéo
+  - Je n'aime pas cette chanson
+  - Je n'aime pas cette musique
+  - Retire la vidéo des favoris
+  - Retire la chanson des favoris
+- name: RateItemIntent
+  samples:
+  - Mets {star_rating} étoiles
+  - Mets {star_rating} étoiles à cette chanson
+  - Donne {star_rating} étoiles à cette chanson
+  - Évalue cette chanson avec {star_rating} étoiles
+  - Mets {star_rating} étoiles à ce titre
+  slots:
+  - name: star_rating
+    type: AMAZON.NUMBER
+- name: MediaInfoIntent
+  slots:
+  - name: media_info_type
+    type: MediaInfoType
+  samples:
+  - Quel est le {media_info_type}
+  - Quelle est la {media_info_type}
+  - Dis-moi le {media_info_type}
+  - Dis-moi la {media_info_type}
+  - Quel {media_info_type} est-ce
+  - Quelle {media_info_type} est-ce
+  - Qu'est-ce qui joue
+  - Quelle est cette chanson
+  - Qui chante
+  - Qui chante cette chanson
+  - De quel album
+  - De quelle année
+  - Quand est-ce sorti
+  - Combien de temps
+  - Combien de temps dure cette chanson
+  - Quel genre est-ce
+  - Parle-moi de l'artiste
+  - Raconte-moi l'artiste
+  - quelle chanson est en train de jouer
+  - quel est le nom de cette chanson
+  - qui a fait cette chanson
+  - quel est le nom de l'album
+  - quand est sortie cette chanson
+  - quel est le genre de cette musique
+  - donne-moi des infos sur ce morceau
+  - dis-moi le nom de l'artiste
+  - de quel album vient cette chanson
+  - qui est l'artiste de ce morceau
+  - quelle saison est-ce
+  - c'est quelle saison
+  - quel épisode est-ce
+  - c'est quel épisode
+  - c'est quelle série
+  - qui a réalisé ça
+  - qui est le réalisateur
+  - qui joue dedans
+  - qui sont les acteurs
+  - qui est l'auteur
+  - qui a écrit ça
+  - qui est le narrateur
+  - qui raconte ça
+  - quelle est la note
+  - comment est-ce noté
+  - quelle est l'évaluation
+- name: InProgressMediaListIntent
+  samples:
+  - qu'est-ce que j'écoute
+  - qu'est-ce que je regarde
+  - quoi en cours
+  - afficher ma progression
+  - qu'ai-je commencé
+- name: PlayEpisodeIntent
+  slots:
+  - name: series_name
+    type: SeriesName
+  - name: season_number
+    type: AMAZON.NUMBER
+  - name: episode_number
+    type: AMAZON.NUMBER
+  samples:
+  - joue la saison {season_number} épisode {episode_number} de {series_name}
+  - joue {series_name} saison {season_number} épisode {episode_number}
+  - regarde la saison {season_number} épisode {episode_number} de {series_name}
+  - De jouer la saison {season_number} épisode {episode_number} de {series_name}
+  - De regarder la saison {season_number} épisode {episode_number} de {series_name}
+  - De jouer {series_name} saison {season_number} épisode {episode_number}
+  - De regarder {series_name} saison {season_number} épisode {episode_number}
+  - joue l'épisode {episode_number} de {series_name}
+  - regarde l'épisode {episode_number} de {series_name}
+  - De jouer l'épisode {episode_number} de {series_name}
+- name: PlayNextEpisodeIntent
+  slots:
+  - name: series_name
+    type: SeriesName
+  - name: episode_position
+    type: EpisodePosition
+  samples:
+  - joue {episode_position} épisode de {series_name}
+  - joue {episode_position} épisode de la série {series_name}
+  - mets {episode_position} épisode de {series_name}
+  - joue l'épisode {episode_position} de {series_name}
+  - mets l'épisode {episode_position} de {series_name}
+  - regarde l'épisode {episode_position} de {series_name}
+  - continue à regarder {series_name}
+  - De jouer {episode_position} épisode de {series_name}
+  - De jouer {episode_position} épisode de la série {series_name}
+  - De mettre {episode_position} épisode de {series_name}
+  - De jouer l'épisode {episode_position} de {series_name}
+  - De mettre l'épisode {episode_position} de {series_name}
+  - De continuer à regarder {series_name}
+- name: BrowseLibraryIntent
+  slots:
+  - name: browse_category
+    type: BrowseCategory
+  - name: filter
+    type: AMAZON.SearchQuery
+  samples:
+  - '{browse_category}'
+  - juste {browse_category}
+  - je veux {browse_category}
+  - parcourir {browse_category}
+  - montre-moi {browse_category}
+  - lister {browse_category}
+  - quels {browse_category} ai-je
+  - quels {browse_category} y a-t-il
+  - parcourir genres {filter}
+  - montre-moi genres {filter}
+- name: RecommendIntent
+  slots:
+  - name: media_type
+    type: MediaType
+  samples:
+  - recommande quelque chose
+  - recommande de la musique
+  - recommande un film
+  - suggère quelque chose
+  - joue quelque chose que j'aimerais
+  - recommande {media_type}
+- name: SleepTimerIntent
+  slots:
+  - name: sleep_duration
+    type: AMAZON.DURATION
+  samples:
+  - arrêter dans {sleep_duration}
+  - minuterie {sleep_duration}
+  - arrêter après {sleep_duration}
+  - éteindre dans {sleep_duration}
+- name: SetReminderIntent
+  slots:
+  - name: reminder_duration
+    type: AMAZON.DURATION
+  - name: reminder_time
+    type: AMAZON.TIME
+  samples:
+  - rappelle-moi dans {reminder_duration}
+  - mets un rappel de {reminder_duration}
+  - rappelle-moi à {reminder_time}
+  - crée un rappel pour {reminder_time}
+- name: PlayMoodMusicIntent
+  slots:
+  - name: mood
+    type: Mood
+  samples:
+  - joue de la musique {mood}
+  - joue quelque chose de {mood}
+  - je veux de la musique {mood}
+  - joue-moi quelque chose de {mood}
+- name: PlayPodcastIntent
+  samples:
+  - joue le podcast {podcast_name}
+  - écoute le podcast {podcast_name}
+  - lance le podcast {podcast_name}
+  - joue podcast {podcast_name}
+  - écoute le dernier épisode de {podcast_name}
+  - je veux écouter le podcast {podcast_name}
+  - joue {podcast_name} podcast
+  - ouvre le podcast {podcast_name}
+  - joue le dernier épisode de {podcast_name}
+  - continue le podcast {podcast_name}
+  - écoute l'épisode le plus récent de {podcast_name}
+  - reprends le podcast {podcast_name}
+  - mets le dernier épisode du podcast {podcast_name}
+  - je veux entendre le podcast {podcast_name}
+  - reprends le podcast {podcast_name} où j'en étais
+  - écoute le dernier épisode du podcast {podcast_name}
+  - lance le dernier épisode de {podcast_name}
+  - fais jouer le podcast {podcast_name}
+  slots:
+  - name: podcast_name
+    type: AMAZON.SearchQuery
+- name: SetPlaybackSpeedIntent
+  slots:
+  - name: speed
+    type: SpeedRate
+  samples:
+  - à vitesse {speed}
+  - vitesse {speed}
+  - mets la vitesse à {speed}
+  - lis à vitesse {speed}
+  - mets {speed}
+- name: SearchMediaIntent
+  slots:
+  - name: query
+    type: AMAZON.SearchQuery
+  samples:
+  - Cherche un film {query}
+  - Cherche un contenu {query}
+  - Cherche une série {query}
+  - Cherche un vidéo {query}
+  - Trouve un film {query}
+  - Trouve un contenu {query}
+  - Trouve une série {query}
+  - Recherche un film {query}
+  - Recherche un contenu {query}
+  - Est-ce que tu as un film {query}
+  - Est-ce que tu as un contenu {query}
+  - Je veux trouver un film {query}
+  - Je veux trouver un contenu {query}
+  - Peux-tu trouver un film {query}
+  - Peux-tu trouver un contenu {query}
+  - Cherche le contenu {query}
+  - cherche dans ma bibliothèque {query}
+  - recherche dans ma médiathèque {query}
+  - trouve {query} dans ma bibliothèque
+  - est-ce que {query} est dans ma bibliothèque
+  - j'ai {query} dans ma collection
+  - cherche {query} dans ma collection
+  - recherche {query} dans ma médiathèque
+  - vérifie si {query} est disponible
+- name: AddToQueueIntent
+  slots:
+  - name: song
+    type: AMAZON.MusicRecording
+  - name: musician
+    type: AMAZON.Musician
+  samples:
+  - Ajoute {song} à ma file d'attente
+  - Ajoute {song} à la file d'attente
+  - Ajoute {song} de {musician} à ma file d'attente
+  - Ajoute {song} de {musician} à la file d'attente
+  - Mets {song} dans la file d'attente
+  - Mets {song} de {musician} dans la file d'attente
+  - Ajoute {song} à ma liste
+  - Ajoute {song} de {musician} à ma liste
+- name: PlayNextIntent
+  slots:
+  - name: song
+    type: AMAZON.MusicRecording
+  - name: musician
+    type: AMAZON.Musician
+  samples:
+  - Lis {song} ensuite
+  - Lis {song} de {musician} ensuite
+  - Lis {song} après
+  - Lis {song} de {musician} après
+  - Je veux entendre {song} ensuite
+  - Passe {song} ensuite
+- name: ClearQueueIntent
+  slots: []
+  samples:
+  - Efface ma file d'attente
+  - Efface la file d'attente
+  - Vide ma file d'attente
+  - Vide la file d'attente
+  - Supprime tout de ma file d'attente
+  - Efface ma liste
+- name: ListQueueIntent
+  slots: []
+  samples:
+  - Qu'est-ce qu'il y a dans ma file d'attente
+  - Qu'est-ce qu'il y a dans la file d'attente
+  - Qu'est-ce qui vient après
+  - Qu'est-ce qui suit
+  - Affiche ma file d'attente
+  - Liste ma file d'attente
+  - Qu'est-ce qui passe ensuite
+- name: PlayRadioIntent
+  slots:
+  - name: station
+    type: AMAZON.SearchQuery
+  samples:
+  - Lis la radio
+  - Démarre la radio
+  - Lis le mode radio
+  - Lis de la musique similaire
+  - Lis des chansons similaires
+  - Démarre une station de radio
+  - Continue avec de la musique similaire
+  - Lis des chansons comme celle-ci
+  - Lis la station de radio {station}
+- name: TurnRadioOnIntent
+  slots: []
+  samples:
+  - Active le mode radio
+  - Allume le mode radio
+  - Mode radio activé
+  - Active la radio
+  - Allume la radio
+- name: TurnRadioOffIntent
+  slots: []
+  samples:
+  - Désactive le mode radio
+  - Éteins le mode radio
+  - Mode radio désactivé
+  - Désactive la radio
+  - Éteins la radio
+  - Arrête le mode radio
+- name: LearnMyVoiceIntent
+  slots: []
+  samples:
+  - Apprends ma voix
+  - Reconnais ma voix
+  - Lie ma voix
+  - C'est ma voix
+  - Reconnais-moi
+  - Configure mon profil vocal
+  - Associe ma voix
+- name: WhoAmIIntent
+  slots: []
+  samples:
+  - Qui suis-je
+  - Quel compte est-ce
+  - Quel compte j'utilise
+  - Qui parle
+  - Quel profil est actif
+  - Suis-je reconnu
+- name: QueryArtistLibraryIntent
+  slots:
+  - name: musician
+    type: AMAZON.Musician
+  - name: query_type
+    type: LibraryQueryType
+  samples:
+  - Quelles chansons avons-nous de {musician}
+  - Quels titres avons-nous de {musician}
+  - Quels albums avons-nous de {musician}
+  - Quels disques avons-nous de {musician}
+  - Qu'avons-nous de {musician}
+  - Affiche les chansons de {musician}
+  - Affiche les albums de {musician}
+  - Liste les chansons de {musician}
+  - Liste les albums de {musician}
+  - Quels {query_type} avons-nous de {musician}
+  - Affiche {query_type} de {musician}
+  - Quelles chansons y a-t-il de {musician}
+  - Quels albums y a-t-il de {musician}
+- name: PlayByDecadeIntent
+  slots:
+  - name: decade
+    type: Decade
+  - name: genre
+    type: AMAZON.Genre
+  samples:
+  - Lis des chansons des {decade}
+  - Lis des titres des {decade}
+  - Lis des succès des {decade}
+  - Lis de la musique des {decade}
+  - Lis les succès des {decade}
+  - Lis les chansons des {decade}
+  - Lis du {genre} des {decade}
+  - Lis des chansons {genre} des {decade}
+  - Je veux entendre de la musique des {decade}
+  - Lis quelque chose des {decade}
+  - Écoute de la musique des {decade}
+  - Donne-moi des chansons des {decade}
+  - Mélange de la musique des {decade}
+- name: PlayBookIntent
+  slots:
+  - name: book
+    type: AudiobookTitle
+  samples:
+  - lis {book}
+  - lis le livre {book}
+  - écoute {book}
+  - écoute le livre {book}
+  - écoute le livre audio {book}
+- name: LoopSongOnIntent
+  samples:
+  - Répète cette chanson
+  - Répète ce morceau
+  - Mets cette chanson en boucle
+  - Loop cette chanson
+  - Répète indéfiniment
+  - Active la boucle
+  - Active la répétition
+- name: ShowMoreIntent
+  samples:
+  - montre plus
+  - encore
+  - plus de résultats
+  - continuer
+  - suivant
+  - quoi d'autre
+  - voir plus
+  - page suivante
+  slots: []
+- name: FindSongIntent
+  samples:
+  - trouve une chanson
+  - aide moi a trouver une chanson
+  - je cherche une chanson
+  - trouve une chanson appelee {titleKeywords}
+  - cherche une chanson appelee {titleKeywords}
+  - cherche une chanson
+  - je voudrais trouver une chanson
+  - je veux trouver une chanson
+  - trouve une chanson qui s appelle {titleKeywords}
+  - cherche une chanson qui s appelle {titleKeywords}
+  - je cherche une chanson qui s appelle {titleKeywords}
+  - trouve une chanson sur {titleKeywords}
+  - cherche une chanson sur {titleKeywords}
+  - aide moi a chercher une chanson
+  - une chanson appelee {titleKeywords}
+  slots:
+  - name: titleKeywords
+    type: AMAZON.SearchQuery
+- name: FindSongByArtistIntent
+  samples:
+  - trouve une chanson de {musician}
+  - aide moi a trouver une chanson de {musician}
+  - je cherche une chanson de {musician}
+  - cherche une chanson de {musician}
+  - je veux trouver une chanson de {musician}
+  - je voudrais trouver une chanson de {musician}
+  - aide moi a chercher une chanson de {musician}
+  - trouve un morceau de {musician}
+  - cherche un morceau de {musician}
+  - je cherche un morceau de {musician}
+  - une chanson de {musician}
+  slots:
+  - name: musician
+    type: AMAZON.Musician
+- name: ShufflePlayIntent
+  samples:
+  - lis la playlist {playlist} en mode aléatoire
+  - mélange la playlist {playlist}
+  - mets la playlist {playlist} en mode aléatoire
+  slots:
+  - name: playlist
+    type: AMAZON.SearchQuery
+- name: ShowPhotoAlbumIntent
+  samples:
+  - montre mes photos
+  - montre-moi mes photos
+  - montre les photos de {photoAlbum}
+  - montre-moi les photos de {photoAlbum}
+  - affiche les photos de {photoAlbum}
+  - ouvre les photos de {photoAlbum}
+  - montre les photos de l'album {photoAlbum}
+  - lance un diaporama de mes photos
+  - lance un diaporama de {photoAlbum}
+  slots:
+  - name: photoAlbum
+    type: AMAZON.SearchQuery
 types:
-  # JF-636: playback-speed vocabulary (the JF-354 Mood architecture). Ids are
-  # the shared cross-locale key space (per-mille strings + faster/slower).
   SpeedRate:
     values:
-      - value: trois quarts
-        id: "750"
-        synonyms: ["0,75", "0.75"]
-      - value: vitesse normale
-        id: "1000"
-        synonyms: [normale, "vitesse un", un, "1", "1,0"]
-      - value: un et quart
-        id: "1250"
-        synonyms: ["1,25", "1.25", "une et quart"]
-      - value: un et demi
-        id: "1500"
-        synonyms: ["une et demie", "1,5", "1.5"]
-      - value: un et trois quarts
-        id: "1750"
-        synonyms: ["1,75", "1.75", "une et trois quarts"]
-      - value: vitesse double
-        id: "2000"
-        synonyms: [double, "le double", deux, "2"]
-      - value: "plus vite"
-        id: faster
-        synonyms: [accélère, "plus rapidement"]
-      - value: "plus lentement"
-        id: slower
-        synonyms: ["plus lent", ralentis]
+    - value: trois quarts
+      id: '750'
+      synonyms:
+      - 0,75
+      - '0.75'
+    - value: vitesse normale
+      id: '1000'
+      synonyms:
+      - normale
+      - vitesse un
+      - un
+      - '1'
+      - 1,0
+    - value: un et quart
+      id: '1250'
+      synonyms:
+      - 1,25
+      - '1.25'
+      - une et quart
+    - value: un et demi
+      id: '1500'
+      synonyms:
+      - une et demie
+      - 1,5
+      - '1.5'
+    - value: un et trois quarts
+      id: '1750'
+      synonyms:
+      - 1,75
+      - '1.75'
+      - une et trois quarts
+    - value: vitesse double
+      id: '2000'
+      synonyms:
+      - double
+      - le double
+      - deux
+      - '2'
+    - value: plus vite
+      id: faster
+      synonyms:
+      - accélère
+      - plus rapidement
+    - value: plus lentement
+      id: slower
+      synonyms:
+      - plus lent
+      - ralentis
   Mood:
     values:
-      - value: détendant
-        synonyms: [détendu, détendue]
-      - value: reposant
-      - value: dynamique
-      - value: énergique
-      - value: concentration
-      - value: romantique
-      - value: heureuse
-        synonyms: [heureux, joyeuse, joyeux]
-      - value: triste
-      - value: fête
-      - value: entraînement
-      - value: matinal
-      - value: soirée
-      - value: dîner
-      - value: sommeil
-        synonyms: [dormir]
+    - value: détendant
+      synonyms:
+      - détendu
+      - détendue
+    - value: reposant
+    - value: dynamique
+    - value: énergique
+    - value: concentration
+    - value: romantique
+    - value: heureuse
+      synonyms:
+      - heureux
+      - joyeuse
+      - joyeux
+    - value: triste
+    - value: fête
+    - value: entraînement
+    - value: matinal
+    - value: soirée
+    - value: dîner
+    - value: sommeil
+      synonyms:
+      - dormir
   MediaType:
     values:
-      - id: media
-        value: média
-        synonyms: [contenu]
-      - id: video
-        value: vidéo
-        synonyms: [film, clip, épisode]
-      - id: audio
-        value: Audio
-        synonyms: [musique, chanson, morceau]
+    - id: media
+      value: média
+      synonyms:
+      - contenu
+    - id: video
+      value: vidéo
+      synonyms:
+      - film
+      - clip
+      - épisode
+    - id: audio
+      value: Audio
+      synonyms:
+      - musique
+      - chanson
+      - morceau
   BrowseCategory:
     values:
-      - value: artistes
-        id: artists
-      - value: albums
-        synonyms: [disque, disques, album]
-        id: albums
-      - value: films
-      - value: chansons
-        synonyms: [titres, chanson, morceaux, titre, morceau]
-        id: songs
-      - value: genres
-      - value: séries
-      - value: livres
+    - value: artistes
+      id: artists
+    - value: albums
+      synonyms:
+      - disque
+      - disques
+      - album
+      id: albums
+    - value: films
+    - value: chansons
+      synonyms:
+      - titres
+      - chanson
+      - morceaux
+      - titre
+      - morceau
+      id: songs
+    - value: genres
+    - value: séries
+    - value: livres
   SeriesName:
     values:
-      - value: Breaking Bad
-      - value: Game of Thrones
-      - value: Stranger Things
-      - value: La Casa de Papel
-      - value: Peaky Blinders
-      - value: The Walking Dead
-      - value: Dark
-      - value: Lupin
-      - value: Le Bureau des Légendes
-      - value: Engrenages
-  # JF-583: restricted episode-position vocabulary on PlayNextEpisodeIntent
-  # (the Mood architecture). Ids are the shared cross-locale key space the
-  # handler's entity resolution reads; 'le dernier' is the most-recent
-  # reading (same ambiguity as en 'last').
+    - value: Breaking Bad
+    - value: Game of Thrones
+    - value: Stranger Things
+    - value: La Casa de Papel
+    - value: Peaky Blinders
+    - value: The Walking Dead
+    - value: Dark
+    - value: Lupin
+    - value: Le Bureau des Légendes
+    - value: Engrenages
   EpisodePosition:
     values:
-      - value: le prochain
-        id: "next"
-        synonyms: [prochain]
-      - value: le dernier
-        id: latest
-        synonyms: [dernier, le plus récent, plus récent]
-  # JF-875: seek vocabulary for SkipForwardBackIntent (the EpisodePosition
-  # shape: localized values over the shared English id key space the
-  # handler's entity resolution reads; SeekVocabulary.cs is the consuming
-  # half, its raw word sets carry these locale words as the no-ER
-  # fallback).
+    - value: le prochain
+      id: next
+      synonyms:
+      - prochain
+    - value: le dernier
+      id: latest
+      synonyms:
+      - dernier
+      - le plus récent
+      - plus récent
   SeekDirection:
     values:
-      - value: en avant
-        id: "forward"
-        synonyms: [avance]
-      - value: en arrière
-        id: "back"
-        synonyms: [recule]
+    - value: en avant
+      id: forward
+      synonyms:
+      - avance
+    - value: en arrière
+      id: back
+      synonyms:
+      - recule
   SeekUnit:
     values:
-      - value: secondes
-        id: "seconds"
-        synonyms: [seconde]
-      - value: minutes
-        id: "minutes"
-        synonyms: [minute]
+    - value: secondes
+      id: seconds
+      synonyms:
+      - seconde
+    - value: minutes
+      id: minutes
+      synonyms:
+      - minute
   MediaInfoType:
     values:
-      - id: title
-        value: titre
-        synonyms: [nom]
-      - id: album
-        value: album
-        synonyms: [disque]
-      - id: artist
-        value: artiste
-        synonyms: [chanteur, groupe, musicien]
-      - id: year
-        value: année
-        synonyms: [année de sortie]
-      - id: duration
-        value: durée
-        synonyms: [longueur, temps]
-      - id: genre
-        value: genre
-        synonyms: [style, type de musique]
-      - id: biography
-        value: biographie
-        synonyms: [bio, sur l'artiste]
-      - id: director
-        value: réalisateur
-        synonyms: [réalisatrice, metteur en scène, cinéaste]
-      - id: cast
-        value: distribution
-        synonyms: [acteurs, actrices, casting, rôles]
-      - id: season
-        value: saison
-        synonyms: [numéro de saison]
-      - id: episode
-        value: épisode
-        synonyms: [numéro d'épisode, chapitre]
-      - id: series
-        value: série
-        synonyms: [série télévisée, programme, émission]
-      - id: author
-        value: auteur
-        synonyms: [écrivain, autrice, écrivaine]
-      - id: narrator
-        value: narrateur
-        synonyms: [narratrice, lecteur, lectrice, voix off]
-      - id: rating
-        value: note
-        synonyms: [évaluation, score, appréciation]
+    - id: title
+      value: titre
+      synonyms:
+      - nom
+    - id: album
+      value: album
+      synonyms:
+      - disque
+    - id: artist
+      value: artiste
+      synonyms:
+      - chanteur
+      - groupe
+      - musicien
+    - id: year
+      value: année
+      synonyms:
+      - année de sortie
+    - id: duration
+      value: durée
+      synonyms:
+      - longueur
+      - temps
+    - id: genre
+      value: genre
+      synonyms:
+      - style
+      - type de musique
+    - id: biography
+      value: biographie
+      synonyms:
+      - bio
+      - sur l'artiste
+    - id: director
+      value: réalisateur
+      synonyms:
+      - réalisatrice
+      - metteur en scène
+      - cinéaste
+    - id: cast
+      value: distribution
+      synonyms:
+      - acteurs
+      - actrices
+      - casting
+      - rôles
+    - id: season
+      value: saison
+      synonyms:
+      - numéro de saison
+    - id: episode
+      value: épisode
+      synonyms:
+      - numéro d'épisode
+      - chapitre
+    - id: series
+      value: série
+      synonyms:
+      - série télévisée
+      - programme
+      - émission
+    - id: author
+      value: auteur
+      synonyms:
+      - écrivain
+      - autrice
+      - écrivaine
+    - id: narrator
+      value: narrateur
+      synonyms:
+      - narratrice
+      - lecteur
+      - lectrice
+      - voix off
+    - id: rating
+      value: note
+      synonyms:
+      - évaluation
+      - score
+      - appréciation
   Decade:
     values:
-      - id: 50s
-        value: cinquante
-        synonyms: [les cinquante, années cinquante, '50', les 50]
-      - id: 60s
-        value: soixante
-        synonyms: [les soixante, années soixante, '60', les 60]
-      - id: 70s
-        value: soixante-dix
-        synonyms: [les soixante-dix, années soixante-dix, '70', les 70]
-      - id: 80s
-        value: quatre-vingts
-        synonyms: [les quatre-vingts, années quatre-vingts, '80', les 80]
-      - id: 90s
-        value: quatre-vingt-dix
-        synonyms: [les quatre-vingt-dix, années quatre-vingt-dix, '90', les 90]
-      - id: 2000s
-        value: deux mille
-        synonyms: [les deux mille, années deux mille, '2000']
-      - id: 2010s
-        value: deux mille dix
-        synonyms: [les deux mille dix, '2010']
-      - id: 2020s
-        value: deux mille vingt
-        synonyms: [les deux mille vingt, '2020']
+    - id: 50s
+      value: cinquante
+      synonyms:
+      - les cinquante
+      - années cinquante
+      - '50'
+      - les 50
+    - id: 60s
+      value: soixante
+      synonyms:
+      - les soixante
+      - années soixante
+      - '60'
+      - les 60
+    - id: 70s
+      value: soixante-dix
+      synonyms:
+      - les soixante-dix
+      - années soixante-dix
+      - '70'
+      - les 70
+    - id: 80s
+      value: quatre-vingts
+      synonyms:
+      - les quatre-vingts
+      - années quatre-vingts
+      - '80'
+      - les 80
+    - id: 90s
+      value: quatre-vingt-dix
+      synonyms:
+      - les quatre-vingt-dix
+      - années quatre-vingt-dix
+      - '90'
+      - les 90
+    - id: 2000s
+      value: deux mille
+      synonyms:
+      - les deux mille
+      - années deux mille
+      - '2000'
+    - id: 2010s
+      value: deux mille dix
+      synonyms:
+      - les deux mille dix
+      - '2010'
+    - id: 2020s
+      value: deux mille vingt
+      synonyms:
+      - les deux mille vingt
+      - '2020'
   LibraryQueryType:
     values:
-      - id: tracks
-        value: chansons
-        synonyms: [titres, morceaux, chanson, titre, morceau]
-      - id: albums
-        value: albums
-        synonyms: [disques, disque, album]
+    - id: tracks
+      value: chansons
+      synonyms:
+      - titres
+      - morceaux
+      - chanson
+      - titre
+      - morceau
+    - id: albums
+      value: albums
+      synonyms:
+      - disques
+      - disque
+      - album
   AudiobookTitle:
     values:
-      - value: livre audio
-        synonyms: []
+    - value: livre audio
+      synonyms: []
 dialog:
   intents:
-    - name: SetPlaybackSpeedIntent
+  - name: SetPlaybackSpeedIntent
+    confirmationRequired: false
+    slots:
+    - name: speed
+      type: SpeedRate
       confirmationRequired: false
-      slots:
-        - name: speed
-          type: SpeedRate
-          confirmationRequired: false
-          elicitationRequired: false
-    - name: RateItemIntent
+      elicitationRequired: false
+  - name: RateItemIntent
+    confirmationRequired: false
+    slots:
+    - name: star_rating
+      type: AMAZON.NUMBER
       confirmationRequired: false
-      slots:
-        - name: star_rating
-          type: AMAZON.NUMBER
-          confirmationRequired: false
-          elicitationRequired: false
-    - name: PlayVideoIntent
+      elicitationRequired: false
+  - name: PlayVideoIntent
+    confirmationRequired: false
+    slots:
+    - name: title
+      type: AMAZON.SearchQuery
       confirmationRequired: false
-      slots:
-        - name: title
-          type: AMAZON.SearchQuery
-          confirmationRequired: false
-          elicitationRequired: false
-    - name: FindSongIntent
+      elicitationRequired: false
+  - name: FindSongIntent
+    confirmationRequired: false
+    slots:
+    - name: titleKeywords
+      type: AMAZON.SearchQuery
       confirmationRequired: false
-      slots:
-        - name: titleKeywords
-          type: AMAZON.SearchQuery
-          confirmationRequired: false
-          elicitationRequired: false
-    - name: FindSongByArtistIntent
+      elicitationRequired: false
+  - name: FindSongByArtistIntent
+    confirmationRequired: false
+    slots:
+    - name: musician
+      type: AMAZON.Musician
       confirmationRequired: false
-      slots:
-        - name: musician
-          type: AMAZON.Musician
-          confirmationRequired: false
-          elicitationRequired: false
-    - name: ShufflePlayIntent
+      elicitationRequired: false
+  - name: ShufflePlayIntent
+    confirmationRequired: false
+    slots:
+    - name: playlist
+      type: AMAZON.SearchQuery
       confirmationRequired: false
-      slots:
-        - name: playlist
-          type: AMAZON.SearchQuery
-          confirmationRequired: false
-          elicitationRequired: false
-    - name: PlayEpisodeIntent
+      elicitationRequired: false
+  - name: PlayEpisodeIntent
+    confirmationRequired: false
+    slots:
+    - name: series_name
+      type: SeriesName
       confirmationRequired: false
-      slots:
-        - name: series_name
-          type: SeriesName
-          confirmationRequired: false
-          elicitationRequired: false
-        - name: season_number
-          type: AMAZON.NUMBER
-          confirmationRequired: false
-          elicitationRequired: false
-        - name: episode_number
-          type: AMAZON.NUMBER
-          confirmationRequired: false
-          elicitationRequired: false
-    - name: PlaySongIntent
+      elicitationRequired: false
+    - name: season_number
+      type: AMAZON.NUMBER
       confirmationRequired: false
-      slots:
-        - name: song
-          type: AMAZON.MusicRecording
-          confirmationRequired: false
-          elicitationRequired: false
-        - name: musician
-          type: AMAZON.Musician
-          confirmationRequired: false
-          elicitationRequired: false
-    - name: PlayAlbumIntent
+      elicitationRequired: false
+    - name: episode_number
+      type: AMAZON.NUMBER
       confirmationRequired: false
-      slots:
-        - name: album
-          type: AMAZON.MusicRecording
-          confirmationRequired: false
-          elicitationRequired: false
-        - name: musician
-          type: AMAZON.Musician
-          confirmationRequired: false
-          elicitationRequired: false
-    - name: PlayRadioIntent
+      elicitationRequired: false
+  - name: PlaySongIntent
+    confirmationRequired: false
+    slots:
+    - name: song
+      type: AMAZON.MusicRecording
       confirmationRequired: false
-      slots:
-        - name: station
-          type: AMAZON.SearchQuery
-          confirmationRequired: false
-          elicitationRequired: false
-    - name: PlayNextEpisodeIntent
+      elicitationRequired: false
+    - name: musician
+      type: AMAZON.Musician
       confirmationRequired: false
-      slots:
-        - name: series_name
-          type: SeriesName
-          confirmationRequired: false
-          elicitationRequired: false
-        - name: episode_position
-          type: EpisodePosition
-          confirmationRequired: false
-          elicitationRequired: false
-    - name: PlayPodcastIntent
+      elicitationRequired: false
+  - name: PlayAlbumIntent
+    confirmationRequired: false
+    slots:
+    - name: album
+      type: AMAZON.MusicRecording
       confirmationRequired: false
-      slots:
-        - name: podcast_name
-          type: AMAZON.SearchQuery
-          confirmationRequired: false
-          elicitationRequired: false
-    - name: SleepTimerIntent
+      elicitationRequired: false
+    - name: musician
+      type: AMAZON.Musician
       confirmationRequired: false
-      slots:
-        - name: sleep_duration
-          type: AMAZON.DURATION
-          confirmationRequired: false
-          elicitationRequired: false
-    - name: SetReminderIntent
+      elicitationRequired: false
+  - name: PlayRadioIntent
+    confirmationRequired: false
+    slots:
+    - name: station
+      type: AMAZON.SearchQuery
       confirmationRequired: false
-      slots:
-        - name: reminder_duration
-          type: AMAZON.DURATION
-          confirmationRequired: false
-          elicitationRequired: false
-        - name: reminder_time
-          type: AMAZON.TIME
-          confirmationRequired: false
-          elicitationRequired: false
-    - name: AddToQueueIntent
+      elicitationRequired: false
+  - name: PlayNextEpisodeIntent
+    confirmationRequired: false
+    slots:
+    - name: series_name
+      type: SeriesName
       confirmationRequired: false
-      slots:
-        - name: song
-          type: AMAZON.MusicRecording
-          confirmationRequired: false
-          elicitationRequired: false
-        - name: musician
-          type: AMAZON.Musician
-          confirmationRequired: false
-          elicitationRequired: false
-    - name: PlayNextIntent
+      elicitationRequired: false
+    - name: episode_position
+      type: EpisodePosition
       confirmationRequired: false
-      slots:
-        - name: song
-          type: AMAZON.MusicRecording
-          confirmationRequired: false
-          elicitationRequired: false
-        - name: musician
-          type: AMAZON.Musician
-          confirmationRequired: false
-          elicitationRequired: false
-    - name: QueryArtistLibraryIntent
+      elicitationRequired: false
+  - name: PlayPodcastIntent
+    confirmationRequired: false
+    slots:
+    - name: podcast_name
+      type: AMAZON.SearchQuery
       confirmationRequired: false
-      slots:
-        - name: musician
-          type: AMAZON.Musician
-          confirmationRequired: false
-          elicitationRequired: false
-        - name: query_type
-          type: LibraryQueryType
-          confirmationRequired: false
-          elicitationRequired: false
-    - name: PlayArtistSongsIntent
+      elicitationRequired: false
+  - name: SleepTimerIntent
+    confirmationRequired: false
+    slots:
+    - name: sleep_duration
+      type: AMAZON.DURATION
       confirmationRequired: false
-      slots:
-        - name: musician
-          type: AMAZON.Musician
-          confirmationRequired: false
-          elicitationRequired: false
-    - name: BrowseLibraryIntent
+      elicitationRequired: false
+  - name: SetReminderIntent
+    confirmationRequired: false
+    slots:
+    - name: reminder_duration
+      type: AMAZON.DURATION
       confirmationRequired: false
-      slots:
-        - name: browse_category
-          type: BrowseCategory
-          confirmationRequired: false
-          elicitationRequired: false
-        - name: filter
-          type: AMAZON.SearchQuery
-          confirmationRequired: false
-          elicitationRequired: false
-    - name: PlayMoodMusicIntent
+      elicitationRequired: false
+    - name: reminder_time
+      type: AMAZON.TIME
       confirmationRequired: false
-      slots:
-        - name: mood
-          type: Mood
-          confirmationRequired: false
-          elicitationRequired: false
-    - name: PlayPlaylistIntent
+      elicitationRequired: false
+  - name: AddToQueueIntent
+    confirmationRequired: false
+    slots:
+    - name: song
+      type: AMAZON.MusicRecording
       confirmationRequired: false
-      slots:
-        - name: playlist
-          type: AMAZON.SearchQuery
-          confirmationRequired: false
-          elicitationRequired: false
-    - name: AddSongToPlaylistIntent
+      elicitationRequired: false
+    - name: musician
+      type: AMAZON.Musician
       confirmationRequired: false
-      slots:
-        - name: song_query
-          type: AMAZON.SearchQuery
-          confirmationRequired: false
-          elicitationRequired: false
-        - name: playlist_target
-          type: AMAZON.SearchQuery
-          confirmationRequired: false
-          elicitationRequired: false
+      elicitationRequired: false
+  - name: PlayNextIntent
+    confirmationRequired: false
+    slots:
+    - name: song
+      type: AMAZON.MusicRecording
+      confirmationRequired: false
+      elicitationRequired: false
+    - name: musician
+      type: AMAZON.Musician
+      confirmationRequired: false
+      elicitationRequired: false
+  - name: QueryArtistLibraryIntent
+    confirmationRequired: false
+    slots:
+    - name: musician
+      type: AMAZON.Musician
+      confirmationRequired: false
+      elicitationRequired: false
+    - name: query_type
+      type: LibraryQueryType
+      confirmationRequired: false
+      elicitationRequired: false
+  - name: PlayArtistSongsIntent
+    confirmationRequired: false
+    slots:
+    - name: musician
+      type: AMAZON.Musician
+      confirmationRequired: false
+      elicitationRequired: false
+  - name: BrowseLibraryIntent
+    confirmationRequired: false
+    slots:
+    - name: browse_category
+      type: BrowseCategory
+      confirmationRequired: false
+      elicitationRequired: false
+    - name: filter
+      type: AMAZON.SearchQuery
+      confirmationRequired: false
+      elicitationRequired: false
+  - name: PlayMoodMusicIntent
+    confirmationRequired: false
+    slots:
+    - name: mood
+      type: Mood
+      confirmationRequired: false
+      elicitationRequired: false
+  - name: PlayPlaylistIntent
+    confirmationRequired: false
+    slots:
+    - name: playlist
+      type: AMAZON.SearchQuery
+      confirmationRequired: false
+      elicitationRequired: false
+  - name: AddSongToPlaylistIntent
+    confirmationRequired: false
+    slots:
+    - name: song_query
+      type: AMAZON.SearchQuery
+      confirmationRequired: false
+      elicitationRequired: false
+    - name: playlist_target
+      type: AMAZON.SearchQuery
+      confirmationRequired: false
+      elicitationRequired: false

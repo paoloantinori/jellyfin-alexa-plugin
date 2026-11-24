@@ -597,9 +597,7 @@
           "Continue watching",
           "Continue listening",
           "Resume where I left off",
-          "What was I watching",
-          "Keep playing",
-          "Continue"
+          "What was I watching"
         ]
       },
       {
@@ -906,8 +904,6 @@
       {
         "name": "InProgressMediaListIntent",
         "samples": [
-          "what am i listening to",
-          "what am i watching",
           "what's in progress",
           "what is in progress",
           "show my progress",
