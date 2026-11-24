@@ -91,3 +91,14 @@ def skip_line(locale: str) -> str | None:
     if is_whitespace_tokenized(locale):
         return None
     return f"SKIP {locale}: no whitespace tokenization"
+
+
+def contains_contiguous(tokens: tuple[str, ...], entry: tuple[str, ...]) -> bool:
+    """True when ``entry`` occurs back-to-back inside ``tokens``.
+
+    The shared contiguous-run test for token tuples (the fixture-vocab
+    any-value rule and the triage collision rule compare the same way, so
+    they share this one definition instead of two copies).
+    """
+    span = len(entry)
+    return any(tokens[i : i + span] == entry for i in range(len(tokens) - span + 1))

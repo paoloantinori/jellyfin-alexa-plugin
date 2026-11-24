@@ -24,7 +24,7 @@ _SCRIPTS_DIR = Path(__file__).resolve().parents[1]
 if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 
-from nlu_static import fixture_vocab, ledger, matcher, producer_jellyfin, token_collisions  # noqa: E402
+from nlu_static import fixture_vocab, ledger, matcher, producer_jellyfin, token_collisions, triage as nlu_triage  # noqa: E402
 from nlu_static import graph as nlu_graph  # noqa: E402
 from nlu_static.effective_model import (  # noqa: E402
     EffectiveModel,
@@ -738,6 +738,85 @@ def _register_classify_fixtures(subparsers: argparse._SubParsersAction) -> None:
     parser.set_defaults(func=cmd_classify_fixtures)
 
 
+def cmd_triage(args: argparse.Namespace) -> int:
+    """Classify every red row of one ledger session with the fixed precedence."""
+    snapshot, refusal = _load_optional_snapshot(args)
+    if refusal is not None:
+        return refusal
+    sessions = _load_sessions_or_fail(args)
+    if sessions is None:
+        return 2
+    try:
+        payload = nlu_triage.triage(
+            sessions,
+            session_arg=args.session,
+            snapshot=snapshot,
+            history=args.history,
+            flaky_min_flips=args.flaky_min_flips,
+        )
+    except ValueError as err:
+        return _fail(err)
+    for line in payload["skip_lines"]:
+        print(line, file=sys.stderr)
+    if args.format == "json":
+        _print_json(payload, args.out)
+    else:
+        text = nlu_triage.render_markdown(payload)
+        if args.out:
+            Path(args.out).write_text(text, encoding="utf-8")
+        else:
+            sys.stdout.write(text)
+    if args.fail_on == "systematic" and payload["totals"]["verdicts"][nlu_triage.V_SYSTEMATIC]:
+        return 1
+    return 0
+
+
+def _register_triage(subparsers: argparse._SubParsersAction) -> None:
+    """Register the triage subcommand (JF-954.6)."""
+    parser = subparsers.add_parser(
+        "triage",
+        help="classify every red NLU row of a ledger session with the fixed precedence",
+    )
+    parser.add_argument(
+        "--session",
+        help="session id, or 'latest' to accept an incomplete session (default: the latest complete session)",
+    )
+    parser.add_argument(
+        "--dir", help="ledger directory (default: tests/integration/results)"
+    )
+    parser.add_argument(
+        "--snapshot",
+        help="catalog snapshot JSON file; switches the vocabulary rule to the live-catalog question",
+    )
+    parser.add_argument(
+        "--history",
+        type=int,
+        default=nlu_triage.DEFAULT_HISTORY,
+        metavar="N",
+        help="how many prior sessions the flaky rule reads (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--flaky-min-flips",
+        type=int,
+        default=nlu_triage.DEFAULT_FLAKY_MIN_FLIPS,
+        metavar="N",
+        help="same-model flips that make a row KNOWN_FLAKY (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--format",
+        choices=("md", "json"),
+        default="md",
+        help="output format (default: md)",
+    )
+    parser.add_argument("--out", help="write the report here instead of stdout")
+    parser.add_argument(
+        "--fail-on",
+        choices=("systematic",),
+        help="exit 1 when at least one SYSTEMATIC_CANDIDATE row exists",
+    )
+    parser.set_defaults(func=cmd_triage)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="nlu_static", description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -749,6 +828,7 @@ def main(argv: list[str] | None = None) -> int:
     _register_graph(subparsers)
     _register_match(subparsers)
     _register_classify_fixtures(subparsers)
+    _register_triage(subparsers)
     args = parser.parse_args(argv)
     return int(args.func(args))
 

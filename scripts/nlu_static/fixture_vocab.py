@@ -62,7 +62,12 @@ from nlu_static.effective_model import (
     entry_texts,
     is_catalog_type,
 )
-from nlu_static.normalize import is_whitespace_tokenized, normalize_text, tokenize
+from nlu_static.normalize import (
+    contains_contiguous,
+    is_whitespace_tokenized,
+    normalize_text,
+    tokenize,
+)
 
 STATUS_PRESENT = "PRESENT"
 STATUS_ABSENT = "ABSENT"
@@ -397,11 +402,7 @@ def _pinned_value(expectation: object) -> str | None:
 
 def _contains_contiguous(utterance_tokens: tuple[str, ...], entry_tokens: tuple[str, ...]) -> bool:
     """True when ``entry_tokens`` occur back-to-back inside ``utterance_tokens``."""
-    span = len(entry_tokens)
-    return any(
-        utterance_tokens[i : i + span] == entry_tokens
-        for i in range(len(utterance_tokens) - span + 1)
-    )
+    return contains_contiguous(utterance_tokens, entry_tokens)
 
 
 def _is_latin_text(text: str) -> bool:

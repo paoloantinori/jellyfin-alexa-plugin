@@ -1,5 +1,15 @@
 # NLU static analysis toolkit
 
+## Triage in five minutes
+
+After a live suite reports red rows, the `triage` subcommand turns each red row of the recorded ledger session into one verdict (INFRA, UNSTABLE_BUILD, FIXTURE_VOCAB, KNOWN_FLAKY, CONTESTED, TOKEN_COLLISION, SYSTEMATIC_CANDIDATE, in that precedence), groups the rows into families and prints a report you can act on in minutes. The exact sequence after a red suite:
+
+1. Take a catalog snapshot so the vocabulary rule answers the LIVE question, not the committed-seed one: `python3 scripts/nlu_static/cli.py snapshot --out catalog-snapshot.json` (or the plugin export once JF-954.8 lands).
+2. Run triage against the latest complete session with that snapshot: `python3 scripts/nlu_static/cli.py triage --snapshot catalog-snapshot.json`. Without `--dir` it reads `tests/integration/results/` (or `NLU_LEDGER_DIR`); `--session latest` accepts an incomplete session and says so in the header.
+3. Read the "Look at these first" section: those are the SYSTEMATIC_CANDIDATE families, the rows no static rule explains, and start there. Then work down the remaining verdict sections in precedence order. `--fail-on systematic` exits 1 when any such row exists, so the command can gate a follow-up ticket. `--format json` gives the same data sorted for machine use.
+
+What to do per verdict: INFRA, re-run the rows (the probe itself failed). UNSTABLE_BUILD, re-run after builds settle (the live model changed mid-session). FIXTURE_VOCAB, fix or annotate the fixture, not the model. KNOWN_FLAKY, annotate the fixture comment and consider an `A|B` alternation only when both deliveries reach the same handler. CONTESTED, decide with the maintainer, never re-pin to a wrong intent. TOKEN_COLLISION, fix the vocabulary collision in the template. SYSTEMATIC_CANDIDATE, investigate first; a lab round is justified. Every row also carries its raw signals (vocab_status, match_classification, rivals, flips_same_model, history_runs, rebuilt_during_run, failure_kind), so you can see why a lower rule never got a chance.
+
 `scripts/nlu_static/` is the deterministic triage toolkit for the interaction models (JF-954). It reads the committed `model_<locale>.json` files, the NLU fixtures and (optionally) a catalog snapshot, and answers build-time questions about vocabulary, token ownership and sample shape that used to cost hours of live probing. One CLI entry point serves every tool: `python3 scripts/nlu_static/cli.py <subcommand>`, documented below per subcommand. Later JF-954 subtasks add their own subcommands to the same CLI; this page grows with them.
 
 These tools detect NECESSARY conditions for a break and classify failures with reproducible rules. They do NOT predict how Amazon's trainer routes an utterance: a clean static report never certifies live routing, and a static finding about routing still needs profile-nlu, simulate-skill or a device test to confirm behavior. Treat every output here as one input to triage, not as the verdict.
@@ -193,3 +203,17 @@ Statistics order sessions by `started` (ties by `session_id`) and key rows by `(
 Reading rule: a red row with `flips_same_model` of zero over many runs deserves investigation; it was stable for many builds and is now red, so the change is a signal. A red row with a history of same-model flips is trainer noise; annotate such a row in its fixture comment rather than chasing it. The statistics describe what the ledger recorded; like every tool on this page they do not predict how Amazon's trainer will route the next run.
 
 
+## The `triage` subcommand: the automatic triage report (JF-954.6)
+
+`triage` reads one ledger session (default: the latest COMPLETE session in the results directory; `--session latest` accepts an incomplete one and the header says so; `--session <id>` picks one explicitly) and classifies every red row (outcome `fail` or `error`) with the fixed seven-verdict precedence, implemented as one ordered list of (verdict, predicate) pairs in `scripts/nlu_static/triage.py`: INFRA (the probe errored), UNSTABLE_BUILD (the locale's live identity changed mid-session), FIXTURE_VOCAB (the JF-954.3 check reports ABSENT or FIXTURE_SLOT_UNKNOWN; in committed mode a plain ABSENT on a CATALOG type means only "not in the committed seed" and does NOT fire, while under a snapshot it does and the detail says `absent in live catalog`), KNOWN_FLAKY (at least `--flaky-min-flips` same-model flips among the last `--history` sessions BEFORE the chosen one; a row with fewer than two prior runs is never KNOWN_FLAKY and carries `history: insufficient`), CONTESTED (the matcher classification is CONTESTED or NO_SAMPLE_MATCH and the row's actual_intent is one of the rivals), TOKEN_COLLISION (a CARRIER_VS_VALUE finding whose carrying intent is expected, whose type the actual intent uses, and whose entry occurs in the utterance), SYSTEMATIC_CANDIDATE (none of the above: look at these first). ja-JP rows skip the matcher and collision rules with the explicit note `static signals skipped: ja-JP`. The `ABSENT_IN_LIBRARY_SEED_ONLY` status never fires the vocabulary rule; it rides the row's `vocab_status` signal. The vocabulary rule reads the row's `expected_slots` from the LEDGER record, never from the fixture files.
+
+Families group red rows by (language prefix, expected_intent, actual_intent, verdict), sorted by size descending then key; a family lists its locales and its rows in a short table (locale, utterance, expected, actual, detail). The markdown body starts with "Look at these first" (the SYSTEMATIC_CANDIDATE families) and continues with one section per other verdict in precedence order, ending with a fixed limits paragraph. The JSON form carries the same data, sorted, for machine use. Output is byte-identical for the same ledger files, models, baseline and snapshot; no current time is printed. Exit code 0 by default; `--fail-on systematic` exits 1 when at least one SYSTEMATIC_CANDIDATE row exists. A locale whose effective model cannot be built is reported with an explicit `SKIP <locale>: ...` line on stderr.
+
+```
+python3 scripts/nlu_static/cli.py triage --snapshot catalog-snapshot.json
+python3 scripts/nlu_static/cli.py triage --session latest
+python3 scripts/nlu_static/cli.py triage --dir /tmp/ledger --format json
+python3 scripts/nlu_static/cli.py triage --fail-on systematic --out triage.md
+```
+
+Like every tool on this page, the verdicts describe necessary conditions and recorded history; they do not predict how Amazon's trainer routes an utterance. The header also says which model mode was used: committed mode can only answer the committed-seed question, so re-run with a snapshot when none was given.
