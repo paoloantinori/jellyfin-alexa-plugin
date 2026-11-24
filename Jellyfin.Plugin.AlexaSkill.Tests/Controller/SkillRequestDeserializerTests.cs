@@ -8,6 +8,7 @@ using global::Alexa.NET.Request.Type;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
+using Jellyfin.Plugin.AlexaSkill.Controller;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 using MediaBrowser.Controller.Session;
@@ -299,4 +300,86 @@ public class SkillRequestDeserializerTests : IDisposable
           "\"error\":{\"type\":\"" + errorType + "\",\"message\":\"playback error surfaced as a system exception\"}" +
         "}" +
       "}";
+
+    [Fact]
+    public void ExplicitNullType_IsToleratedNotSilentlyDefaulted()
+    {
+        // Review round: an explicit "type": null must ride the tolerated path
+        // (pre-fix the naive call failed loudly on it); silently producing a
+        // plain Error with no Warn trace would contradict the fix's principle.
+        string body = "{" +
+            "\"version\":\"1.0\",\"context\":{}," +
+            "\"request\":{" +
+              "\"type\":\"AudioPlayer.PlaybackFailed\"," +
+              "\"requestId\":\"req-null-type\"," +
+              "\"token\":\"tok\"," +
+              "\"error\":{\"type\":null,\"message\":\"m\"}" +
+            "}" +
+          "}";
+        var req = SkillRequestDeserializer.Deserialize(body);
+        var tolerated = SkillRequestDeserializer.FindToleratedError(req);
+        Assert.NotNull(tolerated);
+        Assert.Equal(ErrorType.InternalError, tolerated.Type);
+    }
+
+    [Fact]
+    public void StringErrorPayload_RendersRawValueUnquoted()
+    {
+        // Review round: a non-object string payload must keep the same unquoted
+        // rendering contract the object branch uses for string type tokens.
+        string body = "{" +
+            "\"version\":\"1.0\",\"context\":{}," +
+            "\"request\":{" +
+              "\"type\":\"AudioPlayer.PlaybackFailed\"," +
+              "\"requestId\":\"req-string-error\"," +
+              "\"token\":\"tok\"," +
+              "\"error\":\"MEDIA_ERROR_X\"" +
+            "}" +
+          "}";
+        var req = SkillRequestDeserializer.Deserialize(body);
+        var tolerated = SkillRequestDeserializer.FindToleratedError(req);
+        Assert.NotNull(tolerated);
+        Assert.Equal("MEDIA_ERROR_X", tolerated!.RawWireType);
+        Assert.DoesNotContain("\"", UnknownWireTypeError.DescribeWireType(tolerated));
+    }
+
+    public class SliceBodyExcerptTests
+    {
+        // Review round: the excerpt-cut rules pinned as a pure function test.
+        [Fact]
+        public void ShortBody_PassesThroughUnchanged()
+        {
+            Assert.Equal("abc", AlexaSkillController.SliceBodyExcerpt("abc", 4000));
+        }
+
+        [Fact]
+        public void LongBody_IsCapped()
+        {
+            string body = new string('a', 5000);
+            Assert.Equal(4000, AlexaSkillController.SliceBodyExcerpt(body, 4000).Length);
+        }
+
+        [Fact]
+        public void CutOnHighSurrogate_StepsBackOne()
+        {
+            // Build a body whose 4000th char is a HIGH surrogate: the cut must
+            // step back so the excerpt never ends on a lone (invalid) half pair.
+            string pair = "😀"; // U+1F600 as a surrogate pair
+            string prefix = new string('a', 3999);
+            string body = prefix + pair + new string('b', 10);
+            string excerpt = AlexaSkillController.SliceBodyExcerpt(body, 4000);
+            Assert.Equal(3999, excerpt.Length);
+            Assert.Equal(prefix, excerpt);
+        }
+
+        [Fact]
+        public void CutNotOnSurrogate_KeepsTheFullCap()
+        {
+            string pair = "😀";
+            string body = new string('a', 3998) + pair + new string('b', 10);
+            // The cap cuts inside the b-run, no step-back needed: 4000 chars.
+            Assert.Equal(4000, AlexaSkillController.SliceBodyExcerpt(body, 4000).Length);
+        }
+    }
+
 }

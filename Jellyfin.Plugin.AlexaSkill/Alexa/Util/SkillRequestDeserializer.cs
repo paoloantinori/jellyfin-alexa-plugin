@@ -114,10 +114,15 @@ public sealed class ErrorTypeTolerantConverter : JsonConverter<Error>
         // either, but it must not become a null Error either: ExceptionHandler reads
         // Error.Type unguarded, so null would trade a clean deserialization failure for a
         // NullReferenceException. Tolerate it like an unknown type value, with the raw
-        // payload text preserved for triage.
+        // payload text preserved for triage; a STRING payload renders unquoted, the same
+        // rendering contract the object branch's type token uses (review round: the
+        // JSON-serialized form kept its quotes and broke grep parity between branches).
         if (reader.TokenType != JsonToken.StartObject)
         {
-            var rawPayloadText = JToken.ReadFrom(reader).ToString(Formatting.None);
+            JToken rawToken = JToken.ReadFrom(reader);
+            string rawPayloadText = rawToken.Type == JTokenType.String
+                ? rawToken.Value<string>() ?? string.Empty
+                : rawToken.ToString(Formatting.None);
             return new UnknownWireTypeError(rawPayloadText) { Type = ErrorType.InternalError };
         }
 
@@ -131,7 +136,12 @@ public sealed class ErrorTypeTolerantConverter : JsonConverter<Error>
 
         ErrorType type = default;
         string? rawWireType = null;
-        if (typeToken is not null && typeToken.Type != JTokenType.Null)
+        // An EXPLICIT "type": null rides the tolerated path too (review round): the
+        // pre-fix contract failed loudly on it, and silently defaulting to a plain
+        // Error with no Warn trace would contradict the fix's own principle that
+        // every unrecognized error.type value surfaces for triage. A MISSING type
+        // key stays a plain Error (Amazon always sends the field on Error carriers).
+        if (typeToken is not null)
         {
             try
             {
