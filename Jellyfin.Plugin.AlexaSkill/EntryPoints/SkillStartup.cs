@@ -16,6 +16,7 @@ using Jellyfin.Plugin.AlexaSkill.Controller;
 using Jellyfin.Plugin.AlexaSkill.Diagnostics;
 using Jellyfin.Plugin.AlexaSkill.Entities;
 using Jellyfin.Plugin.AlexaSkill.Lwa;
+using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -38,6 +39,7 @@ public class SkillStartup : IHostedService, IDisposable
     private readonly JellyfinConnectivityChecker _connectivityChecker;
     private readonly Alexa.Playback.DeviceQueueManager _deviceQueueManager;
     private readonly Alexa.Playback.AudiobookPositionTracker _positionTracker;
+    private readonly ILibraryManager _libraryManager;
     private CancellationTokenSource? _cts;
     private Task? _runningTask;
     private bool _disposed;
@@ -53,6 +55,7 @@ public class SkillStartup : IHostedService, IDisposable
     /// <param name="requestCounters">Request counters for metrics tracking.</param>
     /// <param name="connectivityChecker">Connectivity checker for Jellyfin server health.</param>
     /// <param name="deviceQueueManager">Per-device playback queue manager.</param>
+    /// <param name="libraryManager">Library manager for the JF-960 media census.</param>
     public SkillStartup(
         ISessionManager sessionManager,
         ILoggerFactory loggerFactory,
@@ -63,7 +66,8 @@ public class SkillStartup : IHostedService, IDisposable
         RequestCounters requestCounters,
         JellyfinConnectivityChecker connectivityChecker,
         Alexa.Playback.DeviceQueueManager deviceQueueManager,
-        Alexa.Playback.AudiobookPositionTracker positionTracker)
+        Alexa.Playback.AudiobookPositionTracker positionTracker,
+        ILibraryManager libraryManager)
     {
         _sessionManager = sessionManager;
         _httpClientFactory = httpClientFactory;
@@ -74,6 +78,7 @@ public class SkillStartup : IHostedService, IDisposable
         _connectivityChecker = connectivityChecker;
         _deviceQueueManager = deviceQueueManager;
         _positionTracker = positionTracker;
+        _libraryManager = libraryManager;
         _logger = loggerFactory.CreateLogger<SkillStartup>();
     }
 
@@ -89,6 +94,7 @@ public class SkillStartup : IHostedService, IDisposable
         Plugin.Instance!.ConnectivityChecker = _connectivityChecker;
         Plugin.Instance!.DeviceQueueManager = _deviceQueueManager;
         Plugin.Instance!.AudiobookPositionTracker = _positionTracker;
+        Plugin.Instance!.LibraryManager = _libraryManager;
 
         PluginConfiguration configuration = Plugin.Instance!.Configuration;
 

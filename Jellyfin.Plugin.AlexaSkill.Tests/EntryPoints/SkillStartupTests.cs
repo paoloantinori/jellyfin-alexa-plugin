@@ -32,10 +32,12 @@ public class SkillStartupTests : PluginTestBase
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly SearchResultCache _searchCache;
     private readonly JellyfinConnectivityChecker _connectivityChecker;
+    private readonly Mock<MediaBrowser.Controller.Library.ILibraryManager> _libraryManagerMock;
 
     public SkillStartupTests()
     {
         _sessionManagerMock = new Mock<ISessionManager>();
+        _libraryManagerMock = new Mock<MediaBrowser.Controller.Library.ILibraryManager>();
         _loggerFactory = LoggerFactory.Create(b => { });
         var services = new ServiceCollection();
         services.AddHttpClient();
@@ -61,7 +63,7 @@ public class SkillStartupTests : PluginTestBase
         var positionTracker = new Jellyfin.Plugin.AlexaSkill.Alexa.Playback.AudiobookPositionTracker(
             TestHelpers.CreateRegisteredTempDir("alexa_test_pos"),
             _loggerFactory.CreateLogger<Jellyfin.Plugin.AlexaSkill.Alexa.Playback.AudiobookPositionTracker>());
-        return new SkillStartup(_sessionManagerMock.Object, _loggerFactory, _httpClientFactory, mdm, _searchCache, new CircuitBreaker(), new RequestCounters(), _connectivityChecker, deviceQueueManager, positionTracker);
+        return new SkillStartup(_sessionManagerMock.Object, _loggerFactory, _httpClientFactory, mdm, _searchCache, new CircuitBreaker(), new RequestCounters(), _connectivityChecker, deviceQueueManager, positionTracker, _libraryManagerMock.Object);
     }
 
     [Fact]

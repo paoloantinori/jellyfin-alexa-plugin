@@ -343,6 +343,24 @@ public class PluginConfiguration : BasePluginConfiguration
 
     public bool CustomModelEnabled { get; set; }
 
+    /// <summary>
+    /// Gets or sets whether interaction models are media-profiled at rebuild time
+    /// (JF-960, first slice). When ON, every model build counts the media families
+    /// (video, music, audiobook, podcast, live TV) reachable by the UNION of the
+    /// linked users' libraries and drops every intent whose SOLE purpose is an absent
+    /// family from the deployed locale models, before catalog injection. The pruning
+    /// table (<c>Alexa.ModelDeployment.IntentMediaFamilies</c>) holds only intents
+    /// whose serving handler queries one family exclusively; media-neutral and
+    /// dual-media intents are never pruned. The census is bounded (one Limit-1
+    /// existence query per family per user) and FAILS OPEN: any degraded path (no
+    /// linked users, a stale user id, a throwing query) keeps the full model. Default
+    /// FALSE: off, the models are byte-identical to the unprofiled build, and the
+    /// household's NLU suite keeps measuring the full model until the maintainer
+    /// enables it. Turning it on (or off) takes effect at the next model build
+    /// (startup sync, skill creation, or a Rebuild Models action).
+    /// </summary>
+    public bool MediaProfiledModels { get; set; }
+
     public DateTime? LastModelDeployTime { get; set; }
 
     public string? LastModelDeployStatus { get; set; }

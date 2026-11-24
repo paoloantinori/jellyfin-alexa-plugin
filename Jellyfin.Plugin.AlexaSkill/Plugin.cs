@@ -139,6 +139,15 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     public IUserManager UserManager { get; private set; }
 
     /// <summary>
+    /// Gets the library manager. The JF-960 media census behind
+    /// <see cref="Configuration.PluginConfiguration.MediaProfiledModels"/> reads library
+    /// composition through it when the model builder prunes profiled models. Set from
+    /// DI in SkillStartup like the other collaborators; null (tests, or a startup that
+    /// never ran) means the census cannot run and the models stay unpruned (fail open).
+    /// </summary>
+    public ILibraryManager? LibraryManager { get; internal set; }
+
+    /// <summary>
     /// Gets the logger factory.
     /// </summary>
     public ILoggerFactory LoggerFactory { get; private set; }
@@ -232,6 +241,28 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
             .Where(o => o != null)
             .Select(o => o.Mood);
 
+        // JF-960: with the flag ON, census the linked users' media families ONCE and
+        // prune every single-family intent whose family is absent from every locale
+        // model before it leaves the plugin (this is the model-build service the
+        // custom-model rebuild endpoint drives, so the rebuild PUT carries the pruned
+        // model; the catalog injection pass runs afterwards and preserves the pruning).
+        // Flag OFF (the default) or an unusable library manager: no census, no pruning,
+        // byte-identical to the pre-JF-960 output.
+        IReadOnlyDictionary<Alexa.ModelDeployment.MediaFamily, int>? familyCounts = null;
+        if (Configuration.MediaProfiledModels && LibraryManager != null)
+        {
+            familyCounts = new Alexa.ModelDeployment.MediaCensus(
+                    LibraryManager,
+                    UserManager,
+                    LoggerFactory.CreateLogger<Alexa.ModelDeployment.MediaCensus>())
+                .CountFamilies(Configuration.Users);
+        }
+        else if (Configuration.MediaProfiledModels && LibraryManager == null)
+        {
+            LoggerFactory.CreateLogger("Jellyfin.Plugin.AlexaSkill.Alexa.ModelDeployment.MediaCensus").LogWarning(
+                "MediaProfiledModels is on but the library manager is not set; models stay unpruned (JF-960)");
+        }
+
         Collection<SkillInteractionModel> models = new Collection<SkillInteractionModel>();
         foreach (Tuple<string, string> model in InteractionModels)
         {
@@ -244,6 +275,15 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
             string localeInvocation = Config.EffectiveInvocationName(model.Item1, invocationName);
             var skillModel = new SkillInteractionModel(model.Item1, model.Item2, localeInvocation);
             skillModel.InjectMoodSlotValues(moodOverrideWords);
+            if (familyCounts != null)
+            {
+                Alexa.ModelDeployment.MediaProfiledModelPruner.Apply(
+                    skillModel.InteractionModel,
+                    skillModel.Locale,
+                    familyCounts,
+                    LoggerFactory.CreateLogger("Jellyfin.Plugin.AlexaSkill.Alexa.ModelDeployment.MediaProfiledModelPruner"));
+            }
+
             models.Add(skillModel);
         }
 
