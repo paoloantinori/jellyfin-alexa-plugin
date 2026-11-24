@@ -311,7 +311,22 @@ def _check_one_slot(
     # Any-value expectation: the row passes only if the trainer can anchor
     # the slot on vocabulary it actually holds.
     if ctx.substring_mode:
-        if any(text and text in utterance_text for text in pin_norms):
+        # Script-aware containment (review round): the substring rule
+        # exists for CJK text without word spaces, where a sub-word match
+        # ('Yoru' inside 'Kon-ya') is the intended semantics, so a CJK
+        # entry keeps plain substring. A LATIN entry must not match inside
+        # an unrelated Latin run ('pop' inside 'popcorn'): it counts only
+        # when both edges are the string's ends or non-alphanumeric
+        # characters (so a bare Latin title jammed flush against Japanese
+        # text reads NO_ENTRY, the conservative verdict).
+        if any(
+            text and (
+                _substring_bounded(utterance_text, text)
+                if _is_latin_text(text)
+                else text in utterance_text
+            )
+            for text in pin_norms
+        ):
             return result(type_name, type_kind, STATUS_PRESENT)
     elif any(_contains_contiguous(utterance_tokens, run) for run in entry_token_runs):
         return result(type_name, type_kind, STATUS_PRESENT)
@@ -389,8 +404,53 @@ def _contains_contiguous(utterance_tokens: tuple[str, ...], entry_tokens: tuple[
     )
 
 
+def _is_latin_text(text: str) -> bool:
+    """True when ``text`` carries at least one ASCII letter and no CJK char.
+
+    The boundary rule applies to Latin entries only; CJK entries keep the
+    plain substring semantics (sub-word matches are intended there).
+    """
+    has_ascii = False
+    for ch in text:
+        if ch.isascii() and ch.isalpha():
+            has_ascii = True
+        elif not ch.isascii() and not ch.isalnum():
+            return False
+        elif ch.isspace():
+            continue
+    return has_ascii
+
+
+def _substring_bounded(haystack: str, needle: str) -> bool:
+    """True when ``needle`` occurs in ``haystack`` delimited on both sides.
+
+    Both edges must be the string's ends or non-alphanumeric characters, so
+    'pop' matches 'pop musik' and '(pop)' but never 'popcorn'.
+    """
+    if not needle:
+        return False
+    start = 0
+    while True:
+        found = haystack.find(needle, start)
+        if found < 0:
+            return False
+        end = found + len(needle)
+        left_ok = found == 0 or not haystack[found - 1].isalnum()
+        right_ok = end == len(haystack) or not haystack[end].isalnum()
+        if left_ok and right_ok:
+            return True
+        start = found + 1
+
+
 def _committed_has(committed_model: EffectiveModel | None, type_name: str, pin: str) -> bool:
-    """True when the committed seed of ``type_name`` owns the pinned value."""
+    """True when the committed seed of ``type_name`` owns the pinned value.
+
+    Shares the normalized-entry-text computation with the pin check via
+    ``entry_texts`` (one extraction, review round); the committed model is
+    a different model from the effective one, so its norms are computed
+    here per call (the call count is one per ABSENT pin under a name-level
+    snapshot, bounded by the fixture row count).
+    """
     if committed_model is None:
         return False
     vocab = committed_model.type_vocab(type_name)
@@ -510,6 +570,12 @@ def analyze_locale(
     )
     committed = None
     if snapshot is not None:
-        committed = build_effective_model(locale, models_dir=resolved_dir)
+        # raw_model rides the committed comparison too: the ABSENT vs
+        # ABSENT_IN_LIBRARY_SEED_ONLY decision must compare the pin against
+        # the SAME model the effective build started from (review round:
+        # ignoring raw_model here read the models-dir file and produced
+        # plain ABSENT where the contract demands the seed-only verdict).
+        committed = build_effective_model(
+            locale, models_dir=resolved_dir, raw_model=raw_model)
     results = check_fixture_rows(effective, rows, committed_model=committed, snapshot=snapshot)
     return results, None, unknown_builtin_type_names(effective, results)

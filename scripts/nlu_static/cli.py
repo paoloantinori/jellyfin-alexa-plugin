@@ -27,7 +27,7 @@ from nlu_static import fixture_vocab, producer_jellyfin, token_collisions  # noq
 from nlu_static.effective_model import EffectiveModel, build_effective_model, load_snapshot  # noqa: E402
 
 
-def _print_json(payload: dict, out: str | None) -> None:
+def _print_json(payload: dict | list, out: str | None) -> None:
     """Write a deterministic JSON document to stdout or the --out file."""
     text = json.dumps(payload, indent=2, sort_keys=True) + "\n"
     if out:
@@ -271,6 +271,12 @@ def cmd_fixtures(args: argparse.Namespace) -> int:
         if skip is not None:
             # Diagnostics go to stderr so --format json keeps stdout parseable.
             print(skip, file=sys.stderr)
+            if args.locale:
+                # An EXPLICITLY named locale that skips (unknown or typo'd)
+                # must fail the command: exiting 0 with '[]' would read as
+                # all-clean in a scripted consumer (review round; the
+                # effective and tokens subcommands already exit 2 here).
+                return _fail(ValueError(skip))
             continue
         if unknown:
             print(

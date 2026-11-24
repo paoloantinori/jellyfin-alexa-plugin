@@ -710,7 +710,10 @@ def test_validator_phase_skips_locale_without_fixture_file(tmp_path, capsys):
     warnings = lint_fixture_vocab(
         {"es-ES": _EPISODE_MODEL, "fr-FR": _EPISODE_MODEL}, fixtures_dir=fixtures_dir
     )
-    assert warnings == []
+    # Review round: the directory exists but NO locale file matched, so the
+    # phase is a SKIP (None), never a [] that would print its all-clear
+    # over zero checked locales.
+    assert warnings is None
     assert "SKIP fr-FR: no fixture file" in capsys.readouterr().out
 
 
@@ -719,7 +722,9 @@ def test_validator_phase_survives_a_broken_fixture(tmp_path):
     fixtures_dir.mkdir()
     (fixtures_dir / "es-ES.yaml").write_text("tests: [ [ broken", encoding="utf-8")
     warnings = lint_fixture_vocab({"es-ES": _EPISODE_MODEL}, fixtures_dir=fixtures_dir)
-    assert warnings == []
+    # The broken file reads as a locale SKIP, so the whole phase is the
+    # None skip shape (review round), never an all-clear [].
+    assert warnings is None
 
 
 # --- the CLI subcommand (AC 5) -----------------------------------------------
@@ -827,7 +832,9 @@ def test_cli_text_mode_prints_findings_and_skips(tmp_path, monkeypatch, capsys):
     assert nlu_cli.main(["fixtures", "--format", "text", "--locale", "es-ES"]) == 0
     out = capsys.readouterr().out
     assert "ABSENT" in out and "SeriesName/CATALOG" in out
-    assert nlu_cli.main(["fixtures", "--format", "text", "--locale", "fr-FR"]) == 0
+    # Review round: an EXPLICIT locale that skips fails the command (a
+    # typo'd locale must not read as all-clean in a scripted consumer).
+    assert nlu_cli.main(["fixtures", "--format", "text", "--locale", "fr-FR"]) == 2
     assert "SKIP fr-FR: no fixture file" in capsys.readouterr().err
 
 
@@ -921,3 +928,68 @@ def test_unknown_builtin_type_is_reported_not_swallowed(tmp_path):
     assert skip is None
     assert unknown == ["AMAZON.BookAuthor"]
     assert results[0].status == fv.STATUS_NOT_APPLICABLE
+
+
+# --- review round (2026-11-24): raw_model in the committed comparison -------------------
+
+
+def test_snapshot_mode_committed_comparison_uses_raw_model(tmp_path):
+    """The ABSENT vs ABSENT_IN_LIBRARY_SEED_ONLY decision must compare against
+    the SAME model the effective build started from, not the models-dir file."""
+    model = _synthetic_es_model_with_series(["Breaking Bad"])
+    _write_model(tmp_path, "es-ES", {"languageModel": _synthetic_es_model_with_series(["Other"])})
+    snap = _snapshot(
+        {"SeriesName": [{"value": "Adolescencia", "synonyms": []}]}, locale="es-ES")
+    fixtures = tmp_path / "fixtures"
+    fixtures.mkdir(exist_ok=True)
+    (fixtures / "es-ES.yaml").write_text(
+        "locale: es-ES\n"
+        "invocation_name: test\n"
+        "tests:\n"
+        "  - utterance: breaking bad pin\n"
+        "    expected_intent: PlayEpisodeIntent\n"
+        "    expected_slots:\n"
+        "      series_name: {value: breaking bad}\n",
+        encoding="utf-8",
+    )
+    results, _skip, _unknown = fv.analyze_locale(
+        "es-ES", raw_model=model, snapshot=snap, models_dir=tmp_path,
+        fixtures_dir=fixtures)
+    statuses = {(r.utterance, r.status) for r in results}
+    assert ("breaking bad pin", "ABSENT_IN_LIBRARY_SEED_ONLY") in statuses
+
+
+def _synthetic_es_model_with_series(series_values):
+    return {
+        "invocationName": "test",
+        "intents": [
+            {"name": "PlayEpisodeIntent", "slots": [
+                {"name": "series_name", "type": "SeriesName"},
+            ], "samples": ["reproduce {series_name}"]},
+            {"name": "PlayByGenreIntent", "slots": [
+                {"name": "genre", "type": "AMAZON.Genre"},
+            ], "samples": ["reproduce musica {genre}"]},
+        ],
+        "types": [
+            {"name": "SeriesName", "values": [
+                {"name": {"value": v}} for v in series_values
+            ]},
+        ],
+    }
+
+
+def _write_model(directory, locale, doc):
+    import json as _json
+    from pathlib import Path as _Path
+    path = _Path(directory) / f"model_{locale}.json"
+    path.write_text(_json.dumps(doc), encoding="utf-8")
+
+
+def test_ja_substring_requires_boundaries():
+    """A Latin entry must not match inside an unrelated Latin run."""
+    from nlu_static.fixture_vocab import _substring_bounded
+    assert _substring_bounded("popcorn and pop", "pop")
+    assert _substring_bounded("popcorn", "pop") is False
+    assert _substring_bounded("(pop)", "pop")
+    assert _substring_bounded("pop", "pop")
+    assert _substring_bounded("", "pop") is False

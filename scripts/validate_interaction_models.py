@@ -985,6 +985,7 @@ def lint_fixture_vocab(all_models: dict[str, dict], fixtures_dir: Path = FIXTURE
         return None
     warnings: list[str] = []
     catalog_dependent = 0
+    checked_locales = 0
     for locale in sorted(all_models):
         try:
             results, skip, unknown = fixture_vocab.analyze_locale(
@@ -1001,6 +1002,7 @@ def lint_fixture_vocab(all_models: dict[str, dict], fixtures_dir: Path = FIXTURE
         if skip is not None:
             print(f"  {skip}")
             continue
+        checked_locales += 1
         if unknown:
             # classify_slot_type's contract: the callers report names its
             # pinned table misses, so the table gets maintained.
@@ -1019,6 +1021,15 @@ def lint_fixture_vocab(all_models: dict[str, dict], fixtures_dir: Path = FIXTURE
             "library-only values the committed seed lacks); not warned individually, "
             "full list: python3 scripts/nlu_static/cli.py fixtures --format json"
         )
+    if checked_locales == 0:
+        # The directory exists but NO locale fixture matched (renamed files,
+        # a partial checkout): the phase must not print its all-clear over
+        # zero checked locales (review round); that is the None skip shape.
+        print(
+            "  SKIP Phase 12: fixtures directory holds no per-locale fixture "
+            f"files under {fixtures_dir}; parity unchecked"
+        )
+        return None
     return warnings
 
 
