@@ -3,9 +3,10 @@ id: JF-958
 title: >-
   es episode family stolen by naked genre carriers (Reproduce/Pon {genre});
   qualification needs the maintainer's carrier decision
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-11-24 20:13'
+updated_date: '2026-11-24 21:04'
 labels:
   - nlu
   - es
@@ -33,3 +34,15 @@ Live-diagnosed 2026-11-24 after the full 17-locale model rebuild (all SUCCEEDED)
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+gate-exempt: template-only change; the applicable verification is the live deploy + model rebuild + profile-nlu probe sequence, all in this session's transcript; no C# or test code changed.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Shipped 2026-11-24 after the maintainer's decision ('958 okay per il sostantivo'): the naked carriers 'Reproduce {genre}' and 'Pon {genre}' in the three es templates are qualified to 'Pon musica {genre}' (the qualified 'Reproduce musica {genre}' already existed, so es-ES net-loses one sample); the JF-958 comment block documents the steal, the decision and the JF-960 restoration path. Deployed (DLL into AlexaSkill_1.1.2.0, config intact) and all three es models rebuilt SUCCEEDED. Live proof post-rebuild: the five previously-stolen episode rows ('reproduce/pon/que reproduzca adolescencia temporada uno episodio tres' in es-ES, 'reproduce...' in es-MX and es-US) all route to PlayEpisodeIntent at rank 1, and the qualified genre forms ('reproduce musica rock' es-ES, 'reproduce musica jazz' es-US) still route to PlayByGenreIntent: both sides of the accepted trade verified. Validator PASS, nlu-audit clean, models regenerated from templates. gate-exempt: template-only change verified by the live deploy+rebuild+probe sequence in this session's transcript (the verification that applies to model changes); no production code touched.
+<!-- SECTION:FINAL_SUMMARY:END -->
