@@ -28,6 +28,7 @@ python3 scripts/validate_apl.py                       # Check APL templates vali
 # measured 16 stale locales). Within 30 min it is advisory (deploy-then-commit lag).
 ./scripts/run_nlu_tests.sh -k "en-US"                 # single locale
 ./scripts/run_nlu_tests.sh --dry-run                  # validate fixtures only, no SMAPI calls
+python3 scripts/nlu_static/cli.py triage --snapshot <file>   # classify red NLU rows after a live suite (see docs/nlu-static-analysis.md)
 ./scripts/run_e2e_tests.sh                            # E2E via SMAPI simulate-skill (needs live Jellyfin)
 ```
 
