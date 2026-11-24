@@ -62,7 +62,20 @@ def is_whitespace_tokenized(locale: str) -> bool:
 
     False exactly for the locales in ``NON_WHITESPACE_TOKENIZED_LOCALES``:
     False for ja-JP, True for the other 16. A tool that depends on word
-    tokens checks this and prints ``SKIP ja-JP: no whitespace tokenization``
-    instead of producing output for that locale.
+    tokens checks this and prints ``skip_line(locale)`` instead of
+    producing output for that locale.
     """
     return locale not in NON_WHITESPACE_TOKENIZED_LOCALES
+
+
+def skip_line(locale: str) -> str | None:
+    """The mandated SKIP line for a locale word tokens cannot serve, or None.
+
+    The ONE producer of the explicit-skip contract (parent task rule:
+    silent skips are forbidden): ``SKIP ja-JP: no whitespace tokenization``
+    for the non-whitespace locales, None for every locale a token tool may
+    process. Callers print the returned line verbatim and move on.
+    """
+    if is_whitespace_tokenized(locale):
+        return None
+    return f"SKIP {locale}: no whitespace tokenization"

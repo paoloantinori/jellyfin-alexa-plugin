@@ -120,7 +120,12 @@ def redact(text: str, api_key: str) -> str:
 
 
 def _item_names(url: str, api_key: str, item_type: str, fetch_json: FetchJson) -> list[str]:
-    """Fetch the names of every item of one type, deduped case-insensitively."""
+    """Fetch the names of every item of one type, deduped case-insensitively.
+
+    An unexpected payload shape raises ValueError: a wrong URL or a changed
+    endpoint must fail loudly, not silently omit the type from the snapshot
+    (the omit rule is reserved for a genuinely EMPTY library section).
+    """
     base = url.rstrip("/")
     if item_type == "MusicArtist":
         path = "/Artists"
@@ -135,10 +140,14 @@ def _item_names(url: str, api_key: str, item_type: str, fetch_json: FetchJson) -
         }
     full_url = base + path + "?" + urllib.parse.urlencode(query)
     payload = fetch_json(full_url)
-    items = payload.get("Items", []) if isinstance(payload, dict) else []
-    seen: set[str] = set()
+    if not isinstance(payload, dict) or "Items" not in payload:
+        raise ValueError(
+            f"{path} for {item_type} returned an unexpected payload "
+            "(no 'Items' key); check --url and the Jellyfin version"
+        )
     names: list[str] = []
-    for item in items:
+    seen: set[str] = set()
+    for item in payload["Items"]:
         name = item.get("Name") if isinstance(item, dict) else None
         if not isinstance(name, str) or not name.strip():
             continue

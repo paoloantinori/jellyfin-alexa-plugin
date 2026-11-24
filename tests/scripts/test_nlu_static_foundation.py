@@ -34,6 +34,7 @@ from nlu_static.effective_model import (  # noqa: E402
 from nlu_static.normalize import (  # noqa: E402
     is_whitespace_tokenized,
     normalize_text,
+    skip_line,
     tokenize,
 )
 
@@ -248,61 +249,29 @@ def test_load_snapshot_accepts_valid_file(tmp_path):
     assert doc["producer"] == "test"
 
 
-def test_load_snapshot_rejects_wrong_schema_naming_path(tmp_path):
-    path = _write_snapshot(tmp_path, {"schema": 2, "locales": {"es-ES": {}}})
-    with pytest.raises(ValueError) as excinfo:
-        load_snapshot(path)
-    assert str(path) in str(excinfo.value)
-    assert "schema" in str(excinfo.value)
+# --- AC 5: load_snapshot rejections ----------------------------------------------------
+# One parametrized body: every case must raise ValueError naming the file.
+
+_SNAPSHOT_REJECTION_CASES = [
+    pytest.param({"schema": 2, "locales": {"es-ES": {}}}, ["schema"], id="wrong-schema"),
+    pytest.param({"producer": "x", "locales": {"es-ES": {}}}, [], id="missing-schema"),
+    pytest.param(_snapshot({"es-ES": {"SeriesName": "Breaking Bad"}}), ["SeriesName"], id="non-list-type-entry"),
+    pytest.param(_snapshot({"es-ES": {"SeriesName": [{"value": 7}, {"novalue": "x"}]}}), ["string 'value'"], id="entry-without-string-value"),
+    pytest.param(_snapshot({"es-ES": {"SeriesName": [{"value": "x", "synonyms": [1]}]}}), [], id="non-string-synonyms"),
+    pytest.param("{not json", [], id="invalid-json"),
+    pytest.param("[]", [], id="bad-top-level"),
+]
 
 
-def test_load_snapshot_rejects_missing_schema_and_bad_top_level(tmp_path):
-    path = _write_snapshot(tmp_path, {"producer": "x", "locales": {"es-ES": {}}})
-    with pytest.raises(ValueError) as excinfo:
-        load_snapshot(path)
-    assert str(path) in str(excinfo.value)
-    junk = _write_snapshot(tmp_path, "[]")
-    with pytest.raises(ValueError) as excinfo:
-        load_snapshot(junk)
-    assert str(junk) in str(excinfo.value)
-
-
-def test_load_snapshot_rejects_non_list_type_entry_naming_path(tmp_path):
-    path = _write_snapshot(tmp_path, _snapshot({"es-ES": {"SeriesName": "Breaking Bad"}}))
+@pytest.mark.parametrize("document,fragments", _SNAPSHOT_REJECTION_CASES)
+def test_load_snapshot_rejects_naming_path(tmp_path, document, fragments):
+    path = _write_snapshot(tmp_path, document)
     with pytest.raises(ValueError) as excinfo:
         load_snapshot(path)
     message = str(excinfo.value)
     assert str(path) in message
-    assert "SeriesName" in message
-
-
-def test_load_snapshot_rejects_entry_without_string_value_naming_path(tmp_path):
-    path = _write_snapshot(
-        tmp_path,
-        _snapshot({"es-ES": {"SeriesName": [{"value": 7}, {"novalue": "x"}]}}),
-    )
-    with pytest.raises(ValueError) as excinfo:
-        load_snapshot(path)
-    message = str(excinfo.value)
-    assert str(path) in message
-    assert "string 'value'" in message
-
-
-def test_load_snapshot_rejects_non_string_synonyms_naming_path(tmp_path):
-    path = _write_snapshot(
-        tmp_path,
-        _snapshot({"es-ES": {"SeriesName": [{"value": "x", "synonyms": [1]}]}}),
-    )
-    with pytest.raises(ValueError) as excinfo:
-        load_snapshot(path)
-    assert str(path) in str(excinfo.value)
-
-
-def test_load_snapshot_rejects_invalid_json_naming_path(tmp_path):
-    path = _write_snapshot(tmp_path, "{not json")
-    with pytest.raises(ValueError) as excinfo:
-        load_snapshot(path)
-    assert str(path) in str(excinfo.value)
+    for fragment in fragments:
+        assert fragment in message
 
 
 # --- AC 6: classify_slot_type ----------------------------------------------------------
@@ -602,3 +571,33 @@ def test_package_and_doc_prose_avoids_banned_punctuation():
     for path in [*package_files, doc]:
         text = path.read_text(encoding="utf-8")
         assert em_dash not in text, path
+
+
+# --- /simplify round (2026-11-24): the new seams ---------------------------------------
+
+
+def test_build_effective_model_rejects_schemaless_snapshot_dict(tmp_path):
+    """A raw dict passed to build_effective_model cannot bypass the schema check."""
+    _write_model(tmp_path, "xx-XX", {"languageModel": _series_model({"SeriesName": ["Seed"]})})
+    bogus = {"schema": 99, "locales": {"xx-XX": {"SeriesName": [{"value": "x", "synonyms": []}]}}}
+    with pytest.raises(ValueError) as excinfo:
+        build_effective_model("xx-XX", snapshot=bogus, models_dir=tmp_path)
+    assert "schema" in str(excinfo.value)
+
+
+def test_skip_line_is_none_for_tokenizable_locales_and_mandated_otherwise():
+    assert skip_line("it-IT") is None
+    assert skip_line("es-ES") is None
+    ja = skip_line("ja-JP")
+    assert ja == "SKIP ja-JP: no whitespace tokenization"
+
+
+def test_producer_raises_on_unexpected_payload_shape():
+    def fake_fetch(_url):
+        return {"not": "the items envelope"}
+
+    with pytest.raises(ValueError) as excinfo:
+        producer_jellyfin.build_snapshot(
+            "http://server", "key", fetch_json=fake_fetch, item_types=("Series",)
+        )
+    assert "unexpected payload" in str(excinfo.value)

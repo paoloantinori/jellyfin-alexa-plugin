@@ -13,7 +13,7 @@ with every type labeled STATIC or CATALOG.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Literal
 
@@ -122,9 +122,10 @@ class EffectiveModel:
 def load_locale_model(locale: str, models_dir: str | Path | None = None) -> dict:
     """Load ``model_<locale>.json`` and return its ``languageModel`` dict.
 
-    Accepts a bare document with a top-level ``languageModel`` key, one
-    wrapped in an ``interactionModel`` object, and a document that IS the
-    language model itself. Raises FileNotFoundError for a missing locale
+    Accepts three shapes: a document with a top-level ``languageModel`` key
+    (the committed models), one wrapped in an ``interactionModel`` object
+    (SMAPI payloads), and a document that IS the language model itself
+    (synthetic test fixtures). Raises FileNotFoundError for a missing locale
     file and ValueError for a readable file without a usable model.
     """
     directory = Path(models_dir) if models_dir is not None else DEFAULT_MODELS_DIR
@@ -166,6 +167,7 @@ def build_effective_model(
     snapshot_types: list[str] = []
     notes: list[str] = []
     if snapshot is not None:
+        validate_snapshot(snapshot)
         table = _resolve_locale_table(snapshot, locale)
         if table is None:
             notes.append(
@@ -173,14 +175,13 @@ def build_effective_model(
                 f"{SNAPSHOT_GLOB_KEY!r} fallback; committed values kept"
             )
         else:
-            if not isinstance(table, dict):
-                raise ValueError(f"snapshot locales.{locale} must be an object keyed by slot type name")
             for type_name in sorted(table):
                 entries = _parse_snapshot_entries(
                     table[type_name], f"snapshot locales.{locale}.{type_name}"
                 )
                 if type_name in committed:
-                    committed[type_name]["entries"] = entries
+                    committed[type_name] = replace(
+                        committed[type_name], entries=entries)
                     snapshot_types.append(type_name)
                 else:
                     notes.append(
@@ -188,14 +189,7 @@ def build_effective_model(
                     )
 
     source: ModelSource = "snapshot" if snapshot_types else "committed"
-    types = tuple(
-        SlotTypeVocab(
-            name=name,
-            kind=committed[name]["kind"],
-            entries=committed[name]["entries"],
-        )
-        for name in sorted(committed)
-    )
+    types = tuple(committed[name] for name in sorted(committed))
     return EffectiveModel(
         locale=locale,
         intents=intents,
@@ -212,11 +206,12 @@ def classify_slot_type(type_name: str, effective_model: EffectiveModel) -> str:
     FREE = AMAZON.SearchQuery, AMAZON.MusicRecording, AMAZON.Musician,
     AMAZON.Genre, AMAZON.Person; NUMERIC = AMAZON.NUMBER; STRUCTURED =
     AMAZON.DURATION and AMAZON.TIME; CLOSED = every custom type (kind
-    STATIC or CATALOG). Any other AMAZON.* name returns UNKNOWN_BUILTIN:
-    callers treat it as FREE for behavior but must report it, so this table
-    gets maintained instead of silently guessing. A custom name this model
-    does not declare still returns CLOSED (another locale may declare it);
-    the model lookup confirms declared membership.
+    STATIC or CATALOG), declared by this model or not (another locale may
+    declare it). Any other AMAZON.* name returns UNKNOWN_BUILTIN: callers
+    treat it as FREE for behavior but must report it, so this table gets
+    maintained instead of silently guessing. ``effective_model`` is part of
+    the pinned foundation signature; later subtasks classify per intent and
+    read the model there.
     """
     if type_name in FREE_BUILTIN_TYPES:
         return "FREE"
@@ -226,8 +221,6 @@ def classify_slot_type(type_name: str, effective_model: EffectiveModel) -> str:
         return "STRUCTURED"
     if type_name.startswith("AMAZON."):
         return "UNKNOWN_BUILTIN"
-    if effective_model.type_vocab(type_name) is not None:
-        return "CLOSED"
     return "CLOSED"
 
 
@@ -249,20 +242,35 @@ def load_snapshot(path: str | Path) -> dict:
         raise ValueError(f"{snapshot_path}: not valid JSON ({err.msg} at line {err.lineno})") from err
     if not isinstance(doc, dict):
         raise ValueError(f"{snapshot_path}: top level must be a JSON object")
+    validate_snapshot(doc, context=str(snapshot_path))
+    return doc
+
+
+def validate_snapshot(doc: dict, context: str = "snapshot") -> None:
+    """Validate a parsed snapshot dict in place of a file.
+
+    The ONE owner of the snapshot format contract, shared by load_snapshot
+    (file entry point) and build_effective_model (dict entry point, so a
+    caller passing a raw dict cannot bypass the schema check; subtask 8's
+    plugin export validates its HTTP response body through this same
+    function). Rejects an unknown or missing schema number, a bad
+    ``locales`` table, a non-list type entry, and an entry without a
+    string ``value``, each with a ValueError naming the offending path
+    under ``context``.
+    """
     schema = doc.get("schema")
     if isinstance(schema, bool) or schema != SNAPSHOT_SCHEMA:
-        raise ValueError(f"{snapshot_path}: snapshot schema must be {SNAPSHOT_SCHEMA}, got {schema!r}")
+        raise ValueError(f"{context}: snapshot schema must be {SNAPSHOT_SCHEMA}, got {schema!r}")
     locales = doc.get("locales")
     if not isinstance(locales, dict) or not locales:
-        raise ValueError(f"{snapshot_path}: 'locales' must be a non-empty object keyed by locale")
+        raise ValueError(f"{context}: 'locales' must be a non-empty object keyed by locale")
     for locale_key, table in locales.items():
         if not isinstance(locale_key, str) or not isinstance(table, dict):
             raise ValueError(
-                f"{snapshot_path}: locales.{locale_key!r} must be an object keyed by slot type name"
+                f"{context}: locales.{locale_key!r} must be an object keyed by slot type name"
             )
         for type_name, entries in table.items():
-            _parse_snapshot_entries(entries, f"{snapshot_path}: locales.{locale_key}.{type_name}")
-    return doc
+            _parse_snapshot_entries(entries, f"{context}: locales.{locale_key}.{type_name}")
 
 
 def _resolve_locale_table(snapshot: dict, locale: str) -> dict | None:
@@ -302,20 +310,31 @@ def _parse_intents(model: dict) -> tuple[IntentSpec, ...]:
     return tuple(sorted(intents, key=lambda intent: intent.name))
 
 
-def _parse_types(model: dict) -> dict[str, dict]:
-    """Read the declared types into name -> {kind, entries} records."""
-    committed: dict[str, dict] = {}
+def _parse_types(model: dict) -> dict[str, SlotTypeVocab]:
+    """Read the declared types into name -> SlotTypeVocab records.
+
+    Entry parsing shares ``_parse_snapshot_entries`` with the snapshot path
+    (one entry-parsing authority, including its synonyms validation); the
+    model shape is adapted to the entry list that helper expects.
+    """
+    committed: dict[str, SlotTypeVocab] = {}
     for raw in model.get("types", []):
         name = raw.get("name")
         if not isinstance(name, str):
             raise ValueError("model has a type entry without a string name")
-        entries: list[tuple[str, tuple[str, ...]]] = []
+        entry_dicts = []
         for value in raw.get("values", []):
             value_obj = value.get("name") if isinstance(value, dict) else None
             if not isinstance(value_obj, dict) or not isinstance(value_obj.get("value"), str):
                 raise ValueError(f"model type {name!r} has a value entry without a string name.value")
-            synonyms = value_obj.get("synonyms") or ()
-            entries.append((value_obj["value"], tuple(synonyms)))
+            entry_dicts.append({
+                "value": value_obj["value"],
+                "synonyms": list(value_obj.get("synonyms") or ()),
+            })
         kind: VocabKind = "CATALOG" if name in _CATALOG_TYPE_SET else "STATIC"
-        committed[name] = {"kind": kind, "entries": tuple(entries)}
+        committed[name] = SlotTypeVocab(
+            name=name,
+            kind=kind,
+            entries=_parse_snapshot_entries(entry_dicts, f"model type {name!r}"),
+        )
     return committed

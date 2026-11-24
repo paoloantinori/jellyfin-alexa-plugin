@@ -39,7 +39,7 @@ def _print_json(payload: dict, out: str | None) -> None:
 def effective_summary(model: EffectiveModel) -> dict:
     """The deterministic per-locale summary: per slot type kind, entry count and source."""
     types: dict[str, dict] = {}
-    for vocab in sorted(model.types, key=lambda item: item.name):
+    for vocab in model.types:  # build_effective_model already emits name-sorted
         types[vocab.name] = {
             "kind": vocab.kind,
             "entry_count": len(vocab.entries),
@@ -53,19 +53,23 @@ def effective_summary(model: EffectiveModel) -> dict:
     }
 
 
+def _fail(err: Exception) -> int:
+    """Print one error line for a refused input and return the refusal exit code."""
+    print(f"error: {err}", file=sys.stderr)
+    return 2
+
+
 def cmd_snapshot(args: argparse.Namespace) -> int:
     """Fetch item names from a Jellyfin server and write a catalog snapshot."""
     try:
         url, api_key = producer_jellyfin.resolve_connection(args.url, args.api_key)
     except ValueError as err:
-        print(f"error: {err}", file=sys.stderr)
-        return 2
+        return _fail(err)
     try:
         item_types = tuple(args.types) if args.types else None
         snapshot = producer_jellyfin.build_snapshot(url, api_key, item_types=item_types)
     except Exception as err:  # the HTTP layer raises many shapes; redact them all
-        print(f"error: {producer_jellyfin.redact(str(err), api_key)}", file=sys.stderr)
-        return 2
+        return _fail(ValueError(producer_jellyfin.redact(str(err), api_key)))
     _print_json(snapshot, args.out)
     return 0
 
@@ -77,13 +81,11 @@ def cmd_effective(args: argparse.Namespace) -> int:
         try:
             snapshot = load_snapshot(args.snapshot)
         except (OSError, ValueError) as err:
-            print(f"error: {err}", file=sys.stderr)
-            return 2
+            return _fail(err)
     try:
         model = build_effective_model(args.locale, snapshot=snapshot)
     except (OSError, ValueError) as err:
-        print(f"error: {err}", file=sys.stderr)
-        return 2
+        return _fail(err)
     _print_json(effective_summary(model), args.out)
     return 0
 
@@ -103,6 +105,7 @@ def _register_snapshot(subparsers: argparse._SubParsersAction) -> None:
         "--types",
         nargs="+",
         metavar="ITEM_TYPE",
+        choices=sorted(producer_jellyfin.ITEM_TYPE_TO_SLOT_TYPE),
         help="subset of Jellyfin item types to fetch (default: all of Series, MusicArtist, MusicAlbum, Movie, AudioBook, Audio)",
     )
     parser.add_argument("--out", help="write the snapshot JSON here instead of stdout")
