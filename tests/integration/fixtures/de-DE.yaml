@@ -84,9 +84,9 @@ tests:
   # entities and wins the competition). Functionally identical: both arms
   # play the song. These rows pin the measured routing.
   - utterance: "Spiele das Lied bohemian rhapsody"
-    expected_intent: PlaySongIntent
+    expected_intent: PlayLibrarySongIntent
     expected_slots:
-      song: {}
+      librarySong: {}
 
   - utterance: "Spiele das Lied hotel california von the eagles"
     expected_intent: PlaySongIntent
