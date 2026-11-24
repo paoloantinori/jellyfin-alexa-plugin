@@ -39,6 +39,7 @@ from nlu_static.effective_model import (
     DEFAULT_MODELS_DIR,
     EffectiveModel,
     build_effective_model,
+    entry_texts,
 )
 from nlu_static.normalize import SLOT_PLACEHOLDER_RE, normalize_text, skip_line, tokenize
 
@@ -174,12 +175,8 @@ def analyze_locale(
 
 
 def _vocab_entry_texts(vocab: SlotTypeVocab) -> list[str]:
-    """The entry texts of one type: each canonical and each synonym."""
-    texts: list[str] = []
-    for canonical, synonyms in vocab.entries:
-        texts.append(canonical)
-        texts.extend(synonyms)
-    return texts
+    """The entry texts of one type: each canonical and each synonym (shared helper)."""
+    return entry_texts(vocab)
 
 
 def _entry_tokens(text: str) -> tuple[str, ...]:

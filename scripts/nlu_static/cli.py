@@ -23,7 +23,7 @@ _SCRIPTS_DIR = Path(__file__).resolve().parents[1]
 if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 
-from nlu_static import producer_jellyfin, token_collisions  # noqa: E402
+from nlu_static import fixture_vocab, producer_jellyfin, token_collisions  # noqa: E402
 from nlu_static.effective_model import EffectiveModel, build_effective_model, load_snapshot  # noqa: E402
 
 
@@ -250,12 +250,90 @@ def _register_tokens(subparsers: argparse._SubParsersAction) -> None:
     parser.set_defaults(func=cmd_tokens)
 
 
+def cmd_fixtures(args: argparse.Namespace) -> int:
+    """Run the fixture-versus-vocabulary check over one locale or all locales."""
+    snapshot, refusal = _load_optional_snapshot(args)
+    if refusal is not None:
+        return refusal
+    locales = [args.locale] if args.locale else fixture_vocab.committed_locales()
+    results: list[fixture_vocab.FixtureVocabResult] = []
+    checked = 0
+    for locale in locales:
+        try:
+            locale_results, skip, unknown = fixture_vocab.analyze_locale(
+                locale,
+                snapshot=snapshot,
+                models_dir=fixture_vocab.default_models_dir(),
+                fixtures_dir=fixture_vocab.default_fixtures_dir(),
+            )
+        except (OSError, ValueError) as err:
+            return _fail(err)
+        if skip is not None:
+            # Diagnostics go to stderr so --format json keeps stdout parseable.
+            print(skip, file=sys.stderr)
+            continue
+        if unknown:
+            print(
+                f"  note [{locale}]: UNKNOWN_BUILTIN slot type(s) treated as free-text: "
+                f"{', '.join(unknown)} (the classify table needs these)",
+                file=sys.stderr,
+            )
+        results.extend(locale_results)
+        checked += 1
+    results.sort(key=lambda result: result.sort_key())
+    if args.format == "json":
+        payload = [result.payload() for result in results]
+        _print_json(payload, args.out)
+        return 0
+    counts: dict[str, int] = {}
+    for result in results:
+        counts[result.status] = counts.get(result.status, 0) + 1
+    summary = " ".join(f"{status}={counts[status]}" for status in sorted(counts))
+    print(f"fixture-vocab check over {checked} locale(s), {len(results)} slot expectation(s): {summary}")
+    for result in results:
+        if not fixture_vocab.is_reportable(result):
+            continue
+        kind = f"/{result.type_kind}" if result.type_kind else ""
+        type_field = f"{result.type}{kind}" if result.type else "no type"
+        print(
+            f"  [{result.locale}] {result.status} slot '{result.slot}' type={type_field} "
+            f"intent={result.expected_intent} mode={result.mode}"
+        )
+        print(f"      utterance: {result.utterance}")
+    return 0
+
+
+def _register_fixtures(subparsers: argparse._SubParsersAction) -> None:
+    """Register the fixtures subcommand (JF-954.3)."""
+    parser = subparsers.add_parser(
+        "fixtures",
+        help="check NLU fixture slot values against the effective slot type vocabulary",
+    )
+    parser.add_argument(
+        "--locale",
+        help="single Alexa locale to check (default: every committed locale)",
+    )
+    parser.add_argument(
+        "--snapshot",
+        help="catalog snapshot JSON file; answers the live question (which pinned values the live catalog lacks)",
+    )
+    parser.add_argument(
+        "--format",
+        choices=("json", "text"),
+        default="json",
+        help="output format (default: json, a sorted list of result objects)",
+    )
+    parser.add_argument("--out", help="write the JSON output here instead of stdout")
+    parser.set_defaults(func=cmd_fixtures)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="nlu_static", description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
     _register_snapshot(subparsers)
     _register_effective(subparsers)
     _register_tokens(subparsers)
+    _register_fixtures(subparsers)
     args = parser.parse_args(argv)
     return int(args.func(args))
 
