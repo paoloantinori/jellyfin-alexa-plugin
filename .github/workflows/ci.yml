@@ -89,6 +89,12 @@ jobs:
       - name: Check generated voice-reference doc freshness
         run: python3 scripts/generate_voice_reference.py --check
 
+      # NLU static quality audit (2026-11-24): slot type consistency at
+      # error level; vocabulary collisions warning-only vs baseline until
+      # the structural fix (JF-955) closes the JF-933 class.
+      - name: NLU static quality audit
+        run: python3 scripts/nlu-audit/run_audit.py
+
   validate-locales:
     runs-on: ubuntu-latest
     steps:
