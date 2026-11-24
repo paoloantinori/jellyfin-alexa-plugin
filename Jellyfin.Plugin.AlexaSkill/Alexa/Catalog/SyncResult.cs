@@ -9,6 +9,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Catalog;
 public class SyncResult
 {
     private readonly HashSet<CatalogType> _frozenTypes = new();
+    private readonly HashSet<string> _skippedOversizeLocales = new(StringComparer.Ordinal);
 
     /// <summary>
     /// Gets or sets a value indicating whether the sync completed successfully.
@@ -83,8 +84,28 @@ public class SyncResult
     public IReadOnlyCollection<CatalogType> FrozenTypes => _frozenTypes;
 
     /// <summary>
+    /// Gets the locales (JF-951) whose interaction-model PUT was SKIPPED by the
+    /// local pre-flight size guard: the effective model size (serialized model
+    /// JSON plus the wired catalog payload bytes) exceeded the safety
+    /// threshold, so the PUT was not sent and the locale keeps its previous
+    /// good model. Unlike <see cref="FrozenTypes"/>, a skipped locale does NOT
+    /// fail the run; it surfaces here so the config page can tell the user
+    /// their chosen combination (e.g. song phonetic synonyms on a large
+    /// library) is incompatible and name the levers (disable song phonetic
+    /// synonyms, or fewer titles).
+    /// </summary>
+    public IReadOnlyCollection<string> SkippedOversizeLocales => _skippedOversizeLocales;
+
+    /// <summary>
     /// Records a frozen catalog type (internal: LibrarySyncService is the only writer).
     /// </summary>
     /// <param name="type">The catalog type whose payload build froze.</param>
     internal void RecordFrozenType(CatalogType type) => _frozenTypes.Add(type);
+
+    /// <summary>
+    /// Records a locale skipped by the JF-951 pre-flight size guard (internal:
+    /// LibrarySyncService is the only writer).
+    /// </summary>
+    /// <param name="locale">The locale whose model PUT was skipped.</param>
+    internal void RecordSkippedOversizeLocale(string locale) => _skippedOversizeLocales.Add(locale);
 }

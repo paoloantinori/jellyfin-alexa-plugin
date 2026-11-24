@@ -571,6 +571,12 @@ public class CatalogManager
         // assert pre-song shapes with all-null song semantics.
         string? songCatalogId = null,
         string? songCatalogVersion = null,
+        // JF-951: the serialized byte length of each type's catalog payload, in
+        // memory at the sync's call site. Wired types (a non-null catalog id)
+        // contribute their bytes to the pre-flight effective-size estimate; a
+        // null dictionary disables the guard (older callers, tests asserting
+        // pre-guard shapes). Trailing-optional like the song pair above.
+        IReadOnlyDictionary<CatalogType, long>? payloadBytesByType = null,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrEmpty(artistCatalogId) && string.IsNullOrEmpty(albumCatalogId) && string.IsNullOrEmpty(seriesCatalogId) && string.IsNullOrEmpty(audiobookCatalogId) && string.IsNullOrEmpty(movieCatalogId) && string.IsNullOrEmpty(songCatalogId))
@@ -601,8 +607,62 @@ public class CatalogManager
 
         string modifiedJson = InjectCatalogReferences(modelJson, artistCatalogId, albumCatalogId, seriesCatalogId, audiobookCatalogId, movieCatalogId, artistCatalogVersion, albumCatalogVersion, seriesCatalogVersion, audiobookCatalogVersion, movieCatalogVersion, _logger, songCatalogId, songCatalogVersion);
 
-        // JF-495: greppable audit line before the PUT.
+        // JF-951: the model is UTF-8 encoded ONCE. The guard below counts these
+        // exact bytes and the PUT sends the same array, so the guard's model
+        // figure is provably the wire bytes (identical content to the former
+        // StringContent re-encode).
+        byte[] modelUtf8 = Encoding.UTF8.GetBytes(modifiedJson);
+
+        // The PUT audit counts, computed once for the audit line and the
+        // SkippedOversize outcome.
         var (putIntents, putSamples) = InteractionModelPutAudit.CountFromJson(modifiedJson);
+
+        // JF-951 pre-flight size guard: Amazon's per-locale interaction-model cap is
+        // EFFECTIVE (the serialized model plus the bytes of every catalog referenced
+        // by it), and an over-cap PUT fails ExceededMaximumModelSize on Amazon's
+        // servers AFTER the build, leaving the locale's live model FAILED until
+        // manually restored (the 2026-11-23 live findings: a 9,458-title library
+        // with phonetic song synonyms measured it-IT 2.0MB / de-DE 1.6MB / ja-JP
+        // 2.5MB). The payload bytes are in memory at the sync's call site, the
+        // post-injection model bytes are in memory here, so the check runs LOCALLY
+        // before the PUT: on exceed, skip the PUT (the previous good model stays
+        // live), report a SkippedOversize outcome the sync surfaces in its
+        // SyncResult, and log the numbers and the levers the user controls. The
+        // wired set is read from the POST-INJECTION MODEL ITSELF (the valueSupplier
+        // carriers, the IsCatalogWired predicate): exactly what Amazon will count,
+        // so a mapping the JF-952 declare check skipped contributes no payload
+        // bytes, and a wired block is counted only when this run knows its bytes.
+        // KNOWN RESIDUAL GAP (absorbed by the safety margin): a STALE wired block
+        // of a type that minted no version this run (zero items, or a frozen type)
+        // keeps Amazon counting its PREVIOUS run's payload, which no local byte
+        // count can know; the worst case degrades to the pre-guard behavior (a
+        // server-side build failure on that locale), never to a wrong skip.
+        if (payloadBytesByType != null)
+        {
+            List<long> wiredPayloadBytes = CollectWiredPayloadBytes(modifiedJson, payloadBytesByType);
+            long modelBytes = modelUtf8.Length;
+            long thresholdBytes = EffectiveModelSizeSafetyThresholdBytes;
+            long effectiveBytes = EstimateEffectiveModelSizeBytes(modelBytes, wiredPayloadBytes);
+            // The ONE sum lives in the estimator; the log's payload figure is
+            // derived from it, never re-summed inline (the estimator's doc
+            // contract).
+            long payloadBytes = effectiveBytes - modelBytes;
+            if (effectiveBytes > thresholdBytes)
+            {
+                _logger.LogError(
+                    "Interaction model update SKIPPED for skill {SkillId} locale {Locale} (JF-951 pre-flight size guard): effective size {EffectiveBytes} bytes exceeds the {ThresholdBytes}-byte safety threshold (Amazon's per-model cap is {CapBytes} bytes; model JSON {ModelBytes} bytes + wired catalog payloads {PayloadBytes} bytes). The locale keeps its previous good model. {Levers}",
+                    skillId, locale, effectiveBytes, thresholdBytes, ModelSizeCapBytes, modelBytes, payloadBytes, OversizeGuardLeversText);
+                return new CatalogModelUpdateResult(BuildStatusSkippedOversize, null, putIntents, putSamples, CanaryError: $"skipped by the JF-951 pre-flight size guard: effective {effectiveBytes} bytes > threshold {thresholdBytes} (model {modelBytes} + payloads {payloadBytes})");
+            }
+
+            _logger.LogDebug(
+                "Interaction model size for skill {SkillId} locale {Locale}: effective {EffectiveBytes} bytes (model {ModelBytes} + payloads {PayloadBytes}; threshold {ThresholdBytes})",
+                skillId, locale, effectiveBytes, modelBytes, payloadBytes, thresholdBytes);
+        }
+
+        // JF-495: greppable audit line before the PUT, AFTER the JF-951 guard:
+        // the audit reconciles PUTs against deployments, and a size-skipped
+        // locale sends no PUT, so it must not mint an audit entry.
         InteractionModelPutAudit.LogModelPut(
             _logger,
             InteractionModelPutAudit.SourceGetModifyPut,
@@ -615,7 +675,8 @@ public class CatalogManager
 
         using var putRequest = new HttpRequestMessage(HttpMethod.Put, modelUrl);
         putRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-        putRequest.Content = new StringContent(modifiedJson, Encoding.UTF8, "application/json");
+        putRequest.Content = new ByteArrayContent(modelUtf8);
+        putRequest.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json") { CharSet = "utf-8" };
 
         using var putResponse = await client.SendAsync(putRequest, cancellationToken).ConfigureAwait(false);
         await EnsureSuccessAsync(putResponse, cancellationToken).ConfigureAwait(false);
@@ -1304,6 +1365,138 @@ public class CatalogManager
     }
 
     /// <summary>
+    /// JF-951: Amazon's per-locale interaction-model size cap, EFFECTIVE form
+    /// (the serialized model JSON plus the bytes of every catalog wired into
+    /// it). Amazon documents 1.5MB; the constant carries the SI reading
+    /// (1,500,000 bytes), the same number the 2026-11-23 live
+    /// ExceededMaximumModelSize findings were measured against.
+    /// </summary>
+    internal const long ModelSizeCapBytes = 1_500_000;
+
+    /// <summary>
+    /// JF-951: the BuildStatus value the pre-flight size guard returns on a
+    /// skipped PUT. The ONE literal; the sync's consumer compares against this
+    /// constant, never its own copy.
+    /// </summary>
+    internal const string BuildStatusSkippedOversize = "SkippedOversize";
+
+    /// <summary>
+    /// JF-951: the ONE copy of the lever text every size-guard log line names,
+    /// so the two writers (this class's guard line and the sync's per-user
+    /// warning) cannot drift. The guard can fire on ANY wired type's payload
+    /// (artist and album catalogs count too), so the wording names the general
+    /// lever first and the song-specific one as the example.
+    /// </summary>
+    internal const string OversizeGuardLeversText = "Levers: sync fewer titles (for the song catalog, disabling phonetic synonyms via CatalogSongSynonymsEnabled removes most of the added bytes)";
+
+    /// <summary>
+    /// JF-951: the pre-flight guard threshold, the cap minus a safety margin
+    /// (the 1.45MB line the task pins). The margin absorbs the estimator's
+    /// known gaps (SMAPI's own serialization of the injected reference block,
+    /// catalog-side metadata Amazon may count beyond the raw payload bytes),
+    /// so a payload that clears the threshold locally is comfortably inside
+    /// Amazon's effective cap. The ONE threshold the guard compares against;
+    /// the <see cref="ModelSizeSafetyThresholdBytesForTest"/> seam only
+    /// overrides the comparison in tests, never this definition.
+    /// </summary>
+    internal const long ModelSizeSafetyThresholdBytes = 1_450_000;
+
+    /// <summary>
+    /// Test seam (null in production, the PollDelayMsForTest pattern): overrides
+    /// the guard threshold so the full-sync pins can drive a leg past the
+    /// pre-flight guard without materializing a 1.45MB payload. Zero or negative
+    /// forces the skip for every wired locale.
+    /// </summary>
+    internal long? ModelSizeSafetyThresholdBytesForTest { get; set; }
+
+    /// <summary>
+    /// JF-951: the ONE estimator of the guard (pure, unit-pinned over known
+    /// sizes): the effective per-model size is the serialized model JSON bytes
+    /// plus the sum of the serialized bytes of every catalog payload wired into
+    /// that model. Nothing else may re-derive the sum inline.
+    /// </summary>
+    /// <param name="modelBytes">The serialized (post-injection) model JSON byte count.</param>
+    /// <param name="wiredPayloadBytes">The serialized byte counts of the wired catalog payloads.</param>
+    /// <returns>The effective size in bytes.</returns>
+    internal static long EstimateEffectiveModelSizeBytes(long modelBytes, IReadOnlyCollection<long> wiredPayloadBytes) =>
+        modelBytes + wiredPayloadBytes.Sum();
+
+    /// <summary>
+    /// JF-951: the payload byte counts of the catalog blocks ACTUALLY WIRED into
+    /// the post-injection model (each type block carrying a valueSupplier, the
+    /// <see cref="IsCatalogWired"/> definition). Reading the model itself, not
+    /// the caller's forwarded ids, is load-bearing: the JF-952 declare check can
+    /// skip a mapping whose id was forwarded (a non-declaring locale never
+    /// carries the block, so Amazon never counts its payload), and a wired
+    /// block with no bytes in the dictionary (a STALE block of a type that
+    /// minted nothing this run) contributes nothing locally (the guard's
+    /// documented residual gap). A malformed body yields an empty list (the
+    /// guard then never fires; the malformed-model case fails loudly earlier).
+    /// </summary>
+    internal static List<long> CollectWiredPayloadBytes(
+        string modifiedJson,
+        IReadOnlyDictionary<CatalogType, long> payloadBytesByType)
+    {
+        var wired = new List<long>(6);
+        try
+        {
+            var typesArray = JsonNode.Parse(modifiedJson)?["interactionModel"]?["languageModel"]?["types"] as JsonArray;
+            if (typesArray == null)
+            {
+                return wired;
+            }
+
+            foreach (JsonNode? typeNode in typesArray)
+            {
+                string? slotTypeName = typeNode?["name"]?.GetValue<string>();
+                if (slotTypeName == null || !IsCatalogWired(typeNode!))
+                {
+                    continue;
+                }
+
+                if (TryGetCatalogTypeForSlotTypeName(slotTypeName, out CatalogType type)
+                    && payloadBytesByType.TryGetValue(type, out long bytes))
+                {
+                    wired.Add(bytes);
+                }
+            }
+        }
+        catch (JsonException)
+        {
+            // Malformed model: no wired bytes to count; the guard stays silent.
+        }
+
+        return wired;
+    }
+
+    /// <summary>
+    /// The reverse of <see cref="CatalogSlotTypes.CatalogSlotTypeNames"/>: a
+    /// wired model block's slot type name back to its CatalogType. Built once;
+    /// an unknown name (a block the catalog family does not own) resolves
+    /// false.
+    /// </summary>
+    private static bool TryGetCatalogTypeForSlotTypeName(string slotTypeName, out CatalogType type)
+    {
+        foreach ((CatalogType candidate, string name) in CatalogSlotTypes.CatalogSlotTypeNames)
+        {
+            if (string.Equals(name, slotTypeName, StringComparison.Ordinal))
+            {
+                type = candidate;
+                return true;
+            }
+        }
+
+        type = default;
+        return false;
+    }
+
+    /// <summary>
+    /// The guard threshold this instance enforces: the test seam, else the const.
+    /// </summary>
+    private long EffectiveModelSizeSafetyThresholdBytes =>
+        ModelSizeSafetyThresholdBytesForTest ?? ModelSizeSafetyThresholdBytes;
+
+    /// <summary>
     /// Injects catalog-backed slot type definitions into the interaction model.
     /// Uses JsonNode for efficient in-place mutation without serialize/deserialize round-trips.
     /// </summary>
@@ -1895,7 +2088,7 @@ public class CatalogManager
 /// (LocaleModelStatuses) so catalog-sync PUTs are recorded next to
 /// ModelDeploymentManager deployments.
 /// </summary>
-/// <param name="BuildStatus">"SUCCEEDED", "FAILED", "TIMEOUT" (poll budget exhausted), or "Skipped" (no catalogs to inject).</param>
+/// <param name="BuildStatus">"SUCCEEDED", "FAILED", "TIMEOUT" (poll budget exhausted), "Skipped" (no catalogs to inject), or "SkippedOversize" (JF-951: the pre-flight size guard skipped the PUT; the skip reason rides CanaryError, which the ledger displays in its Error column even though nothing canary failed).</param>
 /// <param name="CanaryMatch">True/false when the canary ran; null when it could not (build not settled or GET failed).</param>
 /// <param name="PutIntents">Intent count of the submitted payload.</param>
 /// <param name="PutSamples">Sample count of the submitted payload.</param>
