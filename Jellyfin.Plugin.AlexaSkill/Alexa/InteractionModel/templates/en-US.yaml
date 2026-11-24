@@ -583,6 +583,7 @@ intents:
   - who narrates this
   - what is the rating
   - how is this rated
+  - what song is this
 - name: InProgressMediaListIntent
   samples:
   - what's in progress
@@ -652,6 +653,7 @@ intents:
   - set speed {speed}
   - play at speed {speed}
   - go {speed}
+  - normal speed
 - name: BrowseLibraryIntent
   slots:
   - name: browse_category

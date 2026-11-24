@@ -105,6 +105,8 @@ tests:
   # template (template edit + regen in this change). RED-UNTIL-DEPLOY row (the JF-766 convention):
   # green on the live suite only after the rebuilt model deploys.
   # ------------------------------------------------------------------------
+  # Catalog-dependent (JF-684): non-famous title not in the static seed.
+  # skip_reason: "catalog-dependent: needs SongTitle catalog for selection"
   - utterance: "tocar a música borboletas de papel"
     expected_intent: PlaySongIntent
     expected_slots:

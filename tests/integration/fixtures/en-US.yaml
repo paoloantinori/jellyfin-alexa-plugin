@@ -439,8 +439,7 @@ tests:
 
   - utterance: "What song is this"
     expected_intent: MediaInfoIntent
-    expected_slots:
-      media_info_type: {}
+    expected_slots: {}
 
   - utterance: "What album is this from"
     expected_intent: MediaInfoIntent

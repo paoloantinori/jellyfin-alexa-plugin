@@ -167,7 +167,7 @@
         "name": "PlayVideoIntent",
         "samples": [
           "شغل الفيديو {title}",
-          "شغل {title}",
+          "شغل فيلم {title}",
           "شاهد {title}",
           "هل يمكنك تشغيل {title}",
           "أريد مشاهدة {title}",

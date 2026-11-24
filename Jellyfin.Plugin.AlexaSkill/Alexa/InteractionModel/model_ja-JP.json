@@ -381,7 +381,7 @@
       {
         "name": "AddSongToPlaylistIntent",
         "samples": [
-          "曲 {song_query}",
+          "曲 {song_query} を追加して",
           "プレイリスト {playlist_target} に追加して"
         ],
         "slots": [

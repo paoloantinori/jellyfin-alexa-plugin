@@ -898,7 +898,8 @@
           "who is the narrator",
           "who narrates this",
           "what is the rating",
-          "how is this rated"
+          "how is this rated",
+          "what song is this"
         ]
       },
       {
@@ -1008,7 +1009,8 @@
           "set the speed to {speed}",
           "set speed {speed}",
           "play at speed {speed}",
-          "go {speed}"
+          "go {speed}",
+          "normal speed"
         ]
       },
       {
