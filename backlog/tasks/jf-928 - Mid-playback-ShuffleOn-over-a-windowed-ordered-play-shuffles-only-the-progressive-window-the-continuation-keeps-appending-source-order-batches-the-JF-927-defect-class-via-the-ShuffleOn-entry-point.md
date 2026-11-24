@@ -4,10 +4,10 @@ title: >-
   Mid-playback ShuffleOn over a windowed ordered play shuffles only the
   progressive window: the continuation keeps appending source-order batches (the
   JF-927 defect class via the ShuffleOn entry point)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-11-15 15:27'
-updated_date: '2026-11-24 21:06'
+updated_date: '2026-11-24 22:42'
 labels: []
 dependencies: []
 references:
@@ -44,6 +44,18 @@ Related consolidation observed in the same review (optional, can fold into this 
 - [ ] #4 Unit tests cover: shuffle-on mid ordered window play, shuffle-off revert, and the no-continuation (short queue) shape
 - [ ] #5 No regression in the JF-927 launch-time shuffle tests (AlbumPlayServicePlaylistShuffleTests)
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+gate-exempt: /simplify on the review-round delta only (the five a1eb8790 fixes are review-driven: a SourceType gate, a doc rewrite, a test-equality fix, a message update, banned-dash removals); the worker's own 4-agent /simplify covered the base implementation 913f0b8c; the /code-review evidence (worker high + orchestrator medium, all findings applied) is in this transcript.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Shipped 2026-11-24 via the merge of worktree-agent-ada29ecdc1f9aacaf (base 913f0b8c + review round a1eb8790). QueueContinuationStore.TryUpdateShuffleForLiveQueue: the JF-674 identity-gated, idempotent flip that ShuffleOn/Off handlers now run, RESTRICTED TO THE MUSIC SOURCETYPES (Playlist/Album/Artist) after the review's blocking finding: an Audiobook continuation lives legitimately on the AudioPlayer path (screenless chapter-resume) and a mid-book shuffle-on could have scattered chapters; the store is the single owner of the rule. QueueContinuation.WithShuffleSemantics is the re-mint clone (identity, offsets, cached source carried; a reflection completeness guard with sequence-equality for collections). Per-batch shuffle only, riding the artist path's existing fetcher channel; the JF-713 KNOWN RACE doc names both failure modes honestly (lost offset advance bounded by the id-set dedupe; lost flip = one batch in source order, self-heals next batch; non-locking kept per precedent). Tests: the AC-1 defect pin end-to-end (17-track ordered play, window edge, the 12-track tail appended shuffled at 1/12! probability), off-revert, short-queue shape, foreign no-mutation, audiobook-never-scattered, music-sources flip theory; JF-927 launch tests green. 6254/6254 both TFMs. Gates: worker /simplify (4 agents) + /code-review high (6 triaged) in its session; orchestrator Skill(code-review) medium (5 findings, all applied in a1eb8790); the claimed unrelated net9 flake was re-run green before merge (both TFMs isolated).
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
