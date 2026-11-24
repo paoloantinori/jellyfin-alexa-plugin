@@ -211,6 +211,136 @@ public static class CatalogSeedEnrichment
     };
 
     /// <summary>
+    /// Returns the FULL static type block JSON of one slot type from the given
+    /// locale's committed embedded interaction model, or null when the locale or
+    /// the block is unavailable (JF-949: the song-catalog opt-out teardown restores
+    /// the locale's OWN static block, not a seed union, so the unwired model is
+    /// byte-equivalent to what the embedded model ships). Tolerant by design: a
+    /// missing model, a malformed body, or a non-object block yields null and the
+    /// caller treats the locale as a failed strip.
+    /// </summary>
+    /// <param name="locale">The Alexa locale whose embedded model to read.</param>
+    /// <param name="slotTypeName">The slot type block to extract.</param>
+    /// <returns>The type block JSON string, or null.</returns>
+    internal static string? GetEmbeddedTypeBlock(string locale, string slotTypeName)
+    {
+        var match = global::Jellyfin.Plugin.AlexaSkill.Util.GetLocalInteractionModels()
+            .FirstOrDefault(m => m.Item1 == locale);
+        if (match == null)
+        {
+            return null;
+        }
+
+        try
+        {
+            string? modelJson = ReadEmbeddedModelJson(match.Item2);
+            if (modelJson == null)
+            {
+                return null;
+            }
+
+            using var doc = JsonDocument.Parse(modelJson);
+            if (!TryGetLanguageModelTypes(doc.RootElement, out var types))
+            {
+                return null;
+            }
+
+            foreach (JsonElement typeNode in types.EnumerateArray())
+            {
+                if (typeNode.ValueKind == JsonValueKind.Object
+                    && typeNode.TryGetProperty("name", out var nameNode)
+                    && nameNode.ValueKind == JsonValueKind.String
+                    && string.Equals(nameNode.GetString(), slotTypeName, StringComparison.Ordinal))
+                {
+                    // Verbatim raw text: no re-parse/re-serialize round-trip, so the
+                    // restored block is byte-identical to what the embedded model ships.
+                    return typeNode.GetRawText();
+                }
+            }
+
+            return null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// The ONE embedded-model resource reader (JF-949 review: shared by the
+    /// seed-value extraction and the teardown's full-block extraction, so the
+    /// locate-and-read mechanics live in a single copy): reads the resource whole,
+    /// null on any miss or IO failure. The callers keep their own tolerance.
+    /// </summary>
+    /// <param name="resourcePath">The embedded model's manifest resource path.</param>
+    /// <returns>The model JSON, or null.</returns>
+    private static string? ReadEmbeddedModelJson(string resourcePath)
+    {
+        try
+        {
+            using Stream? resource = typeof(global::Jellyfin.Plugin.AlexaSkill.Util).Assembly.GetManifestResourceStream(resourcePath);
+            if (resource == null)
+            {
+                return null;
+            }
+
+            using var reader = new StreamReader(resource);
+            return reader.ReadToEnd();
+        }
+        catch (IOException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// The ONE dual-shape container walk (JF-949 review: shared by the seed-value
+    /// extraction and the teardown's full-block extraction): accepts both the raw
+    /// <c>languageModel</c> root (the committed model_*.json files) and the SMAPI
+    /// <c>interactionModel.languageModel</c> envelope, and hands back the types
+    /// array. False when neither shape matches or the types array is absent.
+    /// </summary>
+    /// <param name="root">The parsed model root.</param>
+    /// <param name="types">The types array element when found.</param>
+    /// <returns>True when the types array resolved.</returns>
+    private static bool TryGetLanguageModelTypes(JsonElement root, out JsonElement types)
+    {
+        types = default;
+        if (root.ValueKind != JsonValueKind.Object)
+        {
+            return false;
+        }
+
+        JsonElement container;
+        if (root.TryGetProperty("languageModel", out var lm0) && lm0.ValueKind == JsonValueKind.Object)
+        {
+            // The bare root wins FIRST, preserving ExtractSeedNames' original
+            // container-priority order byte-for-byte (review round: the shared
+            // walk must not silently re-prioritize a document carrying both keys).
+            container = lm0;
+        }
+        else if (root.TryGetProperty("interactionModel", out var im)
+            && im.ValueKind == JsonValueKind.Object
+            && im.TryGetProperty("languageModel", out var lm)
+            && lm.ValueKind == JsonValueKind.Object)
+        {
+            container = lm;
+        }
+        else
+        {
+            return false;
+        }
+
+        if (container.TryGetProperty("types", out var found) && found.ValueKind == JsonValueKind.Array)
+        {
+            types = found;
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// Extracts the values of one slot type from an interaction model JSON.
     /// Tolerates both the raw <c>languageModel</c> root (the committed model_*.json
     /// files) and the SMAPI <c>interactionModel.languageModel</c> envelope.
@@ -225,30 +355,7 @@ public static class CatalogSeedEnrichment
         try
         {
             using var doc = JsonDocument.Parse(modelJson);
-            JsonElement root = doc.RootElement;
-            if (root.ValueKind != JsonValueKind.Object)
-            {
-                return Array.Empty<string>();
-            }
-
-            JsonElement container;
-            if (root.TryGetProperty("languageModel", out var lm) && lm.ValueKind == JsonValueKind.Object)
-            {
-                container = lm;
-            }
-            else if (root.TryGetProperty("interactionModel", out var im)
-                && im.ValueKind == JsonValueKind.Object
-                && im.TryGetProperty("languageModel", out var lm2)
-                && lm2.ValueKind == JsonValueKind.Object)
-            {
-                container = lm2;
-            }
-            else
-            {
-                return Array.Empty<string>();
-            }
-
-            if (!container.TryGetProperty("types", out var types) || types.ValueKind != JsonValueKind.Array)
+            if (!TryGetLanguageModelTypes(doc.RootElement, out var types))
             {
                 return Array.Empty<string>();
             }
@@ -400,21 +507,8 @@ public static class CatalogSeedEnrichment
 
     private static IReadOnlyList<string> ReadResourceSeeds(string resourcePath, string slotTypeName)
     {
-        try
-        {
-            using Stream? resource = typeof(global::Jellyfin.Plugin.AlexaSkill.Util).Assembly.GetManifestResourceStream(resourcePath);
-            if (resource == null)
-            {
-                return Array.Empty<string>();
-            }
-
-            using var reader = new StreamReader(resource);
-            return ExtractSeedNames(reader.ReadToEnd(), slotTypeName);
-        }
-        catch (IOException)
-        {
-            return Array.Empty<string>();
-        }
+        string? modelJson = ReadEmbeddedModelJson(resourcePath);
+        return modelJson == null ? Array.Empty<string>() : ExtractSeedNames(modelJson, slotTypeName);
     }
 
     private static IEnumerable<(string Locale, string ResourcePath)> GetModelsSortedByLocale() =>

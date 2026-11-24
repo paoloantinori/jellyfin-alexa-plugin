@@ -204,6 +204,23 @@ public class LibrarySyncService
         _logger.LogInformation("Catalog sync for user {UserId}: {LocaleCount} locales ({Locales})",
             user.Id, locales.Count, string.Join(", ", locales));
 
+        // JF-949 (JF-946 review F1): the opt-out must TEAR DOWN. A disabled
+        // CatalogSongSyncEnabled with a stored SongCatalogId means a prior
+        // opt-in left its artifacts behind: the SongTitle wiring (only
+        // it-IT/de-DE declare the slot, but the wired block rides every synced
+        // locale model that carried it, against the 1.5MB effective cap), the
+        // SMAPI catalog itself (the uploaded tracklist, including the private
+        // recordings the privacy gate exists to remove), and the stale stored
+        // id. Strip the wiring FIRST (a model must never keep referencing a
+        // catalog this run deletes), delete the catalog only when every strip
+        // succeeded, and clear SongCatalogId only after the delete. A failed
+        // step keeps the id so the next sync run retries the teardown. The
+        // SongCatalogId read lives INSIDE TearDownSongCatalogAsync: the stored-id
+        // structure pin allows the getter only in the wiring-table lambda, the
+        // JF-826 suppression predicate, and the teardown reader.
+        bool songTeardownFailed = !user.CatalogSongSyncEnabled
+            && !await TearDownSongCatalogAsync(user, skillId, cancellationToken).ConfigureAwait(false);
+
         var totalSw = System.Diagnostics.Stopwatch.StartNew();
 
         // JF-706: the ONE per-type wiring table for the whole sync (locale-
@@ -319,6 +336,13 @@ public class LibrarySyncService
         if (AllTypeLegsEmpty(typeLegs))
         {
             _logger.LogWarning("No artists, albums, series, audiobooks, movies or songs found for user {UserId}, skipping sync", user.Id);
+            // JF-949: the early return bypasses the tail verdict, so a failed
+            // teardown still fails the run here (see the tail clause).
+            if (songTeardownFailed)
+            {
+                result.Success = false;
+            }
+
             return result;
         }
 
@@ -560,6 +584,16 @@ public class LibrarySyncService
         // state to optimize for.
         result.Success = localesSucceeded > 0 && result.FrozenTypes.Count == 0;
 
+        // JF-949: a failed teardown must not read as a clean run, or
+        // CatalogSyncTask stamps LastCatalogSync and the retry waits out the
+        // full sync interval with the tracklist still uploaded. Placement AFTER
+        // the frozen-type verdict: an independent failure clause, so a teardown
+        // failure alone fails the run exactly like a freeze does.
+        if (songTeardownFailed)
+        {
+            result.Success = false;
+        }
+
         result.SyncTime = DateTime.UtcNow;
 
         if (result.FrozenTypes.Count > 0)
@@ -579,6 +613,165 @@ public class LibrarySyncService
             user.Id, localesSucceeded, locales.Count, result.ArtistCount, result.AlbumCount, result.SeriesCount, result.AudiobookCount, result.MovieCount, result.SongCount, result.SongTitleTotal, totalSw.ElapsedMilliseconds, frozenClause);
 
         return result;
+    }
+
+    /// <summary>
+    /// JF-949 (JF-946 review F1): the song-catalog opt-out teardown. Ordering is
+    /// load-bearing: (1) strip the SongTitle catalog wiring from EVERY
+    /// catalog-wiring-supported locale (the whole embedded-model roster, NOT the
+    /// run's CatalogSyncLocales-filtered list: the wiring was applied to whatever
+    /// roster the opt-in-time sync carried, so a roster narrowed since then must
+    /// not leave locale B wired while the catalog under it is deleted, JF-949
+    /// review round), restoring each locale's OWN embedded static block;
+    /// (2) delete the SMAPI catalog, but ONLY when every strip succeeded, so no
+    /// model is ever left referencing a deleted catalog; (3) clear
+    /// <see cref="Entities.User.SongCatalogId"/> ONLY after the delete, so a
+    /// failure anywhere keeps the id and the next sync run retries the whole
+    /// teardown. Idempotent end to end: an already-static or absent SongTitle
+    /// block strips nothing (CatalogManager.StripCatalogWiringAsync returns
+    /// "Skipped" without a PUT), and a 404 delete counts as done. Each strip
+    /// outcome rides the per-locale status ledger via
+    /// <see cref="RecordModelUpdateInLedger"/> like any other catalog-sync PUT.
+    /// The user record mutation persists through the caller's save
+    /// (CatalogSyncTask / SkillStartup persist after the run); an extra guarded
+    /// save here makes the clear durable even on a path that returns early.
+    /// </summary>
+    /// <param name="user">The plugin user whose song catalog to tear down.</param>
+    /// <param name="skillId">The user's skill ID.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>True when the teardown completed (or found nothing left to do); false when a step failed and the id must stay for retry.</returns>
+    private async Task<bool> TearDownSongCatalogAsync(
+        Entities.User user,
+        string skillId,
+        CancellationToken cancellationToken)
+    {
+        // The strip roster is the FULL catalog-wiring-supported locale set (every
+        // embedded model, JF-543-filtered), independent of CatalogSyncLocales: the
+        // wiring exists wherever a PAST sync put it, and a narrowed current roster
+        // must not blind the strip to a locale it no longer syncs (JF-949 review
+        // round finding 1).
+        List<string> locales = global::Jellyfin.Plugin.AlexaSkill.Util.GetLocalInteractionModels()
+            .Select(m => m.Item1)
+            .Where(CatalogManager.IsCatalogWiringSupported)
+            .ToList();
+
+        string? catalogId = user.SongCatalogId;
+        if (string.IsNullOrEmpty(catalogId))
+        {
+            // Nothing stored: nothing to tear down (the method's idempotent entry).
+            return true;
+        }
+
+        if (user.SmapiDeviceToken == null)
+        {
+            // Unreachable through SyncUserLibraryAsync (its entry guard returns on a
+            // null token first), but a defensive landing here must NOT read as a
+            // completed teardown: returning true with the id kept would orphan the
+            // Amazon-side tracklist silently. Report failure so the run stays
+            // unclean and the next sync retries (JF-949 code-review round).
+            _logger.LogWarning(
+                "Song catalog teardown for user {UserId}: no SMAPI device token; the teardown cannot run and the stored catalog id stays (JF-949)",
+                user.Id);
+            return false;
+        }
+
+        string accessToken = user.SmapiDeviceToken.AccessToken;
+        string slotTypeName = CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Song];
+
+        _logger.LogInformation(
+            "Song catalog opt-out teardown for user {UserId}: stripping SongTitle wiring from {LocaleCount} locales, then deleting catalog {CatalogId} (JF-949)",
+            user.Id, locales.Count, catalogId);
+
+        var failedLocales = new List<string>();
+        for (int i = 0; i < locales.Count; i++)
+        {
+            string locale = locales[i];
+            if (i > 0)
+            {
+                // The same SMAPI rate-limit spacing the per-locale legs use;
+                // the test seam shares the legs' override.
+                await Task.Delay(InterLocaleDelayMsForTest ?? InterLocaleDelayMs, cancellationToken).ConfigureAwait(false);
+            }
+
+            // The embedded static block is OPTIONAL: only it-IT/de-DE ship a
+            // SongTitle block, and only locales where the live model actually
+            // carries a WIRED block need a replacement (a wired block in a locale
+            // with no embedded block is removed outright, the JF-952 removal
+            // shape). A null block is NOT a failure: the strip itself decides
+            // from the live model (JF-949 code-review round).
+            string? embeddedBlock = CatalogSeedEnrichment.GetEmbeddedTypeBlock(locale, slotTypeName);
+
+            try
+            {
+                CatalogModelUpdateResult update = await _catalogManager.StripCatalogWiringAsync(
+                    accessToken, skillId, DevelopmentStage, locale, slotTypeName, embeddedBlock, cancellationToken).ConfigureAwait(false);
+
+                // Only a PUT that actually happened rides the per-locale status
+                // ledger; a "Skipped" strip leaves the locale's previous row
+                // untouched (overwriting a Succeeded row with Skipped would make
+                // the admin panel's ModelsDeployed checklist false-negative,
+                // JF-949 code-review round).
+                if (update.BuildStatus != "Skipped")
+                {
+                    RecordModelUpdateInLedger(locale, update, new List<CatalogType>());
+                }
+
+                if (update.BuildStatus is not ("SUCCEEDED" or "Skipped"))
+                {
+                    _logger.LogError(
+                        "Song catalog teardown for {Locale}: the wiring strip did not settle ({BuildStatus}); the locale keeps its wired block and the catalog stays (JF-949)",
+                        locale, update.BuildStatus);
+                    failedLocales.Add(locale);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex,
+                    "Song catalog teardown for {Locale}: the wiring strip failed; the locale keeps its wired block and the catalog stays (JF-949)",
+                    locale);
+                failedLocales.Add(locale);
+            }
+        }
+
+        if (failedLocales.Count > 0)
+        {
+            _logger.LogError(
+                "Song catalog teardown for user {UserId} stopped before the catalog delete: {Count} locale strip(s) failed ({Locales}); the catalog and the stored id stay so the next sync retries (JF-949)",
+                user.Id, failedLocales.Count, string.Join(", ", failedLocales));
+            return false;
+        }
+
+        try
+        {
+            await _catalogManager.DeleteCatalogAsync(accessToken, catalogId!, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "Song catalog teardown for user {UserId}: the SMAPI catalog delete failed for {CatalogId}; the stored id stays so the next sync retries (JF-949)",
+                user.Id, catalogId);
+            return false;
+        }
+
+        // The wiring strips succeeded and the catalog is gone: the stored id's
+        // catalog no longer exists, so keeping it would poison a later opt-in
+        // re-sync (SyncCatalogForLocaleAsync would update a dead catalog).
+        user.SongCatalogId = null;
+        try
+        {
+            Plugin.Instance?.Configuration.PersistUnderLedgerLock();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Failed to persist the SongCatalogId clear for user {UserId} (non-fatal; the caller's own save covers it) (JF-949)",
+                user.Id);
+        }
+
+        _logger.LogInformation(
+            "Song catalog teardown completed for user {UserId}: wiring stripped, catalog {CatalogId} deleted, SongCatalogId cleared (JF-949)",
+            user.Id, catalogId);
+        return true;
     }
 
     /// <summary>
