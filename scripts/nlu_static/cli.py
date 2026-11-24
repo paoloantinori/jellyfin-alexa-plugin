@@ -24,8 +24,10 @@ _SCRIPTS_DIR = Path(__file__).resolve().parents[1]
 if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 
-from nlu_static import fixture_vocab, ledger, producer_jellyfin, token_collisions  # noqa: E402
-from nlu_static.effective_model import EffectiveModel, build_effective_model, load_snapshot  # noqa: E402
+from nlu_static import fixture_vocab, ledger, matcher, producer_jellyfin, token_collisions  # noqa: E402
+from nlu_static import graph as nlu_graph  # noqa: E402
+from nlu_static.effective_model import EffectiveModel, build_effective_model, load_locale_model, load_snapshot  # noqa: E402
+from nlu_static.normalize import skip_line  # noqa: E402
 
 
 def _print_json(payload: dict | list, out: str | None) -> None:
@@ -421,6 +423,264 @@ def _register_ledger(subparsers: argparse._SubParsersAction) -> None:
     listing.set_defaults(func=cmd_ledger_list)
 
 
+def _resolve_graph_locales(args: argparse.Namespace) -> list[str]:
+    """The locale list a graph/match/classify run covers from --locale/--all."""
+    if args.locale:
+        return [args.locale]
+    return fixture_vocab.committed_locales()
+
+
+def _build_model_or_fail(locale: str, snapshot: dict | None) -> EffectiveModel | None:
+    """build_effective_model with the shared refusal handling; None after the error."""
+    try:
+        return build_effective_model(locale, snapshot=snapshot)
+    except (OSError, ValueError) as err:
+        _fail(err)
+        return None
+
+
+def cmd_graph_build(args: argparse.Namespace) -> int:
+    """Build the subsumption graph for one locale or all locales."""
+    snapshot, refusal = _load_optional_snapshot(args)
+    if refusal is not None:
+        return refusal
+    locales = _resolve_graph_locales(args)
+    out_dir: Path | None = Path(args.out) if args.out else None
+    if len(locales) > 1 and out_dir is None:
+        return _fail(ValueError("--all requires --out DIR to write graph_<locale>.json files"))
+    if out_dir is not None:
+        out_dir.mkdir(parents=True, exist_ok=True)
+    for locale in locales:
+        line = skip_line(locale)
+        if line is not None:
+            print(line)
+            continue
+        model = _build_model_or_fail(locale, snapshot)
+        if model is None:
+            return 2
+        payload = nlu_graph.build_graph(locale, model)
+        if out_dir is not None:
+            path = out_dir / f"graph_{locale}.json"
+            path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            print(f"wrote {path.name} ({len(payload['edges'])} edges)")
+        else:
+            _print_json(payload, None)
+    return 0
+
+
+def _register_graph_build(sub: argparse.ArgumentParser) -> None:
+    sub.add_argument("--locale", help="single Alexa locale to build, for example es-ES")
+    sub.add_argument("--all", action="store_true", help="build every committed locale")
+    sub.add_argument("--snapshot", help="catalog snapshot JSON file to overlay on the committed model")
+    sub.add_argument("--out", help="directory for graph_<locale>.json (required with --all; single locale prints to stdout without it)")
+    sub.set_defaults(func=cmd_graph_build)
+
+
+def cmd_graph_diff(args: argparse.Namespace) -> int:
+    """Print the sorted diff between two graph payloads; --fail-on-new exits 1 on added edges."""
+    try:
+        old = nlu_graph.load_graph(args.old)
+        new = nlu_graph.load_graph(args.new)
+    except (OSError, ValueError, json.JSONDecodeError) as err:
+        return _fail(err)
+    lines = nlu_graph.diff_graphs(old, new)
+    for line in lines:
+        print(line)
+    if args.fail_on_new and any(line.startswith("added ") for line in lines):
+        return 1
+    return 0
+
+
+def _register_graph_diff(sub: argparse.ArgumentParser) -> None:
+    sub.add_argument("old", help="the old graph_<locale>.json")
+    sub.add_argument("new", help="the new graph_<locale>.json")
+    sub.add_argument(
+        "--fail-on-new",
+        action="store_true",
+        help="exit 1 when an edge was added",
+    )
+    sub.set_defaults(func=cmd_graph_diff)
+
+
+DEFAULT_MODEL_REL_PATH = "Jellyfin.Plugin.AlexaSkill/Alexa/InteractionModel/model_{locale}.json"
+
+
+def _git_show_model(base: str, locale: str) -> dict | None:
+    """The old model dict from ``git show <base>:<path>``; None after printing the note."""
+    import subprocess
+
+    path = DEFAULT_MODEL_REL_PATH.format(locale=locale)
+    result = subprocess.run(
+        ["git", "show", f"{base}:{path}"],
+        capture_output=True,
+        text=True,
+        check=False,
+        cwd=Path(__file__).resolve().parents[2],
+    )
+    if result.returncode != 0:
+        print(f"  note [{locale}]: not in {base} ({path})", file=sys.stderr)
+        return None
+    doc = json.loads(result.stdout)
+    # Unwrap to the languageModel dict build_effective_model(raw_model=...)
+    # expects; the committed files carry it at the top level beside
+    # "dialog", SMAPI payloads wrap it in "interactionModel".
+    wrapper = doc.get("interactionModel")
+    container = wrapper if isinstance(wrapper, dict) else doc
+    model = container.get("languageModel")
+    return model if isinstance(model, dict) else doc
+
+
+def cmd_graph_diff_git(args: argparse.Namespace) -> int:
+    """Diff the graph of a base git ref against the working tree (the reviewer command)."""
+    snapshot, refusal = _load_optional_snapshot(args)
+    if refusal is not None:
+        return refusal
+    locales = _resolve_graph_locales(args)
+    added_any = False
+    for locale in locales:
+        line = skip_line(locale)
+        if line is not None:
+            print(line)
+            continue
+        old_raw = _git_show_model(args.base, locale)
+        if old_raw is None:
+            continue
+        try:
+            old_model = build_effective_model(locale, snapshot=snapshot, raw_model=old_raw)
+            new_model = build_effective_model(locale, snapshot=snapshot)
+        except (OSError, ValueError, json.JSONDecodeError) as err:
+            return _fail(err)
+        lines = nlu_graph.diff_graphs(
+            nlu_graph.build_graph(locale, old_model),
+            nlu_graph.build_graph(locale, new_model),
+        )
+        if not lines:
+            continue
+        print(f"== {locale} ==")
+        for diff_line in lines:
+            print(diff_line)
+            if diff_line.startswith("added "):
+                added_any = True
+    if args.fail_on_new and added_any:
+        return 1
+    return 0
+
+
+def _register_graph_diff_git(sub: argparse.ArgumentParser) -> None:
+    sub.add_argument("--base", required=True, help="git ref to diff against, for example HEAD")
+    sub.add_argument("--locale", help="single Alexa locale, for example es-ES (default: every committed locale)")
+    sub.add_argument("--all", action="store_true", help="diff every committed locale")
+    sub.add_argument("--snapshot", help="catalog snapshot JSON file to overlay on both models")
+    sub.add_argument(
+        "--fail-on-new",
+        action="store_true",
+        help="exit 1 when an edge was added in any locale",
+    )
+    sub.set_defaults(func=cmd_graph_diff_git)
+
+
+def _register_graph(subparsers: argparse._SubParsersAction) -> None:
+    """Register the graph subcommand (JF-954.4) with its build/diff/diff-git children."""
+    parser = subparsers.add_parser(
+        "graph",
+        help="sample-subsumption graph: which intents can swallow another intent's phrasing",
+    )
+    graph_sub = parser.add_subparsers(dest="graph_command", required=True)
+    build = graph_sub.add_parser("build", help="build graph_<locale>.json for one locale or all")
+    _register_graph_build(build)
+    diff = graph_sub.add_parser("diff", help="diff two graph payloads (added/removed/changed edges)")
+    _register_graph_diff(diff)
+    diff_git = graph_sub.add_parser(
+        "diff-git", help="diff the graph of a git base ref against the working tree"
+    )
+    _register_graph_diff_git(diff_git)
+
+
+def cmd_match(args: argparse.Namespace) -> int:
+    """Print the intents with a sample reading that covers one real utterance."""
+    snapshot, refusal = _load_optional_snapshot(args)
+    if refusal is not None:
+        return refusal
+    line = skip_line(args.locale)
+    if line is not None:
+        print(line)
+        return 0
+    model = _build_model_or_fail(args.locale, snapshot)
+    if model is None:
+        return 2
+    hits = matcher.match_intents(args.utterance, model)
+    _print_json(hits, None)
+    return 0
+
+
+def _register_match(subparsers: argparse._SubParsersAction) -> None:
+    """Register the match subcommand (JF-954.4)."""
+    parser = subparsers.add_parser(
+        "match", help="match a real utterance against every sample pattern of a locale"
+    )
+    parser.add_argument("--locale", required=True, help="Alexa locale, for example es-ES")
+    parser.add_argument("utterance", help="the real utterance to match")
+    parser.add_argument("--snapshot", help="catalog snapshot JSON file to overlay on the committed model")
+    parser.set_defaults(func=cmd_match)
+
+
+def cmd_classify_fixtures(args: argparse.Namespace) -> int:
+    """Classify every fixture row of one locale or all locales (the triage input)."""
+    snapshot, refusal = _load_optional_snapshot(args)
+    if refusal is not None:
+        return refusal
+    locales = _resolve_graph_locales(args)
+    results: list[dict] = []
+    for locale in locales:
+        line = skip_line(locale)
+        if line is not None:
+            # Diagnostics go to stderr so the JSON stays parseable.
+            print(line, file=sys.stderr)
+            if args.locale:
+                return _fail(ValueError(line))
+            continue
+        rows, skip_reason = fixture_vocab.load_fixture_rows(
+            fixture_vocab.default_fixtures_dir(), locale
+        )
+        if skip_reason is not None:
+            print(skip_reason, file=sys.stderr)
+            if args.locale:
+                return _fail(ValueError(skip_reason))
+            continue
+        model = _build_model_or_fail(locale, snapshot)
+        if model is None:
+            return 2
+        prepared = matcher.PreparedMatcher(model)
+        for row in rows:
+            utterance = row.get("utterance")
+            expected_intent = row.get("expected_intent")
+            if not isinstance(utterance, str) or not isinstance(expected_intent, str):
+                continue
+            verdict = matcher.classify_fixture_row(row, model, prepared)
+            verdict["locale"] = locale
+            verdict["utterance"] = utterance
+            verdict["expected_intent"] = expected_intent
+            results.append(verdict)
+    results.sort(
+        key=lambda r: (r["locale"], r["utterance"], r["expected_intent"])
+    )
+    _print_json(results, args.out)
+    return 0
+
+
+def _register_classify_fixtures(subparsers: argparse._SubParsersAction) -> None:
+    """Register the classify-fixtures subcommand (JF-954.4; JF-954.6 consumes its JSON)."""
+    parser = subparsers.add_parser(
+        "classify-fixtures",
+        help="classify NLU fixture rows as UNCONTESTED, CONTESTED or NO_SAMPLE_MATCH",
+    )
+    parser.add_argument("--locale", help="single Alexa locale to classify (default: every committed locale)")
+    parser.add_argument("--all", action="store_true", help="classify every committed locale")
+    parser.add_argument("--snapshot", help="catalog snapshot JSON file to overlay on the committed model")
+    parser.add_argument("--out", help="write the JSON output here instead of stdout")
+    parser.set_defaults(func=cmd_classify_fixtures)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="nlu_static", description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -429,6 +689,9 @@ def main(argv: list[str] | None = None) -> int:
     _register_tokens(subparsers)
     _register_fixtures(subparsers)
     _register_ledger(subparsers)
+    _register_graph(subparsers)
+    _register_match(subparsers)
+    _register_classify_fixtures(subparsers)
     args = parser.parse_args(argv)
     return int(args.func(args))
 
