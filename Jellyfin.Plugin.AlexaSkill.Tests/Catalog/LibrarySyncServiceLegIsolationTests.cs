@@ -818,14 +818,14 @@ public class LibrarySyncServiceLegIsolationTests : PluginTestBase, IDisposable
 
         private static string ModelJson =>
             """
-            {"interactionModel":{"languageModel":{"invocationName":"mia collezione","intents":[{"name":"PlayArtistSongsIntent","slots":[{"name":"musician","type":"JELLYFIN_ARTIST"}]},{"name":"PlayAlbumIntent","slots":[{"name":"album","type":"AlbumName"}]},{"name":"PlayEpisodeIntent","slots":[{"name":"series_name","type":"SeriesName"}]}],"types":[{"name":"JellyfinArtist","values":[{"name":{"value":"Mina"}}]},{"name":"AlbumName","values":[{"name":{"value":"Thriller"}}]},{"name":"SeriesName","values":[{"name":{"value":"Breaking Bad"}}]}]}}}
+            {"interactionModel":{"languageModel":{"invocationName":"mia collezione","intents":[{"name":"PlayArtistSongsIntent","slots":[{"name":"musician","type":"JellyfinArtist"}]},{"name":"PlayAlbumIntent","slots":[{"name":"album","type":"AlbumName"}]},{"name":"PlayEpisodeIntent","slots":[{"name":"series_name","type":"SeriesName"}]}],"types":[{"name":"JellyfinArtist","values":[{"name":{"value":"Mina"}}]},{"name":"AlbumName","values":[{"name":{"value":"Thriller"}}]},{"name":"SeriesName","values":[{"name":{"value":"Breaking Bad"}}]}]}}}
             """;
 
         /// <summary>Same model with two samples on the first intent: the canary's
         /// sample count (2) differs from the submitted one (0).</summary>
         private static string CanaryMismatchModelJson =>
             """
-            {"interactionModel":{"languageModel":{"invocationName":"mia collezione","intents":[{"name":"PlayArtistSongsIntent","samples":["suona mina","metti mina"],"slots":[{"name":"musician","type":"JELLYFIN_ARTIST"}]},{"name":"PlayAlbumIntent","slots":[{"name":"album","type":"AlbumName"}]},{"name":"PlayEpisodeIntent","slots":[{"name":"series_name","type":"SeriesName"}]}],"types":[{"name":"JellyfinArtist","values":[{"name":{"value":"Mina"}}]},{"name":"AlbumName","values":[{"name":{"value":"Thriller"}}]},{"name":"SeriesName","values":[{"name":{"value":"Breaking Bad"}}]}]}}}
+            {"interactionModel":{"languageModel":{"invocationName":"mia collezione","intents":[{"name":"PlayArtistSongsIntent","samples":["suona mina","metti mina"],"slots":[{"name":"musician","type":"JellyfinArtist"}]},{"name":"PlayAlbumIntent","slots":[{"name":"album","type":"AlbumName"}]},{"name":"PlayEpisodeIntent","slots":[{"name":"series_name","type":"SeriesName"}]}],"types":[{"name":"JellyfinArtist","values":[{"name":{"value":"Mina"}}]},{"name":"AlbumName","values":[{"name":{"value":"Thriller"}}]},{"name":"SeriesName","values":[{"name":{"value":"Breaking Bad"}}]}]}}}
             """;
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)

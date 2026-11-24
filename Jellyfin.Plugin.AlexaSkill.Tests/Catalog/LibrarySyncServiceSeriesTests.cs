@@ -443,9 +443,13 @@ public class LibrarySyncServiceSeriesTests : PluginTestBase, IDisposable
 
         public string? LastModelPutBody { get; private set; }
 
+        // The model DECLARES a musician slot (AMAZON.Musician, the 11-locale
+        // real-world shape): the JF-952 declare check skips the artist leg on
+        // a model that declares neither it nor the replaced type, and the
+        // artist-wiring assertions below need the leg to land.
         private static string ModelJson =>
             """
-            {"interactionModel":{"languageModel":{"invocationName":"mia collezione","intents":[{"name":"PlayEpisodeIntent","slots":[{"name":"series_name","type":"SeriesName"}]}],"types":[{"name":"SeriesName","values":[{"name":{"value":"Breaking Bad"}}]}]}}}
+            {"interactionModel":{"languageModel":{"invocationName":"mia collezione","intents":[{"name":"PlayEpisodeIntent","slots":[{"name":"series_name","type":"SeriesName"}]},{"name":"PlayArtistSongsIntent","slots":[{"name":"musician","type":"AMAZON.Musician"}]}],"types":[{"name":"SeriesName","values":[{"name":{"value":"Breaking Bad"}}]}]}}}
             """;
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
