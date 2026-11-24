@@ -150,6 +150,60 @@ public class CatalogManager
     }
 
     /// <summary>
+    /// Deletes an SMAPI catalog (JF-949: the song-catalog opt-out teardown).
+    /// The caller owns the guard: the id passed here MUST be the one stored on the
+    /// caller's own user record (LibrarySyncService passes user.SongCatalogId and
+    /// clears it only after this call succeeds), so a foreign catalog can never
+    /// be deleted through this path. A 404 is treated as already-deleted success:
+    /// the teardown is idempotent and Amazon may have removed the catalog between
+    /// the wiring strip and this call. Transient SMAPI failures (503/502/504, the
+    /// same reverse-proxy-warming class the upload path retries) retry up to
+    /// <see cref="TransientFetchMaxAttempts"/> attempts so one transient 5xx does
+    /// not defer the privacy teardown by a full sync interval.
+    /// </summary>
+    /// <param name="accessToken">The SMAPI access token.</param>
+    /// <param name="catalogId">The catalog ID to delete.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Task.</returns>
+    public async Task DeleteCatalogAsync(
+        string accessToken,
+        string catalogId,
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Deleting SMAPI catalog {CatalogId} (JF-949 song-catalog opt-out teardown)", catalogId);
+
+        var client = _httpClientFactory.CreateClient("AlexaSkill");
+        string url = $"{SmapiEndpoint}/v1/skills/api/custom/interactionModel/catalogs/{Uri.EscapeDataString(catalogId)}";
+
+        for (int attempt = 1; ; attempt++)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Delete, url);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+            using var response = await client.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                _logger.LogInformation("SMAPI catalog {CatalogId} already gone (404); treating the delete as done (JF-949 idempotency)", catalogId);
+                return;
+            }
+
+            bool transient = (int)response.StatusCode is 502 or 503 or 504;
+            if (!transient || attempt >= TransientFetchMaxAttempts)
+            {
+                await EnsureSuccessAsync(response, cancellationToken).ConfigureAwait(false);
+                break;
+            }
+
+            _logger.LogWarning(
+                "Transient SMAPI {StatusCode} deleting catalog {CatalogId} (attempt {Attempt}/{Max}); retrying (JF-949)",
+                (int)response.StatusCode, catalogId, attempt, TransientFetchMaxAttempts);
+            await Task.Delay(PollDelayMsForTest ?? TransientFetchRetryDelayMs, cancellationToken).ConfigureAwait(false);
+        }
+
+        _logger.LogInformation("SMAPI catalog {CatalogId} deleted", catalogId);
+    }
+
+    /// <summary>
     /// Maximum number of attempts when a catalog version build fails with a transient
     /// GATEWAY_ERROR (SMAPI could not fetch the source URL, e.g. the reverse proxy was
     /// still warming up after a Jellyfin restart). Each retry re-stores the payload (fresh
@@ -534,23 +588,10 @@ public class CatalogManager
         var client = _httpClientFactory.CreateClient("AlexaSkill");
         string modelUrl = LocaleModelUrl(skillId, stage, locale);
 
-        // JF-495: serialize against concurrently-pending builds BEFORE the GET. When a
-        // rebuild (or any other writer) submitted a model moments ago, its build may
-        // still be IN_PROGRESS and the GET would return the last SUCCEEDED (stale)
-        // content; PUTting that content back redeploys yesterday's model.
-        await WaitForLocaleBuildToSettleAsync(
-            accessToken, client, skillId, locale, _logger, cancellationToken,
-            PollDelayMs).ConfigureAwait(false);
-
-        _logger.LogInformation("Fetching interaction model for skill {SkillId} locale {Locale}", skillId, locale);
-
-        using var getRequest = new HttpRequestMessage(HttpMethod.Get, modelUrl);
-        getRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-
-        using var getResponse = await client.SendAsync(getRequest, cancellationToken).ConfigureAwait(false);
-        await EnsureSuccessAsync(getResponse, cancellationToken).ConfigureAwait(false);
-
-        string modelJson = await getResponse.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        // JF-495: serialize against concurrently-pending builds BEFORE the GET
+        // (the guard lives inside the shared fetch helper below).
+        string modelJson = await FetchLiveModelAsync(
+            accessToken, client, modelUrl, skillId, locale, cancellationToken).ConfigureAwait(false);
 
         string modifiedJson = InjectCatalogReferences(modelJson, artistCatalogId, albumCatalogId, seriesCatalogId, audiobookCatalogId, movieCatalogId, artistCatalogVersion, albumCatalogVersion, seriesCatalogVersion, audiobookCatalogVersion, movieCatalogVersion, _logger, songCatalogId, songCatalogVersion);
 
@@ -575,72 +616,10 @@ public class CatalogManager
 
         _logger.LogInformation("Interaction model update submitted for skill {SkillId} locale {Locale}", skillId, locale);
 
-        // JF-495: the PUT is asynchronous on SMAPI (202 + a Location header).
-        // Wait for the build so this sync's build cannot complete and clobber the
-        // live model minutes later, unobserved.
-        // JF-497: the Location is not always a pollable update-request URL. Observed
-        // live (2026-09-06 startup sync): the model PUT's Location is a skill-status
-        // URL, whose response nests the per-locale status under
-        // interactionModel.{locale}; ExtractPollStatus (root/lastUpdateRequest) can
-        // never parse it, so the poll burned its full budget on every locale, landed
-        // TIMEOUT, and the canary never fired. Dispatch on the Location's shape:
-        // poll only genuine update-request URLs, and fall back to the skill-status
-        // tracker immediately otherwise (no budget burn on an unparseable URL).
-        string buildStatus;
-        Uri? rawLocation = putResponse.Headers.Location;
-        Uri? pollLocation = rawLocation == null ? null : ResolveLocationUri(rawLocation);
-        if (pollLocation != null && IsUpdateRequestLocation(pollLocation))
-        {
-            try
-            {
-                await PollSmapiOperationAsync(
-                    accessToken, client, pollLocation, "Interaction model update", cancellationToken).ConfigureAwait(false);
-                buildStatus = "SUCCEEDED";
-            }
-            catch (TimeoutException ex)
-            {
-                buildStatus = "TIMEOUT";
-                _logger.LogWarning(ex,
-                    "Interaction model update build did not settle within the poll budget for skill {SkillId} locale {Locale}; the live model state is unverified (JF-495)",
-                    skillId, locale);
-            }
-            catch (HttpRequestException ex)
-            {
-                // JF-495 review fix: the PUT itself succeeded (a failure above would have
-                // thrown before the poll); only the OBSERVATION failed (e.g. a 429
-                // mid-poll). Do not mark the locale failed or skip its ledger entry for
-                // an observation error.
-                buildStatus = "UNVERIFIED";
-                _logger.LogWarning(ex,
-                    "Interaction model update poll failed transiently for skill {SkillId} locale {Locale}; the build outcome is unverified, not failed (JF-495)",
-                    skillId, locale);
-            }
-            catch (InvalidOperationException ex)
-            {
-                buildStatus = "FAILED";
-                _logger.LogError(ex,
-                    "Interaction model update build FAILED for skill {SkillId} locale {Locale} (JF-495)",
-                    skillId, locale);
-            }
-        }
-        else
-        {
-            if (pollLocation == null)
-            {
-                _logger.LogWarning(
-                    "Interaction model PUT for skill {SkillId} locale {Locale} returned no Location header; tracking the build via the skill-status endpoint instead (JF-495)",
-                    skillId, locale);
-            }
-            else
-            {
-                _logger.LogInformation(
-                    "Interaction model PUT for skill {SkillId} locale {Locale} returned a non-update-request Location ({Location}); tracking the build via the skill-status endpoint instead (JF-497)",
-                    skillId, locale, pollLocation);
-            }
-
-            buildStatus = await WaitForModelBuildOutcomeViaSkillStatusAsync(
-                accessToken, client, skillId, locale, cancellationToken).ConfigureAwait(false);
-        }
+        // The poll dispatch (JF-495/JF-497) is shared with the JF-949 strip path:
+        // ONE copy of the stale-build semantics.
+        string buildStatus = await AwaitModelPutBuildAsync(
+            accessToken, client, putResponse, skillId, locale, "Interaction model update", cancellationToken).ConfigureAwait(false);
 
         // Canary: only meaningful once the build reports SUCCEEDED; a GET before the
         // build settles would race and produce a false mismatch.
@@ -650,6 +629,348 @@ public class CatalogManager
         }
 
         return new CatalogModelUpdateResult(buildStatus, null, putIntents, putSamples);
+    }
+
+    /// <summary>
+    /// The shared GET half of the GET-modify-PUT model paths (JF-495, extracted so
+    /// the injection path and the JF-949 wiring-strip path share ONE copy):
+    /// waits for any in-flight build of this locale to settle, then fetches the
+    /// live model JSON from the caller-computed URL (ONE derivation of
+    /// LocaleModelUrl per flow, so the GET and any later PUT/canary cannot drift).
+    /// Waiting BEFORE the GET matters: a rebuild (or any other writer) that
+    /// submitted a model moments ago may still be IN_PROGRESS, the GET would
+    /// return the last SUCCEEDED (stale) content, and PUTting that content back
+    /// redeploys yesterday's model (the 2026-09-05 silent-stale regression class).
+    /// </summary>
+    /// <param name="accessToken">The SMAPI access token.</param>
+    /// <param name="client">The HTTP client.</param>
+    /// <param name="modelUrl">The locale model URL the flow already computed.</param>
+    /// <param name="skillId">The skill ID.</param>
+    /// <param name="locale">The locale.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The live interaction model JSON.</returns>
+    private async Task<string> FetchLiveModelAsync(
+        string accessToken,
+        HttpClient client,
+        string modelUrl,
+        string skillId,
+        string locale,
+        CancellationToken cancellationToken)
+    {
+        await WaitForLocaleBuildToSettleAsync(
+            accessToken, client, skillId, locale, _logger, cancellationToken,
+            PollDelayMs).ConfigureAwait(false);
+
+        _logger.LogInformation("Fetching interaction model for skill {SkillId} locale {Locale}", skillId, locale);
+
+        using var getRequest = new HttpRequestMessage(HttpMethod.Get, modelUrl);
+        getRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+        using var getResponse = await client.SendAsync(getRequest, cancellationToken).ConfigureAwait(false);
+        await EnsureSuccessAsync(getResponse, cancellationToken).ConfigureAwait(false);
+
+        return await getResponse.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The shared PUT-follow-through of the model-update paths (JF-495/JF-497, ONE
+    /// copy for the injection path and the JF-949 wiring-strip path). The PUT is
+    /// asynchronous on SMAPI (202 + a Location header); wait for the build so this
+    /// update cannot complete later and clobber a fresher model unobserved. The
+    /// Location is not always a pollable update-request URL (observed live
+    /// 2026-09-06: a skill-status URL whose response nests the per-locale status
+    /// under interactionModel.{locale}; ExtractPollStatus can never parse it, so
+    /// the poll once burned its full budget on every locale, landed TIMEOUT, and
+    /// the canary never fired). Dispatch on the Location's shape: poll only genuine
+    /// update-request URLs, and fall back to the skill-status tracker immediately
+    /// otherwise (no budget burn on an unparseable URL). The HttpRequestException
+    /// arm keeps the JF-495 review distinction: the PUT itself succeeded, only the
+    /// OBSERVATION failed, so the outcome is UNVERIFIED, not failed.
+    /// </summary>
+    /// <param name="accessToken">The SMAPI access token.</param>
+    /// <param name="client">The HTTP client.</param>
+    /// <param name="putResponse">The already-verified PUT response.</param>
+    /// <param name="skillId">The skill ID.</param>
+    /// <param name="locale">The locale.</param>
+    /// <param name="opLabel">Human-readable operation name for the poll and the log lines.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The build status: "SUCCEEDED", "TIMEOUT", "UNVERIFIED", or whatever the skill-status tracker reports.</returns>
+    private async Task<string> AwaitModelPutBuildAsync(
+        string accessToken,
+        HttpClient client,
+        HttpResponseMessage putResponse,
+        string skillId,
+        string locale,
+        string opLabel,
+        CancellationToken cancellationToken)
+    {
+        Uri? rawLocation = putResponse.Headers.Location;
+        Uri? pollLocation = rawLocation == null ? null : ResolveLocationUri(rawLocation);
+        if (pollLocation != null && IsUpdateRequestLocation(pollLocation))
+        {
+            try
+            {
+                await PollSmapiOperationAsync(
+                    accessToken, client, pollLocation, opLabel, cancellationToken).ConfigureAwait(false);
+                return "SUCCEEDED";
+            }
+            catch (TimeoutException ex)
+            {
+                _logger.LogWarning(ex,
+                    "{OpLabel} build did not settle within the poll budget for skill {SkillId} locale {Locale}; the live model state is unverified (JF-495)",
+                    opLabel, skillId, locale);
+                return "TIMEOUT";
+            }
+            catch (HttpRequestException ex)
+            {
+                _logger.LogWarning(ex,
+                    "{OpLabel} poll failed transiently for skill {SkillId} locale {Locale}; the build outcome is unverified, not failed (JF-495)",
+                    opLabel, skillId, locale);
+                return "UNVERIFIED";
+            }
+            catch (InvalidOperationException ex)
+            {
+                _logger.LogError(ex,
+                    "{OpLabel} build FAILED for skill {SkillId} locale {Locale} (JF-495)",
+                    opLabel, skillId, locale);
+                return "FAILED";
+            }
+        }
+
+        if (pollLocation == null)
+        {
+            _logger.LogWarning(
+                "{OpLabel} PUT for skill {SkillId} locale {Locale} returned no Location header; tracking the build via the skill-status endpoint instead (JF-495)",
+                opLabel, skillId, locale);
+        }
+        else
+        {
+            _logger.LogInformation(
+                "{OpLabel} PUT for skill {SkillId} locale {Locale} returned a non-update-request Location ({Location}); tracking the build via the skill-status endpoint instead (JF-497)",
+                opLabel, skillId, locale, pollLocation);
+        }
+
+        return await WaitForModelBuildOutcomeViaSkillStatusAsync(
+            accessToken, client, skillId, locale, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Removes the catalog wiring from one slot type in a locale's live interaction
+    /// model, restoring the given static replacement block (JF-949: the song-catalog
+    /// opt-out teardown). Same GET-modify-PUT shape as
+    /// <see cref="UpdateInteractionModelAsync"/> (build settle before the GET, build
+    /// poll after the PUT) so the 2026-09-05 silent-stale class stays impossible
+    /// here too. Idempotent: when the live model carries no WIRED block of this type
+    /// (absent type, or a static values block), nothing is PUT and a "Skipped"
+    /// result returns. The JF-543 guard applies: wiring can only exist in supported
+    /// locales, so an unsupported locale short-circuits to "Skipped".
+    /// A build that does not settle SUCCEEDED reports that status (the caller treats
+    /// anything but "SUCCEEDED"/"Skipped" as a failed strip and keeps its catalog).
+    /// After a SUCCEEDED build the live model is GET-ed back once and the named type
+    /// verified unwired: a stale GET-back (the silent-stale class) would otherwise
+    /// leave the model referencing a catalog the caller is about to delete, so the
+    /// verification failure surfaces as an "UNVERIFIED" result with the mismatch in
+    /// <see cref="CatalogModelUpdateResult.CanaryError"/>.
+    /// </summary>
+    /// <param name="accessToken">The SMAPI access token.</param>
+    /// <param name="skillId">The skill ID whose model should be updated.</param>
+    /// <param name="stage">The skill stage (e.g. "development").</param>
+    /// <param name="locale">The locale to update (e.g. "it-IT").</param>
+    /// <param name="slotTypeName">The slot type whose catalog wiring to remove.</param>
+    /// <param name="replacementTypeJson">The static type block JSON to restore in its place (read from the locale's own embedded model), or null to remove the wired block outright (a locale whose embedded model never carried the type; the JF-952 inert-wiring removal shape).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The build outcome for the status ledger.</returns>
+    public async Task<CatalogModelUpdateResult> StripCatalogWiringAsync(
+        string accessToken,
+        string skillId,
+        string stage,
+        string locale,
+        string slotTypeName,
+        string? replacementTypeJson,
+        CancellationToken cancellationToken)
+    {
+        if (!IsCatalogWiringSupported(locale))
+        {
+            _logger.LogInformation(
+                "Skipping catalog wiring strip for {SlotTypeName} in {Locale}: wiring cannot exist in a JF-543 locale",
+                slotTypeName, locale);
+            return new CatalogModelUpdateResult("Skipped", null, 0, 0);
+        }
+
+        var client = _httpClientFactory.CreateClient("AlexaSkill");
+        string modelUrl = LocaleModelUrl(skillId, stage, locale);
+
+        string modelJson = await FetchLiveModelAsync(
+            accessToken, client, modelUrl, skillId, locale, cancellationToken).ConfigureAwait(false);
+
+        (string modifiedJson, bool removed) = StripCatalogWiring(modelJson, slotTypeName, replacementTypeJson, _logger);
+        if (!removed)
+        {
+            _logger.LogInformation(
+                "No wired {SlotTypeName} block in the live model for skill {SkillId} locale {Locale}; nothing to strip (JF-949 idempotency)",
+                slotTypeName, skillId, locale);
+            return new CatalogModelUpdateResult("Skipped", null, 0, 0);
+        }
+
+        using var putRequest = new HttpRequestMessage(HttpMethod.Put, modelUrl);
+        putRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        putRequest.Content = new StringContent(modifiedJson, Encoding.UTF8, "application/json");
+
+        using var putResponse = await client.SendAsync(putRequest, cancellationToken).ConfigureAwait(false);
+        await EnsureSuccessAsync(putResponse, cancellationToken).ConfigureAwait(false);
+
+        _logger.LogInformation("Wiring-strip model update submitted for skill {SkillId} locale {Locale}", skillId, locale);
+
+        // The shared poll dispatch (JF-495/JF-497): ONE copy of the stale-build
+        // semantics for both model-update paths.
+        string buildStatus = await AwaitModelPutBuildAsync(
+            accessToken, client, putResponse, skillId, locale, "Wiring strip model update", cancellationToken).ConfigureAwait(false);
+
+        if (buildStatus != "SUCCEEDED")
+        {
+            return new CatalogModelUpdateResult(buildStatus, null, 0, 0);
+        }
+
+        // Strip canary (the JF-495 canary's counterpart; the counts-based canary is
+        // meaningless here since the strip never changes intent/sample counts): GET
+        // the model back and confirm the named type carries no catalog supplier
+        // anymore. A wired GET-back means the build served stale content and the
+        // model still references the catalog the caller will delete, so the strip
+        // reports UNVERIFIED with the mismatch in CanaryError and the caller keeps
+        // the catalog.
+        try
+        {
+            string liveJson = await FetchLiveModelAsync(
+                accessToken, client, modelUrl, skillId, locale, cancellationToken).ConfigureAwait(false);
+            if (IsSlotTypeWired(liveJson, slotTypeName))
+            {
+                _logger.LogError(
+                    "Wiring strip canary MISMATCH for skill {SkillId} locale {Locale}: the live {SlotTypeName} block still carries a catalog supplier after the strip build settled; treating the strip as unverified (JF-949)",
+                    skillId, locale, slotTypeName);
+                return new CatalogModelUpdateResult("UNVERIFIED", false, 0, 0, CanaryError: "strip canary mismatch: the live model still carries the wired block");
+            }
+
+            return new CatalogModelUpdateResult(buildStatus, true, 0, 0);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Wiring strip canary GET failed for skill {SkillId} locale {Locale}; the build outcome is unverified, not failed (JF-949)",
+                skillId, locale);
+            return new CatalogModelUpdateResult("UNVERIFIED", null, 0, 0);
+        }
+    }
+
+    /// <summary>
+    /// True when the named slot type block in the given model JSON carries a
+    /// catalog valueSupplier (the strip canary's stale-detection read). Tolerant:
+    /// a malformed body reads as wired-free (the canary then passes; the
+    /// malformed-model case fails loudly earlier in the pipeline).
+    /// </summary>
+    /// <param name="modelJson">The live interaction model JSON envelope.</param>
+    /// <param name="slotTypeName">The slot type to inspect.</param>
+    /// <returns>True when the block is present and catalog-wired.</returns>
+    private static bool IsSlotTypeWired(string modelJson, string slotTypeName)
+    {
+        try
+        {
+            var typesArray = JsonNode.Parse(modelJson)?["interactionModel"]?["languageModel"]?["types"] as JsonArray;
+            if (typesArray == null)
+            {
+                return false;
+            }
+
+            int index = FindTypeIndex(typesArray, slotTypeName);
+            return index >= 0 && IsCatalogWired(typesArray[index]);
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Static core of <see cref="StripCatalogWiringAsync"/> (JF-949): replaces the
+    /// WIRED block of <paramref name="slotTypeName"/> (a valueSupplier carrier, the
+    /// <see cref="IsCatalogWired"/> definition, matching
+    /// CatalogWiringGraft.ExtractWiring) with the static replacement block, or with
+    /// nothing when the replacement is null (a locale whose embedded model never
+    /// carried the type: the JF-952 inert-wiring removal shape). An absent type or
+    /// a static values block leaves the model untouched with removed false (the
+    /// teardown's idempotent no-op; a static block is never re-PUT and never
+    /// overwritten, byte-identical to the JF-952 keep-static rule). A malformed
+    /// live body is tolerated as unchanged: the teardown cannot safely rewrite a
+    /// model it cannot parse.
+    /// </summary>
+    /// <param name="modelJson">The live interaction model JSON envelope.</param>
+    /// <param name="slotTypeName">The slot type whose wiring to remove.</param>
+    /// <param name="replacementTypeJson">The static type block JSON to restore, or null to remove the block.</param>
+    /// <param name="logger">Optional logger for the strip diagnostics.</param>
+    /// <returns>The (possibly unchanged) model JSON and whether a wired block was removed.</returns>
+    internal static (string ModifiedJson, bool Removed) StripCatalogWiring(string modelJson, string slotTypeName, string? replacementTypeJson, ILogger? logger = null)
+    {
+        JsonNode? root;
+        try
+        {
+            root = JsonNode.Parse(modelJson);
+        }
+        catch (JsonException ex)
+        {
+            logger?.LogWarning(ex,
+                "Wiring strip for {SlotTypeName}: the live model body is malformed; leaving it untouched",
+                slotTypeName);
+            return (modelJson, false);
+        }
+
+        if (root == null)
+        {
+            return (modelJson, false);
+        }
+
+        var typesArray = root["interactionModel"]?["languageModel"]?["types"] as JsonArray;
+        if (typesArray == null)
+        {
+            return (modelJson, false);
+        }
+
+        int existingIndex = FindTypeIndex(typesArray, slotTypeName);
+        if (existingIndex < 0 || !IsCatalogWired(typesArray[existingIndex]))
+        {
+            return (modelJson, false);
+        }
+
+        JsonNode? replacement = null;
+        if (replacementTypeJson != null)
+        {
+            try
+            {
+                replacement = JsonNode.Parse(replacementTypeJson);
+            }
+            catch (JsonException ex)
+            {
+                logger?.LogWarning(ex,
+                    "Wiring strip for {SlotTypeName}: the replacement block failed to parse; leaving the wired block in place",
+                    slotTypeName);
+                return (modelJson, false);
+            }
+        }
+
+        if (replacement != null)
+        {
+            logger?.LogInformation(
+                "Stripping catalog wiring from {SlotTypeName} (index {Index}); restoring the static seed block (JF-949)",
+                slotTypeName, existingIndex);
+            typesArray[existingIndex] = replacement;
+        }
+        else
+        {
+            logger?.LogInformation(
+                "Removing wired {SlotTypeName} block (index {Index}): the locale carries no embedded static block for the type, so the wiring goes outright (JF-949, the JF-952 removal shape)",
+                slotTypeName, existingIndex);
+            typesArray.RemoveAt(existingIndex);
+        }
+
+        return (root.ToJsonString(), true);
     }
 
     /// <summary>
@@ -1030,8 +1351,7 @@ public class CatalogManager
 
         foreach (var (catalogId, catalogVersion, slotTypeName, replacesType) in catalogMappings)
         {
-            int existingIndex = Enumerable.Range(0, typesArray.Count)
-                .FirstOrDefault(i => typesArray[i]?["name"]?.GetValue<string>() == slotTypeName, -1);
+            int existingIndex = FindTypeIndex(typesArray, slotTypeName);
 
             // JF-952 universal declare check. Load-bearing branch order (the
             // JF-946 live lesson 2026-11-23, generalized): the check and the
@@ -1176,6 +1496,20 @@ public class CatalogManager
     /// leaving a static seed byte-untouched.
     /// </summary>
     private static bool IsCatalogWired(JsonNode? typeBlock) => typeBlock?["valueSupplier"] is JsonObject;
+
+    /// <summary>
+    /// The ONE slot-type block lookup for the injection loop and the JF-949 strip:
+    /// the index of the type named <paramref name="slotTypeName"/> in the types
+    /// array, or -1. Shared so a guard against a malformed (non-string) name node,
+    /// if one ever lands, cannot miss one of the two copies (the repo's
+    /// "missed one" class; the reviewers flagged the verbatim duplication).
+    /// </summary>
+    /// <param name="typesArray">The language model's types array.</param>
+    /// <param name="slotTypeName">The slot type name to find.</param>
+    /// <returns>The index, or -1 when absent.</returns>
+    private static int FindTypeIndex(JsonArray typesArray, string slotTypeName) =>
+        Enumerable.Range(0, typesArray.Count)
+            .FirstOrDefault(i => typesArray[i]?["name"]?.GetValue<string>() == slotTypeName, -1);
 
     /// <summary>
     /// JF-952: the shared slot-scan core, the ONE intents-array to slots-array

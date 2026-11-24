@@ -227,7 +227,7 @@ public class LibrarySyncServiceStructureTests
             Assert.True(
                 setter != null,
                 $"{property.Name} must keep a setter (this pin's lookup target)");
-            AssertOnlyCallerIsTableLambda(methodCalls, setter!);
+            AssertOnlyCallerIsTableLambda(methodCalls, property, setter!);
         }
     }
 
@@ -403,7 +403,7 @@ public class LibrarySyncServiceStructureTests
             // returns public accessors only).
             foreach (MethodInfo accessor in property.GetAccessors(true))
             {
-                AssertOnlyCallerIsTableLambda(methodCalls, accessor);
+                AssertOnlyCallerIsTableLambda(methodCalls, property, accessor);
             }
         }
     }
@@ -422,13 +422,23 @@ public class LibrarySyncServiceStructureTests
     /// </summary>
     private static void AssertOnlyCallerIsTableLambda(
         IReadOnlyList<(Type Type, MethodBase Method, int[] Tokens)> methodCalls,
+        PropertyInfo property,
         MethodInfo accessor)
     {
         var callSites = CallSites(methodCalls, accessor.MetadataToken);
         int totalCalls = callSites.Sum(site => site.Count);
         bool isGetter = accessor.Name.StartsWith("get_", StringComparison.Ordinal);
+        // JF-949: the ONLY SongCatalogId accessor use outside the wiring table is
+        // the opt-out teardown's (it reads the stored id to know whether a
+        // catalog is still live on Amazon, and WRITES null to it after the
+        // delete succeeds; both halves of that contract are the teardown's own
+        // behavioral pins). SongCatalogId only: the other five ids keep their
+        // getter/setter closure, and the setters of all six stay closed
+        // elsewhere (the setter sweep below iterates the same pin).
+        bool teardownAllowed = property.Name == nameof(User.SongCatalogId);
         int lambdaCalls = callSites.Where(s => IsWiringTableLambda(s.Method)).Sum(s => s.Count);
         int predicateCalls = callSites.Where(s => IsCatalogSuppressionPredicate(s.Method)).Sum(s => s.Count);
+        int teardownCalls = callSites.Where(s => IsSongCatalogTeardownReader(s.Method)).Sum(s => s.Count);
 
         // Loud rename tripwire (JF-826 code-review F5): a renamed predicate would
         // otherwise just reduce every getter's predicateCalls to 0 and the pin
@@ -438,12 +448,16 @@ public class LibrarySyncServiceStructureTests
         Assert.True(
             lambdaCalls == 1
             && predicateCalls <= (isGetter ? 1 : 0)
-            && totalCalls == lambdaCalls + predicateCalls,
+            && teardownCalls <= (teardownAllowed ? 1 : 0)
+            && totalCalls == lambdaCalls + predicateCalls + teardownCalls,
             $"{accessor.Name} must be called from exactly one place: the JF-706 wiring-table lambda in LibrarySyncService.SyncUserLibraryAsync"
             + (isGetter
                 ? ", plus (getters only, at most once) the JF-826 runtime reader DynamicEntityBuilder.ResolveCatalogWiredTypeNames"
                 : string.Empty)
-            + $". Found {totalCalls} call instructions ({lambdaCalls} lambda, {predicateCalls} predicate). "
+            + (teardownAllowed
+                ? ", plus (at most once) the JF-949 opt-out teardown LibrarySyncService.TearDownSongCatalogAsync (read + null write)"
+                : string.Empty)
+            + $". Found {totalCalls} call instructions ({lambdaCalls} lambda, {predicateCalls} predicate, {teardownCalls} teardown). "
             + $"Call sites found: [{DescribeCallSites(callSites)}]");
     }
 
@@ -462,6 +476,22 @@ public class LibrarySyncServiceStructureTests
 
     private static bool IsCatalogSuppressionPredicate(MethodBase method) =>
         CatalogSuppressionPredicate != null && method == CatalogSuppressionPredicate;
+
+    /// <summary>
+    /// The JF-949 sanctioned SongCatalogId getter reader: the opt-out teardown's
+    /// async state machine (async methods compile their bodies into a
+    /// "&lt;TearDownSongCatalogAsync&gt;d__N.MoveNext", the same shape the pin's
+    /// failure message names). A shape check, not a reflection-resolved
+    /// MethodBase like the JF-826 predicate above: a rename of the teardown
+    /// method changes the state-machine name and the allowance silently lapses,
+    /// but the teardown itself has behavioral pins (its reader feed) whose
+    /// absence fails loudly, so the looser shape check is enough here.
+    /// </summary>
+    private static bool IsSongCatalogTeardownReader(MethodBase method) =>
+        method.DeclaringType != null
+        && IlCallScanner.TopLevelType(method.DeclaringType) == typeof(LibrarySyncService)
+        && method.Name == "MoveNext"
+        && method.DeclaringType.Name.StartsWith("<TearDownSongCatalogAsync>", StringComparison.Ordinal);
 
     /// <summary>
     /// A wiring-table row lambda: Roslyn compiles each row's accessors to a
