@@ -326,6 +326,54 @@ def test_run_refuses_when_live_name_read_fails(tmp_path, monkeypatch, capsys):
     assert "live name" in err and "no auth" in err
 
 
+def test_run_refuses_fixture_row_with_typo_key(tmp_path, monkeypatch, capsys):
+    """JF-935 CLI wiring: a typo'd row key in the FIXTURE file used to escape
+    _preflight's except (RunRefused, LabConfigError) as a KeyError traceback;
+    the battery-level refusal now converts into a clean run refusal naming
+    the fixture file and the row index, before any deploy or run file."""
+    lab = _lab_dir(tmp_path)
+    fx = _fixtures(tmp_path, [
+        {"utterance": "spiele das lied x", "expected_intent": "PlaySongIntent"},
+        {"utterrence": "spiele das lied y", "expected_intent": "LoopAllOffIntent"},
+    ])
+    log = _happy_smapi(monkeypatch)
+    model_path = _model_file(tmp_path, _valid_model())
+    rc = _cmd(lab, fx, model_path, label="bad")
+    assert rc == 1 and log == []
+    assert not (tmp_path / "runs").exists()
+    err = capsys.readouterr().err
+    assert "refusing to run" in err and "row #2" in err and "de-DE.yaml" in err
+
+
+def test_run_refuses_non_mapping_lab_json(tmp_path, monkeypatch, capsys):
+    """JF-935: a JSON-valid non-dict lab.json used to raise AttributeError in
+    LabConfig.load; run refuses cleanly instead (init-skill never loads
+    lab.json, it only refuses an existing one, so run is the crash surface)."""
+    (tmp_path / "lab.json").write_text(json.dumps(["not", "a", "dict"]))
+    fx = _fixtures(tmp_path, [FX_ROW_A])
+    log = _happy_smapi(monkeypatch)
+    model_path = _model_file(tmp_path, _valid_model())
+    rc = _cmd(tmp_path, fx, model_path, label="bad")
+    assert rc == 1 and log == []
+    assert not (tmp_path / "runs").exists()
+    err = capsys.readouterr().err
+    assert "refusing to run" in err and "instead of a mapping" in err
+
+
+def test_run_refuses_non_dict_interaction_model_value(tmp_path, monkeypatch, capsys):
+    """JF-935: {"interactionModel": "oops"} used to crash prepare_payload with
+    TypeError after the key-presence unwrap; the models-level ValueError now
+    surfaces as a clean run refusal, before any deploy or run file."""
+    lab = _lab_dir(tmp_path)
+    fx = _fixtures(tmp_path, [FX_ROW_A])
+    log = _happy_smapi(monkeypatch)
+    rc = _cmd(lab, fx, _model_file(tmp_path, {"interactionModel": "oops"}), label="bad")
+    assert rc == 1 and log == []
+    assert not (tmp_path / "runs").exists()
+    err = capsys.readouterr().err
+    assert "refusing to run" in err and "interactionModel is str" in err
+
+
 # --- live-phase outcomes (run file rewritten) ---
 
 def test_deploy_exception_saves_failed_run(tmp_path, monkeypatch, capsys):

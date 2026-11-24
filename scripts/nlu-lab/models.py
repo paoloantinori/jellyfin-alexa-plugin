@@ -14,10 +14,37 @@ import generate_interaction_model
 
 
 def _unwrap_or_raise(model: dict, source: str) -> dict:
-    if isinstance(model, dict) and "interactionModel" in model:
+    """The ONE two-shape discriminator (SMAPI wrapper vs bare languageModel);
+    both load_model_file and prepare_payload ride it, so a shape the lab
+    cannot deploy refuses here with ValueError and the CLI converts it into
+    RunRefused. JF-935: the check used to be key presence only, so
+    {"interactionModel": "oops"} passed and crashed prepare_payload with
+    TypeError at payload["interactionModel"]["languageModel"] instead; the
+    wrapper branch now also demands a languageModel dict INSIDE the wrapper
+    (same crash line, reached via {"interactionModel": {}} and
+    {"interactionModel": {"languageModel": 5}}). Shape only: this refuses a
+    wrong nesting and non-dict wrapper values; schema (the intents list,
+    per-intent samples) belongs to validate_single_model downstream."""
+    if isinstance(model, dict) and isinstance(model.get("interactionModel"), dict):
+        inner = model["interactionModel"].get("languageModel")
+        if not isinstance(inner, dict):
+            # Same crash class one step deeper: prepare_payload indexes
+            # ["interactionModel"]["languageModel"], so a wrapper without a
+            # languageModel dict crashed there instead of refusing (JF-935).
+            raise ValueError(
+                f"{source}: the wrapper's interactionModel.languageModel is "
+                f"{type(inner).__name__}, expected a dict; "
+                "not a model the lab can deploy"
+            )
         return copy.deepcopy(model)
-    if isinstance(model, dict) and "languageModel" in model:
+    if isinstance(model, dict) and isinstance(model.get("languageModel"), dict):
         return {"interactionModel": copy.deepcopy(model)}
+    if isinstance(model, dict) and ("interactionModel" in model or "languageModel" in model):
+        key = "interactionModel" if "interactionModel" in model else "languageModel"
+        raise ValueError(
+            f"{source}: {key} is {type(model[key]).__name__}, expected a dict; "
+            "not a model the lab can deploy"
+        )
     raise ValueError(
         f"{source}: neither an interactionModel wrapper nor a languageModel "
         "dict; not a model the lab can deploy"
@@ -29,7 +56,8 @@ def load_model_file(path) -> dict:
 
     Accepts both the {"interactionModel": ...} payload SMAPI consumes and a
     bare build_model dict ({"languageModel": ...}); the return is always
-    the wrapper. Raises ValueError on anything else.
+    the wrapper. Raises ValueError on anything else, including a wrapper
+    whose interactionModel value is not a dict (JF-935).
     """
     data = json.loads(Path(path).read_text(encoding="utf-8"))
     return _unwrap_or_raise(data, str(path))

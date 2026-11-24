@@ -2,6 +2,8 @@ import hashlib
 import json
 from pathlib import Path
 
+import pytest
+
 import _paths
 _paths.bootstrap()
 
@@ -37,6 +39,38 @@ def test_load_accepts_wrapper_and_bare_language_model(tmp_path):
     assert load_model_file(p) == wrapper
     p2 = _write(tmp_path, "bare.json", _bare_model())
     assert load_model_file(p2) == {"interactionModel": _bare_model()}
+
+
+def test_non_dict_interaction_model_value_refuses(tmp_path):
+    """JF-935: {"interactionModel": "oops"} used to pass the key-presence
+    check and crash prepare_payload with TypeError at
+    payload["interactionModel"]["languageModel"]; the one shape authority
+    refuses it with ValueError (which the CLI converts into RunRefused)."""
+    p = _write(tmp_path, "oops.json", {"interactionModel": "oops"})
+    with pytest.raises(ValueError, match="interactionModel is str, expected a dict"):
+        load_model_file(p)
+    with pytest.raises(ValueError, match="interactionModel is str, expected a dict"):
+        prepare_payload({"interactionModel": "oops"}, "nlu labor")
+
+
+def test_non_dict_language_model_value_refuses():
+    """JF-935: the bare-languageModel twin of the wrapper case refuses the
+    same way instead of crashing downstream."""
+    with pytest.raises(ValueError, match="languageModel is str, expected a dict"):
+        prepare_payload({"languageModel": "oops"}, "nlu labor")
+
+
+def test_wrapper_without_inner_language_model_refuses(tmp_path):
+    """JF-935 companion: {"interactionModel": {}} and a non-dict inner
+    languageModel used to crash prepare_payload downstream with KeyError /
+    TypeError at payload["interactionModel"]["languageModel"]; the shape
+    authority refuses them too (shape only: content stays with the
+    structural validator)."""
+    p = _write(tmp_path, "empty_wrapper.json", {"interactionModel": {}})
+    with pytest.raises(ValueError, match="interactionModel.languageModel is NoneType"):
+        load_model_file(p)
+    with pytest.raises(ValueError, match="interactionModel.languageModel is int"):
+        prepare_payload({"interactionModel": {"languageModel": 5}}, "nlu labor")
 
 
 def test_build_from_template_is_in_memory(tmp_path, monkeypatch):

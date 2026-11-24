@@ -16,6 +16,14 @@ def test_unparseable_refuses(tmp_path):
     with pytest.raises(LabConfigError, match="refuse"):
         LabConfig.load(p)
 
+def test_non_mapping_refuses(tmp_path):
+    """JF-935: a JSON-valid non-dict lab.json (e.g. the list
+    ["not","a","dict"]) used to raise AttributeError on data.get; the module
+    docstring promises 'missing/unparseable refuses, never re-inits', so the
+    shape check refuses with LabConfigError instead."""
+    with pytest.raises(LabConfigError, match=r"holds a JSON list instead of a mapping"):
+        LabConfig.load(_write(tmp_path, ["not", "a", "dict"]))
+
 def test_loads_and_pins(tmp_path):
     p = _write(tmp_path, {"skill_id": "amzn1.ask.skill.1", "skill_name": "jellyfin nlu lab", "invocation_name": "jellyfin nlu laboratorio"})
     cfg = LabConfig.load(p)

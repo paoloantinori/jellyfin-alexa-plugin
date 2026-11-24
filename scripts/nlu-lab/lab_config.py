@@ -21,6 +21,13 @@ class LabConfig:
             data = json.loads(path.read_text())
         except json.JSONDecodeError as e:
             raise LabConfigError(f"lab.json unparseable ({e}): the lab refuses rather than re-init; fix or delete and re-run init-skill")
+        if not isinstance(data, dict):
+            # JF-935: a JSON-valid non-dict file (e.g. the list ["not","a","dict"])
+            # used to raise AttributeError on the .get calls below; the shape
+            # check mirrors the workingset top-level check in battery.py.
+            raise LabConfigError(
+                f"lab.json holds a JSON {type(data).__name__} instead of a mapping: "
+                "the lab refuses rather than re-init; fix or delete and re-run init-skill")
         if not data.get("skill_id") or not data.get("skill_name"):
             raise LabConfigError("lab.json must carry both skill_id and skill_name; refusing")
         if not data.get("invocation_name"):
