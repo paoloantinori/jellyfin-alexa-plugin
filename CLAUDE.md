@@ -21,6 +21,11 @@ python3 scripts/validate_locales.py                   # Check locale key coverag
 python3 scripts/validate_versions.py                  # Check version consistency across files
 python3 scripts/validate_apl.py                       # Check APL templates validity
 ./scripts/run_nlu_tests.sh                            # NLU tests via Utterance Profiler API (needs ask CLI auth)
+# Staleness gate: the live suites measure the MODELS AMAZON TRAINS ON, which change
+# only via DLL deploy + custom-model/rebuild (locale "*" for all). The nlu-suite-staleness-gate
+# PreToolUse hook blocks a suite launch when template HEAD is newer than the deployed DLL
+# (phantom-reds incident 2026-11-24: b6da49e7 sat undeployed for a day while the suite
+# measured 16 stale locales). Within 30 min it is advisory (deploy-then-commit lag).
 ./scripts/run_nlu_tests.sh -k "en-US"                 # single locale
 ./scripts/run_nlu_tests.sh --dry-run                  # validate fixtures only, no SMAPI calls
 ./scripts/run_e2e_tests.sh                            # E2E via SMAPI simulate-skill (needs live Jellyfin)
