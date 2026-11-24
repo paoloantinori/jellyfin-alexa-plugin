@@ -63,14 +63,16 @@ public class PlaybackFailedEventHandler : BaseHandler
         // JF-929: the parsed item id rides {ItemId} (a composite "{guid}|launch:n" token
         // under ItemId sends triagers grepping Jellyfin for a nonexistent item, the JF-910
         // class); the raw token stays visible under {Token}. error.type/message come from
-        // the request's Error payload (Alexa.NET renders the enum member name, e.g.
-        // MediaServiceUnavailable; the wire/MEDIA_ERROR_* dual vocabulary is JF-930).
+        // the request's Error payload; the renderer surfaces the raw wire value when the
+        // type was unknown to Alexa.NET's enum and was tolerated at deserialization
+        // (JF-931), the enum member name otherwise (the wire/MEDIA_ERROR_* dual
+        // vocabulary is JF-930).
         Logger.LogError(
             "Playback failed for item {ItemId} (token {Token}) at offset {OffsetMs}ms, error {ErrorType}: {ErrorMessage} [RequestId={RequestId}, DeviceId={DeviceId}]",
             itemId,
             req.Token,
             req.OffsetInMilliseconds,
-            req.Error?.Type.ToString() ?? "UNKNOWN",
+            UnknownWireTypeError.DescribeWireType(req.Error),
             req.Error?.Message ?? string.Empty,
             request.RequestId,
             deviceId);

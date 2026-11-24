@@ -43,6 +43,11 @@ public class AlexaSkillController : ControllerBase
     /// </summary>
     public const string ApiBaseUri = "alexaskill/api/";
 
+    /// <summary>
+    /// Cap for the redacted body excerpt logged at the controller catch (JF-931).
+    /// </summary>
+    private const int BodyExcerptLength = 4000;
+
     private readonly IUserManager _userManager;
     private readonly ISessionManager _sessionManager;
     private readonly ILogger<AlexaSkillController> _logger;
@@ -290,11 +295,14 @@ public class AlexaSkillController : ControllerBase
         // JF-507: visible to the catch blocks so a timeout/exception on an EVENT request
         // (AudioPlayer event, SessionEnded, SystemExceptionEncountered) degrades to the
         // keep-alive shape instead of an outputSpeech Tell Amazon rejects.
+        // JF-931: visible to the catch blocks alongside req so a deserialization death
+        // can still log a triageable body excerpt.
+        string body = string.Empty;
         SkillRequest? req = null;
         try
         {
             using var reader = new StreamReader(Request.Body);
-            string body = await reader.ReadToEndAsync().ConfigureAwait(false);
+            body = await reader.ReadToEndAsync().ConfigureAwait(false);
 
             if (string.IsNullOrWhiteSpace(body))
             {
@@ -308,7 +316,21 @@ public class AlexaSkillController : ControllerBase
                 return SkillResponseContent(ResponseBuilder.Tell("Unable to verify request authenticity."));
             }
 
-            req = JsonConvert.DeserializeObject<SkillRequest>(body);
+            req = SkillRequestDeserializer.Deserialize(body);
+
+            // JF-931: an Error.type value Alexa.NET's enum did not know was tolerated at
+            // deserialization; the raw wire value would otherwise surface only at Debug
+            // level (or on the handler's own line, if one exists). Warn here so every
+            // carrier (AudioPlayer, SessionEnded, SystemExceptionEncountered) is visible.
+            if (SkillRequestDeserializer.FindToleratedError(req) is { } toleratedError)
+            {
+                _logger.LogWarning(
+                    "Tolerated unknown Alexa error.type '{RawWireType}' (mapped to {FallbackMember}) on {RequestType} [RequestId={RequestId}]",
+                    toleratedError.RawWireType,
+                    toleratedError.Type,
+                    req?.Request?.Type ?? "unknown",
+                    req?.Request?.RequestId);
+            }
 
             // JF-311: Reject requests outside the 150-second timestamp window (replay protection).
             DateTime now = DateTime.UtcNow;
@@ -447,7 +469,13 @@ public class AlexaSkillController : ControllerBase
         catch (OperationCanceledException)
         {
             _counters.IncrementErrors();
-            _logger.LogWarning("Request processing timed out");
+            string timeoutRef = Guid.NewGuid().ToString("N")[..8];
+            _logger.LogWarning("Request processing timed out [ErrorRef:{ErrorRef}]", timeoutRef);
+            // JF-931 review: the timeout path needs the body context exactly like the
+            // generic catch; a request-shape-dependent hang is the triage class this
+            // excerpt exists for, and omitting it here silently disproved the "no
+            // unhandled exception passes without raw context" invariant.
+            LogBodyExcerpt(body, timeoutRef, LogLevel.Warning);
             return SkillResponseContent(BaseHandler.DegradeForEventRequest(req?.Request, "Sorry, that took too long. Please try again."));
         }
         catch (Exception ex)
@@ -455,8 +483,53 @@ public class AlexaSkillController : ControllerBase
             _counters.IncrementErrors();
             string errorRef = Guid.NewGuid().ToString("N")[..8];
             _logger.LogError(ex, "Unhandled exception processing Alexa request [ErrorRef:{ErrorRef}]", errorRef);
+            LogBodyExcerpt(body, errorRef, LogLevel.Error);
             return SkillResponseContent(BaseHandler.DegradeForEventRequest(req?.Request, $"Something went wrong. Reference: {errorRef}"));
         }
+    }
+
+    /// <summary>
+    /// Log the redacted body excerpt for triage (JF-931). Every catch on this endpoint
+    /// calls it, so no failure class passes without raw request context. The Debug-level
+    /// body line is filtered off at the default Serilog level; this excerpt is the only
+    /// body context production logs keep for deserialization deaths and timeouts alike.
+    /// </summary>
+    /// <param name="body">The raw request body (empty when reading never completed).</param>
+    /// <param name="errorRef">The error reference of the failing catch.</param>
+    /// <param name="level">The log level of the excerpt line (Error for exceptions, Warning for timeouts).</param>
+    private void LogBodyExcerpt(string body, string errorRef, LogLevel level)
+    {
+        if (body.Length == 0)
+        {
+            return;
+        }
+
+        _logger.Log(
+            level,
+            "Request body excerpt for triage [ErrorRef:{ErrorRef}]: {BodyExcerpt}",
+            errorRef,
+            SliceBodyExcerpt(RequestLogRedactor.Redact(body), BodyExcerptLength));
+    }
+
+    /// <summary>
+    /// Cut a redacted body to at most <paramref name="cap"/> characters without splitting
+    /// a surrogate pair. Internal and pure so tests pin the two edge rules: redaction
+    /// happens BEFORE slicing at the call site (slicing first could cut a sensitive value
+    /// mid-token so the redactor's full-match regex never fires on the truncated tail),
+    /// and the step-back never returns a lone high surrogate.
+    /// </summary>
+    /// <param name="redactedBody">The already-redacted body text.</param>
+    /// <param name="cap">The maximum excerpt length in characters.</param>
+    /// <returns>The excerpt, never longer than the cap and never ending on a lone high surrogate.</returns>
+    internal static string SliceBodyExcerpt(string redactedBody, int cap)
+    {
+        int cut = Math.Min(redactedBody.Length, cap);
+        if (cut < redactedBody.Length && char.IsHighSurrogate(redactedBody[cut - 1]))
+        {
+            cut--;
+        }
+
+        return redactedBody[..cut];
     }
 
     private ContentResult SkillResponseContent(SkillResponse response)
