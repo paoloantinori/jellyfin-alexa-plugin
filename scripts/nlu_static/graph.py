@@ -27,13 +27,18 @@ class _IntentIndex:
     """One intent's unique skeletons and the buckets the pair scan needs."""
 
     name: str
-    samples: tuple[str, ...]
     unique: list = field(default_factory=list)  # CompiledPattern, one per skeleton
     samples_by_skeleton: dict = field(default_factory=dict)  # skeleton -> sample texts
     by_first_lit: dict = field(default_factory=dict)  # literal -> skeletons opening with it
     by_last_lit: dict = field(default_factory=dict)  # literal -> skeletons closing with it
     closers: list = field(default_factory=list)  # skeletons closing with a slot or empty
     openers: list = field(default_factory=list)  # skeletons opening with a slot
+    closers_ids: frozenset = frozenset()  # id() membership sets for the
+    by_last_lit_ids: dict = field(default_factory=dict)  # candidate filter,
+    # precomputed once per intent (simplify round: the old filter rebuilt
+    # an id() set per B skeleton). id(), not value membership: a frozen
+    # dataclass rehashes its whole pattern tuple on every membership test,
+    # which measured 6x slower than the trivial identity hash.
 
 
 def _intent_index(name: str, patterns_of_intent: list) -> _IntentIndex:
@@ -43,7 +48,7 @@ def _intent_index(name: str, patterns_of_intent: list) -> _IntentIndex:
     type) match identically, so they are compiled once and their sample
     texts ride along in ``samples_by_skeleton``.
     """
-    index = _IntentIndex(name=name, samples=tuple(c.sample for c in patterns_of_intent))
+    index = _IntentIndex(name=name)
     for compiled in patterns_of_intent:
         if compiled.skeleton not in index.samples_by_skeleton:
             index.samples_by_skeleton[compiled.skeleton] = [compiled.sample]
@@ -60,7 +65,17 @@ def _intent_index(name: str, patterns_of_intent: list) -> _IntentIndex:
                 index.closers.append(compiled)
         else:
             index.samples_by_skeleton[compiled.skeleton].append(compiled.sample)
+    index.closers_ids = frozenset(id(c) for c in index.closers)
+    index.by_last_lit_ids = {
+        token: frozenset(id(c) for c in compiled_list)
+        for token, compiled_list in index.by_last_lit.items()
+    }
     return index
+
+
+def total_samples(index: "_IntentIndex") -> int:
+    """The intent's sample count (unique skeletons carry their duplicate texts)."""
+    return sum(len(texts) for texts in index.samples_by_skeleton.values())
 
 
 def _candidates_against(b_compiled, a_index: _IntentIndex) -> list:
@@ -79,8 +94,7 @@ def _candidates_against(b_compiled, a_index: _IntentIndex) -> list:
         candidates = list(a_index.unique)
     last = b_compiled.last_item
     if last is not None and last[0] == "lit":
-        allowed = set(id(c) for c in a_index.by_last_lit.get(last[1], []))
-        allowed.update(id(c) for c in a_index.closers)
+        allowed = a_index.by_last_lit_ids.get(last[1], frozenset()) | a_index.closers_ids
         candidates = [c for c in candidates if id(c) in allowed]
     return candidates
 
@@ -99,6 +113,12 @@ def build_graph(locale: str, model: EffectiveModel) -> dict:
         per_intent.setdefault(c.intent, []).append(c)
     indexes = [_intent_index(name, per_intent[name]) for name in sorted(per_intent)]
 
+    # Per-pair DP memos (simplify round, measured decision): the B-outer
+    # shape sharing one memo per witness across every A intent measured
+    # SLOWER (6.6s vs 3.3s on the 16-locale build) than these small
+    # per-pair tables, because a shared memo accumulates ~49 patterns'
+    # DP states and loses cache locality; 3.3s is 36x under budget, so
+    # the empirically faster shape stays.
     edges: list[dict] = []
     for a_index in indexes:
         for b_index in indexes:
@@ -108,9 +128,6 @@ def build_graph(locale: str, model: EffectiveModel) -> dict:
             identical = False
             matching_a_samples: set[str] = set()
             for b_compiled in b_index.unique:
-                # one shared DP memo per B witness: every A skeleton of
-                # this intent pair reuses it instead of rebuilding the
-                # table from scratch (review round, finding 4)
                 witness_memo: dict[tuple[int, int, int], bool] = {}
                 b_matched = False
                 for a_compiled in _candidates_against(b_compiled, a_index):
@@ -137,7 +154,7 @@ def build_graph(locale: str, model: EffectiveModel) -> dict:
                 "to": b_index.name,
                 "kind": "IDENTICAL" if identical else "SWALLOW",
                 "swallowed": len(matched_b_samples),
-                "total": len(b_index.samples),
+                "total": total_samples(b_index),
                 "examples": examples,
             })
 

@@ -50,6 +50,20 @@ def _class_label(cls: str, type_name: str) -> str:
     return f"CLOSED:{type_name}"
 
 
+_CLOSED_LABEL_PREFIX = "CLOSED:"
+
+
+def _label_type_name(label: str) -> str | None:
+    """The type name of a CLOSED witness label, None for every other label.
+
+    The ONE parser paired with ``_class_label``'s encoding, so a label
+    format change is a two-site edit in this module instead of a hunt.
+    """
+    if label.startswith(_CLOSED_LABEL_PREFIX):
+        return label[len(_CLOSED_LABEL_PREFIX):]
+    return None
+
+
 @dataclass(frozen=True)
 class CompiledPattern:
     """One sample compiled for matching.
@@ -138,14 +152,12 @@ def compile_pattern(
     set is given.
     """
     pattern: list[tuple] = []
-    skeleton: list[tuple] = []
     witness: list[tuple] = []
     cursor = 0
     for match in SLOT_PLACEHOLDER_RE.finditer(sample):
         literal = sample[cursor:match.start()]
         for token in tokenize(literal):
             pattern.append(("lit", token))
-            skeleton.append(("lit", token))
             witness.append(("lit", token))
         name = match.group(0)[1:-1]
         type_name = _type_of_slot(name, intent.slots)
@@ -155,19 +167,24 @@ def compile_pattern(
                 unclassified.add(type_name)
             cls = CLASS_FREE
         pattern.append(("slot", cls, type_name))
-        skeleton.append(("slot", cls, type_name) if cls == CLASS_CLOSED else ("slot", cls))
         witness.append(("cls", _class_label(cls, type_name)))
         cursor = match.end()
     for token in tokenize(sample[cursor:]):
         pattern.append(("lit", token))
-        skeleton.append(("lit", token))
         witness.append(("lit", token))
+    # The skeleton is the pattern with CLOSED slots keeping their type and
+    # every other slot collapsed to (class,): derived here so the two
+    # shapes can never drift (simplify round).
+    skeleton = tuple(
+        item if item[0] == "slot" and item[1] == CLASS_CLOSED else item[:2]
+        for item in pattern
+    )
     return CompiledPattern(
         intent=intent.name,
         sample=sample,
         pattern=tuple(pattern),
         witness=tuple(witness),
-        skeleton=tuple(skeleton),
+        skeleton=skeleton,
     )
 
 
@@ -194,6 +211,7 @@ def matches(
     witness_len = len(witness)
     if memo is None:
         memo = {}
+    lengths_cache: dict[str, tuple[int, ...]] = {}
     # Memo keys carry the compiled pattern's identity: one shared memo
     # may serve several patterns against the same witness, and (pi, wi)
     # alone would collide across them.
@@ -238,7 +256,7 @@ def matches(
                 if mode == WitnessMode:
                     result = (
                         wi < witness_len
-                        and witness[wi] == ("cls", f"STRUCT:{item[2]}")
+                        and witness[wi] == ("cls", _class_label(CLASS_STRUCTURED, item[2]))
                         and match_from(pi + 1, wi + 1)
                     )
                 else:
@@ -254,16 +272,19 @@ def matches(
                 result = False
                 if mode == WitnessMode and wi < witness_len and witness[wi][0] == "cls":
                     label = witness[wi][1]
-                    if label == f"CLOSED:{type_name}":
+                    if label == _class_label(CLASS_CLOSED, type_name):
                         result = match_from(pi + 1, wi + 1)
-                    elif label.startswith("CLOSED:"):
-                        other = label[len("CLOSED:"):]
+                    elif _label_type_name(label) is not None:
+                        other = _label_type_name(label)
                         if entries and entries & entry_tokens.get(other, frozenset()):
                             result = match_from(pi + 1, wi + 1)
                 if not result:
-                    # literal run equal to one entry's token list
-                    lengths = {len(tokens) for tokens in entries}
-                    for length in sorted(lengths):
+                    # literal run equal to one entry's token list; the per-type
+                    # distinct lengths are cached for the whole matches() call
+                    # (the entry sets are fixed per run, and the DP revisits
+                    # CLOSED nodes many times).
+                    lengths = _closed_entry_lengths(entry_tokens, type_name, lengths_cache)
+                    for length in lengths:
                         if length == 0 or wi + length > witness_len:
                             continue
                         if all(witness[k][0] == "lit" for k in range(wi, wi + length)):
@@ -275,6 +296,25 @@ def matches(
         return result
 
     return match_from(0, 0)
+
+
+def _closed_entry_lengths(
+    entry_tokens: dict[str, frozenset[tuple[str, ...]]],
+    type_name: str,
+    cache: dict[str, tuple[int, ...]],
+) -> tuple[int, ...]:
+    """The sorted distinct entry lengths of one CLOSED type, cached per call.
+
+    The DP revisits CLOSED nodes many times against entry sets that are
+    fixed for the whole ``matches`` call, so the length set is computed
+    once per type per call instead of once per node visit (simplify round).
+    """
+    cached = cache.get(type_name)
+    if cached is None:
+        entries = entry_tokens.get(type_name, frozenset())
+        cached = tuple(sorted({len(tokens) for tokens in entries}))
+        cache[type_name] = cached
+    return cached
 
 
 def skeleton_equal(a: CompiledPattern, b: CompiledPattern) -> bool:
