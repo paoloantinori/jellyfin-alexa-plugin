@@ -115,3 +115,31 @@ The validator runs this check as "Phase 12: fixture slot values versus slot type
 
 Practical rule for fixture authors: a live fixture that pins a value on a catalog-backed slot (SeriesName, AlbumName, JellyfinArtist, MovieTitle, AudiobookTitle, SongTitle) should pin an item that exists in the test library, or the row's comment should mark it as catalog-dependent so a red row reads as "the live catalog lacks this item" instead of "the model is broken". A pinned value on a STATIC type must exist in the committed type (or the type must be extended through the template and regeneration); an ANY row should carry at least one vocabulary entry inside the utterance unless generalization is deliberately being tested. As everywhere in this toolkit, a finding is a necessary condition, not a routing verdict: `ABSENT` says the trainer has nothing to anchor on, not that Amazon will certainly misroute the row.
 
+## The `ledger` subcommand: the results ledger and per-row flip statistics
+
+The live NLU suite (`./scripts/run_nlu_tests.sh` without `--dry-run`) writes a RESULTS LEDGER automatically (JF-954.5): one JSON Lines file per suite session under `tests/integration/results/` (gitignored, local only), named `nlu-<UTC yyyymmddThhmmssZ>-<pid>.jsonl`. Dry-run writes nothing; the environment variable `NLU_LEDGER=0` disables the ledger and any other value or unset leaves it enabled; `NLU_LEDGER_DIR` overrides the output directory. Skipped rows are not recorded. The ledger never changes a test outcome: any exception inside ledger code is caught, reported once as a pytest warning, and the suite continues without a ledger.
+
+Four record types, one JSON object per line, each line flushed as written so an interrupted run keeps its rows; a file without a `session_end` record is an INCOMPLETE session whose rows still count in the statistics (a session that recorded no rows at all is removed at close):
+
+- `session_start`: `schema` (1), `session_id` (the file stem), `started` (UTC ISO 8601), `skill_id`, `git_head`, `git_dirty`, `locales` (empty at write time; the `locale_start` records that follow fill it lazily).
+- `locale_start`, written the first time a locale is exercised: `locale`, `model_sha256` (sha256 of the bytes of the committed `model_<locale>.json`), `live_identity_start` (the interaction-model eTag live on the skill for that locale, read through one read-only `get-skill-status` call; null when unobtainable).
+- `row`: `locale`, `utterance` (verbatim), `expected_intent` (verbatim, may contain `|`), `expected_slots` (verbatim from the fixture row: the empty object for any-value expectations and for fixtures with no slot expectations, the pinned value object otherwise), `actual_intent` (string or null), `slots` (resolved slot name to value string), `outcome` (`pass`, `fail`, `error`), `failure_kind` (null, `intent`, `slot_missing`, `slot_empty`, `slot_value`, `smapi_error`), `detail` (short string or null). The SMAPI error path and the suite's per-test timeout are environmental and map to outcome `error`; the four assertion failures map to the four slot/intent kinds. Storing `expected_slots` verbatim keeps every session self-sufficient: it stays analysable after fixture files change.
+- `session_end`: `ended`, `rows`, and `live_identity_end` (per exercised locale). At most two read-only SMAPI identity calls are made per locale per session, one at locale start and one at session end.
+
+`rebuilt_during_run` (per session locale in the stats output) is true when both live identities exist and differ, meaning a rebuild happened DURING the session and flip reasoning across it is suspect; it is null when either identity is unobtainable.
+
+```
+python3 scripts/nlu_static/cli.py ledger stats
+python3 scripts/nlu_static/cli.py ledger stats --locale it-IT --last 10
+python3 scripts/nlu_static/cli.py ledger stats --format text
+python3 scripts/nlu_static/cli.py ledger list
+```
+
+Statistics order sessions by `started` (ties by `session_id`) and key rows by `(locale, normalize_text(utterance))`. With `--locale`, the sessions are first restricted to those that exercised that locale, so `--locale it-IT --last 10` means the newest ten it-IT sessions, not the newest ten sessions of any locale. Per key it reports `runs`, `passes`, `fails`, `errors`, `actual_intents` (sorted distinct values), `flips_total`, `flips_same_model`, `last_outcome`, `last_actual_intent`, `first_session` and `last_session`. The two flip counters are the point of the ledger:
+
+- `flips_total` counts adjacent session pairs of the key whose `actual_intent` differs, ignoring rows whose outcome is `error` (a SMAPI outage between two passes is not a flip).
+- `flips_same_model` counts the same pairs restricted to those whose sessions carry an equal `model_sha256` for that locale: a flip counted there happened with NO template change, which is the JF-945 trainer-nondeterminism class. A pair whose sessions lack the locale's model sha (the committed model file was unreadable at record time) is excluded from BOTH counters' same-model test, so a `flips_same_model` of zero means "no PROVEN same-model flips"; read the per-session `model` fields to tell a genuinely stable row from an unclassified one.
+
+Reading rule: a red row with `flips_same_model` of zero over many runs deserves investigation; it was stable for many builds and is now red, so the change is a signal. A red row with a history of same-model flips is trainer noise; annotate such a row in its fixture comment rather than chasing it. The statistics describe what the ledger recorded; like every tool on this page they do not predict how Amazon's trainer will route the next run.
+
+

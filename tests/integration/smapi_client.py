@@ -426,6 +426,43 @@ class SmapiClient:
                 ) from exc
         raise SmapiError("Should not reach here")
 
+    def live_model_identity(self) -> str | None:
+        """Read-only SMAPI read of this locale's live interaction-model eTag.
+
+        The same get-skill-status read the NLU lab's build wait uses as its
+        baseline witness (scripts/nlu-lab/smapi_ops.py): one call, no --stage
+        flag, per-locale entry at interactionModel[<locale>] with an optional
+        outer body wrapper. The NLU results ledger (JF-954.5) uses it to
+        prove whether a rebuild happened during a suite session; it costs at
+        most two calls per locale per session. Returns None when the read
+        fails, the locale entry is absent or malformed, or the eTag is
+        missing: the ledger records null and continues.
+        """
+        try:
+            output = _run_ask([
+                "get-skill-status",
+                "--skill-id", self.skill_id,
+            ])
+            data = _parse_json_output(output)
+        except (SmapiError, ValueError, OSError, subprocess.SubprocessError):
+            # SubprocessError covers the runner's timeout: a hung ask CLI must
+            # read as an unobtainable identity, never propagate into the test
+            # session's teardown.
+            return None
+        if not isinstance(data, dict):
+            return None
+        body = data.get("body", data)
+        models = body.get("interactionModel") if isinstance(body, dict) else None
+        if not isinstance(models, dict):
+            return None
+        entry = models.get(self.locale)
+        if not isinstance(entry, dict):
+            return None
+        etag = entry.get("eTag")
+        if etag is None or etag == "":
+            return None
+        return str(etag)
+
     @staticmethod
     def _intent_summary(response: dict[str, Any]) -> str:
         """Extract a short intent name for log messages."""
