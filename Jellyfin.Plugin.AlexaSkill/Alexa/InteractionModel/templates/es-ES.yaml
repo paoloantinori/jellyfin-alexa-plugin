@@ -188,9 +188,18 @@ intents:
     type: AMAZON.Genre
 - name: PlayByGenreIntent
   samples:
+  # JF-958 (maintainer decision 2026-11-24): the naked genre carriers are
+  # qualified with the media noun. 'Reproduce {genre}' and 'Pon {genre}'
+  # stole the episode family ('reproduce adolescencia temporada uno
+  # episodio tres' read PlayByGenreIntent with genre='adolescencia', rank 1
+  # over PlayEpisode's exact 4-slot sample, 11 suite rows across the es
+  # locales): a two-token greedy free-text carrier beats everything. The
+  # qualified 'Reproduce música {genre}' already exists one row above; the
+  # one-shot cost ('reproduce rock' now needs the noun) was accepted by the
+  # maintainer. The JF-960 media profile may later restore the naked form
+  # on instances where no rival family is active.
   - Reproduce música {genre}
-  - Reproduce {genre}
-  - Pon {genre}
+  - Pon música {genre}
   - Quiero escuchar {genre}
   - Reproduce canciones de {genre}
   slots:

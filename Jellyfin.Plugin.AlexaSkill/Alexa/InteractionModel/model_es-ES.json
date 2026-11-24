@@ -287,8 +287,7 @@
         "name": "PlayByGenreIntent",
         "samples": [
           "Reproduce música {genre}",
-          "Reproduce {genre}",
-          "Pon {genre}",
+          "Pon música {genre}",
           "Quiero escuchar {genre}",
           "Reproduce canciones de {genre}"
         ],
