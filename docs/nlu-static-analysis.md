@@ -46,3 +46,41 @@ JELLYFIN_URL=http://jellyfin.local:8096 JELLYFIN_API_KEY=<key> python3 scripts/n
 ```
 
 CAVEAT: this producer is NAME-LEVEL. It does NOT reproduce the plugin's phonetic synonyms, does NOT apply the 140-character slot value truncation, and does NOT enforce the 50000-value cap, so its output understates what catalog sync actually uploads to Amazon. It can also OVERSTATE the live vocabulary in the other direction on a multi-user server: it queries admin-wide, while the plugin's authoritative sync is per-user library-filtered (LibraryFilter.ApplyLibraryFilter), SortName-ordered and capped, so names from libraries the synced user cannot access appear here but never reach Amazon. Use it for local static analysis where the raw names are what matter; the authoritative producer is the plugin export (JF-954 subtask 8, which adds `--from-plugin` to this same subcommand), and the format above is the contract between the two.
+
+## The `tokens` subcommand: token-ownership collision lint
+
+Every intent sample has a CARRIER: the token list left after removing the `{slot}` placeholders. Every custom slot type owns ENTRIES: each of its values and synonyms, tokenized the same way. A collision exists when a token the trainer learns as a LITERAL of one intent's carrier is at the same time a vocabulary VALUE of a custom type another intent uses, because for titles Amazon does not know the trainer tends to prefer the intent whose type owns the word. The `tokens` subcommand finds three kinds of such ownership conflicts; the identity line printed for each finding is `locale|kind|type-or-types|entry|intent-or-empty` and is the stable key for grep, baselines and bug reports.
+
+- `CARRIER_VS_VALUE` (the issue #46 class): an entry of custom type T appears as a contiguous token sequence inside the carrier of at least one sample of intent I, where I does not use T and at least one other intent J uses T. One finding per locale, T, entry and I; the detail line names the intents using T, how many samples of I contain the entry and the alphabetically first such sample as the example.
+- `VALUE_IN_TWO_TYPES`: the same normalized entry text is owned by two different custom types of one locale. One finding per sorted type pair. The comparison is the shared normalizer's NFC composition plus casefold: "Jazz" in one type and "jazz" in another collide, and a decomposed spelling ("cafe" + combining accent) collides with its precomposed spelling ("café"), but an accented spelling never collides with an unaccented one ("café" and "cafe" stay distinct).
+- `CATALOG_VS_MODEL` (only with `--snapshot`, never baselined): a snapshot entry of a catalog-backed type whose FULL normalized text equals a complete slot-free sample of any intent, or an entry of a STATIC custom type. This is the "a library song titled Stop or Jazz" shape: the catalog pushes a word that is also a trained literal, so an utterance made of that word alone can flip intent. Output per locale is the exact count per sub-kind plus the first 50 findings in sorted order, with a `... N more not shown` line when truncated.
+
+Matching is index-driven (one inverted index per locale, token to sample positions; multi-token entries are matched by first-token lookup plus following-position verification), so the run cost scales with the model, not with entries times samples. Locales without word spaces get the explicit `SKIP ja-JP: no whitespace tokenization` line, which scopes to the TOKEN-dependent kinds (CARRIER_VS_VALUE and VALUE_IN_TWO_TYPES); CATALOG_VS_MODEL compares full normalized texts and needs no word tokens, so it still runs for ja-JP. Silent skips are forbidden.
+
+```
+python3 scripts/nlu_static/cli.py tokens --locale de-DE
+python3 scripts/nlu_static/cli.py tokens
+python3 scripts/nlu_static/cli.py tokens --locale de-DE --all
+python3 scripts/nlu_static/cli.py tokens --snapshot catalog-snapshot.json
+python3 scripts/nlu_static/cli.py tokens --update-baseline
+```
+
+### Reading a finding, and the issue #46 worked example
+
+Issue #46 (de-DE): "spiele das Lied die streithörnchen" routed to MediaInfoIntent instead of PlaySongIntent. Root cause, found only after days of live probing: the word "Lied" was a synonym inside the custom type MediaInfoType (used by MediaInfoIntent for "what is playing" questions) and at the same time a literal carrier word of PlaySongIntent samples like "Spiele Lied {song}". Re-adding those two synonyms to today's committed de-DE model and running the lint reproduces the finding exactly:
+
+```
+de-DE|CARRIER_VS_VALUE|MediaInfoType|lied|PlaySongIntent
+    using intents: MediaInfoIntent; samples: 2; example: "Spiele Lied {song}"
+```
+
+Read it as: in de-DE, the MediaInfoType entry "lied" (the kind is on the identity line) appears in the carrier of 2 PlaySongIntent samples, and PlaySongIntent does not use MediaInfoType while MediaInfoIntent does. That is the exact shape that lost the routing fight. JF-933 removed the song-noun synonyms from MediaInfoType in 16 locales, which is the correct FIX direction: delete the colliding synonym or qualify the carrier with a media noun, so the word belongs to one owner again. A finding is evidence of a necessary condition, not proof of a break: "album" in a MediaType value and in "play the album {album}" is a collision by this definition and is deliberate design, because the carrier is qualified enough that the fight does not arise. That is what the baseline is for.
+
+### The baseline workflow
+
+`scripts/nlu_static/token_collision_baseline.json` is a sorted JSON list of identity strings, one per finding the models legitimately carry. By default the CLI and the validator's Phase 11 print only findings NOT in the baseline; `--all` prints everything and annotates each line with `baselined: true` or `false`; the CLI also lists STALE baseline identities (entries the current models no longer produce, scoped to the locales this run linted, so a single-locale run never calls the other locales' entries stale). `--update-baseline` rewrites the baseline from the current committed models and prints how many identities were added and removed; CATALOG_VS_MODEL findings never enter it, because the catalog depends on one user's library and would freeze library names into the repo.
+
+- FIX the model when the finding names a real contested word: a media noun or carrier word doubling as a type entry (the issue #46 shape), or an entry duplicated across two types where the duplication is not deliberate. The fix lives in the locale YAML templates and flows through regeneration; never hand-edit `model_*.json`.
+- BASELINE the finding when it is legitimate design: qualified carriers ("play the album {album}" with a MediaType value "album"), shared vocabulary words no utterance actually contests. Baseline only what you have looked at; run `tokens --locale <locale> --all`, judge each line, then update. `--update-baseline` is a SCOPED merge: it rewrites the entries of the locales this run linted and keeps every other locale's entries verbatim, so judging one locale can never delete the others' known findings. It refuses `--snapshot`: the baseline tracks the committed models only, and letting snapshot (library) entries in would freeze one user's library names into the repo.
+- After every model change run the CLI once before committing: a NEW non-baselined finding shows up in CI as a validator warning, and the wrong response to that warning is a blind `--update-baseline` that swallows a real collision.
+

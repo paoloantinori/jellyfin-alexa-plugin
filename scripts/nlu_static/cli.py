@@ -23,7 +23,7 @@ _SCRIPTS_DIR = Path(__file__).resolve().parents[1]
 if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 
-from nlu_static import producer_jellyfin  # noqa: E402
+from nlu_static import producer_jellyfin, token_collisions  # noqa: E402
 from nlu_static.effective_model import EffectiveModel, build_effective_model, load_snapshot  # noqa: E402
 
 
@@ -74,14 +74,27 @@ def cmd_snapshot(args: argparse.Namespace) -> int:
     return 0
 
 
+def _load_optional_snapshot(args: argparse.Namespace) -> tuple[dict | None, int | None]:
+    """Load the ``--snapshot`` file when the subcommand carries one.
+
+    Returns (snapshot, None) on success and (None, refusal exit code) on a
+    refused file, with the error already printed; every snapshot-taking
+    subcommand shares this one loader.
+    """
+    path = getattr(args, "snapshot", None)
+    if not path:
+        return None, None
+    try:
+        return load_snapshot(path), None
+    except (OSError, ValueError) as err:
+        return None, _fail(err)
+
+
 def cmd_effective(args: argparse.Namespace) -> int:
     """Print the deterministic effective-model summary for one locale."""
-    snapshot = None
-    if args.snapshot:
-        try:
-            snapshot = load_snapshot(args.snapshot)
-        except (OSError, ValueError) as err:
-            return _fail(err)
+    snapshot, refusal = _load_optional_snapshot(args)
+    if refusal is not None:
+        return refusal
     try:
         model = build_effective_model(args.locale, snapshot=snapshot)
     except (OSError, ValueError) as err:
@@ -127,11 +140,122 @@ def _register_effective(subparsers: argparse._SubParsersAction) -> None:
     parser.set_defaults(func=cmd_effective)
 
 
+def cmd_tokens(args: argparse.Namespace) -> int:
+    """Run the token-ownership collision lint over one locale or all locales."""
+    snapshot, refusal = _load_optional_snapshot(args)
+    if refusal is not None:
+        return refusal
+    if args.update_baseline and snapshot is not None:
+        # The baseline tracks the committed models only; letting snapshot
+        # entries in would freeze one user's library names into the repo.
+        return _fail(
+            ValueError(
+                "--update-baseline and --snapshot are mutually exclusive: "
+                "the baseline tracks the committed models only"
+            )
+        )
+    if args.locale:
+        locales = [args.locale]
+    else:
+        locales = token_collisions.committed_locales()
+    try:
+        reports = [token_collisions.analyze_locale(locale, snapshot=snapshot) for locale in locales]
+    except (OSError, ValueError) as err:
+        return _fail(err)
+    if args.update_baseline:
+        for report in reports:
+            if report.skip_reason is not None:
+                print(report.skip_reason)
+        try:
+            candidates = token_collisions.baseline_candidates(reports)
+            added, removed = token_collisions.update_baseline(
+                token_collisions.default_baseline_path(), candidates, locales=locales
+            )
+        except (OSError, ValueError) as err:
+            return _fail(err)
+        print(
+            f"baseline updated: {token_collisions.default_baseline_path().name} "
+            f"({len(candidates)} identities, added {added}, removed {removed})"
+        )
+        return 0
+    try:
+        baseline = token_collisions.load_baseline(token_collisions.default_baseline_path())
+    except (OSError, ValueError) as err:
+        return _fail(err)
+    known = set(baseline)
+    print(f"token collisions over {len(locales)} locale(s)")
+    non_baselined_count = 0
+    for report in reports:
+        if report.skip_reason is not None:
+            # Scoped to the token-dependent kinds; the catalog kind below
+            # still runs (its comparison needs no word tokens).
+            print(report.skip_reason)
+        for note in report.notes:
+            print(f"  note [{report.locale}]: {note}")
+        non, _ = token_collisions.split_baselined(report.findings, baseline)
+        non_baselined_count += len(non)
+        shown = report.findings if args.all else non
+        for finding in shown:
+            suffix = ""
+            if args.all:
+                suffix = f" [baselined: {'true' if finding.identity() in known else 'false'}]"
+            print(f"  {finding.identity()}{suffix}")
+            if finding.detail:
+                print(f"      {finding.detail}")
+        if report.catalog_findings or report.catalog_counts:
+            counts = " ".join(f"{name}={count}" for name, count in report.catalog_counts)
+            print(f"  CATALOG_VS_MODEL {report.locale}: {counts}")
+            for finding in report.catalog_findings:
+                print(f"    {finding.identity()}")
+                if finding.detail:
+                    print(f"        {finding.detail}")
+            if report.catalog_truncated:
+                print(f"    ... {report.catalog_truncated} more not shown")
+            # Catalog findings are never baselined, so every one of them is
+            # non-baselined; the summary must not contradict the printed
+            # section above it (shown list plus the withheld tail).
+            non_baselined_count += len(report.catalog_findings) + report.catalog_truncated
+    stale = token_collisions.stale_identities(reports, baseline)
+    print(f"non-baselined findings: {non_baselined_count}")
+    print(f"stale baseline identities: {len(stale)}")
+    for identity in stale:
+        print(f"  {identity}")
+    return 0
+
+
+def _register_tokens(subparsers: argparse._SubParsersAction) -> None:
+    """Register the tokens subcommand (JF-954.2)."""
+    parser = subparsers.add_parser(
+        "tokens",
+        help="lint carrier words that also own a slot value in another intent",
+    )
+    parser.add_argument(
+        "--locale",
+        help="single Alexa locale to lint (default: every committed locale)",
+    )
+    parser.add_argument(
+        "--snapshot",
+        help="catalog snapshot JSON file; enables the CATALOG_VS_MODEL kind",
+    )
+    parser.add_argument(
+        "--all",
+        action="store_true",
+        help="also print baselined findings, each with a baselined: true/false field",
+    )
+    parser.add_argument(
+        "--update-baseline",
+        action="store_true",
+        help="rewrite the baseline from the current committed models",
+    )
+    parser.set_defaults(func=cmd_tokens)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="nlu_static", description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
     _register_snapshot(subparsers)
     _register_effective(subparsers)
+    _register_tokens(subparsers)
     args = parser.parse_args(argv)
     return int(args.func(args))
 
