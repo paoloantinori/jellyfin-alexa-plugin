@@ -370,6 +370,25 @@ def _to_row_result(row, row_dict: dict, raws: dict) -> RowResult:
     )
 
 
+def _gate_battery_rows(rows, locale: str, fixtures: Path, workingset) -> None:
+    """The two battery-row gates EVERY run path applies (live and lab alike).
+
+    A None/empty utterance must refuse before profile-nlu, and an EMPTY
+    assembled battery must refuse before deploy: a 0-row run would exit
+    green comparing nothing (the review round's --live finding; the
+    non-live path always had these gates)."""
+    for i, row in enumerate(rows):
+        if not isinstance(row.utterance, str) or not row.utterance.strip():
+            raise RunRefused(
+                f"battery row #{i + 1} (source '{row.source}', expected_intent "
+                f"{row.expected_intent!r}) carries a None/empty utterance; fix the "
+                "fixture or workingset before it reaches profile-nlu")
+    if not rows:
+        raise RunRefused(
+            f"battery assembled 0 rows for {locale} (fixtures {fixtures}, "
+            f"workingset {workingset}); refusing to deploy for an empty run")
+
+
 def _preflight(args, lab_dir: Path, fixtures: Path):
     """Everything that can refuse without a deploy: config load, the LIVE name
     guard, model source resolution, structural validation, battery assembly.
@@ -395,6 +414,7 @@ def _preflight(args, lab_dir: Path, fixtures: Path):
             rows = battery.load_battery(args.locale, fixtures, workingset, args.filter_k)
         except battery.WorkingsetRefused as exc:
             raise RunRefused(str(exc)) from exc
+        _gate_battery_rows(rows, args.locale, fixtures, workingset)
         run = RunRecord(
             id=f"{datetime.now():%Y%m%d-%H%M%S}-{_slug(args.label)}",
             timestamp=f"{datetime.now():%Y-%m-%dT%H:%M:%S}", locale=args.locale,
@@ -421,16 +441,7 @@ def _preflight(args, lab_dir: Path, fixtures: Path):
         rows = battery.load_battery(args.locale, fixtures, workingset, args.filter_k)
     except battery.WorkingsetRefused as exc:
         raise RunRefused(str(exc)) from exc
-    for i, row in enumerate(rows):
-        if not isinstance(row.utterance, str) or not row.utterance.strip():
-            raise RunRefused(
-                f"battery row #{i + 1} (source '{row.source}', expected_intent "
-                f"{row.expected_intent!r}) carries a None/empty utterance; fix the "
-                "fixture or workingset before it reaches profile-nlu")
-    if not rows:
-        raise RunRefused(
-            f"battery assembled 0 rows for {args.locale} (fixtures {fixtures}, "
-            f"workingset {workingset}); refusing to deploy for an empty run")
+    _gate_battery_rows(rows, args.locale, fixtures, workingset)
 
     now = datetime.now()
     run = RunRecord(

@@ -119,3 +119,38 @@ def test_de_template_real_path_smoke():
     assert {r["intent"] for r in roster} == {i["name"] for i in ints}
     assert all(r["sample"] is None or isinstance(r["sample"], str) and r["sample"] for r in roster)
     assert any(r["sample"] is not None for r in roster)
+
+
+# --- review round (2026-11-24): intents shape and the both-keys smuggle --------------------
+
+
+def test_missing_intents_list_refuses_instead_of_keyerror():
+    with pytest.raises(ValueError, match="intents"):
+        prepare_payload({"languageModel": {}}, "lab")
+
+
+def test_non_list_intents_refuses():
+    with pytest.raises(ValueError, match="intents"):
+        prepare_payload({"languageModel": {"intents": "oops"}}, "lab")
+
+
+def test_non_mapping_intent_entries_refuse():
+    with pytest.raises(ValueError, match="intents"):
+        prepare_payload({"languageModel": {"intents": ["not-a-dict"]}}, "lab")
+
+
+def test_both_keys_with_garbage_wrapper_refuses_not_smuggled():
+    # A dict carrying BOTH a non-dict interactionModel and a valid
+    # languageModel must refuse; the bare branch must not wrap the whole
+    # doc and smuggle the garbage key into the payload (review round).
+    model = {"interactionModel": 5, "languageModel": _bare_model()["languageModel"]}
+    with pytest.raises(ValueError, match="interactionModel"):
+        prepare_payload(model, "lab")
+
+
+def test_bare_model_with_dialog_sibling_still_wraps_whole_doc():
+    # dialog belongs INSIDE the SMAPI wrapper; the bare branch keeps
+    # wrapping the whole doc for the committed-model shape.
+    payload, _sha, _roster = prepare_payload(_bare_model(), "nlu labor")
+    assert "dialog" in payload["interactionModel"]
+    assert "interactionModel" not in payload["interactionModel"]

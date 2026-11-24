@@ -43,8 +43,11 @@ def _battery_row(case, path: Path, source: str, index: int) -> BatteryRow:
     index instead. A PRESENT utterance with a None or empty value still reaches
     the run preflight's None/empty refusal, unchanged, with or without a -k
     filter (non-string utterances bypass the filter; see the filter comment
-    below). That gate is the NON-LIVE run path's: --live has never carried
-    one, unchanged by this fix."""
+    below); that gate now runs on BOTH the lab and the --live paths. A
+    non-string expected_intent (the YAML list written instead of the
+    documented 'A|B' pipe string) also refuses here: it used to crash the
+    run REPORT with an AttributeError after the results were already saved
+    (review round 2026-11-24)."""
     if not isinstance(case, dict):
         raise WorkingsetRefused(
             f"{source} {path} row #{index + 1} is {type(case).__name__}, "
@@ -53,10 +56,16 @@ def _battery_row(case, path: Path, source: str, index: int) -> BatteryRow:
         raise WorkingsetRefused(
             f"{source} {path} row #{index + 1} carries keys {list(case)} but "
             "no utterance; every battery row needs an utterance key")
+    expected_intent = case.get("expected_intent")
+    if expected_intent is not None and not isinstance(expected_intent, str):
+        raise WorkingsetRefused(
+            f"{source} {path} row #{index + 1} expected_intent is "
+            f"{type(expected_intent).__name__}, expected a string (alternatives "
+            "are the documented 'A|B' pipe form); fix the row")
     return BatteryRow(
         utterance=case["utterance"],
         source=source,
-        expected_intent=case.get("expected_intent"),
+        expected_intent=expected_intent,
     )
 
 
@@ -76,7 +85,16 @@ def load_battery(locale: str, fixtures_dir: Path, workingset: Path | None,
                 continue
             data = yaml.safe_load(path.read_text(encoding="utf-8"))
             if not isinstance(data, dict):
-                continue
+                # A fixture file whose YAML top level is not a mapping (a
+                # mangled paste, a top-level list, an empty file parsing to
+                # None) must REFUSE, not silently skip: the battery would run
+                # without the locale's fixture corpus and report ok on a
+                # truncated comparison (review round 2026-11-24; the workingset
+                # twin of the identical shape already refused).
+                raise WorkingsetRefused(
+                    f"fixture {path} top level is "
+                    f"{type(data).__name__ if data is not None else 'empty'}, "
+                    "expected a mapping with locale/invocation_name/tests")
             for i, case in enumerate(data.get("tests") or []):
                 rows.append(_battery_row(case, path, SOURCE_FIXTURE, i))
 

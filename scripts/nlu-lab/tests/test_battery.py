@@ -1,6 +1,7 @@
 import yaml
 import pytest
 
+import battery
 from battery import WorkingsetRefused, load_battery
 
 FIXTURE_TESTS = [
@@ -172,3 +173,36 @@ def test_duplicate_utterance_across_sources_distinct(tmp_path):
     by_source = {r.source: r for r in rows}
     assert by_source["fixture"].expected_intent == "FixtureIntent"
     assert by_source["workingset"].expected_intent == "WorkingsetIntent"
+
+
+# --- review round (2026-11-24): fixture top level and expected_intent shape ----------------
+
+
+def test_fixture_non_dict_top_level_refuses_not_silently_skips(tmp_path):
+    fixtures = tmp_path / "fixtures"
+    fixtures.mkdir()
+    (fixtures / "de-DE.yaml").write_text("- some utterance\n- another\n", encoding="utf-8")
+    with pytest.raises(battery.WorkingsetRefused, match="top level"):
+        battery.load_battery("de-DE", fixtures, None, None)
+
+
+def test_fixture_empty_file_parsing_to_none_refuses(tmp_path):
+    fixtures = tmp_path / "fixtures"
+    fixtures.mkdir()
+    (fixtures / "de-DE.yaml").write_text("", encoding="utf-8")
+    with pytest.raises(battery.WorkingsetRefused, match="top level"):
+        battery.load_battery("de-DE", fixtures, None, None)
+
+
+def test_non_string_expected_intent_refuses_with_row_context(tmp_path):
+    ws = tmp_path / "ws.yaml"
+    ws.write_text(
+        "locale: de-DE\n"
+        "invocation_name: x\n"
+        "tests:\n"
+        "  - utterance: spiele musik\n"
+        "    expected_intent: [PlaySongIntent, PlayAlbumIntent]\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(battery.WorkingsetRefused, match="expected_intent"):
+        battery.load_battery("de-DE", tmp_path / "absent-fixtures", ws, None)

@@ -13,6 +13,27 @@ from pathlib import Path
 import generate_interaction_model
 
 
+def _validated_intents(wrapper: dict, source: str) -> dict:
+    """Demand an intents LIST of mappings inside the wrapper's languageModel.
+
+    A languageModel without a usable intents list (missing key, non-list,
+    non-mapping entries) used to crash prepare_payload's roster
+    comprehension with KeyError/TypeError, which is neither ValueError nor
+    RunRefused, so it escaped the CLI as the raw-traceback class JF-935
+    exists to kill (review round 2026-11-24); validate_single_model runs
+    only AFTER prepare_payload returns, so the guard must live here. What
+    stays downstream: per-intent content (names, samples, slot shapes)."""
+    language_model = wrapper["interactionModel"]["languageModel"]
+    intents = language_model.get("intents")
+    if not isinstance(intents, list) or not all(isinstance(i, dict) for i in intents):
+        raise ValueError(
+            f"{source}: interactionModel.languageModel.intents is "
+            f"{type(intents).__name__}, expected a list of intent mappings; "
+            "not a model the lab can deploy"
+        )
+    return wrapper
+
+
 def _unwrap_or_raise(model: dict, source: str) -> dict:
     """The ONE two-shape discriminator (SMAPI wrapper vs bare languageModel);
     both load_model_file and prepare_payload ride it, so a shape the lab
@@ -22,9 +43,13 @@ def _unwrap_or_raise(model: dict, source: str) -> dict:
     TypeError at payload["interactionModel"]["languageModel"] instead; the
     wrapper branch now also demands a languageModel dict INSIDE the wrapper
     (same crash line, reached via {"interactionModel": {}} and
-    {"interactionModel": {"languageModel": 5}}). Shape only: this refuses a
-    wrong nesting and non-dict wrapper values; schema (the intents list,
-    per-intent samples) belongs to validate_single_model downstream."""
+    {"interactionModel": {"languageModel": 5}}), an intents list of
+    mappings inside the languageModel (review round), and a bare
+    languageModel never smuggles a stray non-dict interactionModel sibling
+    into the payload (the both-keys shape refuses; wrapping the whole bare
+    doc stays correct for committed models, whose dialog belongs INSIDE
+    the wrapper). Shape only beyond these: per-intent content belongs to
+    validate_single_model downstream."""
     if isinstance(model, dict) and isinstance(model.get("interactionModel"), dict):
         inner = model["interactionModel"].get("languageModel")
         if not isinstance(inner, dict):
@@ -36,9 +61,10 @@ def _unwrap_or_raise(model: dict, source: str) -> dict:
                 f"{type(inner).__name__}, expected a dict; "
                 "not a model the lab can deploy"
             )
-        return copy.deepcopy(model)
-    if isinstance(model, dict) and isinstance(model.get("languageModel"), dict):
-        return {"interactionModel": copy.deepcopy(model)}
+        return _validated_intents(copy.deepcopy(model), source)
+    if (isinstance(model, dict) and "interactionModel" not in model
+            and isinstance(model.get("languageModel"), dict)):
+        return _validated_intents({"interactionModel": copy.deepcopy(model)}, source)
     if isinstance(model, dict) and ("interactionModel" in model or "languageModel" in model):
         key = "interactionModel" if "interactionModel" in model else "languageModel"
         raise ValueError(
