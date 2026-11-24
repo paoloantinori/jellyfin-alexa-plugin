@@ -44,6 +44,7 @@ scatter it across modules.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 
 from nlu_static import fixture_vocab, ledger, matcher, token_collisions
@@ -51,8 +52,14 @@ from nlu_static.effective_model import (
     DEFAULT_MODELS_DIR,
     EffectiveModel,
     build_effective_model,
+    load_locale_model,
 )
-from nlu_static.normalize import is_whitespace_tokenized, normalize_text, tokenize
+from nlu_static.normalize import (
+    contains_contiguous,
+    is_whitespace_tokenized,
+    normalize_text,
+    tokenize,
+)
 
 TRIAGE_SCHEMA = 1
 
@@ -193,8 +200,13 @@ class TriageContext:
                 slot.type for slot in intent.slots if slot.type
             }
         if is_whitespace_tokenized(locale):
+            # The collision lint must see the SAME effective model the slot
+            # types above come from, snapshot included: a snapshot-introduced
+            # collision has to fire rule 6 and a snapshot-removed one must
+            # not. raw_model skips the second file read of the same JSON.
+            raw = load_locale_model(locale, self.models_dir)
             report = token_collisions.analyze_locale(
-                locale, models_dir=self.models_dir
+                locale, snapshot=self.snapshot, models_dir=self.models_dir, raw_model=raw
             )
             collisions = tuple(
                 finding
@@ -223,7 +235,10 @@ class TriageContext:
         ctx = self.locale_context(locale)
         if not ctx.model_ok or not isinstance(expected_slots, dict):
             return []
-        key = (utterance, expected_intent)
+        # The key must include the pins: two rows can share utterance and
+        # intent while pinning different values, and the payloads depend on
+        # all three.
+        key = (utterance, expected_intent, json.dumps(expected_slots, sort_keys=True))
         cached = ctx.vocab_by_row.get(key)
         if cached is None:
             results = fixture_vocab.check_fixture_rows(
@@ -257,7 +272,10 @@ def _severity(status: str) -> int:
     try:
         return _VOCAB_SEVERITY.index(status)
     except ValueError:
-        return len(_VOCAB_SEVERITY)
+        # A status the severity table does not know (a renamed or new
+        # fixture_vocab status) must be LOUD, not silent: rank it as the
+        # worst bucket so it wins worst_vocab_status and the reader sees it.
+        return -1
 
 
 # ---------------------------------------------------------------- row triage
@@ -447,7 +465,7 @@ def _pred_token_collision(state: _RowState) -> tuple[bool, list[str]]:
         if type_name not in actual_types:
             continue
         entry_tokens = tuple(tokenize(finding.entry))
-        if not entry_tokens or not _contains_contiguous(utterance_tokens, entry_tokens):
+        if not entry_tokens or not contains_contiguous(utterance_tokens, entry_tokens):
             continue
         return True, [f"token collision: {finding.identity()}"]
     return False, []
@@ -455,11 +473,6 @@ def _pred_token_collision(state: _RowState) -> tuple[bool, list[str]]:
 
 def _pred_systematic(state: _RowState) -> tuple[bool, list[str]]:
     return True, []
-
-
-def _contains_contiguous(tokens: tuple[str, ...], entry: tuple[str, ...]) -> bool:
-    span = len(entry)
-    return any(tokens[i : i + span] == entry for i in range(len(tokens) - span + 1))
 
 
 # ---------------------------------------------------------------- session
@@ -503,11 +516,15 @@ def triage(
 ) -> dict:
     """The full report payload for one session; deterministic for the same inputs.
 
-    Raises ValueError for a session selection problem. History sessions
-    are the ledger sessions BEFORE the chosen one (the ledger's own
-    started, session_id order), restricted to the last ``history`` of
+    Raises ValueError for a session selection problem and for a history
+    window below 1 (the --last invariant of the ledger stats: a zero or
+    negative window would silently disable the KNOWN_FLAKY rule). History
+    sessions are the ledger sessions BEFORE the chosen one (the ledger's
+    own started, session_id order), restricted to the last ``history`` of
     them.
     """
+    if int(history) < 1:
+        raise ValueError("--history must be a positive integer")
     chosen, completeness = choose_session(sessions, session_arg)
     index = sessions.index(chosen)
     history_sessions = sessions[max(0, index - history) : index]

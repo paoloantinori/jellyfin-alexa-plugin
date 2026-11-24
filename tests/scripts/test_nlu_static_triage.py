@@ -518,9 +518,65 @@ def test_vocab_rule_reads_ledger_slots_not_fixture_files(tmp_path):
     assert row["expected_slots"] == {"name": {"value": "el artefacto inventado"}}
 
 
+# ------------------------------------------------------- review-round rules
+
+
+def test_snapshot_introduced_collision_fires(tmp_path):
+    """The collision rule reads the snapshot model, not the committed one."""
+    models = tmp_path / "models"
+    # The committed model carries NO collision for this row: StaticThing's
+    # seed holds another value and OwnerIntent reads SeriesName (a CATALOG
+    # type, the only kind a snapshot can replace) whose committed seed has
+    # no carrier-colliding entry. The snapshot below INTRODUCES the
+    # colliding SeriesName entry, and rule 6 must see it.
+    _synthetic_model(models)
+    model_path = models / "model_es-ES.json"
+    model = json.loads(model_path.read_text(encoding="utf-8"))
+    for block in model["languageModel"]["types"]:
+        if block["name"] == "StaticThing":
+            block["values"] = [{"name": {"value": "otra cosa", "synonyms": []}}]
+    for intent in model["languageModel"]["intents"]:
+        if intent["name"] == "OwnerIntent":
+            for slot in intent["slots"]:
+                slot["type"] = "SeriesName"
+            # The actual intent must USE the colliding type without the
+            # snapshot entry matching its samples, or rule 5 would fire
+            # before rule 6.
+            intent["samples"] = ["quien es {thing}"]
+    model_path.write_text(json.dumps(model), encoding="utf-8")
+    led = tmp_path / "led"
+    _session(led, 301, 0, COLLISION_ROWS)
+    payload = _triage(led, models)
+    assert _verdicts(payload) == {"pon la cosa": nlu_triage.V_SYSTEMATIC}
+    snapshot = {
+        "schema": 1,
+        "producer": "plugin",
+        "locales": {"*": {"SeriesName": [{"value": "pon la cosa", "synonyms": []}]}},
+    }
+    payload = _triage(led, models, snapshot=snapshot)
+    row = _by_utterance(payload, "pon la cosa")
+    assert row["verdict"] == nlu_triage.V_TOKEN_COLLISION
+
+
+def test_unknown_vocab_status_is_worst_severity():
+    # A status the severity table does not know must win the aggregation,
+    # not sink to the bottom: drift in fixture_vocab's vocabulary is loud.
+    assert nlu_triage.worst_vocab_status(
+        [{"status": "PRESENT"}, {"status": "SOMETHING_NEW"}]
+    ) == "SOMETHING_NEW"
+    assert nlu_triage.worst_vocab_status([{"status": "PRESENT"}]) == "PRESENT"
+
+
+def test_history_refuses_non_positive(tmp_path, capsys):
+    led = tmp_path / "led"
+    _session(led, 311, 0, [("hola", "X", None, nlu_ledger.OUTCOME_ERROR)])
+    assert nlu_cli.main(["triage", "--dir", str(led), "--history", "0"]) == 2
+    assert "--history must be a positive integer" in capsys.readouterr().err
+    with pytest.raises(ValueError):
+        nlu_triage.triage(_load(led), history=0)
+
+
 # ---------------------------------------------------------------- families
-
-
 def test_family_grouping_and_order(tmp_path):
     models = tmp_path / "models"
     _synthetic_model(models)
