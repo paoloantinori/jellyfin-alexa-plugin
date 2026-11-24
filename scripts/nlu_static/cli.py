@@ -26,7 +26,7 @@ if str(_SCRIPTS_DIR) not in sys.path:
 
 from nlu_static import fixture_vocab, ledger, matcher, producer_jellyfin, token_collisions  # noqa: E402
 from nlu_static import graph as nlu_graph  # noqa: E402
-from nlu_static.effective_model import EffectiveModel, build_effective_model, load_locale_model, load_snapshot  # noqa: E402
+from nlu_static.effective_model import EffectiveModel, build_effective_model, load_snapshot  # noqa: E402
 from nlu_static.normalize import skip_line  # noqa: E402
 
 
@@ -450,6 +450,7 @@ def cmd_graph_build(args: argparse.Namespace) -> int:
         return _fail(ValueError("--all requires --out DIR to write graph_<locale>.json files"))
     if out_dir is not None:
         out_dir.mkdir(parents=True, exist_ok=True)
+    failed_locales: list[str] = []
     for locale in locales:
         line = skip_line(locale)
         if line is not None:
@@ -457,7 +458,10 @@ def cmd_graph_build(args: argparse.Namespace) -> int:
             continue
         model = _build_model_or_fail(locale, snapshot)
         if model is None:
-            return 2
+            # one unreadable model must not starve the other locales:
+            # note it, finish the rest, fail the run at the end
+            failed_locales.append(locale)
+            continue
         payload = nlu_graph.build_graph(locale, model)
         if out_dir is not None:
             path = out_dir / f"graph_{locale}.json"
@@ -465,12 +469,15 @@ def cmd_graph_build(args: argparse.Namespace) -> int:
             print(f"wrote {path.name} ({len(payload['edges'])} edges)")
         else:
             _print_json(payload, None)
+    if failed_locales:
+        return 1
     return 0
 
 
 def _register_graph_build(sub: argparse.ArgumentParser) -> None:
-    sub.add_argument("--locale", help="single Alexa locale to build, for example es-ES")
-    sub.add_argument("--all", action="store_true", help="build every committed locale")
+    locale_group = sub.add_mutually_exclusive_group(required=True)
+    locale_group.add_argument("--locale", help="single Alexa locale to build, for example es-ES")
+    locale_group.add_argument("--all", action="store_true", help="build every committed locale")
     sub.add_argument("--snapshot", help="catalog snapshot JSON file to overlay on the committed model")
     sub.add_argument("--out", help="directory for graph_<locale>.json (required with --all; single locale prints to stdout without it)")
     sub.set_defaults(func=cmd_graph_build)
@@ -520,7 +527,16 @@ def _git_show_model(base: str, locale: str) -> dict | None:
     if result.returncode != 0:
         print(f"  note [{locale}]: not in {base} ({path})", file=sys.stderr)
         return None
-    doc = json.loads(result.stdout)
+    try:
+        doc = json.loads(result.stdout)
+        if not isinstance(doc, dict):
+            raise ValueError("top level must be a JSON object")
+    except ValueError as err:
+        # A malformed model at the base ref is that locale's problem only:
+        # note it and let the other locales still diff (review round,
+        # finding 1).
+        print(f"  note [{locale}]: unreadable model JSON at {base} ({path}: {err})", file=sys.stderr)
+        return None
     # Unwrap to the languageModel dict build_effective_model(raw_model=...)
     # expects; the committed files carry it at the top level beside
     # "dialog", SMAPI payloads wrap it in "interactionModel".
@@ -651,16 +667,28 @@ def cmd_classify_fixtures(args: argparse.Namespace) -> int:
         if model is None:
             return 2
         prepared = matcher.PreparedMatcher(model)
+        malformed = 0
         for row in rows:
             utterance = row.get("utterance")
             expected_intent = row.get("expected_intent")
             if not isinstance(utterance, str) or not isinstance(expected_intent, str):
+                # A row without an utterance or an expected intent has
+                # nothing to classify; counting and reporting it keeps the
+                # skip explicit instead of silent (parent rule; one line
+                # per locale, per-row stderr lines would flood --all).
+                malformed += 1
                 continue
             verdict = matcher.classify_fixture_row(row, model, prepared)
             verdict["locale"] = locale
             verdict["utterance"] = utterance
             verdict["expected_intent"] = expected_intent
             results.append(verdict)
+        if malformed:
+            print(
+                f"  note [{locale}]: {malformed} fixture row(s) without a "
+                "string utterance or expected_intent were skipped",
+                file=sys.stderr,
+            )
     results.sort(
         key=lambda r: (r["locale"], r["utterance"], r["expected_intent"])
     )

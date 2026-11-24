@@ -176,6 +176,7 @@ def matches(
     witness: tuple[tuple, ...],
     entry_tokens: dict[str, frozenset[tuple[str, ...]]],
     mode: str = WitnessMode,
+    memo: dict[tuple[int, int], bool] | None = None,
 ) -> bool:
     """True when ``compiled.pattern`` can consume the whole of ``witness``.
 
@@ -184,15 +185,22 @@ def matches(
     consumes a real utterance's plain tokens, where NUMERIC and
     STRUCTURED deliberately over-approximate (any one token, any one to
     four tokens) and CLOSED matches literal entry runs only. Memoized DP
-    over (pattern index, witness index); never a regex.
+    over (pattern index, witness index); never a regex. Pass ``memo``
+    to share the DP table across several patterns matched against the
+    SAME witness (the graph's per-B loop does exactly that).
     """
     pattern = compiled.pattern
     pattern_len = len(pattern)
     witness_len = len(witness)
-    memo: dict[tuple[int, int], bool] = {}
+    if memo is None:
+        memo = {}
+    # Memo keys carry the compiled pattern's identity: one shared memo
+    # may serve several patterns against the same witness, and (pi, wi)
+    # alone would collide across them.
+    pattern_id = id(compiled)
 
     def match_from(pi: int, wi: int) -> bool:
-        key = (pi, wi)
+        key = (pattern_id, pi, wi)
         cached = memo.get(key)
         if cached is not None:
             return cached

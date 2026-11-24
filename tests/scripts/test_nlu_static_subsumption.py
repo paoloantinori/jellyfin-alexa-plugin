@@ -551,6 +551,15 @@ def test_graph_diff_reports_added_removed_changed_sorted(tmp_path):
     ]
 
 
+def test_graph_diff_reports_changed_total(tmp_path):
+    # competition that resized without changing swallowed (the template
+    # added samples A still does not match) must still be reported
+    old = _write_graph(tmp_path, "old.json", [_edge("A", "B", swallowed=2, total=5)])
+    new = _write_graph(tmp_path, "new.json", [_edge("A", "B", swallowed=2, total=6)])
+    lines = nlu_graph.diff_graphs(nlu_graph.load_graph(old), nlu_graph.load_graph(new))
+    assert lines == ["changed A -> B kind=SWALLOW->SWALLOW swallowed=2/5->2/6"]
+
+
 def test_graph_diff_fail_on_new_exit_codes(tmp_path, capsys):
     old = _write_graph(tmp_path, "old.json", [_edge("A", "B")])
     added = _write_graph(tmp_path, "added.json", [_edge("A", "B"), _edge("C", "D")])
@@ -725,6 +734,53 @@ def test_classify_payload_field_names(tmp_path):
 
 
 # --------------------------------------- classify-fixtures CLI contract
+
+
+def test_classify_fixtures_counts_malformed_rows(tmp_path, capsys, monkeypatch):
+    fixtures_dir = tmp_path / "fixtures"
+    fixtures_dir.mkdir()
+    (fixtures_dir / "es-ES.yaml").write_text(
+        "tests:\n"
+        "  - utterance: pon breaking bad temporada uno episodio tres\n"
+        "    expected_intent: PlayEpisodeIntent\n"
+        "  - utterance: null\n"
+        "    expected_intent: PlayEpisodeIntent\n"
+        "  - utterance: continuar viendo\n"
+        "    expected_intent: null\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(nlu_cli.fixture_vocab, "default_fixtures_dir", lambda: fixtures_dir)
+    out = tmp_path / "classify.json"
+    rc = nlu_cli.main(["classify-fixtures", "--locale", ES_ES, "--out", str(out)])
+    captured = capsys.readouterr()
+    assert rc == 0
+    rows = json.loads(out.read_text(encoding="utf-8"))
+    # only the well-formed row reaches the JSON
+    assert [row["utterance"] for row in rows] == ["pon breaking bad temporada uno episodio tres"]
+    # and the two poisoned rows are reported explicitly, not silently dropped
+    assert "note [es-ES]: 2 fixture row(s) without a string utterance or expected_intent were skipped" in captured.err
+
+
+def test_graph_build_requires_locale_selection(capsys):
+    # neither --locale nor --all: argparse refuses with its own clear
+    # message instead of the misleading --out complaint
+    with pytest.raises(SystemExit) as excinfo:
+        nlu_cli.main(["graph", "build", "--out", "/tmp/nowhere"])
+    assert excinfo.value.code == 2
+    assert "--locale" in capsys.readouterr().err
+
+
+def test_graph_build_all_continues_after_bad_locale(tmp_path, capsys, monkeypatch):
+    monkeypatch.setattr(
+        nlu_cli.fixture_vocab, "committed_locales", lambda: ["zz-ZZ", ES_ES]
+    )
+    rc = nlu_cli.main(["graph", "build", "--all", "--out", str(tmp_path)])
+    captured = capsys.readouterr()
+    assert rc == 1
+    # the unreadable locale is refused with a clean one-liner...
+    assert "error:" in captured.err and "zz-ZZ" in captured.err
+    # ...and the healthy locale still produced its graph
+    assert (tmp_path / "graph_es-ES.json").exists()
 
 
 def test_classify_fixtures_cli_es_es(tmp_path):

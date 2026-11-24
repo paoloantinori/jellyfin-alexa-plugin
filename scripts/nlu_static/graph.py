@@ -31,6 +31,8 @@ class _IntentIndex:
     unique: list = field(default_factory=list)  # CompiledPattern, one per skeleton
     samples_by_skeleton: dict = field(default_factory=dict)  # skeleton -> sample texts
     by_first_lit: dict = field(default_factory=dict)  # literal -> skeletons opening with it
+    by_last_lit: dict = field(default_factory=dict)  # literal -> skeletons closing with it
+    closers: list = field(default_factory=list)  # skeletons closing with a slot or empty
     openers: list = field(default_factory=list)  # skeletons opening with a slot
 
 
@@ -51,30 +53,35 @@ def _intent_index(name: str, patterns_of_intent: list) -> _IntentIndex:
                 index.by_first_lit.setdefault(first[1], []).append(compiled)
             else:
                 index.openers.append(compiled)
+            last = compiled.last_item
+            if last is not None and last[0] == "lit":
+                index.by_last_lit.setdefault(last[1], []).append(compiled)
+            else:
+                index.closers.append(compiled)
         else:
             index.samples_by_skeleton[compiled.skeleton].append(compiled.sample)
     return index
 
 
-def _candidate_b(b_index: _IntentIndex, a_compiled) -> list:
-    """The B skeletons the early-skip lets pattern ``a_compiled`` try.
+def _candidates_against(b_compiled, a_index: _IntentIndex) -> list:
+    """The A skeletons the early-skip lets the witness of ``b_compiled`` try.
 
-    When a starts with a literal token, only B skeletons opening with
-    the same literal can match the first item; every opener skeleton of
-    B does. The closing literal is checked inside the pair loop.
+    Mirror of the original per-A pre-filter, seen from B: when b opens
+    with a literal token, only A skeletons opening with the same literal
+    can match the first item, plus every opener skeleton of A; when b
+    closes with a literal, only A skeletons closing with the same
+    literal can match the last item, plus every closer skeleton of A.
     """
-    first = a_compiled.first_item
+    first = b_compiled.first_item
     if first is not None and first[0] == "lit":
-        candidates = b_index.by_first_lit.get(first[1], []) + b_index.openers
+        candidates = list(a_index.by_first_lit.get(first[1], [])) + a_index.openers
     else:
-        candidates = list(b_index.unique)
-    last = a_compiled.last_item
+        candidates = list(a_index.unique)
+    last = b_compiled.last_item
     if last is not None and last[0] == "lit":
-        candidates = [
-            c
-            for c in candidates
-            if c.last_item is None or c.last_item[0] != "lit" or c.last_item[1] == last[1]
-        ]
+        allowed = set(id(c) for c in a_index.by_last_lit.get(last[1], []))
+        allowed.update(id(c) for c in a_index.closers)
+        candidates = [c for c in candidates if id(c) in allowed]
     return candidates
 
 
@@ -100,15 +107,24 @@ def build_graph(locale: str, model: EffectiveModel) -> dict:
             matched_b_skeletons: set = set()
             identical = False
             matching_a_samples: set[str] = set()
-            for a_compiled in a_index.unique:
-                for b_compiled in _candidate_b(b_index, a_compiled):
+            for b_compiled in b_index.unique:
+                # one shared DP memo per B witness: every A skeleton of
+                # this intent pair reuses it instead of rebuilding the
+                # table from scratch (review round, finding 4)
+                witness_memo: dict[tuple[int, int, int], bool] = {}
+                b_matched = False
+                for a_compiled in _candidates_against(b_compiled, a_index):
                     if patterns.skeleton_equal(a_compiled, b_compiled):
                         identical = True
-                        matched_b_skeletons.add(b_compiled.skeleton)
+                        b_matched = True
                         matching_a_samples.add(a_compiled.sample)
-                    elif patterns.matches(a_compiled, b_compiled.witness, entry_tokens):
-                        matched_b_skeletons.add(b_compiled.skeleton)
+                    elif patterns.matches(
+                        a_compiled, b_compiled.witness, entry_tokens, memo=witness_memo
+                    ):
+                        b_matched = True
                         matching_a_samples.add(a_compiled.sample)
+                if b_matched:
+                    matched_b_skeletons.add(b_compiled.skeleton)
             if not matched_b_skeletons:
                 continue
             matched_b_samples: set[str] = set()
@@ -179,7 +195,11 @@ def diff_graphs(old: dict, new: dict) -> list[str]:
         lines.append(f"removed {e['from']} -> {e['to']} kind={e['kind']} swallowed={e['swallowed']}/{e['total']}")
     for key in sorted(set(old_edges) & set(new_edges)):
         old_e, new_e = old_edges[key], new_edges[key]
-        if old_e["kind"] != new_e["kind"] or old_e["swallowed"] != new_e["swallowed"]:
+        if (
+            old_e["kind"] != new_e["kind"]
+            or old_e["swallowed"] != new_e["swallowed"]
+            or old_e["total"] != new_e["total"]
+        ):
             lines.append(
                 f"changed {key[0]} -> {key[1]} "
                 f"kind={old_e['kind']}->{new_e['kind']} "
