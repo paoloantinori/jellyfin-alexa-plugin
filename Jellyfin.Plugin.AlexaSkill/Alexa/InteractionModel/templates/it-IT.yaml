@@ -493,6 +493,12 @@ explicit_intents:
       - Metti il podcast {podcast_name}
       - Ascolta l'ultimo episodio di {podcast_name}
       - Di riprodurre il podcast {podcast_name}
+      # JF-945: the bare infinitive opener anchors the composed wrapper
+      # ("chiedi a mia collezione DI RIPRODURRE IL PODCAST generazione"
+      # fell to Fallback on the live model while the bare tail routed
+      # correctly; the same title-less-opener fix that anchored FindSong).
+      # The handler elicits when podcast_name arrives empty.
+      - Di riprodurre il podcast
       - Di suonare il podcast {podcast_name}
       - Di ascoltare il podcast {podcast_name}
       - Di mettere il podcast {podcast_name}
