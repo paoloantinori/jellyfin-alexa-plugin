@@ -87,13 +87,17 @@ class LocaleCollisions:
     """Everything the lint found for one locale, in deterministic order.
 
     ``skip_reason`` is the shared SKIP text when the locale cannot be
-    tokenized (then every list is empty). ``findings`` holds the baseline
-    candidates (CARRIER_VS_VALUE + VALUE_IN_TWO_TYPES) sorted by identity;
-    ``catalog_findings`` holds CATALOG_VS_MODEL, sorted, only when a
-    snapshot replaced at least one type; ``catalog_counts`` maps sub-kind
-    to exact count; ``catalog_truncated`` says how many sorted catalog
-    findings beyond the first 50 were withheld from ``catalog_findings``
-    for display purposes.
+    tokenized; it scopes to the TOKEN-dependent kinds only, which then have
+    empty ``findings``, while ``catalog_findings`` (full-normalized-text
+    comparison, no tokenization) still runs and can carry findings.
+    ``findings`` holds the baseline candidates (CARRIER_VS_VALUE +
+    VALUE_IN_TWO_TYPES) sorted by identity; ``catalog_findings`` holds
+    CATALOG_VS_MODEL, sorted, only when a snapshot replaced at least one
+    type; ``catalog_counts`` maps sub-kind to exact count; ``notes`` are
+    the effective-model's deterministic human messages (for example a
+    snapshot that replaced nothing for this locale); ``catalog_truncated``
+    says how many sorted catalog findings beyond the first 50 were withheld
+    from ``catalog_findings`` for display purposes.
     """
 
     locale: str
@@ -102,6 +106,7 @@ class LocaleCollisions:
     catalog_findings: tuple[CollisionFinding, ...]
     catalog_counts: tuple[tuple[str, int], ...]
     catalog_truncated: int
+    notes: tuple[str, ...] = ()
 
 
 def default_models_dir() -> Path:
@@ -131,29 +136,32 @@ def analyze_locale(
     Committed mode (snapshot=None) produces CARRIER_VS_VALUE and
     VALUE_IN_TWO_TYPES only; a snapshot additionally enables
     CATALOG_VS_MODEL against the types the snapshot replaced. Non
-    whitespace-tokenized locales return the SKIP reason and no findings.
+    whitespace-tokenized locales (ja-JP) get the SKIP reason on the
+    TOKEN-dependent kinds only: CATALOG_VS_MODEL compares FULL normalized
+    texts and needs no word tokens, so it still runs for them.
     ``raw_model`` (a languageModel dict the caller already loaded) skips
     the file read; the validator's Phase 11 threads its parsed models
     through it so the files are read once per run.
     """
     reason = skip_line(locale)
+    resolved_dir = models_dir if models_dir is not None else default_models_dir()
+    model = build_effective_model(
+        locale, snapshot=snapshot, models_dir=resolved_dir, raw_model=raw_model
+    )
+    catalog, counts, truncated = _catalog_vs_model_findings(locale, model)
     if reason is not None:
         return LocaleCollisions(
             locale=locale,
             skip_reason=reason,
             findings=(),
-            catalog_findings=(),
-            catalog_counts=(),
-            catalog_truncated=0,
+            catalog_findings=catalog,
+            catalog_counts=counts,
+            catalog_truncated=truncated,
+            notes=model.notes,
         )
-    resolved_dir = models_dir if models_dir is not None else default_models_dir()
-    model = build_effective_model(
-        locale, snapshot=snapshot, models_dir=resolved_dir, raw_model=raw_model
-    )
     carrier = _carrier_vs_value_findings(locale, model)
     pairs = _value_in_two_types_findings(locale, model)
     findings = tuple(sorted(carrier + pairs, key=lambda finding: finding.identity()))
-    catalog, counts, truncated = _catalog_vs_model_findings(locale, model)
     return LocaleCollisions(
         locale=locale,
         skip_reason=None,
@@ -161,6 +169,7 @@ def analyze_locale(
         catalog_findings=catalog,
         catalog_counts=counts,
         catalog_truncated=truncated,
+        notes=model.notes,
     )
 
 
@@ -192,16 +201,21 @@ def _carrier_vs_value_findings(locale: str, model: EffectiveModel) -> list[Colli
         for slot in intent.slots:
             users.setdefault(slot.type, set()).add(intent.name)
 
-    # One record per (intent, sample index): the carrier tokens and the raw
-    # sample text live together, so the two reads cannot disagree on keys.
-    carriers: dict[tuple[str, int], tuple[tuple[str, ...], str]] = {}
-    index: dict[str, list[tuple[str, int, int]]] = {}
-    for intent in model.intents:
+    # One record per (intent ordinal, sample index): the carrier tokens and
+    # the raw sample text live together, so the two reads cannot disagree on
+    # keys. The key uses the intent's ORDINAL, not its name: a hand-authored
+    # model can carry two intents with one name, and a name key would let
+    # the second intent's carriers overwrite the first's while the index
+    # still points at the first's positions.
+    carriers: dict[tuple[int, int], tuple[tuple[str, ...], str]] = {}
+    index: dict[str, list[tuple[int, int, int]]] = {}
+    for ordinal, intent in enumerate(model.intents):
         for sample_index, sample in enumerate(intent.samples):
             tokens = tuple(tokenize(SLOT_PLACEHOLDER_RE.sub(" ", sample)))
-            carriers[(intent.name, sample_index)] = (tokens, sample)
+            carriers[(ordinal, sample_index)] = (tokens, sample)
             for position, token in enumerate(tokens):
-                index.setdefault(token, []).append((intent.name, sample_index, position))
+                index.setdefault(token, []).append((ordinal, sample_index, position))
+    intent_names = [intent.name for intent in model.intents]
 
     findings: list[CollisionFinding] = []
     for vocab in model.types:
@@ -217,25 +231,23 @@ def _carrier_vs_value_findings(locale: str, model: EffectiveModel) -> list[Colli
             if key in seen:
                 continue
             seen.add(key)
-            matches: dict[str, set[int]] = {}
-            for intent_name, sample_index, position in index.get(entry_tokens[0], ()):
+            matches: dict[str, set[tuple[int, int]]] = {}
+            for ordinal, sample_index, position in index.get(entry_tokens[0], ()):
+                intent_name = intent_names[ordinal]
                 if intent_name in using:
                     continue
-                carrier = carriers[(intent_name, sample_index)][0]
+                carrier = carriers[(ordinal, sample_index)][0]
                 if carrier[position : position + len(entry_tokens)] == entry_tokens:
-                    # A set: an entry occurring twice in ONE sample (or a
-                    # multi-token entry matching overlapping runs) is one
-                    # matching sample, not two.
-                    matches.setdefault(intent_name, set()).add(sample_index)
+                    # A set of (ordinal, sample index): an entry occurring
+                    # twice in ONE sample (or a multi-token entry matching
+                    # overlapping runs) is one matching sample, not two.
+                    matches.setdefault(intent_name, set()).add((ordinal, sample_index))
             for intent_name in sorted(matches):
-                sample_indices = sorted(matches[intent_name])
-                example = min(
-                    carriers[(intent_name, sample_index)][1]
-                    for sample_index in sample_indices
-                )
+                hits = sorted(matches[intent_name])
+                example = min(carriers[hit][1] for hit in hits)
                 detail = (
                     f"using intents: {', '.join(sorted(using))}; "
-                    f"samples: {len(sample_indices)}; example: {json.dumps(example, ensure_ascii=False)}"
+                    f"samples: {len(hits)}; example: {json.dumps(example, ensure_ascii=False)}"
                 )
                 findings.append(
                     CollisionFinding(
@@ -319,10 +331,15 @@ def _catalog_vs_model_findings(
         vocab = model.type_vocab(type_name)
         if vocab is None:
             continue
+        # Dedupe per type by normalized text FIRST: a duplicate title (value
+        # "Stop" plus a synonym "stop" on another entry) is one entry, so it
+        # must count and print once, not once per raw occurrence.
+        distinct: set[str] = set()
         for text in _vocab_entry_texts(vocab):
             normalized = normalize_text(text)
-            if not normalized:
-                continue
+            if normalized:
+                distinct.add(normalized)
+        for normalized in sorted(distinct):
             subkinds: list[str] = []
             if normalized in slot_free_samples:
                 counts[SUBKIND_SLOT_FREE_SAMPLE] += 1

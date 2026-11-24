@@ -187,8 +187,11 @@ def cmd_tokens(args: argparse.Namespace) -> int:
     non_baselined_count = 0
     for report in reports:
         if report.skip_reason is not None:
+            # Scoped to the token-dependent kinds; the catalog kind below
+            # still runs (its comparison needs no word tokens).
             print(report.skip_reason)
-            continue
+        for note in report.notes:
+            print(f"  note [{report.locale}]: {note}")
         non, _ = token_collisions.split_baselined(report.findings, baseline)
         non_baselined_count += len(non)
         shown = report.findings if args.all else non

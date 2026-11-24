@@ -324,6 +324,31 @@ def test_catalog_vs_model_capped_at_fifty_with_exact_counts(tmp_path):
     assert report.catalog_findings[-1].entry == "title 049"
 
 
+def test_catalog_duplicate_text_in_one_type_counts_and_prints_once(tmp_path):
+    """A duplicate title (value plus a synonym elsewhere in the same type) is one entry.
+
+    Counts must equal the distinct findings: the same normalized text twice
+    in ONE type counts and prints once, not once per raw occurrence.
+    """
+    model = {
+        "invocationName": "test",
+        "intents": [_intent("StopIntent", ["stop"])],
+        "types": [_type("SongTitle", [_entry("seed")])],
+    }
+    snapshot = _snapshot(
+        {"SongTitle": [_entry("Stop"), _entry("Other", ["stop"]), _entry("keep")]}
+    )
+    _write_model(tmp_path, "en-US", model)
+    report = tc.analyze_locale("en-US", snapshot=snapshot, models_dir=tmp_path)
+    assert report.catalog_counts == (
+        (tc.SUBKIND_SLOT_FREE_SAMPLE, 1),
+        (tc.SUBKIND_STATIC_ENTRY, 0),
+    )
+    printed = [f for f in report.catalog_findings if "slot_free_sample" in f.detail]
+    assert len(printed) == report.catalog_counts[0][1] == 1
+    assert printed[0].entry == "stop"
+
+
 # --- baseline filtering -----------------------------------------------------------------
 
 
@@ -538,11 +563,85 @@ def test_findings_sorted_by_identity_and_runs_are_stable(tmp_path):
 
 
 def test_ja_jp_reports_skip_line_and_no_findings(tmp_path):
-    """The SKIP contract: the shared line, nothing else, no crash."""
+    """The SKIP contract: the shared line, no token-dependent findings, no crash."""
     _write_model(tmp_path, "ja-JP", _issue46_model())
     report = tc.analyze_locale("ja-JP", models_dir=tmp_path)
     assert report.skip_reason == "SKIP ja-JP: no whitespace tokenization"
     assert report.findings == () and report.catalog_findings == ()
+
+
+def test_ja_jp_catalog_kind_still_runs(tmp_path):
+    """CATALOG_VS_MODEL needs no word tokens, so ja-JP gets it despite the SKIP."""
+    model = {
+        "invocationName": "test",
+        "intents": [_intent("StopIntent", ["stop"])],
+        "types": [_type("AudiobookTitle", [_entry("seed")])],
+    }
+    snapshot = _snapshot({"AudiobookTitle": [_entry("stop")]})
+    _write_model(tmp_path, "ja-JP", model)
+    report = tc.analyze_locale("ja-JP", snapshot=snapshot, models_dir=tmp_path)
+    assert report.skip_reason == "SKIP ja-JP: no whitespace tokenization"
+    assert report.findings == ()
+    assert report.catalog_counts[0][0] == tc.SUBKIND_SLOT_FREE_SAMPLE
+    assert report.catalog_counts[0][1] == 1
+    assert report.catalog_findings[0].identity() == "ja-JP|CATALOG_VS_MODEL|AudiobookTitle|stop|"
+
+
+def test_duplicate_intent_names_do_not_collide_in_the_index(tmp_path):
+    """A name-keyed carrier map let a second same-named intent overwrite the first's.
+
+    The index keys by intent ordinal, so both intents' carriers survive and
+    the slice verification reads the right tokens.
+    """
+    model = {
+        "invocationName": "test",
+        "intents": [
+            _intent(
+                "InfoIntent",
+                ["Wie heisst das lied"],
+                slots=[{"name": "media_type", "type": "InfoType"}],
+            ),
+            _intent("PlayerIntent", ["spiele gamma laut"]),
+            _intent("PlayerIntent", ["gamma am anfang"]),
+        ],
+        "types": [_type("InfoType", [_entry("gamma")])],
+    }
+    findings = [
+        f for f in _findings_for(model, "de-DE", tmp_path) if f.kind == tc.KIND_CARRIER_VS_VALUE
+    ]
+    # Both same-named intents' matches are found and collapse into the one
+    # (type, entry, intent) finding; a name-keyed map lost the first match.
+    assert len(findings) == 1
+    assert findings[0].intent == "PlayerIntent"
+    assert "samples: 2" in findings[0].detail
+    assert '"gamma am anfang"' in findings[0].detail
+
+
+def test_cli_surfaces_effective_model_notes(tmp_path, monkeypatch, capsys):
+    """A snapshot that replaced nothing for the locale prints its note, not a bare zero."""
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+    baseline_path = tmp_path / "baseline.json"
+    monkeypatch.setattr(tc, "default_models_dir", lambda: models_dir)
+    monkeypatch.setattr(tc, "default_baseline_path", lambda: baseline_path)
+    # The model declares only InfoType; the snapshot names SongTitle, which
+    # the locale model does not declare, so the catalog kind cannot activate
+    # and the note must say so.
+    model = {
+        "invocationName": "test",
+        "intents": [_intent("InfoIntent", ["info"], slots=[{"name": "t", "type": "InfoType"}])],
+        "types": [_type("InfoType", [_entry("info")])],
+    }
+    _write_model(models_dir, "ar-SA", model)
+    snapshot_path = tmp_path / "snapshot.json"
+    snapshot_path.write_text(
+        json.dumps(_snapshot({"SongTitle": [_entry("title one")]})), encoding="utf-8"
+    )
+    assert nlu_cli.main(["tokens", "--locale", "ar-SA", "--snapshot", str(snapshot_path)]) == 0
+    out = capsys.readouterr().out
+    assert "note [ar-SA]:" in out
+    assert "SongTitle" in out
+    assert "CATALOG_VS_MODEL" not in out
 
 
 def test_skip_line_shared_producer_matches_the_lint():
