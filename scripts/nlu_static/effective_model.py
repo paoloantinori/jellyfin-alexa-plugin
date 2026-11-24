@@ -35,6 +35,29 @@ CATALOG_TYPE_NAMES: tuple[str, ...] = (
 
 _CATALOG_TYPE_SET = frozenset(CATALOG_TYPE_NAMES)
 
+
+def is_catalog_type(type_name: str) -> bool:
+    """True for the catalog-backed slot type names catalog sync replaces.
+
+    The ONE membership test: kind assignment in build_effective_model and
+    any later tool asking "is this type library-replaced" share it instead
+    of each rebuilding the frozenset.
+    """
+    return type_name in _CATALOG_TYPE_SET
+
+
+def entry_texts(vocab: SlotTypeVocab) -> list[str]:
+    """Every canonical value and synonym of one type, in entry order.
+
+    The ONE flattening: the token lint and the fixture-vocab check compare
+    the same texts, so they must read the same extraction.
+    """
+    texts: list[str] = []
+    for canonical, synonyms in vocab.entries:
+        texts.append(canonical)
+        texts.extend(synonyms)
+    return texts
+
 # Pinned classification tables for classify_slot_type. FREE holds the
 # free-text and entity builtins; NUMERIC and STRUCTURED hold their builtin
 # families; every custom type is CLOSED. Any other AMAZON.* name is

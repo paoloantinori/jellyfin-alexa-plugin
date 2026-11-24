@@ -47,6 +47,14 @@ CI validate-models job has been blocking on errors since JF-556):
     scripts/nlu_static/token_collisions.py; regenerate that baseline with
     `python3 scripts/nlu_static/cli.py tokens --update-baseline` only when
     the new collisions are deliberate design.
+  - Fixture slot values versus slot type vocabulary (JF-954.3, Phase 12): a
+    fixture row whose pinned value is not a value or synonym of the effective
+    slot type, an any-value row whose utterance carries no entry of a STATIC
+    type, or a fixture slot no expected intent declares (CLAUDE.md
+    anti-pattern #8, the Breaking Bad class). Implemented in
+    scripts/nlu_static/fixture_vocab.py. Committed-mode rows on CATALOG
+    types are expected (library-only values the committed seed lacks) and
+    are counted in one summary line instead of warned per row.
   - es trio PlayEpisodeIntent mirroring: RETIRED by JF-855. The generator's
     `mirror` directive sources the es-MX / es-US PlayEpisode samples from
     templates/es-ES.yaml minus the declared exclude rows, so the mirroring is
@@ -946,6 +954,85 @@ def lint_token_collisions(all_models: dict[str, dict]) -> list[str]:
     return warnings
 
 
+def lint_fixture_vocab(all_models: dict[str, dict], fixtures_dir: Path = FIXTURES_DIR) -> list[str] | None:
+    """WARNING lint (JF-954.3): fixture slot values versus slot type vocabulary.
+
+    For every fixture row slot, checks that the pinned value (or, for
+    any-value rows, at least one vocabulary entry) exists in the effective
+    slot type the expected intent declares. This mechanizes anti-pattern #8
+    of the project CLAUDE.md ("Missing Slot Type Values for Test Fixtures")
+    and the Breaking Bad class: a pinned value on a CATALOG type that the
+    committed seed owns but the live catalog (the user's library) does not.
+
+    Committed mode only, per the JF-954.3 contract. The JF-954.3 partition
+    applies: committed-mode rows that depend on the live catalog (ABSENT or
+    NO_ENTRY_IN_UTTERANCE on a CATALOG type) are EXPECTED here, because the
+    fixtures deliberately pin library-only values such as "adolescencia"
+    that the committed seed lacks; they are counted in ONE summary line
+    instead of warning per row (the full list stays available through the
+    fixtures subcommand's JSON). The actionable findings stay individual
+    warnings: ABSENT on a STATIC type, NO_ENTRY_IN_UTTERANCE on a STATIC
+    type, and FIXTURE_SLOT_UNKNOWN. A warning means "this fixture cannot
+    work against this vocabulary as committed"; whether Amazon's trainer
+    would actually route the row is a live question the static check cannot
+    answer. Returns the warning list, or None when the check did NOT run
+    (fixtures directory absent, after printing its own SKIP line).
+    """
+    from nlu_static import fixture_vocab  # noqa: PLC0415 (script-local import)
+
+    if not fixtures_dir.is_dir():
+        print("  SKIP Phase 12: fixtures directory not found:", fixtures_dir)
+        return None
+    warnings: list[str] = []
+    catalog_dependent = 0
+    checked_locales = 0
+    for locale in sorted(all_models):
+        try:
+            results, skip, unknown = fixture_vocab.analyze_locale(
+                locale, raw_model=all_models[locale], fixtures_dir=fixtures_dir
+            )
+        except Exception as err:  # noqa: BLE001 - a WARNING phase never crashes the validator
+            # The strict effective-model parser can reject shapes Phase 1's
+            # shallow load accepted; report the locale, keep the phase alive.
+            warnings.append(
+                f"  [{locale}] fixture-vocab check could not process the model "
+                f"({type(err).__name__}): {err}"
+            )
+            continue
+        if skip is not None:
+            print(f"  {skip}")
+            continue
+        checked_locales += 1
+        if unknown:
+            # classify_slot_type's contract: the callers report names its
+            # pinned table misses, so the table gets maintained.
+            warnings.append(
+                f"  [{locale}] UNKNOWN_BUILTIN slot type(s) in fixtures treated as "
+                f"NOT_APPLICABLE: {', '.join(unknown)} (classify table needs these)"
+            )
+        individual, locale_catalog_count = fixture_vocab.partition_validator_findings(results)
+        catalog_dependent += locale_catalog_count
+        for result in individual:
+            warnings.append(f"  [{locale}] {fixture_vocab.format_warning(result)}")
+    if catalog_dependent:
+        print(
+            f"  catalog-dependent committed-mode fixture rows: {catalog_dependent} "
+            "(ABSENT or NO_ENTRY_IN_UTTERANCE on a CATALOG type; expected against "
+            "library-only values the committed seed lacks); not warned individually, "
+            "full list: python3 scripts/nlu_static/cli.py fixtures --format json"
+        )
+    if checked_locales == 0:
+        # The directory exists but NO locale fixture matched (renamed files,
+        # a partial checkout): the phase must not print its all-clear over
+        # zero checked locales (review round); that is the None skip shape.
+        print(
+            "  SKIP Phase 12: fixtures directory holds no per-locale fixture "
+            f"files under {fixtures_dir}; parity unchecked"
+        )
+        return None
+    return warnings
+
+
 def check_elicit_dialog_registration(
     sources: dict[str, str] | None = None,
 ) -> tuple[list[str], list[str]]:
@@ -1666,6 +1753,15 @@ def main() -> int:
             "Phase 11: token-ownership collisions (JF-954 warning check)",
             lambda: lint_token_collisions(all_models),
             "No non-baselined token-ownership collisions",
+            all_warnings,
+        )
+
+    # Phase 12: fixture slot values versus slot type vocabulary (JF-954 warning check)
+    if all_models:
+        run_warning_phase(
+            "Phase 12: fixture slot values versus slot type vocabulary (JF-954 warning check)",
+            lambda: lint_fixture_vocab(all_models),
+            "Every fixture slot value exists in its effective slot type vocabulary",
             all_warnings,
         )
 
