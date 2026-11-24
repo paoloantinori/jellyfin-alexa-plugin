@@ -115,6 +115,55 @@ The validator runs this check as "Phase 12: fixture slot values versus slot type
 
 Practical rule for fixture authors: a live fixture that pins a value on a catalog-backed slot (SeriesName, AlbumName, JellyfinArtist, MovieTitle, AudiobookTitle, SongTitle) should pin an item that exists in the test library, or the row's comment should mark it as catalog-dependent so a red row reads as "the live catalog lacks this item" instead of "the model is broken". A pinned value on a STATIC type must exist in the committed type (or the type must be extended through the template and regeneration); an ANY row should carry at least one vocabulary entry inside the utterance unless generalization is deliberately being tested. As everywhere in this toolkit, a finding is a necessary condition, not a routing verdict: `ABSENT` says the trainer has nothing to anchor on, not that Amazon will certainly misroute the row.
 
+## The `graph` subcommand: the sample-subsumption graph (JF-954.4)
+
+Most NLU regressions here are intent competition: a short carrier with a free-text slot in one intent can also parse a phrase that belongs to a more specific intent, and Amazon's trainer then decides by weights nobody can see. The `graph` subcommand computes, deterministically, which rival READINGS exist. It writes one `graph_<locale>.json` per locale: nodes are intents, and a directed edge A to B exists when at least one sample of B has a generated reading that a sample of A can also produce, meaning everything B's sample can say, A's sample can also claim.
+
+### The pattern rules, in plain words
+
+Each sample compiles into a PATTERN: a sequence of literal tokens (the shared `tokenize` over the text between `{slot}` placeholders) and slot items, each slot carrying its class from the pinned classification table (FREE, NUMERIC, STRUCTURED, CLOSED with its type name). Each sample also compiles into a WITNESS: the abstract utterance it generates, with every slot collapsed to one class token such as `<FREE>` or `<CLOSED:SeriesName>`. A slot type the table does not list at all (any unlisted `AMAZON.*` builtin) is treated as FREE for behavior and its name is reported in the graph's `unclassified_types`, so the table gets maintained instead of silently guessing.
+
+Pattern A matches witness W when the whole of W consumes left to right: a literal matches the identical literal; a FREE slot matches one or more consecutive items of ANY kind; a NUMERIC slot matches `<NUM>` only; a STRUCTURED slot matches the class token of the same type only; a CLOSED slot of type T matches a `<CLOSED:T>` token, or a `<CLOSED:T2>` token when the normalized entry token lists of T and T2 intersect, or a run of literal tokens equal to the token list of some entry of T. The implementation is a memoized dynamic program over (pattern index, witness index), never a regex: vocabulary alternations would blow up.
+
+### Reading an edge, and the universal intents
+
+Edge A to B carries `kind`: IDENTICAL when the two samples have identical skeletons (slots compared by class and, for CLOSED, by type), SWALLOW otherwise; `swallowed` and `total` count B's samples (matched by at least one A sample, out of all of them); `examples` lists up to 3 qualifying `[a_sample, b_sample]` pairs, the first three in sorted order. `universal` lists the intents that swallow at least one sample of more than half of the other intents, which is what a bare `{query}` carrier looks like in the graph.
+
+The graph is noisy by nature: free-text intents swallow a lot, and that is the truth the graph is asked to record, not a defect. It deliberately runs NO validator phase; the tool belongs in review and triage, not in blocking CI.
+
+```
+python3 scripts/nlu_static/cli.py graph build --locale es-ES --out /tmp/graphs
+python3 scripts/nlu_static/cli.py graph build --all --out /tmp/graphs
+python3 scripts/nlu_static/cli.py graph diff old_graph.json new_graph.json
+python3 scripts/nlu_static/cli.py graph diff-git --base HEAD~1 --locale es-ES
+```
+
+`graph diff` prints added edges, removed edges and edges whose `kind` or `swallowed` changed, each group sorted, and always exits 0 unless `--fail-on-new` is passed, which exits 1 only when an edge was ADDED (new competition introduced; removed or changed edges are informational).
+
+### The reviewer workflow: diff-git before committing a template change
+
+When a change touches the locale templates (`Alexa/InteractionModel/templates/*.yaml`), run `graph diff-git --base <the ref you branched from> --locale <locale>` (or `--all`) BEFORE committing. It builds the old graph from `git show <ref>:<model path>` and the new one from the working tree and prints the same diff. An `added` line names competition the change introduces that did not exist before: judge each one. A new SWALLOW edge from a free-text carrier onto a previously uncontested intent is a warning sign the new samples make that intent's rows marginal (flippable across rebuilds, the JF-945 class); a new IDENTICAL edge is usually an outright mistake, since two intents claiming the exact same phrasing can only be separated by trainer weights. Removed edges and changed `swallowed` counts report competition the change relieved or resized and are usually good news. Route deliberate new competition to a fixture row comment (mark the row as contested) instead of blocking the change; the triage report of JF-954.6 consumes the classification below and will carry the same signal per red row.
+
+### The `match` and `classify-fixtures` subcommands
+
+`match --locale X "utterance"` matches a REAL utterance (plain tokens) against every sample pattern and prints, per matching intent, its most specific hit: `intent`, `sample`, `specificity` (the number of literal tokens in the sample), sorted by specificity descending then intent name. The utterance-mode rule table deliberately over-approximates two classes: a NUMERIC slot stands for exactly one token of any kind, and a STRUCTURED slot for one to four tokens of any kind, so "espera mucho" has a reading under "espera {n} segundos" too. A hit therefore means "a reading exists", never "Amazon will choose it".
+
+`classify-fixtures --locale X|--all [--snapshot f.json]` classifies every committed fixture row into three classes and prints sorted JSON rows with exactly the fields `locale`, `utterance`, `expected_intent`, `classification`, `rivals`, `rival_at_least_as_specific`:
+
+- `UNCONTESTED`: only the intents the row names in `expected_intent` (an `A|B` alternative list is honored) have a matching sample. A red row here is NOT marginal: it deserves a real investigation.
+- `CONTESTED`: an expected intent matches and at least one other intent matches too. `rivals` lists the others with their samples and specificities; `rival_at_least_as_specific` is true when the best rival is at least as specific as the best expected hit, which marks the row as marginal by construction, flippable across rebuilds.
+- `NO_SAMPLE_MATCH`: no expected intent has a matching sample; the row relies on trainer generalization or on vocabulary absent from the effective model (for example a catalog-backed slot whose value only the library snapshot carries). `rivals` lists whatever else matched.
+
+```
+python3 scripts/nlu_static/cli.py match --locale es-ES "pon breaking bad temporada uno episodio tres"
+python3 scripts/nlu_static/cli.py classify-fixtures --locale es-ES
+python3 scripts/nlu_static/cli.py classify-fixtures --all --snapshot catalog-snapshot.json
+```
+
+### Limits: what the graph does NOT tell you
+
+The graph computes rival readings, nothing else. It does NOT predict which intent Amazon's trainer picks, does NOT weight edges by anything other than sample counts, and does NOT model ASR, entity resolution ranking, or the default-music-service arbitration. A SWALLOW edge says the phrasing is contestable in principle; whether the trainer actually ever picks the rival is a live question for profile-nlu, simulate-skill or a device test. This exact over-trust failure already happened once: in an es-US lab ablation on 2026-11-23, removing five bare PlaySong carriers moved song requests that used UNTOUCHED carriers ("escucha", "quiero escuchar") to PlayArtistSongsIntent. The graph showed PlayArtistSongsIntent as a neighbour all along; it could not and did not predict that the trainer would move the untouched carriers' traffic. Read an edge as "this row is marginal", never as "this edge is the cause of the red". Also note the graph reads the SAVED model only: utterances whose routing depends on catalog values the model never sees are invisible to it until a `--snapshot` overlays one.
+
 ## The `ledger` subcommand: the results ledger and per-row flip statistics
 
 The live NLU suite (`./scripts/run_nlu_tests.sh` without `--dry-run`) writes a RESULTS LEDGER automatically (JF-954.5): one JSON Lines file per suite session under `tests/integration/results/` (gitignored, local only), named `nlu-<UTC yyyymmddThhmmssZ>-<pid>.jsonl`. Dry-run writes nothing; the environment variable `NLU_LEDGER=0` disables the ledger and any other value or unset leaves it enabled; `NLU_LEDGER_DIR` overrides the output directory. Skipped rows are not recorded. The ledger never changes a test outcome: any exception inside ledger code is caught, reported once as a pytest warning, and the suite continues without a ledger.
