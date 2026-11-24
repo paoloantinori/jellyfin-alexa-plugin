@@ -156,6 +156,22 @@ def load_locale_model(locale: str, models_dir: str | Path | None = None) -> dict
     doc = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(doc, dict):
         raise ValueError(f"{path}: top level must be a JSON object")
+    try:
+        return unwrap_language_model(doc)
+    except ValueError as err:
+        raise ValueError(f"{path}: {err}") from err
+
+
+def unwrap_language_model(doc: dict) -> dict:
+    """The ONE three-shape discriminator for parsed interaction-model JSON.
+
+    Returns the ``languageModel`` dict from a document with a top-level
+    ``languageModel`` key (the committed models), one wrapped in an
+    ``interactionModel`` object (SMAPI payloads, the git-show reviewer
+    path), or a document that IS the language model itself (synthetic
+    fixtures). Raises ValueError when no shape applies; the caller adds
+    its own file or source context to the message.
+    """
     wrapper = doc.get("interactionModel")
     container = wrapper if isinstance(wrapper, dict) else doc
     model = container.get("languageModel")
@@ -164,7 +180,7 @@ def load_locale_model(locale: str, models_dir: str | Path | None = None) -> dict
     if isinstance(doc.get("intents"), list):
         # The document IS a language model (no wrapper, no languageModel key).
         return doc
-    raise ValueError(f"{path}: no languageModel section found")
+    raise ValueError("no languageModel section found")
 
 
 def build_effective_model(

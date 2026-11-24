@@ -635,21 +635,21 @@ def test_skip_lines_on_every_command(tmp_path, capsys):
     rc_build = nlu_cli.main(["graph", "build", "--locale", "ja-JP", "--out", str(out_dir)])
     rc_match = nlu_cli.main(["match", "--locale", "ja-JP", "x"])
     rc_diff_git = nlu_cli.main(["graph", "diff-git", "--base", "HEAD", "--locale", "ja-JP"])
-    captured = capsys.readouterr()
-    expected = "SKIP ja-JP: no whitespace tokenization"
-    assert rc_build == rc_match == rc_diff_git == 0
-    assert captured.out.count(expected) == 3
-    assert not (out_dir / "graph_ja-JP.json").exists()
     rc_classify = nlu_cli.main(["classify-fixtures", "--locale", "ja-JP"])
     captured = capsys.readouterr()
-    assert rc_classify == 2
-    assert expected in captured.err
+    expected = "SKIP ja-JP: no whitespace tokenization"
+    # The unified skip contract (simplify round): the SKIP line always
+    # rides stderr and an explicitly NAMED locale that cannot be served
+    # fails the command, so a typo'd locale never reads as all-clean.
+    assert rc_build == rc_match == rc_diff_git == rc_classify == 2
+    assert captured.err.count(expected) == 4
+    assert not (out_dir / "graph_ja-JP.json").exists()
 
 
 def test_skip_line_in_all_locale_run(tmp_path, capsys):
     assert nlu_cli.main(["graph", "build", "--all", "--out", str(tmp_path)]) == 0
     captured = capsys.readouterr()
-    assert "SKIP ja-JP: no whitespace tokenization" in captured.out
+    assert "SKIP ja-JP: no whitespace tokenization" in captured.err
     assert not (tmp_path / "graph_ja-JP.json").exists()
     assert (tmp_path / "graph_es-ES.json").exists()
 

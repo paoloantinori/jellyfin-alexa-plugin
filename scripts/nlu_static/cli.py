@@ -26,7 +26,12 @@ if str(_SCRIPTS_DIR) not in sys.path:
 
 from nlu_static import fixture_vocab, ledger, matcher, producer_jellyfin, token_collisions  # noqa: E402
 from nlu_static import graph as nlu_graph  # noqa: E402
-from nlu_static.effective_model import EffectiveModel, build_effective_model, load_snapshot  # noqa: E402
+from nlu_static.effective_model import (  # noqa: E402
+    EffectiveModel,
+    build_effective_model,
+    load_snapshot,
+    unwrap_language_model,
+)
 from nlu_static.normalize import skip_line  # noqa: E402
 
 
@@ -54,6 +59,28 @@ def effective_summary(model: EffectiveModel) -> dict:
         "notes": list(model.notes),
         "types": types,
     }
+
+
+_SKIP_CONTINUE = object()
+
+
+def _skip_locale(locale: str, locale_arg_given: bool) -> int | object:
+    """Handle the mandated SKIP line for one locale; three outcomes.
+
+    Returns the refusal exit code when an EXPLICITLY named locale skips
+    (a typo'd locale must never read as all-clean, the fixtures
+    subcommand's convention), the ``_SKIP_CONTINUE`` sentinel when an
+    unnamed locale in an --all sweep skips (the caller continues its
+    loop), and None when the locale can be processed. The SKIP line
+    always rides stderr (diagnostics; stdout stays for artifacts).
+    """
+    line = skip_line(locale)
+    if line is None:
+        return None
+    # The SKIP line itself is the refusal message for the named case: the
+    # bare exit code avoids a doubled "error: SKIP ..." line.
+    print(line, file=sys.stderr)
+    return 2 if locale_arg_given else _SKIP_CONTINUE
 
 
 def _fail(err: Exception) -> int:
@@ -452,10 +479,11 @@ def cmd_graph_build(args: argparse.Namespace) -> int:
         out_dir.mkdir(parents=True, exist_ok=True)
     failed_locales: list[str] = []
     for locale in locales:
-        line = skip_line(locale)
-        if line is not None:
-            print(line)
-            continue
+        refused = _skip_locale(locale, locale_arg_given=bool(args.locale))
+        if refused is not None:
+            if refused is _SKIP_CONTINUE:
+                continue
+            return refused
         model = _build_model_or_fail(locale, snapshot)
         if model is None:
             # one unreadable model must not starve the other locales:
@@ -465,7 +493,9 @@ def cmd_graph_build(args: argparse.Namespace) -> int:
         payload = nlu_graph.build_graph(locale, model)
         if out_dir is not None:
             path = out_dir / f"graph_{locale}.json"
-            path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            # _print_json owns the determinism contract (indent, sorted
+            # keys, trailing newline) for every written artifact.
+            _print_json(payload, str(path))
             print(f"wrote {path.name} ({len(payload['edges'])} edges)")
         else:
             _print_json(payload, None)
@@ -537,13 +567,14 @@ def _git_show_model(base: str, locale: str) -> dict | None:
         # finding 1).
         print(f"  note [{locale}]: unreadable model JSON at {base} ({path}: {err})", file=sys.stderr)
         return None
-    # Unwrap to the languageModel dict build_effective_model(raw_model=...)
-    # expects; the committed files carry it at the top level beside
-    # "dialog", SMAPI payloads wrap it in "interactionModel".
-    wrapper = doc.get("interactionModel")
-    container = wrapper if isinstance(wrapper, dict) else doc
-    model = container.get("languageModel")
-    return model if isinstance(model, dict) else doc
+    # The unwrap rides the ONE three-shape discriminator in
+    # effective_model (JF-954.7's git-show path needs the same rule as a
+    # library function, not this CLI's private copy).
+    try:
+        return unwrap_language_model(doc)
+    except ValueError as err:
+        print(f"  note [{locale}]: unreadable model JSON at {base} ({path}: {err})", file=sys.stderr)
+        return None
 
 
 def cmd_graph_diff_git(args: argparse.Namespace) -> int:
@@ -554,10 +585,11 @@ def cmd_graph_diff_git(args: argparse.Namespace) -> int:
     locales = _resolve_graph_locales(args)
     added_any = False
     for locale in locales:
-        line = skip_line(locale)
-        if line is not None:
-            print(line)
-            continue
+        refused = _skip_locale(locale, locale_arg_given=bool(args.locale))
+        if refused is not None:
+            if refused is _SKIP_CONTINUE:
+                continue
+            return refused
         old_raw = _git_show_model(args.base, locale)
         if old_raw is None:
             continue
@@ -617,10 +649,9 @@ def cmd_match(args: argparse.Namespace) -> int:
     snapshot, refusal = _load_optional_snapshot(args)
     if refusal is not None:
         return refusal
-    line = skip_line(args.locale)
-    if line is not None:
-        print(line)
-        return 0
+    refused = _skip_locale(args.locale, locale_arg_given=True)
+    if refused is not None:
+        return refused
     model = _build_model_or_fail(args.locale, snapshot)
     if model is None:
         return 2
@@ -648,13 +679,11 @@ def cmd_classify_fixtures(args: argparse.Namespace) -> int:
     locales = _resolve_graph_locales(args)
     results: list[dict] = []
     for locale in locales:
-        line = skip_line(locale)
-        if line is not None:
-            # Diagnostics go to stderr so the JSON stays parseable.
-            print(line, file=sys.stderr)
-            if args.locale:
-                return _fail(ValueError(line))
-            continue
+        refused = _skip_locale(locale, locale_arg_given=bool(args.locale))
+        if refused is not None:
+            if refused is _SKIP_CONTINUE:
+                continue
+            return refused
         rows, skip_reason = fixture_vocab.load_fixture_rows(
             fixture_vocab.default_fixtures_dir(), locale
         )
