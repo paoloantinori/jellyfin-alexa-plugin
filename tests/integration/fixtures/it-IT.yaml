@@ -265,10 +265,15 @@ tests:
   # v523 / JellyfinArtist v517). No repo commit in the 09-01..09-03 window
   # touched this carrier region (JF-438 removed only RepeatSingle Suona+clitic
   # samples; JF-450/451 added SetReminderIntent): Amazon-side statistical shift.
+  # JF-438 coin-flip: musician-shaped title on the carrier. Flips between
+  # PlaySong (free-text), PlayArtistSongs (musician slot), and PlayLibrarySong
+  # (twin carrier) across rebuilds. All three are correct: the song plays via
+  # the handler or the JF-439 fallback. Pinned to the twin (most likely stable
+  # shape with the catalog active).
   - utterance: "suona la canzone sugar free jazz"
-    expected_intent: PlaySongIntent
+    expected_intent: PlayLibrarySongIntent
     expected_slots:
-      song: {}
+      librarySong: {}
 
   # -------------------------------------------------------------------------
   # 4. PlayChannelIntent (channel)
@@ -309,7 +314,6 @@ tests:
     expected_intent: PlayVideoIntent
     expected_slots:
       title: {}
-      song: {}
 
   - utterance: "voglio guardare star wars"
     expected_intent: PlayVideoIntent
@@ -599,22 +603,22 @@ tests:
   # the profiler and the plain-audiolibro wrapper ("di mettere l'audiolibro X")
   # is a per-build trainer race (green on the live build, flipped across
   # identical scratch rebuilds), so neither is pinned.
-  - utterance: "chiedi a mia collezione di leggere il libro option b"
+  - utterance: "chiedi a mia collezione di leggere il libro il gattopardo"
     expected_intent: PlayBookIntent
     expected_slots:
       book: {}
 
-  - utterance: "chiedi a mia collezione di mettere il libro option b"
+  - utterance: "chiedi a mia collezione di mettere il libro il gattopardo"
     expected_intent: PlayBookIntent
     expected_slots:
       book: {}
 
-  - utterance: "chiedi a mia collezione di riprodurre il libro option b"
+  - utterance: "chiedi a mia collezione di riprodurre il libro il gattopardo"
     expected_intent: PlayBookIntent
     expected_slots:
       book: {}
 
-  - utterance: "leggi il libro option b"
+  - utterance: "leggi il libro il gattopardo"
     expected_intent: PlayBookIntent
     expected_slots:
       book: {}
@@ -667,9 +671,9 @@ tests:
   # twin set deliberately carries NO mettere-canzone form (review finding: it
   # stole the play utterance).
   - utterance: "di mettere la canzone rapsodia"
-    expected_intent: PlaySongIntent
+    expected_intent: PlayLibrarySongIntent
     expected_slots:
-      song: {}
+      librarySong: {}
   # The verb-level fix family (review finding): every aggiungi-carrying add
   # intent needs its infinitive twin.
   - utterance: "aggiungere rapsodia alla coda"
@@ -1250,9 +1254,9 @@ tests:
   # spoken title). PlaySong keeps musician-qualified and bare-infinitive forms.
   # -------------------------------------------------------------------------
   - utterance: "Riproduci il brano bohemian rhapsody"
-    expected_intent: PlaySongIntent
+    expected_intent: PlayLibrarySongIntent
     expected_slots:
-      song: {}
+      librarySong: {}
 
   - utterance: "Suona imagine di john lennon"
     expected_intent: PlaySongIntent
@@ -1264,9 +1268,9 @@ tests:
   # NOTE: bare "Suona bohemian rhapsody" is unreliable — NLU routes to PlayNextIntent
   # ("suona {song} dopo" matches more strongly). Use song_noun carrier for reliability.
   - utterance: "Suona il brano bohemian rhapsody"
-    expected_intent: PlaySongIntent
+    expected_intent: PlayLibrarySongIntent
     expected_slots:
-      song: {}
+      librarySong: {}
 
   # JF-940: non-famous title on the carrier lands on the twin (measured:
   # 'suona il brano rapsodia' -> twin, battery-green live; the musician-tail
