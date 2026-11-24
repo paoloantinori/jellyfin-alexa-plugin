@@ -2283,6 +2283,11 @@ public sealed class DeviceQueueManager : IDisposable
     /// item is already at (or within one of) the end. Used by
     /// <c>ShuffleOnIntentHandler</c> so sequential queue advancement plays a
     /// shuffled order regardless of the indirect Jellyfin PlayState flag.
+    /// JF-928 PAIRING: this reshuffles only the live window; the caller that
+    /// flips shuffle MID-PLAYBACK must also re-mint the stored continuation's
+    /// per-batch shuffle semantics via
+    /// <c>QueueContinuationStore.TryUpdateShuffleForLiveQueue</c> (the twins do),
+    /// or the window's exhaustion appends the rest of the source in source order.
     /// </summary>
     /// <param name="deviceId">The Alexa device ID.</param>
     /// <param name="currentItemId">The currently-playing item ID (kept first).</param>

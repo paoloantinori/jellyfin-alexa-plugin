@@ -5,6 +5,7 @@ using Alexa.NET;
 using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
+using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
@@ -112,6 +113,16 @@ public class ShuffleOnIntentHandler : BaseHandler
             _queueManager.ShuffleRemaining(deviceId, currentId.ToString());
             ProgressReporter.MirrorQueueToSession(_queueManager.GetOrCreateQueue(deviceId), session);
         }
+
+        // JF-928: ShuffleRemaining reshuffles only the live window; align the
+        // stored continuation's per-batch shuffle semantics with it, or the
+        // window's exhaustion appends the rest of the source in source order
+        // (the JF-927 defect class via the ShuffleOn entry point). DELIBERATELY
+        // unconditional like SetPlaybackOrder above: when the flag is set but the
+        // physical reshuffle was skipped (unparseable token), the resolver
+        // random-picks, so shuffled batches still honor the intent. Full
+        // rationale, gate, and no-op shapes on TryUpdateShuffleForLiveQueue.
+        QueueContinuationStore.TryUpdateShuffleForLiveQueue(session.UserId, deviceId, session, shuffle: true);
 
         // Spoken confirmation (review round 2026-09-22): a speech-less session end
         // reads on-device as "the command did nothing", the same defect the loop

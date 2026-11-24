@@ -159,4 +159,40 @@ public class QueueContinuation
     /// <returns>The page's item ids, in queue order (identity is set-shaped; order is incidental).</returns>
     public static IReadOnlyList<Guid> QueueIdsOf(IEnumerable<QueueItem> queueItems)
         => queueItems.Select(q => q.Id).ToList();
+
+    /// <summary>
+    /// JF-928: re-mint the entry with new per-batch shuffle semantics (the
+    /// mid-playback ShuffleOn/Off channel). The type is init-only by design, so
+    /// flipping <see cref="Shuffle"/> means building a new instance with every
+    /// other field carried over verbatim; the identity
+    /// (<see cref="MintedQueueItemIds"/>) is carried too, so the re-minted entry
+    /// stays bound to the same live queue, and the mutable offsets carry over so
+    /// a fetch that landed between the original mint and this re-mint is not
+    /// lost. The store-level gate deciding WHEN this is safe lives on
+    /// <see cref="QueueContinuationStore.TryUpdateShuffleForLiveQueue"/> (the
+    /// JF-674 live-queue identity check); never call this directly on an
+    /// unchecked entry.
+    /// </summary>
+    /// <param name="shuffle">The new per-batch shuffle semantics.</param>
+    /// <returns>The re-minted continuation with <see cref="Shuffle"/> set to <paramref name="shuffle"/>.</returns>
+    public QueueContinuation WithShuffleSemantics(bool shuffle) => new QueueContinuation
+    {
+        SourceType = SourceType,
+        ParentId = ParentId,
+        ArtistId = ArtistId,
+        PlaylistId = PlaylistId,
+        StartIndex = StartIndex,
+        TotalCount = TotalCount,
+        BatchSize = BatchSize,
+        UserId = UserId,
+        SortOrder = SortOrder,
+        Shuffle = shuffle,
+        CachedTracks = CachedTracks,
+        // JF-674: the identity carries over, so the re-mint remains bound to the
+        // queue it was minted for. NOTE for the JF-753 sentinel roster: this is a
+        // COPY site, not a mint decision: ArtistId and TotalCount carry the
+        // original mint's values verbatim (an artist entry keeps its sentinel),
+        // so the roster documents this method as its accepted boundary.
+        MintedQueueItemIds = MintedQueueItemIds
+    };
 }

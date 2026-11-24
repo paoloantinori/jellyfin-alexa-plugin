@@ -5,6 +5,7 @@ using Alexa.NET;
 using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
+using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
@@ -116,6 +117,13 @@ public class ShuffleOffIntentHandler : BaseHandler
 
             ProgressReporter.MirrorQueueToSession(_queueManager.GetOrCreateQueue(deviceId), session);
         }
+
+        // JF-928: the ShuffleOn twin: restore ORDERED continuation batches
+        // (an artist-minted or mid-playback-shuffled entry must not keep
+        // shuffling appended batches against the explicit off). RestoreOrder
+        // above keeps restoring the pre-shuffle queue order untouched. Full
+        // rationale, gate, and no-op shapes on TryUpdateShuffleForLiveQueue.
+        QueueContinuationStore.TryUpdateShuffleForLiveQueue(session.UserId, deviceId, session, shuffle: false);
 
         // Spoken confirmation (review round 2026-09-22): same class as the loop
         // family's speech-less session end that read as "nothing happened".

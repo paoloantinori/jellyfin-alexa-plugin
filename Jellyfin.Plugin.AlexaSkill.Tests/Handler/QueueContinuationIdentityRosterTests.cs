@@ -26,10 +26,14 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 /// initialize the identity property in the same method body (an init-only
 /// property is only assignable from an object initializer or immediately after
 /// construction, and both compile to the setter call scanned here).
-/// The five construction sites today: PlayArtistSongsIntentHandler and
+/// The five MINT sites today: PlayArtistSongsIntentHandler and
 /// CrossMediaFallback (the Artist arms), AlbumPlayService (the Album and Playlist
 /// arms), and PlayBookIntentHandler's ApplyBookPlaybackState local function
 /// (reached through the assembly walk: local functions compile to nested types).
+/// The JF-928 re-mint clone QueueContinuation.WithShuffleSemantics is a sixth
+/// construction site under the same rule: it must carry MintedQueueItemIds over,
+/// or a shuffle-semantics re-mint would silently unbind the entry from its live
+/// queue.
 /// SELF-RED: deleting the initializer from any one site flips the roster.
 /// ACCEPTED BOUNDARIES (the roster idiom's documented-limit class):
 /// 1. SAME-METHOD SCOPE: the scan ties the setter call to the constructing
@@ -102,6 +106,13 @@ public class QueueContinuationIdentityRosterTests
     /// gate-marker corrected this phrasing).
     /// ACCEPTED BOUNDARY: same-method scope, like the identity roster above (the
     /// sentinel must appear in the constructing method's own IL).
+    /// SECOND ACCEPTED BOUNDARY (JF-928): QueueContinuation.WithShuffleSemantics,
+    /// the shuffle-semantics re-mint clone. It is a COPY site, not a mint
+    /// decision: ArtistId and TotalCount carry the original mint's values
+    /// verbatim (an artist entry keeps its sentinel by construction), and
+    /// ArtistId is init-only, so the copy cannot be moved out of the initializer
+    /// to escape the scan. The exemption is pinned by the guard fact below so a
+    /// rename cannot let the exemption silently widen.
     /// </summary>
     [Fact]
     public void ArtistContinuationConstructionSites_StoreTheEndUnknownSentinel()
@@ -109,6 +120,7 @@ public class QueueContinuationIdentityRosterTests
         Module pluginModule = typeof(BaseHandler).Module;
         var offenders = new SortedSet<string>(StringComparer.Ordinal);
         int artistSites = 0;
+        bool copySiteSeen = false;
 
         foreach ((Type _, MethodBase method) in IlCallScanner.DeclaredMethods(pluginModule.Assembly))
         {
@@ -119,6 +131,13 @@ public class QueueContinuationIdentityRosterTests
             }
 
             artistSites++;
+            if (string.Equals(IlCallScanner.LogicalMethodName(method), "WithShuffleSemantics", StringComparison.Ordinal)
+                && method.DeclaringType == typeof(QueueContinuation))
+            {
+                copySiteSeen = true;
+                continue;
+            }
+
             if (!IlCallScanner.LdcI4Operands(method).Contains(SearchService.UnknownTotal))
             {
                 offenders.Add(IlCallScanner.LogicalMethodName(method));
@@ -134,8 +153,14 @@ public class QueueContinuationIdentityRosterTests
         Assert.True(
             artistSites > 0,
             "The scan found ZERO Artist continuation construction sites; the sentinel roster went vacuous " +
-            "(the set_ArtistId marker no longer identifies the artist arms; today's expected count is two: " +
-            "PlayArtistSongsIntentHandler and CrossMediaFallback).");
+            "(the set_ArtistId marker no longer identifies the artist arms; today's expected count is three: " +
+            "PlayArtistSongsIntentHandler, CrossMediaFallback, and the JF-928 re-mint clone " +
+            "QueueContinuation.WithShuffleSemantics).");
+        Assert.True(
+            copySiteSeen,
+            "The JF-928 re-mint clone QueueContinuation.WithShuffleSemantics was not found among the " +
+            "Artist-setting construction sites; the accepted-boundary exemption no longer matches anything " +
+            "(the clone was renamed, removed, or stopped carrying ArtistId); tighten or drop the exemption.");
     }
 
     /// <summary>
