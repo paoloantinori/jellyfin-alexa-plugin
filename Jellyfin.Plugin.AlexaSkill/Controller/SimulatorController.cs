@@ -9,6 +9,7 @@ using Alexa.NET.Response;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -262,7 +263,7 @@ public class SimulatorController : ControllerBase
         }
         """;
 
-        return JsonConvert.DeserializeObject<SkillRequest>(json)
+        return SkillRequestDeserializer.Deserialize(json)
             ?? throw new InvalidOperationException("Failed to deserialize synthetic skill request");
     }
 
