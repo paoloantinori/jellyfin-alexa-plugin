@@ -2,6 +2,8 @@ import hashlib
 import json
 from pathlib import Path
 
+import pytest
+
 import _paths
 _paths.bootstrap()
 
@@ -37,6 +39,38 @@ def test_load_accepts_wrapper_and_bare_language_model(tmp_path):
     assert load_model_file(p) == wrapper
     p2 = _write(tmp_path, "bare.json", _bare_model())
     assert load_model_file(p2) == {"interactionModel": _bare_model()}
+
+
+def test_non_dict_interaction_model_value_refuses(tmp_path):
+    """JF-935: {"interactionModel": "oops"} used to pass the key-presence
+    check and crash prepare_payload with TypeError at
+    payload["interactionModel"]["languageModel"]; the one shape authority
+    refuses it with ValueError (which the CLI converts into RunRefused)."""
+    p = _write(tmp_path, "oops.json", {"interactionModel": "oops"})
+    with pytest.raises(ValueError, match="interactionModel is str, expected a dict"):
+        load_model_file(p)
+    with pytest.raises(ValueError, match="interactionModel is str, expected a dict"):
+        prepare_payload({"interactionModel": "oops"}, "nlu labor")
+
+
+def test_non_dict_language_model_value_refuses():
+    """JF-935: the bare-languageModel twin of the wrapper case refuses the
+    same way instead of crashing downstream."""
+    with pytest.raises(ValueError, match="languageModel is str, expected a dict"):
+        prepare_payload({"languageModel": "oops"}, "nlu labor")
+
+
+def test_wrapper_without_inner_language_model_refuses(tmp_path):
+    """JF-935 companion: {"interactionModel": {}} and a non-dict inner
+    languageModel used to crash prepare_payload downstream with KeyError /
+    TypeError at payload["interactionModel"]["languageModel"]; the shape
+    authority refuses them too (shape only: content stays with the
+    structural validator)."""
+    p = _write(tmp_path, "empty_wrapper.json", {"interactionModel": {}})
+    with pytest.raises(ValueError, match="interactionModel.languageModel is NoneType"):
+        load_model_file(p)
+    with pytest.raises(ValueError, match="interactionModel.languageModel is int"):
+        prepare_payload({"interactionModel": {"languageModel": 5}}, "nlu labor")
 
 
 def test_build_from_template_is_in_memory(tmp_path, monkeypatch):
@@ -85,3 +119,38 @@ def test_de_template_real_path_smoke():
     assert {r["intent"] for r in roster} == {i["name"] for i in ints}
     assert all(r["sample"] is None or isinstance(r["sample"], str) and r["sample"] for r in roster)
     assert any(r["sample"] is not None for r in roster)
+
+
+# --- review round (2026-11-24): intents shape and the both-keys smuggle --------------------
+
+
+def test_missing_intents_list_refuses_instead_of_keyerror():
+    with pytest.raises(ValueError, match="intents"):
+        prepare_payload({"languageModel": {}}, "lab")
+
+
+def test_non_list_intents_refuses():
+    with pytest.raises(ValueError, match="intents"):
+        prepare_payload({"languageModel": {"intents": "oops"}}, "lab")
+
+
+def test_non_mapping_intent_entries_refuse():
+    with pytest.raises(ValueError, match="intents"):
+        prepare_payload({"languageModel": {"intents": ["not-a-dict"]}}, "lab")
+
+
+def test_both_keys_with_garbage_wrapper_refuses_not_smuggled():
+    # A dict carrying BOTH a non-dict interactionModel and a valid
+    # languageModel must refuse; the bare branch must not wrap the whole
+    # doc and smuggle the garbage key into the payload (review round).
+    model = {"interactionModel": 5, "languageModel": _bare_model()["languageModel"]}
+    with pytest.raises(ValueError, match="interactionModel"):
+        prepare_payload(model, "lab")
+
+
+def test_bare_model_with_dialog_sibling_still_wraps_whole_doc():
+    # dialog belongs INSIDE the SMAPI wrapper; the bare branch keeps
+    # wrapping the whole doc for the committed-model shape.
+    payload, _sha, _roster = prepare_payload(_bare_model(), "nlu labor")
+    assert "dialog" in payload["interactionModel"]
+    assert "interactionModel" not in payload["interactionModel"]
