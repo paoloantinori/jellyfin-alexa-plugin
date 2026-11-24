@@ -3,9 +3,10 @@ id: JF-949
 title: >-
   Song catalog opt-out must TEAR DOWN: strip the SongTitle wiring from locale
   models, delete the SMAPI catalog, clear SongCatalogId (JF-946 review F1)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-11-23 06:06'
+updated_date: '2026-11-24 22:00'
 labels:
   - catalog
   - privacy
