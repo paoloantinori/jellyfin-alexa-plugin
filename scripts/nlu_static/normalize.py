@@ -7,7 +7,14 @@ comparison time so a diff can still show the raw spellings.
 
 from __future__ import annotations
 
+import re
 import unicodedata
+
+# The ONE slot-placeholder regex: a ``{slot_name}`` reference inside an
+# intent sample. Carrier computation (tokens after placeholder removal) and
+# the validator's carrier lints share this single definition so the two
+# placeholder shapes cannot drift.
+SLOT_PLACEHOLDER_RE = re.compile(r"\{[^}]*\}")
 
 # Locales whose samples carry no word spaces, so whitespace tokenization is
 # meaningless and every token-dependent tool must print an explicit SKIP line

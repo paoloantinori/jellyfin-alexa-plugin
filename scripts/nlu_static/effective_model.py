@@ -148,6 +148,7 @@ def build_effective_model(
     locale: str,
     snapshot: dict | None = None,
     models_dir: str | Path | None = None,
+    raw_model: dict | None = None,
 ) -> EffectiveModel:
     """Build the effective model for one locale.
 
@@ -158,9 +159,12 @@ def build_effective_model(
     committed values. A snapshot type the locale model does not declare is
     ignored and listed in EffectiveModel.notes. Pass ``models_dir`` to read
     synthetic models from a test directory; ``snapshot`` is a parsed
-    snapshot dict, normally from load_snapshot.
+    snapshot dict, normally from load_snapshot. Pass ``raw_model`` (a
+    languageModel dict already loaded by the caller, for example the
+    validator's parsed models) to skip the file read entirely; it wins
+    over ``models_dir``.
     """
-    model = load_locale_model(locale, models_dir)
+    model = raw_model if raw_model is not None else load_locale_model(locale, models_dir)
     intents = _parse_intents(model)
     committed = _parse_types(model, locale)
 

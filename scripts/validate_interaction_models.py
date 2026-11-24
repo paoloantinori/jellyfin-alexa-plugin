@@ -40,6 +40,13 @@ CI validate-models job has been blocking on errors since JF-556):
     every locale other than it-IT must carry no ids beyond those three.
     it-IT also ids its extra it-IT-only concepts (film, serie, playlist,
     ...), which are deliberately not enumerated here.
+  - Token-ownership collisions (JF-954.2, Phase 11): a word that is at the
+    same time a carrier word of one intent and an entry of the custom type
+    another intent uses (the issue #46 class), when the finding is NOT in
+    scripts/nlu_static/token_collision_baseline.json. Implemented in
+    scripts/nlu_static/token_collisions.py; regenerate that baseline with
+    `python3 scripts/nlu_static/cli.py tokens --update-baseline` only when
+    the new collisions are deliberate design.
   - es trio PlayEpisodeIntent mirroring: RETIRED by JF-855. The generator's
     `mirror` directive sources the es-MX / es-US PlayEpisode samples from
     templates/es-ES.yaml minus the declared exclude rows, so the mirroring is
@@ -74,11 +81,9 @@ import yaml
 from pathlib import Path
 
 from generate_interaction_model import MODELS_DIR  # the one layout owner
+from nlu_static.normalize import SLOT_PLACEHOLDER_RE  # the one placeholder regex
 
 FIXTURES_DIR = Path(__file__).resolve().parent.parent / "tests" / "integration" / "fixtures"
-
-# Slot placeholder span in a sample utterance, e.g. '{album}' in "play the album {album}".
-SLOT_PLACEHOLDER_RE = re.compile(r"\{[^}]*\}")
 
 # Intents that are expected to exist in all locales
 # (Amazon built-in intents may vary, so we only check custom intents)
@@ -889,6 +894,57 @@ def lint_play_episode_one_shot_order(all_models: dict[str, dict]) -> list[str]:
     return warnings
 
 
+def lint_token_collisions(all_models: dict[str, dict]) -> list[str]:
+    """WARNING lint (JF-954.2): token-ownership collisions not in the committed baseline.
+
+    Runs the nlu_static token lint over every committed locale in committed
+    mode (CARRIER_VS_VALUE and VALUE_IN_TWO_TYPES; CATALOG_VS_MODEL needs a
+    catalog snapshot and is CLI-only here). The already-parsed ``all_models``
+    dicts are threaded straight into the lint, so the model files are read
+    once per run and no second parser touches disk. Findings whose identity
+    string is in ``scripts/nlu_static/token_collision_baseline.json`` are
+    known design and stay silent; a NEW collision warns. Locales without
+    word spaces (ja-JP) print the shared SKIP line and produce nothing. An
+    unreadable baseline file skips the whole phase with its own SKIP line,
+    and a locale model this lint's parser rejects is reported as a warning
+    line, never a crash: the phase is WARNING level and must keep the
+    validator's exit code untouched. A warning means "this collision exists
+    and is not baselined"; whether it actually misroutes an utterance is a
+    live-routing question the static lint cannot answer.
+    """
+    from nlu_static import token_collisions  # noqa: PLC0415 (script-local import)
+
+    warnings: list[str] = []
+    try:
+        baseline = token_collisions.load_baseline(token_collisions.default_baseline_path())
+    except (OSError, ValueError) as err:
+        # Without a readable baseline the filtering would be a guess; skip
+        # the phase loudly instead of crashing the WARNING-level check.
+        print(f"  SKIP Phase 11: baseline file unreadable ({err})")
+        return None
+    for locale in sorted(all_models):
+        try:
+            report = token_collisions.analyze_locale(locale, raw_model=all_models[locale])
+        except Exception as err:  # noqa: BLE001 - a WARNING phase never crashes the validator
+            # Phase 1's load is shallow; this lint's parser is strict and can
+            # reject shapes (or sample types) Phase 1 accepted. A model the
+            # lint cannot process is a warning line, not a validator crash.
+            warnings.append(
+                f"  [{locale}] token lint could not process the model "
+                f"({type(err).__name__}): {err}"
+            )
+            continue
+        if report.skip_reason is not None:
+            print(f"  {report.skip_reason}")
+            continue
+        non_baselined, _ = token_collisions.split_baselined(report.findings, baseline)
+        for finding in non_baselined:
+            warnings.append(
+                f"  [{locale}] non-baselined {finding.kind}: {finding.identity()} "
+                f"({finding.detail})"
+            )
+    return warnings
+
 
 def check_elicit_dialog_registration(
     sources: dict[str, str] | None = None,
@@ -1603,6 +1659,15 @@ def main() -> int:
                 reg_warnings,
                 "Every handler-elicited intent is dialog-registered with slot parity in all locales",
             )
+
+    # Phase 11: token-ownership collisions (JF-954 warning check)
+    if all_models:
+        run_warning_phase(
+            "Phase 11: token-ownership collisions (JF-954 warning check)",
+            lambda: lint_token_collisions(all_models),
+            "No non-baselined token-ownership collisions",
+            all_warnings,
+        )
 
     # Summary
     print(f"\n{'='*60}")
