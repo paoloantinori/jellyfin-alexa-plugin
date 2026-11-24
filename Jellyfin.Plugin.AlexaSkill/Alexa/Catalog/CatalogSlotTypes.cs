@@ -117,22 +117,20 @@ public static class CatalogSlotTypes
         // (CatalogWiringUnsupportedLocales) applies model-wide and is inherited.
         [CatalogType.Audiobook] = "AudiobookTitle",
         // JF-874: declared by it-IT ONLY (the evidence locale; PlayMovieIntent is
-        // it-IT-only this task). The injection ADDS the catalog-backed type block
-        // to the other synced locales where nothing references it; that is the
-        // proven inert-block shape de-DE already carries for AlbumName
-        // (live-verified 2026-10-12: injected AlbumName block, zero referencing
-        // slots, builds SUCCEEDED). Unlike the album family there is no
-        // slot-type divergence to track: no locale declares a MovieTitle slot
-        // type other than this one.
+        // it-IT-only this task). The other synced locales declare no MovieTitle
+        // slot, so JF-952 keeps the block out of them entirely (the pre-JF-952
+        // injected inert block is the shape CatalogManager retired). Unlike the
+        // album family there is no slot-type divergence to track: no locale
+        // declares a MovieTitle slot type other than this one.
         [CatalogType.Movie] = "MovieTitle",
         // JF-946: the song-title catalog backing the SongTitle slot type the
         // JF-940 twin intent (PlayLibrarySongIntent) carries. Declared today
         // by it-IT + de-DE with a static generic seed (replace-in-place shape,
         // the SeriesName precedent); the remaining locales take the carrier in
-        // JF-946 phase B, until then the injection adds the proven inert-block
-        // shape there. The lab evidence forcing the catalog arm: only exact
-        // title anchoring makes unknown titles SELECT on the carrier (runs
-        // jf940-de-vc/v-e, 2026-11-22). GATED per user by
+        // JF-946 phase B, until then the JF-952 universal declare check keeps
+        // the block out of those locales entirely. The lab evidence forcing the
+        // catalog arm: only exact title anchoring makes unknown titles SELECT on
+        // the carrier (runs jf940-de-vc/v-e, 2026-11-22). GATED per user by
         // User.CatalogSongSyncEnabled (privacy: the full tracklist goes to
         // Amazon), default OFF; a disabled flag means no Song wiring at all.
         [CatalogType.Song] = "SongTitle"

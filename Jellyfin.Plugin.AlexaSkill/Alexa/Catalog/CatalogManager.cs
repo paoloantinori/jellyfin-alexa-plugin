@@ -960,21 +960,23 @@ public class CatalogManager
             lmNode["types"] = typesArray;
         }
 
-        var catalogMappings = new List<(string CatalogId, string Version, string SlotTypeName, string? ReplacesType, bool OnlyReplaceExisting)>();
+        // JF-952: the former fifth column (the per-type OnlyReplaceExisting
+        // flag, song-only) is gone. One universal declare check in the loop
+        // below now gates every synced type; see the check's comment for the
+        // rationale and the branch order.
+        var catalogMappings = new List<(string CatalogId, string Version, string SlotTypeName, string? ReplacesType)>();
         if (!string.IsNullOrEmpty(artistCatalogId))
         {
             catalogMappings.Add((artistCatalogId!, ResolveCatalogVersion(artistCatalogVersion, CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Artist], artistCatalogId, logger),
                 CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Artist],
-                CatalogSlotTypes.Names[CatalogType.Artist],
-                false));
+                CatalogSlotTypes.Names[CatalogType.Artist]));
         }
 
         if (!string.IsNullOrEmpty(albumCatalogId))
         {
             catalogMappings.Add((albumCatalogId!, ResolveCatalogVersion(albumCatalogVersion, CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Album], albumCatalogId, logger),
                 CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Album],
-                null,
-                false));
+                null));
         }
 
         if (!string.IsNullOrEmpty(seriesCatalogId))
@@ -984,8 +986,7 @@ public class CatalogManager
             // replaces the type definition in place without re-typing slots.
             catalogMappings.Add((seriesCatalogId!, ResolveCatalogVersion(seriesCatalogVersion, CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Series], seriesCatalogId, logger),
                 CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Series],
-                null,
-                false));
+                null));
         }
 
         if (!string.IsNullOrEmpty(audiobookCatalogId))
@@ -994,86 +995,79 @@ public class CatalogManager
             // on the CatalogSlotTypes.CatalogSlotTypeNames audiobook entry.
             catalogMappings.Add((audiobookCatalogId!, ResolveCatalogVersion(audiobookCatalogVersion, CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Audiobook], audiobookCatalogId, logger),
                 CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Audiobook],
-                null,
-                false));
+                null));
         }
 
         if (!string.IsNullOrEmpty(movieCatalogId))
         {
-            // No ReplacesType (JF-874): the SeriesName/AudiobookTitle shape. In
-            // it-IT (the declaring locale) every PlayMovieIntent slot already
-            // references MovieTitle so the injection replaces the static seed
-            // block in place; in the other synced locales the added type block
-            // is the proven inert AlbumName shape (nothing references it).
+            // No ReplacesType (JF-874): the SeriesName/AudiobookTitle shape,
+            // declared by it-IT only; the loop's declare check owns what the
+            // other 16 locales receive.
             catalogMappings.Add((movieCatalogId!, ResolveCatalogVersion(movieCatalogVersion, CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Movie], movieCatalogId, logger),
                 CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Movie],
-                null,
-                false));
+                null));
         }
 
         if (!string.IsNullOrEmpty(songCatalogId))
         {
             // No ReplacesType (JF-946): the SeriesName replace-in-place shape.
-            // The wiring lands ONLY in locales whose intents declare the
-            // SongTitle slot (it-IT and de-DE today): elsewhere the gate in
-            // the injection loop skips the block entirely and heals any
-            // stale one, because the value set counts against every locale's
-            // 1.5MB effective-model cap. GATED upstream by the per-user
-            // CatalogSongSyncEnabled opt-in: a disabled flag forwards no song
-            // catalog id, so nothing injects here.
+            // Wiring lands ONLY in locales whose intents declare the SongTitle
+            // slot (it-IT and de-DE today): the universal declare check below
+            // is the mechanism (it used to be this row's own
+            // OnlyReplaceExisting flag, generalized by JF-952). GATED upstream
+            // by the per-user CatalogSongSyncEnabled opt-in: a disabled flag
+            // forwards no song catalog id, so nothing injects here.
             catalogMappings.Add((songCatalogId!, ResolveCatalogVersion(songCatalogVersion, CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Song], songCatalogId, logger),
                 CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Song],
-                null,
-                // JF-946 size cap: the song catalog is by far the largest value
-                // set, and Amazon's 1.5MB EFFECTIVE per-model limit counts the
-                // referenced values. Injecting an inert SongTitle block into
-                // locales whose models carry no SongTitle slot pushed the
-                // already-large locales over the cap (live 2026-11-23: ja-JP
-                // 2.5MB, fr 1.7MB, pt-BR 1.7MB, nl-NL 1.5MB+, all
-                // ExceededMaximumModelSize). Song wiring lands ONLY where a
-                // slot already declares the type (replace-in-place, never add);
-                // the other locales keep their pre-song size.
-                true));
+                null));
         }
 
         WarnOnCrossTypeCatalogIds(artistCatalogId, albumCatalogId, seriesCatalogId, audiobookCatalogId, movieCatalogId, songCatalogId, logger);
 
-        logger.LogInformation(
-            "Injecting {Count} catalog references into interaction model ({SlotTypes})",
-            catalogMappings.Count,
-            string.Join(", ", catalogMappings.Select(m => m.SlotTypeName)));
+        var landedTypes = new List<string>();
 
-        foreach (var (catalogId, catalogVersion, slotTypeName, replacesType, onlyReplaceExisting) in catalogMappings)
+        foreach (var (catalogId, catalogVersion, slotTypeName, replacesType) in catalogMappings)
         {
             int existingIndex = Enumerable.Range(0, typesArray.Count)
                 .FirstOrDefault(i => typesArray[i]?["name"]?.GetValue<string>() == slotTypeName, -1);
 
-            // JF-946 (branch-order fix, live lesson 2026-11-23): the declare
-            // check comes FIRST for size-capped types, before the object is
-            // built (16 of 17 locales take this path every song sync; with
-            // the replace branch first, a locale carrying a stale wired block
-            // took REPLACE every sync and the skip branch was a no-op, so
-            // every non-declaring locale kept the full value set against
-            // Amazon's 1.5MB effective per-model cap; the mapping site names
-            // the policy). HEAL while here: a stale block is REMOVED, not
-            // replaced, so the locale returns to its pre-song size.
-            if (onlyReplaceExisting && !AnyIntentSlotDeclaresType(lmNode, slotTypeName))
+            // JF-952 universal declare check. Load-bearing branch order (the
+            // JF-946 live lesson 2026-11-23, generalized): the check runs
+            // BEFORE the JsonObject below is built and BEFORE the replace
+            // branch decides, so a skipped add never constructs the block it
+            // refuses. Rationale: an unreferenced catalog block buys nothing
+            // yet counts against Amazon's 1.5MB EFFECTIVE per-model limit,
+            // which counts referenced values (the JF-946 lesson: an inert
+            // SongTitle block pushed ja-JP, fr, pt-BR and nl-NL over the cap;
+            // every add-anywhere type already carried the same liability).
+            // This drops the inert Album/Movie blocks from the 16
+            // non-declaring locales and the SongTitle block from the 15 that
+            // never declared it; the artist leg rides the replaces-type
+            // disjunct (the 11 AMAZON.Musician locales keep JellyfinArtist).
+            // EXISTING BLOCKS ARE NEVER REMOVED: healing is additive-only. A
+            // locale carrying a wired block keeps it (replace-in-place) until
+            // an explicit remove; this retires the JF-946 stale-removal heal.
+            // The check cannot tell a wired block from a static seed, so the
+            // keep branch converts either shape to the catalog supplier; a
+            // never-declared seed block for a synced type would be re-wired
+            // rather than healed, a trade-off accepted in exchange for never
+            // stripping wiring a live model already carries.
+            bool declared = AnyIntentSlotDeclaresType(lmNode, slotTypeName)
+                || (replacesType != null && AnyIntentSlotDeclaresType(lmNode, replacesType));
+
+            if (!declared)
             {
-                if (existingIndex >= 0)
+                if (existingIndex < 0)
                 {
                     logger.LogInformation(
-                        "Removing stale catalog-backed slot type {SlotTypeName}: no slot declares it and the value set is size-capped (JF-946 heal)",
+                        "Skipping catalog wiring for {SlotTypeName}: the locale declares no slot of this type (or of the type it replaces), so the block would be inert against the effective-model size cap (JF-952)",
                         slotTypeName);
-                    typesArray.RemoveAt(existingIndex);
-                }
-                else
-                {
-                    logger.LogInformation(
-                        "Skipping catalog wiring for {SlotTypeName}: the locale declares no slot of this type and the value set is size-capped (JF-946)",
-                        slotTypeName);
+                    continue;
                 }
 
-                continue;
+                logger.LogInformation(
+                    "Keeping existing catalog block for {SlotTypeName}: no slot declares it but the declare check never removes wiring (JF-952, heal is additive-only)",
+                    slotTypeName);
             }
 
             var catalogType = new JsonObject
@@ -1108,6 +1102,8 @@ public class CatalogManager
                 typesArray.Add(catalogType);
             }
 
+            landedTypes.Add(slotTypeName);
+
             if (replacesType != null)
             {
                 UpdateIntentSlotTypes(lmNode, replacesType, slotTypeName, logger);
@@ -1119,28 +1115,57 @@ public class CatalogManager
             }
         }
 
+        // The landed summary comes AFTER the loop on purpose: the JF-952 declare
+        // check can skip mappings, so a pre-loop count of the attempted rows
+        // would overstate what actually landed (the JF-946 over-cap triage
+        // correlates these lines against model size).
+        logger.LogInformation(
+            "Catalog injection landed {Landed} of {Attempted} catalog mappings ({LandedTypes})",
+            landedTypes.Count,
+            catalogMappings.Count,
+            string.Join(", ", landedTypes));
+
         return root.ToJsonString();
     }
 
     /// <summary>
     /// True when any intent slot in the language model references the given
-    /// slot type name: the declaring-locale test for size-capped types (the
-    /// song catalog rides only locales that actually use it).
+    /// slot type name: the declaring-locale test of the JF-952 universal
+    /// declare check (every synced catalog type wires only where the model
+    /// actually uses it).
     /// </summary>
     private static bool AnyIntentSlotDeclaresType(JsonObject lmNode, string slotTypeName)
     {
-        if (lmNode["intents"] is JsonArray intents)
+        if (lmNode["intents"] is not JsonArray intents)
         {
-            foreach (var intent in intents.OfType<JsonObject>())
+            return false;
+        }
+
+        return VisitIntentSlots(intents, slot => slot["type"]?.GetValue<string>() == slotTypeName);
+    }
+
+    /// <summary>
+    /// JF-952: the shared slot-scan core, the ONE intents-array to slots-array
+    /// to slot["type"] traversal. Applies <paramref name="onSlot"/> to every
+    /// slot object until it returns true and reports whether some call stopped
+    /// the walk: the declare predicate short-circuits on the first match, the
+    /// JF-332 mutator visits every slot and always returns false. Null
+    /// intents, non-object entries and slotless intents are skipped; the
+    /// extraction had to pick one shape and took the predicate's tolerant one
+    /// (the mutator previously THREW on a non-object intent entry, a shape no
+    /// live model reaches today).
+    /// </summary>
+    private static bool VisitIntentSlots(JsonArray intents, Func<JsonObject, bool> onSlot)
+    {
+        foreach (var intent in intents.OfType<JsonObject>())
+        {
+            if (intent["slots"] is JsonArray slots)
             {
-                if (intent["slots"] is JsonArray slots)
+                foreach (var slot in slots.OfType<JsonObject>())
                 {
-                    foreach (var slot in slots.OfType<JsonObject>())
+                    if (onSlot(slot))
                     {
-                        if (slot["type"]?.GetValue<string>() == slotTypeName)
-                        {
-                            return true;
-                        }
+                        return true;
                     }
                 }
             }
@@ -1248,25 +1273,19 @@ public class CatalogManager
             return 0;
         }
 
+        // JF-952: the traversal is the shared VisitIntentSlots core; the
+        // mutator only supplies the per-slot rewrite and never stops the walk.
         int updatedCount = 0;
-        foreach (var intentNode in intentsArray)
+        VisitIntentSlots(intentsArray, slot =>
         {
-            var slotsArray = intentNode?["slots"] as JsonArray;
-            if (slotsArray == null)
+            if (slot["type"]?.GetValue<string>() == oldType)
             {
-                continue;
+                slot["type"] = newType;
+                updatedCount++;
             }
 
-            foreach (var slotNode in slotsArray)
-            {
-                if (slotNode is JsonObject slotObj &&
-                    slotObj["type"]?.GetValue<string>() == oldType)
-                {
-                    slotObj["type"] = newType;
-                    updatedCount++;
-                }
-            }
-        }
+            return false;
+        });
 
         return updatedCount;
     }

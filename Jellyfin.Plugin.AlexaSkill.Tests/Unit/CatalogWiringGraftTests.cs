@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using System.Collections.Generic;
 using System.Reflection;
 using System.Text.Json;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Catalog;
@@ -20,15 +21,43 @@ public class CatalogWiringGraftTests
     private const string SeriesTypeName = "SeriesName";
 
     private static string LiveModelJson(string typesJson)
-        => "{\"interactionModel\":{\"languageModel\":{\"invocationName\":\"mia collezione\",\"intents\":[{\"name\":\"AMAZON.StopIntent\",\"samples\":[]}],\"types\":[" + typesJson + "]}}}";
-
-    private static string FreshModelJson()
         => "{\"interactionModel\":{\"languageModel\":{\"invocationName\":\"mia collezione\",\"intents\":["
-        + "{\"name\":\"FindSongByArtistIntent\",\"slots\":[{\"name\":\"musician\",\"type\":\"" + ArtistTypeName + "\"}]},"
-        + "{\"name\":\"PlayEpisodeIntent\",\"slots\":[{\"name\":\"series_name\",\"type\":\"" + SeriesTypeName + "\"}]}],"
+        + "{\"name\":\"AMAZON.StopIntent\",\"samples\":[]},"
+        + "{\"name\":\"PlayBookIntent\",\"slots\":[{\"name\":\"book\",\"type\":\"AudiobookTitle\"}]},"
+        + "{\"name\":\"PlayMovieIntent\",\"slots\":[{\"name\":\"movie\",\"type\":\"MovieTitle\"}]}],"
+        + "\"types\":[" + typesJson + "]}}}";
+
+    /// <summary>
+    /// A fresh embedded-model envelope. JF-952: the fixtures DECLARE the slot
+    /// types the sync wires (book + movie here) because the universal declare
+    /// check skips a catalog block for a model that declares no slot of the
+    /// type; the two flags turn a declaration off to pin that skip (see
+    /// Apply_MovieWiring_UndeclaredFreshModel_SkipsTheBlock).
+    /// </summary>
+    private static string FreshModelJson(bool declareMovie = true, bool declareBook = true)
+    {
+        var intents = new List<string>
+        {
+            "{\"name\":\"FindSongByArtistIntent\",\"slots\":[{\"name\":\"musician\",\"type\":\"" + ArtistTypeName + "\"}]}",
+            "{\"name\":\"PlayEpisodeIntent\",\"slots\":[{\"name\":\"series_name\",\"type\":\"" + SeriesTypeName + "\"}]}"
+        };
+        if (declareMovie)
+        {
+            intents.Add("{\"name\":\"PlayMovieIntent\",\"slots\":[{\"name\":\"movie\",\"type\":\"MovieTitle\"}]}");
+        }
+
+        if (declareBook)
+        {
+            intents.Add("{\"name\":\"PlayBookIntent\",\"slots\":[{\"name\":\"book\",\"type\":\"AudiobookTitle\"}]}");
+        }
+
+        return "{\"interactionModel\":{\"languageModel\":{\"invocationName\":\"mia collezione\",\"intents\":["
+        + string.Join(",", intents)
+        + "],"
         + "\"types\":["
         + "{\"name\":\"" + ArtistTypeName + "\",\"values\":[{\"name\":{\"value\":\"Mina\"}}]},"
         + "{\"name\":\"" + SeriesTypeName + "\",\"values\":[{\"name\":{\"value\":\"Breaking Bad\"}}]}]}}}";
+    }
 
     private static string WiredType(string name, string catalogId, string version)
         => "{\"name\":\"" + name + "\",\"valueSupplier\":{\"type\":\"CatalogValueSupplier\",\"valueCatalog\":{\"catalogId\":\"" + catalogId + "\",\"version\":\"" + version + "\"}}}";
@@ -232,12 +261,13 @@ public class CatalogWiringGraftTests
     }
 
     /// <summary>
-    /// JF-874: a movie-only live wiring (a live it-IT model whose MovieTitle
-    /// block carries the valueSupplier, nothing else wired) extracts into the
-    /// record's Movie fields and a rebuild PUT grafts it back as the catalog
-    /// supplier on a fresh model that does not even DECLARE the type: the
-    /// injection adds it, which is exactly the shape the 16 non-declaring
-    /// synced locales receive (the proven inert AlbumName block).
+    /// JF-874 + JF-952: a movie-only live wiring (a live it-IT model whose
+    /// MovieTitle block carries the valueSupplier, nothing else wired)
+    /// extracts into the record's Movie fields and a rebuild PUT grafts it
+    /// back as the catalog supplier on a fresh model that DECLARES the type
+    /// (PlayMovieIntent's MovieTitle slot): the injection adds the block
+    /// there. A fresh model that declares NO MovieTitle slot takes the
+    /// JF-952 skip instead, pinned right below.
     /// </summary>
     [Fact]
     public void ExtractAndApply_MovieOnlyWiring_AddsTypeOnFreshModel()
@@ -261,6 +291,30 @@ public class CatalogWiringGraftTests
         var catalog = movieType.GetProperty("valueSupplier").GetProperty("valueCatalog");
         Assert.Equal("movie-9", catalog.GetProperty("catalogId").GetString());
         Assert.Equal("2", catalog.GetProperty("version").GetString());
+    }
+
+    /// <summary>
+    /// JF-952: the graft rides the same universal declare check as the sync,
+    /// so a rebuild PUT into a locale whose fresh model declares no MovieTitle
+    /// slot no longer re-creates the inert block (the pre-JF-952 graft added
+    /// the proven inert AlbumName-shaped block on every rebuild of the 16
+    /// non-declaring locales once their live model carried the wiring).
+    /// </summary>
+    [Fact]
+    public void Apply_MovieWiring_UndeclaredFreshModel_SkipsTheBlock()
+    {
+        const string MovieTypeName = "MovieTitle";
+        string live = LiveModelJson(WiredType(MovieTypeName, "movie-9", "2"));
+
+        var wiring = CatalogWiringGraft.ExtractWiring(live);
+
+        Assert.NotNull(wiring);
+
+        string result = CatalogWiringGraft.Apply(FreshModelJson(declareMovie: false, declareBook: true), "en-US", wiring, null);
+
+        using var doc = JsonDocument.Parse(result);
+        var types = doc.RootElement.GetProperty("interactionModel").GetProperty("languageModel").GetProperty("types");
+        Assert.DoesNotContain(types.EnumerateArray(), t => t.GetProperty("name").GetString() == MovieTypeName);
     }
 
     [Fact]

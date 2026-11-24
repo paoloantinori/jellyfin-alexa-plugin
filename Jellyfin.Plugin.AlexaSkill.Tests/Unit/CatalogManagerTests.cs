@@ -85,22 +85,30 @@ public class CatalogManagerTests
     }
 
     [Fact]
-    public void InjectCatalogReferences_MovieCatalog_ReplacesItItSeedAndAddsElsewhere()
+    public void InjectCatalogReferences_MovieCatalog_DeclaredSeedReplaced_DeclaredFreshAdded_UndeclaredSkipped()
     {
-        // JF-874: in the declaring locale (it-IT) the MovieTitle static seed is
-        // REPLACED in place (the SeriesName shape); a model that does NOT
-        // declare the type (the 16 non-declaring synced locales) gets the
-        // catalog-backed block ADDED, the proven inert AlbumName shape.
-        string declaringModel = BuildInteractionModelJson(existingTypes: new[]
-        {
-            ("MovieTitle", "{\"type\":\"PLAIN_TEXT\",\"values\":[{\"name\":{\"value\":\"Il Padrino\"}}]}")
-        });
-        string bareModel = BuildInteractionModelJson();
+        // JF-874 shapes under the JF-952 universal declare check: in the
+        // declaring locale (it-IT) the MovieTitle static seed is REPLACED in
+        // place (the SeriesName shape); a fresh model that DECLARES the type
+        // (a PlayMovieIntent MovieTitle slot) gets the catalog-backed block
+        // ADDED; a model that declares no MovieTitle slot (the 16 non-declaring
+        // synced locales) gets NOTHING, healing the pre-JF-952 inert block.
+        string declaringModel = BuildInteractionModelJson(
+            existingTypes: new[]
+            {
+                ("MovieTitle", "{\"type\":\"PLAIN_TEXT\",\"values\":[{\"name\":{\"value\":\"Il Padrino\"}}]}")
+            },
+            intents: new[] { ("PlayMovieIntent", new[] { ("movie", "MovieTitle") }) });
+        string declaredFreshModel = BuildInteractionModelJson(
+            intents: new[] { ("PlayMovieIntent", new[] { ("movie", "MovieTitle") }) });
+        string undeclaredModel = BuildInteractionModelJson(
+            intents: new[] { ("AMAZON.StopIntent", Array.Empty<(string SlotName, string SlotType)>()) });
 
         string declaringResult = CatalogManager.InjectCatalogReferences(declaringModel, null, null, null, null, "movie-cat-7", null, null, null, null, "6", _loggerMock.Object);
-        string bareResult = CatalogManager.InjectCatalogReferences(bareModel, null, null, null, null, "movie-cat-7", null, null, null, null, "6", _loggerMock.Object);
+        string declaredFreshResult = CatalogManager.InjectCatalogReferences(declaredFreshModel, null, null, null, null, "movie-cat-7", null, null, null, null, "6", _loggerMock.Object);
+        string undeclaredResult = CatalogManager.InjectCatalogReferences(undeclaredModel, null, null, null, null, "movie-cat-7", null, null, null, null, "6", _loggerMock.Object);
 
-        foreach (string result in new[] { declaringResult, bareResult })
+        foreach (string result in new[] { declaringResult, declaredFreshResult })
         {
             using var resultDoc = JsonDocument.Parse(result);
             var types = resultDoc.RootElement.GetProperty("interactionModel").GetProperty("languageModel").GetProperty("types");
@@ -110,8 +118,181 @@ public class CatalogManagerTests
             Assert.Equal("CatalogValueSupplier", types[0].GetProperty("valueSupplier").GetProperty("type").GetString());
             Assert.Equal("movie-cat-7", types[0].GetProperty("valueSupplier").GetProperty("valueCatalog").GetProperty("catalogId").GetString());
             Assert.Equal("6", types[0].GetProperty("valueSupplier").GetProperty("valueCatalog").GetProperty("version").GetString());
-            Assert.False(types[0].TryGetProperty("values", out _), "static seed values must be replaced, not kept alongside");
         }
+
+        // The declared-seed model must have LOST its static values (replaced,
+        // not kept alongside); the undeclared model must carry NO MovieTitle
+        // block at all (the JF-952 heal: the pre-JF-952 shape added one).
+        using (var declaringDoc = JsonDocument.Parse(declaringResult))
+        {
+            var declaringType = declaringDoc.RootElement.GetProperty("interactionModel").GetProperty("languageModel").GetProperty("types")[0];
+            Assert.False(declaringType.TryGetProperty("values", out _), "static seed values must be replaced, not kept alongside");
+        }
+
+        using (var undeclaredDoc = JsonDocument.Parse(undeclaredResult))
+        {
+            var types = undeclaredDoc.RootElement.GetProperty("interactionModel").GetProperty("languageModel").GetProperty("types");
+            Assert.Equal(0, types.GetArrayLength());
+        }
+    }
+
+    [Fact]
+    public void InjectCatalogReferences_AllTypesUndeclared_NothingIsInjected()
+    {
+        // JF-952: the declare check gates ALL six synced catalog types. A model
+        // that declares none of them (and carries no existing blocks) receives
+        // no catalog block at all: an unreferenced block would only burn the
+        // 1.5MB effective-model budget.
+        string model = BuildInteractionModelJson(
+            intents: new[] { ("AMAZON.StopIntent", Array.Empty<(string SlotName, string SlotType)>()) });
+
+        string result = CatalogManager.InjectCatalogReferences(
+            model, "artist-cat", "album-cat", "series-cat", "audiobook-cat", "movie-cat",
+            "1", "1", "1", "1", "1", _loggerMock.Object, "song-cat", "1");
+
+        using var resultDoc = JsonDocument.Parse(result);
+        var types = resultDoc.RootElement.GetProperty("interactionModel").GetProperty("languageModel").GetProperty("types");
+        Assert.Equal(0, types.GetArrayLength());
+    }
+
+    [Fact]
+    public void InjectCatalogReferences_AllTypesDeclared_AllSixAreInjected()
+    {
+        // JF-952: the positive twin. Every synced type declared by a slot is
+        // wired; the artist leg rides the replaces-type disjunct (the model
+        // declares AMAZON.Musician, not JellyfinArtist, the 11-locale shape),
+        // which must keep re-typing the slot.
+        string model = BuildInteractionModelJson(intents: new[]
+        {
+            ("PlayArtistSongsIntent", new[] { ("musician", "AMAZON.Musician") }),
+            ("PlayAlbumIntent", new[] { ("album", "AlbumName") }),
+            ("PlayEpisodeIntent", new[] { ("series_name", "SeriesName") }),
+            ("PlayBookIntent", new[] { ("book", "AudiobookTitle") }),
+            ("PlayMovieIntent", new[] { ("movie", "MovieTitle") }),
+            ("PlayLibrarySongIntent", new[] { ("librarySong", "SongTitle") })
+        });
+
+        string result = CatalogManager.InjectCatalogReferences(
+            model, "artist-cat", "album-cat", "series-cat", "audiobook-cat", "movie-cat",
+            "1", "2", "3", "4", "5", _loggerMock.Object, "song-cat", "6");
+
+        using var resultDoc = JsonDocument.Parse(result);
+        var languageModel = resultDoc.RootElement.GetProperty("interactionModel").GetProperty("languageModel");
+        var types = languageModel.GetProperty("types");
+
+        var expected = new[]
+        {
+            (Name: "JellyfinArtist", CatalogId: "artist-cat", Version: "1"),
+            (Name: "AlbumName", CatalogId: "album-cat", Version: "2"),
+            (Name: "SeriesName", CatalogId: "series-cat", Version: "3"),
+            (Name: "AudiobookTitle", CatalogId: "audiobook-cat", Version: "4"),
+            (Name: "MovieTitle", CatalogId: "movie-cat", Version: "5"),
+            (Name: "SongTitle", CatalogId: "song-cat", Version: "6")
+        };
+        Assert.Equal(6, types.GetArrayLength());
+        foreach (var (name, catalogId, version) in expected)
+        {
+            var typeNode = TestHelpers.GetModelTypeNode(result, name);
+            Assert.Equal("CatalogValueSupplier", typeNode.GetProperty("valueSupplier").GetProperty("type").GetString());
+            Assert.Equal(catalogId, typeNode.GetProperty("valueSupplier").GetProperty("valueCatalog").GetProperty("catalogId").GetString());
+            Assert.Equal(version, typeNode.GetProperty("valueSupplier").GetProperty("valueCatalog").GetProperty("version").GetString());
+        }
+
+        // The replaces-type arm still re-types the AMAZON.Musician slot.
+        Assert.Equal("JellyfinArtist", languageModel.GetProperty("intents")[0].GetProperty("slots")[0].GetProperty("type").GetString());
+    }
+
+    [Fact]
+    public void InjectCatalogReferences_ExistingBlocksSurviveWhenNothingDeclares()
+    {
+        // JF-952: the declare check is additive-only. A model carrying existing
+        // catalog-backed blocks for types no slot declares keeps them (replaced
+        // in place with the supplier), never stripped: the retired JF-946
+        // stale-removal heal would have deleted them. SongTitle is the load-
+        // bearing case: the JF-946 gate removed stale song blocks, the JF-952
+        // rule keeps every existing block.
+        string model = BuildInteractionModelJson(
+            existingTypes: new[]
+            {
+                ("AlbumName", "{\"type\":\"PLAIN_TEXT\",\"values\":[{\"name\":{\"value\":\"Thriller\"}}]}"),
+                ("SongTitle", "{\"type\":\"PLAIN_TEXT\",\"values\":[{\"name\":{\"value\":\"brano\"}}]}")
+            },
+            intents: new[] { ("AMAZON.StopIntent", Array.Empty<(string SlotName, string SlotType)>()) });
+
+        string result = CatalogManager.InjectCatalogReferences(
+            model, null, "album-cat", null, null, null,
+            null, "5", null, null, null, _loggerMock.Object, "song-cat", "6");
+
+        using var resultDoc = JsonDocument.Parse(result);
+        var types = resultDoc.RootElement.GetProperty("interactionModel").GetProperty("languageModel").GetProperty("types");
+
+        Assert.Equal(2, types.GetArrayLength());
+        foreach (var (name, catalogId, version) in new[] { (Name: "AlbumName", CatalogId: "album-cat", Version: "5"), (Name: "SongTitle", CatalogId: "song-cat", Version: "6") })
+        {
+            var typeNode = TestHelpers.GetModelTypeNode(result, name);
+            Assert.Equal("CatalogValueSupplier", typeNode.GetProperty("valueSupplier").GetProperty("type").GetString());
+            Assert.Equal(catalogId, typeNode.GetProperty("valueSupplier").GetProperty("valueCatalog").GetProperty("catalogId").GetString());
+            Assert.Equal(version, typeNode.GetProperty("valueSupplier").GetProperty("valueCatalog").GetProperty("version").GetString());
+            Assert.False(typeNode.TryGetProperty("values", out _), "static seed values must be replaced, not kept alongside");
+        }
+    }
+
+    /// <summary>
+    /// JF-952 heal, verified against the COMMITTED 17-locale models: AlbumName
+    /// and MovieTitle slots are declared by it-IT only, SongTitle by it-IT and
+    /// de-DE (sweep 2026-11-24). Injecting album + movie + song onto every
+    /// committed model must create those blocks ONLY in the declaring locales
+    /// (where the static seed is replaced in place); the other locales' fresh
+    /// templates receive NO inert block. A live model already carrying a
+    /// pre-JF-952 inert block is a different shape (kept, never removed),
+    /// pinned separately by InjectCatalogReferences_ExistingBlocksSurviveWhenNothingDeclares.
+    /// The expected roster is asserted from this table, NOT recomputed from the
+    /// model, so the test stays independent of the gate it pins.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(TestLocales.LocalesWithResourcePaths), MemberType = typeof(TestLocales))]
+    public void InjectCatalogReferences_NonDeclaringLocales_ReceiveNoInertAlbumMovieSongBlock(string locale, string resourcePath)
+    {
+        var declaredByLocales = new (string SlotTypeName, string CatalogId, string[] Locales)[]
+        {
+            ("AlbumName", "album-cat", new[] { "it-IT" }),
+            ("MovieTitle", "movie-cat", new[] { "it-IT" }),
+            ("SongTitle", "song-cat", new[] { "it-IT", "de-DE" })
+        };
+
+        string model = LoadEmbeddedInteractionModel(resourcePath);
+        string result = CatalogManager.InjectCatalogReferences(
+            model, null, "album-cat", null, null, "movie-cat",
+            null, "5", null, null, "5", _loggerMock.Object, "song-cat", "6");
+
+        using var resultDoc = JsonDocument.Parse(result);
+        var types = resultDoc.RootElement.GetProperty("interactionModel").GetProperty("languageModel").GetProperty("types");
+
+        foreach (var (slotTypeName, catalogId, locales) in declaredByLocales)
+        {
+            bool expected = locales.Contains(locale, StringComparer.Ordinal);
+            var matches = types.EnumerateArray().Where(t => t.GetProperty("name").GetString() == slotTypeName).ToList();
+            Assert.Equal(expected ? 1 : 0, matches.Count);
+
+            if (expected)
+            {
+                Assert.Equal(catalogId, matches[0].GetProperty("valueSupplier").GetProperty("valueCatalog").GetProperty("catalogId").GetString());
+            }
+        }
+    }
+
+    /// <summary>
+    /// Reads a committed interaction model resource (the JF-952 heal runs
+    /// against the real 17-locale roster, not only hand-built fixtures). The
+    /// committed resources hold languageModel + dialog at the root; the
+    /// injection reads the interactionModel envelope.
+    /// </summary>
+    private static string LoadEmbeddedInteractionModel(string resourcePath)
+    {
+        var assembly = typeof(Jellyfin.Plugin.AlexaSkill.Util).Assembly;
+        using var stream = assembly.GetManifestResourceStream(resourcePath)!;
+        using var reader = new System.IO.StreamReader(stream);
+        return "{\"interactionModel\":" + reader.ReadToEnd() + "}";
     }
 
     [Fact]
@@ -374,7 +555,12 @@ public class CatalogManagerTests
     [Fact]
     public void InjectCatalogReferences_CreatesTypesArray_WhenMissing()
     {
-        string model = """{"interactionModel":{"languageModel":{"invocationName":"test","intents":[]}}}""";
+        // JF-952: the model declares the two wired types (the artist via the
+        // replaced AMAZON.Musician, the album directly) or the declare check
+        // would skip both; the pinned behavior is the types-array creation.
+        string model = """
+        {"interactionModel":{"languageModel":{"invocationName":"test","intents":[{"name":"PlayArtistSongsIntent","slots":[{"name":"musician","type":"AMAZON.Musician"}]},{"name":"PlayAlbumIntent","slots":[{"name":"album","type":"AlbumName"}]}]}}}
+        """;
 
         string result = CatalogManager.InjectCatalogReferences(model, "cat-1", "cat-2", null, null, null, "1", "2", null, null, null, _loggerMock.Object);
 
@@ -1167,19 +1353,34 @@ public class CatalogManagerTests
         {
             foreach (var intent in intents)
             {
-                var intentObj = new JsonObject { ["name"] = intent.Name };
-                var slotsArray = new JsonArray();
-                foreach (var (slotName, slotType) in intent.Slots)
-                {
-                    slotsArray.Add(new JsonObject { ["name"] = slotName, ["type"] = slotType });
-                }
-
-                intentObj["slots"] = slotsArray;
-                intentsArray.Add(intentObj);
+                AddIntent(intentsArray, intent.Name, intent.Slots);
             }
+        }
+        else
+        {
+            // JF-952: the declare check wires a type only where the model
+            // declares a slot of it, so the default model declares the two
+            // types these tests wire: AMAZON.Musician (the artist
+            // replaces-type disjunct) and AlbumName (direct). A test wanting
+            // a model that declares nothing passes explicit slotless intents.
+            AddIntent(intentsArray, "PlayArtistSongsIntent", new[] { ("musician", "AMAZON.Musician") });
+            AddIntent(intentsArray, "PlayAlbumIntent", new[] { ("album", "AlbumName") });
         }
 
         return root.ToJsonString();
+    }
+
+    private static void AddIntent(JsonArray intentsArray, string name, (string SlotName, string SlotType)[] slots)
+    {
+        var intentObj = new JsonObject { ["name"] = name };
+        var slotsArray = new JsonArray();
+        foreach (var (slotName, slotType) in slots)
+        {
+            slotsArray.Add(new JsonObject { ["name"] = slotName, ["type"] = slotType });
+        }
+
+        intentObj["slots"] = slotsArray;
+        intentsArray.Add(intentObj);
     }
 
     #endregion
