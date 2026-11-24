@@ -238,7 +238,7 @@ tests:
   # -------------------------------------------------------------------------
   # 18. PlayEpisodeIntent (series_name, season_number, episode_number)
   # -------------------------------------------------------------------------
-  - utterance: "reproduce la temporada uno episodio tres de breaking bad"
+  - utterance: "reproduce la temporada uno episodio tres de adolescencia"
     expected_intent: PlayEpisodeIntent
     expected_slots:
       series_name: {}
@@ -255,7 +255,7 @@ tests:
   # JF-551 (2026-10-04): the SUBJUNCTIVE wrapper payload ("pide a {inv} que
   # reproduzca ...", series FIRST). Pre-family the NLU fuzzy-matched the
   # imperative sample and glued the verb into the slot (series_name
-  # "reproduzca breaking bad" on every SELECTED reading, catalog-independent),
+  # "reproduzca adolescencia" on every SELECTED reading, catalog-independent),
   # so the exact-value pin below is the anti-pollution regression pin: it
   # stayed red until the rebuilt model with the "reproduzca" family was
   # deployed (green since; re-verified 3/3 on the 2026-10-17 JF-904 roll),
@@ -265,11 +265,11 @@ tests:
   # "reproduce {song} ..." steals the same shape for non-catalog values,
   # live-observed 2026-10-04) - treat it as the competition to fix, never a
   # fixture bug to weaken.
-  - utterance: "reproduzca breaking bad temporada uno episodio tres"
+  - utterance: "reproduzca adolescencia temporada uno episodio tres"
     expected_intent: PlayEpisodeIntent
     expected_slots:
       series_name:
-        value: "breaking bad"
+        value: "adolescencia"
       season_number: {}
       episode_number: {}
 
@@ -291,40 +291,40 @@ tests:
   # The number slots are pinned like the bare-form sibling above: the
   # murderbot incident class is "intent selected, numbers empty", which a
   # series-only pin would read green through.
-  - utterance: "que reproduzca breaking bad temporada uno episodio tres"
+  - utterance: "que reproduzca adolescencia temporada uno episodio tres"
     expected_intent: PlayEpisodeIntent
     expected_slots:
       series_name:
-        value: "breaking bad"
+        value: "adolescencia"
       season_number: {}
       episode_number: {}
 
   # JF-844 densification pins (2026-10-09): the STOLEN SHAPES that motivated
   # the season-ed family's densification (see the template header). Live,
   # stable across identical-content rebuilds, content-caused: "reproduce
-  # breaking bad temporada uno episodio tres" routed PlaySongIntent with
-  # song="breaking bad temporada 1" and later PlayNextIntent (the music-next
+  # adolescencia temporada uno episodio tres" routed PlaySongIntent with
+  # song="adolescencia temporada 1" and later PlayNextIntent (the music-next
   # steal of the 2026-10-09 morning battery), "pon ..." had no anchored
   # sample at all. Both pin the SPOKEN text for series_name (the pinning
   # convention) and presence-pin both numbers (the murderbot class, see the
   # connector pin above). The densification roll ran and these shapes stayed
   # stolen: STILL RED 3/3 on the 2026-10-17 JF-904 roll ("reproduce ..." ->
-  # PlayNextIntent, "pon ..." -> PlaySongIntent song="breaking bad
+  # PlayNextIntent, "pon ..." -> PlaySongIntent song="adolescencia
   # temporada 1"); the rows stay red deliberately as the tracker for the
   # parked handler-side decision (JF-865 multi-medium).
-  - utterance: "reproduce breaking bad temporada uno episodio tres"
+  - utterance: "reproduce adolescencia temporada uno episodio tres"
     expected_intent: PlayEpisodeIntent
     expected_slots:
       series_name:
-        value: "breaking bad"
+        value: "adolescencia"
       season_number: {}
       episode_number: {}
 
-  - utterance: "pon breaking bad temporada uno episodio tres"
+  - utterance: "pon adolescencia temporada uno episodio tres"
     expected_intent: PlayEpisodeIntent
     expected_slots:
       series_name:
-        value: "breaking bad"
+        value: "adolescencia"
       season_number: {}
       episode_number: {}
 

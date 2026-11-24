@@ -90,6 +90,9 @@ public static class CatalogSeedEnrichment
     private static readonly Lazy<IReadOnlyList<string>> MovieSeeds =
         new(LoadMovieSeeds);
 
+    private static readonly Lazy<IReadOnlyList<string>> SeriesSeeds =
+        new(LoadSeriesSeeds);
+
     /// <summary>
     /// Appends the seed values of the catalog-backed slot type to the payload.
     /// Library entries win on collision: a seed whose name matches an existing
@@ -163,7 +166,8 @@ public static class CatalogSeedEnrichment
         CatalogType.Album,
         CatalogType.Artist,
         CatalogType.Audiobook,
-        CatalogType.Movie
+        CatalogType.Movie,
+        CatalogType.Series
     };
 
     /// <summary>
@@ -177,9 +181,12 @@ public static class CatalogSeedEnrichment
     /// before the first catalog sync lands; the other locales' generic words
     /// ride their own legs via <see cref="GenericAudiobookWords"/>, see
     /// <see cref="ItItSeedLocale"/>). Series is deliberately NOT
-    /// merged: its seeds are per-locale LOCALIZED titles (Juego de Tronos,
-    /// Il Trono di Spade, ...) and the union-merge decision for them is out of
-    /// JF-541 phase 2 scope. All other types have no seeds.
+    /// merged via the Artist union pattern (the localized titles differ per
+    /// locale, so the union keeps every locale's vocabulary on the shared
+    /// upload; the live lesson 2026-11-23: without the merge, a catalog sync
+    /// strips the seed titles and the episode wrapper fixtures go red for
+    /// every series not in the user's library). All other types have no
+    /// seeds.
     /// </summary>
     /// <param name="type">The catalog type.</param>
     /// <returns>The seed names; empty when the type carries no seeds.</returns>
@@ -191,6 +198,15 @@ public static class CatalogSeedEnrichment
         // JF-874: the it-IT MovieTitle block is the seed authority, same shape
         // as Album/Audiobook (the only locale declaring the type this task).
         CatalogType.Movie => MovieSeeds.Value,
+        // The union across all locale models (the Artist pattern): the seeds
+        // are localized per locale and the catalog upload is shared, so the
+        // union keeps every locale's seed vocabulary. Without this merge the
+        // catalog sync replaces the static seed block with only the user's
+        // library series, and a seed title (Breaking Bad, Stranger Things)
+        // stops anchoring the JF-684 selection gating (the live lesson
+        // 2026-11-23: episode wrapper fixtures went red for every series
+        // not in the test library until this merge landed).
+        CatalogType.Series => SeriesSeeds.Value,
         _ => Array.Empty<string>()
     };
 
@@ -338,6 +354,26 @@ public static class CatalogSeedEnrichment
     private static IReadOnlyList<string> LoadMovieSeeds()
     {
         return ReadModelSeeds(ItItSeedLocale, CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Movie]);
+    }
+
+    private static List<string> LoadSeriesSeeds()
+    {
+        // The Artist union pattern: Series seeds are per-locale LOCALIZED
+        // titles (Juego de Tronos, Il Trono di Spade, ...), so the union
+        // across all committed models keeps every locale's seed vocabulary
+        // on the shared catalog upload. Library entries win on collision
+        // (the MergeSeeds contract).
+        string typeName = CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Series];
+        var union = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach ((string _, string resourcePath) in GetModelsSortedByLocale())
+        {
+            foreach (string seed in ReadResourceSeeds(resourcePath, typeName))
+            {
+                union.Add(seed);
+            }
+        }
+
+        return union.ToList();
     }
 
     private static List<string> LoadArtistSeeds()

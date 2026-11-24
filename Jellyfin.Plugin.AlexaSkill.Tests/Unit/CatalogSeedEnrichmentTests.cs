@@ -184,10 +184,27 @@ public class CatalogSeedEnrichmentTests
     {
         var payload = BuildLibraryPayload("Local Album");
 
-        CatalogSeedEnrichment.MergeInto(payload, CatalogType.Series, NoSynonyms, "it-IT");
+        // Series NOW carries seeds (the union merge, 2026-11-23): only Song
+        // remains seedless by design (its static seeds are generic words,
+        // not real titles).
         CatalogSeedEnrichment.MergeInto(payload, CatalogType.Song, NoSynonyms, "it-IT");
 
         Assert.Single(payload.Values);
+    }
+
+    [Fact]
+    public void MergeInto_Series_AppendsSeedTitles_BeyondTheLibrary()
+    {
+        var payload = BuildLibraryPayload("Local Series");
+
+        CatalogSeedEnrichment.MergeInto(payload, CatalogType.Series, NoSynonyms, "it-IT");
+
+        // The union across locale models: the seed titles (Breaking Bad,
+        // Stranger Things, ...) survive the catalog sync alongside the
+        // library entry.
+        Assert.True(payload.Values.Count > 1, "Series seeds must merge into the payload");
+        Assert.Contains(payload.Values, v => v.Name.Value == "Local Series");
+        Assert.Contains(payload.Values, v => v.Name.Value == "Breaking Bad");
     }
 
     // ---- Embedded-model sourcing (the real seeds) ----

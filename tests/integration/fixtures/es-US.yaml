@@ -46,7 +46,7 @@ tests:
   # SUBJUNCTIVE wrapper payload ("pide a {inv} que reproduzca ...", series
   # FIRST). Pre-family evidence on es-US: the BARE form selected
   # PlayEpisodeIntent but DROPPED series_name entirely, while the
-  # connector-residue form glued "que reproduzca breaking bad" into the slot;
+  # connector-residue form glued "que reproduzca adolescencia" into the slot;
   # the exact-value pin is the anti-pollution regression pin and stayed red
   # until the rebuilt model with the "reproduzca" family was deployed
   # (green since; re-verified 2/2 with all slots on the 2026-10-17 JF-904
@@ -55,11 +55,11 @@ tests:
   # both consistently. The imperative episode forms are deliberately NOT
   # pinned: their probes on es-US filled slots inconsistently (JF-406
   # divergence class).
-  - utterance: "reproduzca breaking bad temporada uno episodio tres"
+  - utterance: "reproduzca adolescencia temporada uno episodio tres"
     expected_intent: PlayEpisodeIntent
     expected_slots:
       series_name:
-        value: "breaking bad"
+        value: "adolescencia"
       season_number: {}
       episode_number: {}
 
@@ -72,11 +72,11 @@ tests:
   # above), apply this locale's imperative-not-pinned convention
   # (skip_reason with the probe evidence), never a silent weakening. Red
   # until the roll.
-  - utterance: "reproduce breaking bad temporada uno episodio tres"
+  - utterance: "reproduce adolescencia temporada uno episodio tres"
     expected_intent: PlayEpisodeIntent
     expected_slots:
       series_name:
-        value: "breaking bad"
+        value: "adolescencia"
       season_number: {}
       episode_number: {}
 
@@ -89,11 +89,11 @@ tests:
   # than repair it; the pin turns red only if a roll breaks what the rows
   # now make explicit. Both numbers pinned per this locale's convention
   # (subjunctive readings fill both consistently, JF-551 note above).
-  - utterance: "que reproduzca breaking bad temporada uno episodio tres"
+  - utterance: "que reproduzca adolescencia temporada uno episodio tres"
     expected_intent: PlayEpisodeIntent
     expected_slots:
       series_name:
-        value: "breaking bad"
+        value: "adolescencia"
       season_number: {}
       episode_number: {}
 

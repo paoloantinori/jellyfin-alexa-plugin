@@ -335,14 +335,14 @@ tests:
   # -------------------------------------------------------------------------
   # 20. PlayEpisodeIntent (series_name, season_number, episode_number)
   # -------------------------------------------------------------------------
-  - utterance: "joue la saison un épisode trois de breaking bad"
+  - utterance: "joue la saison un épisode trois de adolescence"
     expected_intent: PlayEpisodeIntent
     expected_slots:
       series_name: {}
       season_number: {}
       episode_number: {}
 
-  - utterance: "joue stranger things saison deux épisode un"
+  - utterance: "joue adolescence saison deux épisode un"
     expected_intent: PlayEpisodeIntent
     expected_slots:
       series_name: {}
