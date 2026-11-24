@@ -113,13 +113,28 @@ public class LibrarySyncServiceSongTeardownTests : PluginTestBase, IDisposable
 
         var result = await _service.SyncUserLibraryAsync(user, jellyfinUser, CancellationToken.None);
 
-        // The wiring strip PUT the static SongTitle block back (no valueSupplier).
-        string? stripPut = _smapiHandler.ModelPutBodies.FirstOrDefault();
-        Assert.NotNull(stripPut);
-        var songType = TestHelpers.GetModelTypeNode(stripPut!, "SongTitle");
-        Assert.False(songType.TryGetProperty("valueSupplier", out _), "the wired block must lose its catalog supplier");
-        Assert.True(songType.TryGetProperty("values", out _), "the static seed block must be restored");
-        Assert.Equal("brano", songType.GetProperty("values")[0].GetProperty("name").GetProperty("value").GetString());
+        // Every strip PUT leaves the SongTitle block unwired: the declaring
+        // locales (it-IT, de-DE) get their OWN embedded static block restored,
+        // the other roster locales drop the type outright (the JF-952 removal
+        // shape). Roster order is irrelevant: assert over the whole PUT set, not
+        // a positional body.
+        Assert.NotEmpty(_smapiHandler.ModelPutBodies);
+        foreach (string putBody in _smapiHandler.ModelPutBodies)
+        {
+            using var putDoc = JsonDocument.Parse(putBody);
+            var putTypes = putDoc.RootElement.GetProperty("interactionModel").GetProperty("languageModel").GetProperty("types");
+            foreach (var typeNode in putTypes.EnumerateArray())
+            {
+                if (typeNode.TryGetProperty("name", out var nameNode) && nameNode.GetString() == "SongTitle")
+                {
+                    Assert.False(typeNode.TryGetProperty("valueSupplier", out _), $"a strip PUT still carries the catalog supplier: {putBody}");
+                }
+            }
+        }
+
+        var putBodies = _smapiHandler.ModelPutBodies;
+        Assert.Contains(putBodies, b => b.Contains("brano", StringComparison.Ordinal));
+        Assert.Contains(putBodies, b => b.Contains("titel", StringComparison.Ordinal));
 
         // Exactly one catalog delete, against the user's OWN catalog id.
         Assert.Equal(1, _smapiHandler.CatalogDeleteCount);
@@ -179,7 +194,7 @@ public class LibrarySyncServiceSongTeardownTests : PluginTestBase, IDisposable
         // The strip succeeded (the PUT happened) but the delete failed: the id
         // must stay so the next sync run retries, and the run must not read
         // clean (LastCatalogSync must not advance over a failed teardown).
-        Assert.NotNull(_smapiHandler.ModelPutBodies.FirstOrDefault());
+        Assert.NotNull(_smapiHandler.ModelPutBodies.LastOrDefault());
         Assert.Equal(SongCatalogId, user.SongCatalogId);
         Assert.False(result.Success);
     }
@@ -189,31 +204,96 @@ public class LibrarySyncServiceSongTeardownTests : PluginTestBase, IDisposable
     {
         SetupSongsOnlyLibrary();
 
-        // Run 1: opt-in sync mints a catalog and wires the model.
+        // Run 1: opt-in sync mints a catalog and wires the model. The fake mints
+        // a DISTINCT id per creation, so a stale-id reuse cannot masquerade as a
+        // fresh sync.
         var user = CreateUser(songSyncEnabled: true, songCatalogId: null);
         var jellyfinUser = TestHelpers.CreateJellyfinUser();
         await _service.SyncUserLibraryAsync(user, jellyfinUser, CancellationToken.None);
-        Assert.Equal(SongCatalogId, user.SongCatalogId);
+        string firstId = Assert.Single(_smapiHandler.CreatedCatalogIds);
+        Assert.Equal(firstId, user.SongCatalogId);
 
         // Run 2: opt-out teardown strips the wiring and deletes the catalog.
         user.CatalogSongSyncEnabled = false;
         await _service.SyncUserLibraryAsync(user, jellyfinUser, CancellationToken.None);
         Assert.Null(user.SongCatalogId);
 
-        // Run 3: opt-in again re-syncs FROM SCRATCH: a fresh catalog version
-        // is minted, the model is re-wired with the catalog supplier, and the
-        // id lands again.
+        // Run 3: opt-in again re-syncs FROM SCRATCH: a NEW catalog id is minted
+        // (never the deleted one reused), the model is re-wired with that fresh
+        // catalog supplier, and the id lands again.
         user.CatalogSongSyncEnabled = true;
         var result = await _service.SyncUserLibraryAsync(user, jellyfinUser, CancellationToken.None);
 
         Assert.True(result.Success);
-        Assert.Equal(SongCatalogId, user.SongCatalogId);
         Assert.Equal(2, _smapiHandler.CatalogCreationCount);
         Assert.Equal(1, _smapiHandler.CatalogDeleteCount);
+        string secondId = _smapiHandler.CreatedCatalogIds[1];
+        Assert.NotEqual(firstId, secondId);
+        Assert.Equal(secondId, user.SongCatalogId);
 
         string lastPut = _smapiHandler.ModelPutBodies.Last();
         var reWired = TestHelpers.GetModelTypeNode(lastPut, "SongTitle");
-        Assert.Equal(SongCatalogId, reWired.GetProperty("valueSupplier").GetProperty("valueCatalog").GetProperty("catalogId").GetString());
+        Assert.Equal(secondId, reWired.GetProperty("valueSupplier").GetProperty("valueCatalog").GetProperty("catalogId").GetString());
+    }
+
+    /// <summary>
+    /// JF-949 review round finding 1: the strip roster is the FULL wiring-supported
+    /// locale set, independent of CatalogSyncLocales. With the sync roster narrowed
+    /// to it-IT only, the teardown must still strip de-DE (both models lose the
+    /// wired block) BEFORE the catalog delete is allowed, so a locale left out of
+    /// the current sync roster can never keep a wired block over a deleted catalog.
+    /// </summary>
+    [Fact]
+    public async Task OptOut_RosterNarrowed_TeardownStillStripsEverySupportedLocale()
+    {
+        SetupSongsOnlyLibrary();
+
+        // Narrow the sync roster to it-IT only (the opt-in-time roster carried
+        // more locales; the sync legs below only see it-IT).
+        Plugin.Instance!.Configuration.CatalogSyncLocales = "it-IT";
+        try
+        {
+            var user = CreateUser(songSyncEnabled: false, songCatalogId: SongCatalogId);
+            var jellyfinUser = TestHelpers.CreateJellyfinUser();
+
+            var result = await _service.SyncUserLibraryAsync(user, jellyfinUser, CancellationToken.None);
+
+            // Both declaring locales stripped: distinct locales in the PUT set.
+            var strippedLocales = _smapiHandler.ModelPutLocales.ToHashSet(StringComparer.Ordinal);
+            Assert.Contains("it-IT", strippedLocales);
+            Assert.Contains("de-DE", strippedLocales);
+
+            // The delete fired only AFTER both strips (a single delete, and the
+            // id is cleared, so the all-strips-succeeded gate passed).
+            Assert.Equal(1, _smapiHandler.CatalogDeleteCount);
+            Assert.Null(user.SongCatalogId);
+        }
+        finally
+        {
+            Plugin.Instance!.Configuration.CatalogSyncLocales = string.Empty;
+        }
+    }
+
+    /// <summary>
+    /// JF-949 review round finding 2: a malformed live-model body is a DISTINCT
+    /// outcome, not the static case. Every locale's strip reads the malformed body,
+    /// so the wiring state is unknown and the catalog delete must NOT fire; the id
+    /// stays for retry and the run fails.
+    /// </summary>
+    [Fact]
+    public async Task OptOut_MalformedModelBody_BlocksDeleteAndKeepsId()
+    {
+        SetupSongsOnlyLibrary();
+        _smapiHandler.ServeMalformedModel = true;
+        var user = CreateUser(songSyncEnabled: false, songCatalogId: SongCatalogId);
+        var jellyfinUser = TestHelpers.CreateJellyfinUser();
+
+        var result = await _service.SyncUserLibraryAsync(user, jellyfinUser, CancellationToken.None);
+
+        Assert.Equal(0, _smapiHandler.CatalogDeleteCount);
+        Assert.Equal(SongCatalogId, user.SongCatalogId);
+        Assert.False(result.Success);
+        Assert.Empty(_smapiHandler.ModelPutBodies);
     }
 
     [Fact]
@@ -251,9 +331,9 @@ public class LibrarySyncServiceSongTeardownTests : PluginTestBase, IDisposable
             """;
         string staticBlock = """{"name":"SongTitle","values":[{"name":{"value":"brano"}}]}""";
 
-        (string modified, bool removed) = CatalogManager.StripCatalogWiring(wired, "SongTitle", staticBlock);
+        (string modified, CatalogManager.CatalogStripOutcome outcome) = CatalogManager.StripCatalogWiring(wired, "SongTitle", staticBlock);
 
-        Assert.True(removed);
+        Assert.Equal(CatalogManager.CatalogStripOutcome.Removed, outcome);
         using var doc = JsonDocument.Parse(modified);
         var lm = doc.RootElement.GetProperty("interactionModel").GetProperty("languageModel");
         var types = lm.GetProperty("types");
@@ -274,8 +354,8 @@ public class LibrarySyncServiceSongTeardownTests : PluginTestBase, IDisposable
             """;
         string block = """{"name":"SongTitle","values":[{"name":{"value":"brano"}}]}""";
 
-        Assert.False(CatalogManager.StripCatalogWiring(staticModel, "SongTitle", block).Removed);
-        Assert.False(CatalogManager.StripCatalogWiring(absentModel, "SongTitle", block).Removed);
+        Assert.Equal(CatalogManager.CatalogStripOutcome.Unchanged, CatalogManager.StripCatalogWiring(staticModel, "SongTitle", block).Outcome);
+        Assert.Equal(CatalogManager.CatalogStripOutcome.Unchanged, CatalogManager.StripCatalogWiring(absentModel, "SongTitle", block).Outcome);
     }
 
     /// <summary>
@@ -290,25 +370,25 @@ public class LibrarySyncServiceSongTeardownTests : PluginTestBase, IDisposable
             {"interactionModel":{"languageModel":{"types":[{"name":"SongTitle","valueSupplier":{"type":"CatalogValueSupplier","valueCatalog":{"catalogId":"c1","version":"2"}}}]}}}
             """;
 
-        (string modified, bool removed) = CatalogManager.StripCatalogWiring(wired, "SongTitle", null);
+        (string modified, CatalogManager.CatalogStripOutcome outcome) = CatalogManager.StripCatalogWiring(wired, "SongTitle", null);
 
-        Assert.True(removed);
+        Assert.Equal(CatalogManager.CatalogStripOutcome.Removed, outcome);
         using var doc = JsonDocument.Parse(modified);
         var types = doc.RootElement.GetProperty("interactionModel").GetProperty("languageModel").GetProperty("types");
         Assert.Equal(0, types.GetArrayLength());
     }
 
     /// <summary>
-    /// A malformed live body is tolerated as unchanged: the strip cannot safely
-    /// rewrite a model it cannot parse, and the caller's own failure handling
-    /// owns the outcome (JF-949 review round).
+    /// A malformed live body is the DISTINCT Malformed outcome, never the static
+    /// case: the caller must block the catalog delete on it (the wiring state is
+    /// unknown), JF-949 review round finding 2.
     /// </summary>
     [Fact]
-    public void StripCatalogWiring_MalformedBody_IsToleratedAsUnchanged()
+    public void StripCatalogWiring_MalformedBody_IsDistinctMalformedOutcome()
     {
-        (string modified, bool removed) = CatalogManager.StripCatalogWiring("not-json-at-all", "SongTitle", null);
+        (string modified, CatalogManager.CatalogStripOutcome outcome) = CatalogManager.StripCatalogWiring("not-json-at-all", "SongTitle", null);
 
-        Assert.False(removed);
+        Assert.Equal(CatalogManager.CatalogStripOutcome.Malformed, outcome);
         Assert.Equal("not-json-at-all", modified);
     }
 
@@ -342,9 +422,37 @@ public class LibrarySyncServiceSongTeardownTests : PluginTestBase, IDisposable
             {"interactionModel":{"languageModel":{"invocationName":"mia collezione","intents":[{"name":"PlayLibrarySongIntent","slots":[{"name":"librarySong","type":"SongTitle"}]}],"types":[{"name":"SongTitle","valueSupplier":{"type":"CatalogValueSupplier","valueCatalog":{"catalogId":"amzn1.catalog.test.teardown-1","version":"1"}}}]}}}
             """;
 
+        /// <summary>
+        /// Per-locale model state: each locale's live model carries its OWN wired
+        /// block until THIS locale's strip PUT lands (the fake's earlier single
+        /// shared body made only the first roster locale ever strip, which hid the
+        /// roster bug the full-roster pin exists to catch).
+        /// </summary>
+        private readonly Dictionary<string, string> _lastPutByLocale = new(StringComparer.Ordinal);
+
+        /// <summary>Skill status carrying EVERY wiring-supported locale as SUCCEEDED, so the no-Location PUT path settles for any roster locale.</summary>
+        private readonly string _statusJson;
+
+        public FakeSmapiHandler()
+        {
+            _statusJson = TestHelpers.SmapiSkillStatusJson(
+                Jellyfin.Plugin.AlexaSkill.Util.GetLocalInteractionModels()
+                    .Select(m => m.Item1)
+                    .Where(CatalogManager.IsCatalogWiringSupported)
+                    .ToArray());
+        }
+
         public bool DeleteFails { get; set; }
 
+        /// <summary>JF-949 review round finding 2: serve an unparseable model body on every locales GET.</summary>
+        public bool ServeMalformedModel { get; set; }
+
+        private int _creationCounter;
+
         public List<(HttpMethod Method, string Url, string? Body)> Requests { get; } = new();
+
+        /// <summary>JF-949 review round finding 7: a DISTINCT id minted per creation, so a stale-id reuse cannot pass for a fresh sync.</summary>
+        public List<string> CreatedCatalogIds { get; } = new();
 
         public int CatalogDeleteCount =>
             Requests.Count(r => r.Method == HttpMethod.Delete && r.Url.Contains("/interactionModel/catalogs/", StringComparison.Ordinal));
@@ -360,6 +468,12 @@ public class LibrarySyncServiceSongTeardownTests : PluginTestBase, IDisposable
         public List<string> ModelPutBodies =>
             Requests.Where(r => r.Method == HttpMethod.Put && r.Url.Contains("/interactionModel/locales/", StringComparison.Ordinal))
                 .Select(r => r.Body ?? string.Empty)
+                .ToList();
+
+        /// <summary>The locale segment of every model PUT (the roster-narrowing pin reads the set).</summary>
+        public List<string> ModelPutLocales =>
+            Requests.Where(r => r.Method == HttpMethod.Put && r.Url.Contains("/interactionModel/locales/", StringComparison.Ordinal))
+                .Select(r => r.Url.Split("/locales/")[1].Split('/')[0])
                 .ToList();
 
         private static string StaticModelJson
@@ -391,20 +505,23 @@ public class LibrarySyncServiceSongTeardownTests : PluginTestBase, IDisposable
 
             if (request.Method == HttpMethod.Post && url.EndsWith("/interactionModel/catalogs", StringComparison.Ordinal))
             {
-                return Json($"{{\"catalogId\":\"{SongCatalogId}\"}}");
+                string minted = $"amzn1.catalog.test.teardown-{Interlocked.Increment(ref _creationCounter)}";
+                CreatedCatalogIds.Add(minted);
+                return Json($"{{\"catalogId\":\"{minted}\"}}");
             }
 
             if (request.Method == HttpMethod.Post && url.EndsWith("/versions", StringComparison.Ordinal))
             {
+                string targetCatalogId = url.Split("/catalogs/")[1].Split('/')[0];
                 return new HttpResponseMessage(HttpStatusCode.Accepted)
                 {
-                    Headers = { Location = new Uri($"{Base}/v1/skills/api/custom/interactionModel/catalogs/{SongCatalogId}/updateRequest/req-1") }
+                    Headers = { Location = new Uri($"{Base}/v1/skills/api/custom/interactionModel/catalogs/{targetCatalogId}/updateRequest/req-1") }
                 };
             }
 
             if (request.Method == HttpMethod.Get && url.EndsWith("/status", StringComparison.Ordinal))
             {
-                return Json(TestHelpers.SmapiSkillStatusJson("it-IT"));
+                return Json(_statusJson);
             }
 
             if (request.Method == HttpMethod.Get && url.Contains("/updateRequest/", StringComparison.Ordinal))
@@ -414,14 +531,19 @@ public class LibrarySyncServiceSongTeardownTests : PluginTestBase, IDisposable
 
             if (request.Method == HttpMethod.Get && url.Contains("/interactionModel/locales/", StringComparison.Ordinal))
             {
-                string? lastPut = Requests.Where(r => r.Method == HttpMethod.Put && r.Url.Contains("/interactionModel/locales/", StringComparison.Ordinal))
-                    .Select(r => r.Body)
-                    .LastOrDefault();
-                return Json(lastPut ?? WiredModelJson);
+                if (ServeMalformedModel)
+                {
+                    return Json("not-json-at-all");
+                }
+
+                string locale = url.Split("/locales/")[1].Split('/')[0];
+                return Json(_lastPutByLocale.GetValueOrDefault(locale) ?? WiredModelJson);
             }
 
             if (request.Method == HttpMethod.Put && url.Contains("/interactionModel/locales/", StringComparison.Ordinal))
             {
+                string putLocale = url.Split("/locales/")[1].Split('/')[0];
+                _lastPutByLocale[putLocale] = body ?? string.Empty;
                 return new HttpResponseMessage(HttpStatusCode.OK);
             }
 

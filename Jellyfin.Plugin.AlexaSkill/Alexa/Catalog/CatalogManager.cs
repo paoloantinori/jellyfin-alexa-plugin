@@ -187,6 +187,12 @@ public class CatalogManager
                 return;
             }
 
+            // The same transient family the upload path retries (502/503/504 plus
+            // the GATEWAY_ERROR body code). 429 is deliberately NOT in the set:
+            // the upload path does not retry it either, so the delete keeps the
+            // exact same semantics (a rate-limited delete defers the teardown one
+            // sync interval, same as a rate-limited upload would, JF-949 review
+            // round note).
             bool transient = (int)response.StatusCode is 502 or 503 or 504;
             if (!transient || attempt >= TransientFetchMaxAttempts)
             {
@@ -661,7 +667,28 @@ public class CatalogManager
             accessToken, client, skillId, locale, _logger, cancellationToken,
             PollDelayMs).ConfigureAwait(false);
 
-        _logger.LogInformation("Fetching interaction model for skill {SkillId} locale {Locale}", skillId, locale);
+        return await GetModelJsonAsync(accessToken, client, modelUrl, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The bare authorized model GET (no build-settle wait): the settle-half
+    /// lives in <see cref="FetchLiveModelAsync"/>, and the JF-949 strip canary
+    /// deliberately calls THIS one. The poll dispatch already confirmed the
+    /// build SUCCEEDED before the canary runs, so re-running the settle wait
+    /// would double the budget burn for no protection.
+    /// </summary>
+    /// <param name="accessToken">The SMAPI access token.</param>
+    /// <param name="client">The HTTP client.</param>
+    /// <param name="modelUrl">The locale model URL.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The model JSON.</returns>
+    private async Task<string> GetModelJsonAsync(
+        string accessToken,
+        HttpClient client,
+        string modelUrl,
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Fetching interaction model for skill locale model {ModelUrl}", modelUrl);
 
         using var getRequest = new HttpRequestMessage(HttpMethod.Get, modelUrl);
         getRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
@@ -803,8 +830,20 @@ public class CatalogManager
         string modelJson = await FetchLiveModelAsync(
             accessToken, client, modelUrl, skillId, locale, cancellationToken).ConfigureAwait(false);
 
-        (string modifiedJson, bool removed) = StripCatalogWiring(modelJson, slotTypeName, replacementTypeJson, _logger);
-        if (!removed)
+        (string modifiedJson, CatalogStripOutcome outcome) = StripCatalogWiring(modelJson, slotTypeName, replacementTypeJson, _logger);
+        if (outcome == CatalogStripOutcome.Malformed)
+        {
+            // A body we cannot parse (or a replacement block we cannot parse) leaves
+            // the wiring state UNKNOWN: the caller must treat this as a failed strip
+            // and keep the catalog, never alias it with the genuinely-static case
+            // (JF-949 review round; the detail rides CanaryError into the ledger).
+            _logger.LogError(
+                "Wiring strip for {SlotTypeName} in {Locale} aborted: a model body could not be parsed, so the wiring state is unknown and the catalog must stay (JF-949)",
+                slotTypeName, locale);
+            return new CatalogModelUpdateResult("FAILED", null, 0, 0, CanaryError: "strip aborted: a model body could not be parsed; wiring state unknown");
+        }
+
+        if (outcome == CatalogStripOutcome.Unchanged)
         {
             _logger.LogInformation(
                 "No wired {SlotTypeName} block in the live model for skill {SkillId} locale {Locale}; nothing to strip (JF-949 idempotency)",
@@ -840,8 +879,10 @@ public class CatalogManager
         // the catalog.
         try
         {
-            string liveJson = await FetchLiveModelAsync(
-                accessToken, client, modelUrl, skillId, locale, cancellationToken).ConfigureAwait(false);
+            // No settle wait here: AwaitModelPutBuildAsync already confirmed the
+            // build SUCCEEDED, so the canary does the bare GET (JF-949 review
+            // round: the double settle burned the budget twice for no protection).
+            string liveJson = await GetModelJsonAsync(accessToken, client, modelUrl, cancellationToken).ConfigureAwait(false);
             if (IsSlotTypeWired(liveJson, slotTypeName))
             {
                 _logger.LogError(
@@ -857,7 +898,7 @@ public class CatalogManager
             _logger.LogWarning(ex,
                 "Wiring strip canary GET failed for skill {SkillId} locale {Locale}; the build outcome is unverified, not failed (JF-949)",
                 skillId, locale);
-            return new CatalogModelUpdateResult("UNVERIFIED", null, 0, 0);
+            return new CatalogModelUpdateResult("UNVERIFIED", null, 0, 0, CanaryError: "strip canary GET failed; the build outcome is unverified");
         }
     }
 
@@ -890,24 +931,44 @@ public class CatalogManager
     }
 
     /// <summary>
+    /// The JF-949 strip core's three outcomes (JF-949 review round: a malformed
+    /// body must NOT alias the genuinely-static case, because the caller deletes
+    /// the SMAPI catalog when every locale strips clean; an unknown wiring state
+    /// has to block that delete).
+    /// </summary>
+    internal enum CatalogStripOutcome
+    {
+        /// <summary>No WIRED block of the type exists; nothing changed.</summary>
+        Unchanged,
+
+        /// <summary>A WIRED block was removed (replaced or deleted outright).</summary>
+        Removed,
+
+        /// <summary>A body could not be parsed; the wiring state is UNKNOWN and must block the catalog delete.</summary>
+        Malformed
+    }
+
+    /// <summary>
     /// Static core of <see cref="StripCatalogWiringAsync"/> (JF-949): replaces the
     /// WIRED block of <paramref name="slotTypeName"/> (a valueSupplier carrier, the
     /// <see cref="IsCatalogWired"/> definition, matching
     /// CatalogWiringGraft.ExtractWiring) with the static replacement block, or with
     /// nothing when the replacement is null (a locale whose embedded model never
     /// carried the type: the JF-952 inert-wiring removal shape). An absent type or
-    /// a static values block leaves the model untouched with removed false (the
-    /// teardown's idempotent no-op; a static block is never re-PUT and never
-    /// overwritten, byte-identical to the JF-952 keep-static rule). A malformed
-    /// live body is tolerated as unchanged: the teardown cannot safely rewrite a
-    /// model it cannot parse.
+    /// a static values block leaves the model untouched with
+    /// <see cref="CatalogStripOutcome.Unchanged"/> (the teardown's idempotent
+    /// no-op; a static block is never re-PUT and never overwritten, byte-identical
+    /// to the JF-952 keep-static rule). A malformed live body, or a malformed
+    /// replacement block, returns <see cref="CatalogStripOutcome.Malformed"/>: the
+    /// wiring state is unknown and the caller keeps the catalog (a parse failure
+    /// must never read as the static case, JF-949 review round).
     /// </summary>
     /// <param name="modelJson">The live interaction model JSON envelope.</param>
     /// <param name="slotTypeName">The slot type whose wiring to remove.</param>
     /// <param name="replacementTypeJson">The static type block JSON to restore, or null to remove the block.</param>
     /// <param name="logger">Optional logger for the strip diagnostics.</param>
-    /// <returns>The (possibly unchanged) model JSON and whether a wired block was removed.</returns>
-    internal static (string ModifiedJson, bool Removed) StripCatalogWiring(string modelJson, string slotTypeName, string? replacementTypeJson, ILogger? logger = null)
+    /// <returns>The (possibly unchanged) model JSON and the strip outcome.</returns>
+    internal static (string ModifiedJson, CatalogStripOutcome Outcome) StripCatalogWiring(string modelJson, string slotTypeName, string? replacementTypeJson, ILogger? logger = null)
     {
         JsonNode? root;
         try
@@ -917,26 +978,26 @@ public class CatalogManager
         catch (JsonException ex)
         {
             logger?.LogWarning(ex,
-                "Wiring strip for {SlotTypeName}: the live model body is malformed; leaving it untouched",
+                "Wiring strip for {SlotTypeName}: the live model body is malformed; the wiring state is unknown",
                 slotTypeName);
-            return (modelJson, false);
+            return (modelJson, CatalogStripOutcome.Malformed);
         }
 
         if (root == null)
         {
-            return (modelJson, false);
+            return (modelJson, CatalogStripOutcome.Malformed);
         }
 
         var typesArray = root["interactionModel"]?["languageModel"]?["types"] as JsonArray;
         if (typesArray == null)
         {
-            return (modelJson, false);
+            return (modelJson, CatalogStripOutcome.Malformed);
         }
 
         int existingIndex = FindTypeIndex(typesArray, slotTypeName);
         if (existingIndex < 0 || !IsCatalogWired(typesArray[existingIndex]))
         {
-            return (modelJson, false);
+            return (modelJson, CatalogStripOutcome.Unchanged);
         }
 
         JsonNode? replacement = null;
@@ -949,9 +1010,9 @@ public class CatalogManager
             catch (JsonException ex)
             {
                 logger?.LogWarning(ex,
-                    "Wiring strip for {SlotTypeName}: the replacement block failed to parse; leaving the wired block in place",
+                    "Wiring strip for {SlotTypeName}: the replacement block failed to parse; the wiring state is unknown",
                     slotTypeName);
-                return (modelJson, false);
+                return (modelJson, CatalogStripOutcome.Malformed);
             }
         }
 
@@ -970,7 +1031,7 @@ public class CatalogManager
             typesArray.RemoveAt(existingIndex);
         }
 
-        return (root.ToJsonString(), true);
+        return (root.ToJsonString(), CatalogStripOutcome.Removed);
     }
 
     /// <summary>

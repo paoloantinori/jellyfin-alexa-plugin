@@ -219,7 +219,7 @@ public class LibrarySyncService
         // structure pin allows the getter only in the wiring-table lambda, the
         // JF-826 suppression predicate, and the teardown reader.
         bool songTeardownFailed = !user.CatalogSongSyncEnabled
-            && !await TearDownSongCatalogAsync(user, skillId, locales, cancellationToken).ConfigureAwait(false);
+            && !await TearDownSongCatalogAsync(user, skillId, cancellationToken).ConfigureAwait(false);
 
         var totalSw = System.Diagnostics.Stopwatch.StartNew();
 
@@ -617,8 +617,12 @@ public class LibrarySyncService
 
     /// <summary>
     /// JF-949 (JF-946 review F1): the song-catalog opt-out teardown. Ordering is
-    /// load-bearing: (1) strip the SongTitle catalog wiring from every synced
-    /// locale's live model, restoring each locale's OWN embedded static block;
+    /// load-bearing: (1) strip the SongTitle catalog wiring from EVERY
+    /// catalog-wiring-supported locale (the whole embedded-model roster, NOT the
+    /// run's CatalogSyncLocales-filtered list: the wiring was applied to whatever
+    /// roster the opt-in-time sync carried, so a roster narrowed since then must
+    /// not leave locale B wired while the catalog under it is deleted, JF-949
+    /// review round), restoring each locale's OWN embedded static block;
     /// (2) delete the SMAPI catalog, but ONLY when every strip succeeded, so no
     /// model is ever left referencing a deleted catalog; (3) clear
     /// <see cref="Entities.User.SongCatalogId"/> ONLY after the delete, so a
@@ -634,15 +638,23 @@ public class LibrarySyncService
     /// </summary>
     /// <param name="user">The plugin user whose song catalog to tear down.</param>
     /// <param name="skillId">The user's skill ID.</param>
-    /// <param name="locales">The catalog-wiring-supported locales the run targets.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>True when the teardown completed (or found nothing left to do); false when a step failed and the id must stay for retry.</returns>
     private async Task<bool> TearDownSongCatalogAsync(
         Entities.User user,
         string skillId,
-        List<string> locales,
         CancellationToken cancellationToken)
     {
+        // The strip roster is the FULL catalog-wiring-supported locale set (every
+        // embedded model, JF-543-filtered), independent of CatalogSyncLocales: the
+        // wiring exists wherever a PAST sync put it, and a narrowed current roster
+        // must not blind the strip to a locale it no longer syncs (JF-949 review
+        // round finding 1).
+        List<string> locales = global::Jellyfin.Plugin.AlexaSkill.Util.GetLocalInteractionModels()
+            .Select(m => m.Item1)
+            .Where(CatalogManager.IsCatalogWiringSupported)
+            .ToList();
+
         string? catalogId = user.SongCatalogId;
         if (string.IsNullOrEmpty(catalogId))
         {
