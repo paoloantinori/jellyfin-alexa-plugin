@@ -581,9 +581,10 @@ PlayAlbumIntent.album type: AlbumName  →  AMAZON.MusicRecording
 #      album catalog upload reaches a declared type ONLY in it-IT. Consequence
 #      (JF-952, 2026-11-24): the universal declare check stops INJECTING the
 #      AlbumName block into the 16 non-declaring locales (fresh templates carry
-#      none); a live model still holding a pre-JF-952 inert block keeps it,
-#      because the declare check never removes existing wiring. Do NOT "restore"
-#      a uniform-AlbumName assumption.
+#      none); a live model still holding a pre-JF-952 inert WIRED block loses
+#      it on the next sync (the JF-946 removal heal generalized to all six
+#      types), while a static values seed stays untouched. Do NOT "restore" a
+#      uniform-AlbumName assumption.
 
 Second deliberate per-locale type divergence (JF-642, 2026-09-27): ja-JP's genre slots are the
 custom STATIC `GenreType` (22-value vocabulary, NOT catalog-backed by design; the JF-643

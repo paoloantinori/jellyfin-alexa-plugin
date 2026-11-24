@@ -1024,7 +1024,9 @@ public class CatalogManager
 
         WarnOnCrossTypeCatalogIds(artistCatalogId, albumCatalogId, seriesCatalogId, audiobookCatalogId, movieCatalogId, songCatalogId, logger);
 
-        var landedTypes = new List<string>();
+        var wiredTypes = new List<string>();
+        var keptStaticTypes = new List<string>();
+        var removedTypes = new List<string>();
 
         foreach (var (catalogId, catalogVersion, slotTypeName, replacesType) in catalogMappings)
         {
@@ -1032,26 +1034,31 @@ public class CatalogManager
                 .FirstOrDefault(i => typesArray[i]?["name"]?.GetValue<string>() == slotTypeName, -1);
 
             // JF-952 universal declare check. Load-bearing branch order (the
-            // JF-946 live lesson 2026-11-23, generalized): the check runs
-            // BEFORE the JsonObject below is built and BEFORE the replace
-            // branch decides, so a skipped add never constructs the block it
-            // refuses. Rationale: an unreferenced catalog block buys nothing
-            // yet counts against Amazon's 1.5MB EFFECTIVE per-model limit,
-            // which counts referenced values (the JF-946 lesson: an inert
-            // SongTitle block pushed ja-JP, fr, pt-BR and nl-NL over the cap;
-            // every add-anywhere type already carried the same liability).
-            // This drops the inert Album/Movie blocks from the 16
-            // non-declaring locales and the SongTitle block from the 15 that
-            // never declared it; the artist leg rides the replaces-type
-            // disjunct (the 11 AMAZON.Musician locales keep JellyfinArtist).
-            // EXISTING BLOCKS ARE NEVER REMOVED: healing is additive-only. A
-            // locale carrying a wired block keeps it (replace-in-place) until
-            // an explicit remove; this retires the JF-946 stale-removal heal.
-            // The check cannot tell a wired block from a static seed, so the
-            // keep branch converts either shape to the catalog supplier; a
-            // never-declared seed block for a synced type would be re-wired
-            // rather than healed, a trade-off accepted in exchange for never
-            // stripping wiring a live model already carries.
+            // JF-946 live lesson 2026-11-23, generalized): the check and the
+            // block-shape inspection run BEFORE the JsonObject below is built
+            // and BEFORE the replace branch decides, so a skipped or removed
+            // mapping never constructs the block it refuses. Rationale: an
+            // unreferenced catalog block buys nothing yet counts against
+            // Amazon's 1.5MB EFFECTIVE per-model limit, which counts
+            // referenced values (the JF-946 lesson: an inert SongTitle block
+            // pushed ja-JP, fr, pt-BR and nl-NL over the cap; every
+            // add-anywhere type already carried the same liability). The four
+            // outcomes:
+            // - DECLARED (a slot names the type, or the artist leg names the
+            //   replaced type, so the 11 AMAZON.Musician locales keep
+            //   JellyfinArtist): wire, replacing an existing block in place.
+            // - NOT DECLARED, no existing block: skip the add.
+            // - NOT DECLARED, existing WIRED block (a JsonObject
+            //   valueSupplier, the ExtractWiring definition): REMOVE it, the
+            //   JF-946 stale-block heal generalized to all six types. This is
+            //   the one path that shrinks an over-cap live model
+            //   (ExceededMaximumModelSize, 2026-11-23 incident class); a
+            //   future template that declares the slot re-earns wiring on the
+            //   next sync's declare check, so the removal is recoverable.
+            // - NOT DECLARED, existing STATIC block (plain values array): the
+            //   authoring template owns it; leave it byte-untouched and never
+            //   convert it to a supplier (a static seed must not become the
+            //   full catalog behind a model that cannot read it).
             bool declared = AnyIntentSlotDeclaresType(lmNode, slotTypeName)
                 || (replacesType != null && AnyIntentSlotDeclaresType(lmNode, replacesType));
 
@@ -1065,9 +1072,23 @@ public class CatalogManager
                     continue;
                 }
 
-                logger.LogInformation(
-                    "Keeping existing catalog block for {SlotTypeName}: no slot declares it but the declare check never removes wiring (JF-952, heal is additive-only)",
-                    slotTypeName);
+                if (IsCatalogWired(typesArray[existingIndex]))
+                {
+                    logger.LogInformation(
+                        "Removing inert catalog wiring for {SlotTypeName}: the locale declares no slot of this type and the block carries a catalog supplier, so the model returns to its static size (JF-946 heal, generalized by JF-952)",
+                        slotTypeName);
+                    typesArray.RemoveAt(existingIndex);
+                    removedTypes.Add(slotTypeName);
+                }
+                else
+                {
+                    logger.LogInformation(
+                        "Keeping static seed block for {SlotTypeName}: the locale declares no slot of this type and the block carries static values, which stay untouched (JF-952, no seed-to-catalog swap)",
+                        slotTypeName);
+                    keptStaticTypes.Add(slotTypeName);
+                }
+
+                continue;
             }
 
             var catalogType = new JsonObject
@@ -1102,7 +1123,7 @@ public class CatalogManager
                 typesArray.Add(catalogType);
             }
 
-            landedTypes.Add(slotTypeName);
+            wiredTypes.Add(slotTypeName);
 
             if (replacesType != null)
             {
@@ -1115,15 +1136,17 @@ public class CatalogManager
             }
         }
 
-        // The landed summary comes AFTER the loop on purpose: the JF-952 declare
-        // check can skip mappings, so a pre-loop count of the attempted rows
-        // would overstate what actually landed (the JF-946 over-cap triage
-        // correlates these lines against model size).
+        // The summary comes AFTER the loop on purpose: the JF-952 check can
+        // skip, remove or keep-static mappings, so a pre-loop count of the
+        // attempted rows would overstate what landed (the JF-946 over-cap
+        // triage correlates these lines against model size).
         logger.LogInformation(
-            "Catalog injection landed {Landed} of {Attempted} catalog mappings ({LandedTypes})",
-            landedTypes.Count,
+            "Catalog injection: wired {Wired} of {Attempted} mappings ({WiredTypes}); static seeds kept untouched: {KeptStatic}; inert wiring removed: {Removed}",
+            wiredTypes.Count,
             catalogMappings.Count,
-            string.Join(", ", landedTypes));
+            string.Join(", ", wiredTypes),
+            keptStaticTypes.Count == 0 ? "none" : string.Join(", ", keptStaticTypes),
+            removedTypes.Count == 0 ? "none" : string.Join(", ", removedTypes));
 
         return root.ToJsonString();
     }
@@ -1143,6 +1166,16 @@ public class CatalogManager
 
         return VisitIntentSlots(intents, slot => slot["type"]?.GetValue<string>() == slotTypeName);
     }
+
+    /// <summary>
+    /// True when an existing types-array block carries catalog wiring: a
+    /// JsonObject valueSupplier (the ExtractWiring definition, JF-555
+    /// tolerant shape: a null/scalar supplier reads as NOT wired). The
+    /// JF-952 review round's block-shape inspector: it is what lets the
+    /// declare check remove a stale WIRED block (the JF-946 heal) while
+    /// leaving a static seed byte-untouched.
+    /// </summary>
+    private static bool IsCatalogWired(JsonNode? typeBlock) => typeBlock?["valueSupplier"] is JsonObject;
 
     /// <summary>
     /// JF-952: the shared slot-scan core, the ONE intents-array to slots-array

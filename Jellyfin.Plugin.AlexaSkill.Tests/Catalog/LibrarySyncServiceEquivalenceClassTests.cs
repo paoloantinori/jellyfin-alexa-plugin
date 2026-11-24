@@ -382,7 +382,7 @@ public class LibrarySyncServiceEquivalenceClassTests : PluginTestBase, IDisposab
 
         private static string ModelJson =>
             """
-            {"interactionModel":{"languageModel":{"invocationName":"mia collezione","intents":[{"name":"PlayArtistSongsIntent","slots":[{"name":"musician","type":"JELLYFIN_ARTIST"}]}],"types":[{"name":"JellyfinArtist","values":[{"name":{"value":"Mina"}}]}]}}}
+            {"interactionModel":{"languageModel":{"invocationName":"mia collezione","intents":[{"name":"PlayArtistSongsIntent","slots":[{"name":"musician","type":"JellyfinArtist"}]}],"types":[{"name":"JellyfinArtist","values":[{"name":{"value":"Mina"}}]}]}}}
             """;
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)

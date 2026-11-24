@@ -62,29 +62,6 @@ public class CatalogManagerTests
     }
 
     [Fact]
-    public void InjectCatalogReferences_AddsSeriesCatalog_ReplacingStaticSeed()
-    {
-        // JF-493: every locale model declares SeriesName with a static seed list;
-        // the series catalog injection must REPLACE that definition in place
-        // (same slot type name) instead of adding a parallel type.
-        string model = BuildInteractionModelJson(existingTypes: new[]
-        {
-            ("SeriesName", "{\"type\":\"PLAIN_TEXT\",\"values\":[{\"name\":{\"value\":\"Breaking Bad\"}}]}")
-        });
-
-        string result = CatalogManager.InjectCatalogReferences(model, null, null, "series-cat-9", null, null, null, null, "4", null, null, _loggerMock.Object);
-
-        using var resultDoc = JsonDocument.Parse(result);
-        var types = resultDoc.RootElement.GetProperty("interactionModel").GetProperty("languageModel").GetProperty("types");
-
-        Assert.Equal(1, types.GetArrayLength());
-        Assert.Equal("SeriesName", types[0].GetProperty("name").GetString());
-        Assert.Equal("CatalogValueSupplier", types[0].GetProperty("valueSupplier").GetProperty("type").GetString());
-        Assert.Equal("series-cat-9", types[0].GetProperty("valueSupplier").GetProperty("valueCatalog").GetProperty("catalogId").GetString());
-        Assert.Equal("4", types[0].GetProperty("valueSupplier").GetProperty("valueCatalog").GetProperty("version").GetString());
-    }
-
-    [Fact]
     public void InjectCatalogReferences_MovieCatalog_DeclaredSeedReplaced_DeclaredFreshAdded_UndeclaredSkipped()
     {
         // JF-874 shapes under the JF-952 universal declare check: in the
@@ -202,22 +179,25 @@ public class CatalogManagerTests
         Assert.Equal("JellyfinArtist", languageModel.GetProperty("intents")[0].GetProperty("slots")[0].GetProperty("type").GetString());
     }
 
+    /// <summary>
+    /// JF-952 review round, the two undeclared-block shapes pinned separately
+    /// because the block SHAPE decides the outcome: a WIRED block (a
+    /// valueSupplier) for a type no slot declares is REMOVED, generalizing the
+    /// JF-946 stale-block heal to every synced type; that removal is the one
+    /// path that shrinks an over-cap live model (ExceededMaximumModelSize,
+    /// the 2026-11-23 ja-JP/fr/pt-BR/nl-NL incident class) and it is
+    /// recoverable, since a future template declaring the slot re-earns the
+    /// wiring on the next sync's declare check.
+    /// </summary>
     [Fact]
-    public void InjectCatalogReferences_ExistingBlocksSurviveWhenNothingDeclares()
+    public void InjectCatalogReferences_WiredUndeclaredBlock_IsRemoved()
     {
-        // JF-952: the declare check is additive-only. A model carrying existing
-        // catalog-backed blocks for types no slot declares keeps them (replaced
-        // in place with the supplier), never stripped: the retired JF-946
-        // stale-removal heal would have deleted them. SongTitle is the load-
-        // bearing case: the JF-946 gate removed stale song blocks, the JF-952
-        // rule keeps every existing block.
-        string model = BuildInteractionModelJson(
-            existingTypes: new[]
-            {
-                ("AlbumName", "{\"type\":\"PLAIN_TEXT\",\"values\":[{\"name\":{\"value\":\"Thriller\"}}]}"),
-                ("SongTitle", "{\"type\":\"PLAIN_TEXT\",\"values\":[{\"name\":{\"value\":\"brano\"}}]}")
-            },
-            intents: new[] { ("AMAZON.StopIntent", Array.Empty<(string SlotName, string SlotType)>()) });
+        string model = """
+        {"interactionModel":{"languageModel":{"invocationName":"test skill","intents":[{"name":"AMAZON.StopIntent","samples":[]}],"types":[
+          {"name":"AlbumName","valueSupplier":{"type":"CatalogValueSupplier","valueCatalog":{"catalogId":"old-album","version":"9"}}},
+          {"name":"SongTitle","valueSupplier":{"type":"CatalogValueSupplier","valueCatalog":{"catalogId":"old-song","version":"4"}}}
+        ]}}}
+        """;
 
         string result = CatalogManager.InjectCatalogReferences(
             model, null, "album-cat", null, null, null,
@@ -226,15 +206,44 @@ public class CatalogManagerTests
         using var resultDoc = JsonDocument.Parse(result);
         var types = resultDoc.RootElement.GetProperty("interactionModel").GetProperty("languageModel").GetProperty("types");
 
-        Assert.Equal(2, types.GetArrayLength());
-        foreach (var (name, catalogId, version) in new[] { (Name: "AlbumName", CatalogId: "album-cat", Version: "5"), (Name: "SongTitle", CatalogId: "song-cat", Version: "6") })
-        {
-            var typeNode = TestHelpers.GetModelTypeNode(result, name);
-            Assert.Equal("CatalogValueSupplier", typeNode.GetProperty("valueSupplier").GetProperty("type").GetString());
-            Assert.Equal(catalogId, typeNode.GetProperty("valueSupplier").GetProperty("valueCatalog").GetProperty("catalogId").GetString());
-            Assert.Equal(version, typeNode.GetProperty("valueSupplier").GetProperty("valueCatalog").GetProperty("version").GetString());
-            Assert.False(typeNode.TryGetProperty("values", out _), "static seed values must be replaced, not kept alongside");
-        }
+        Assert.Equal(0, types.GetArrayLength());
+        Assert.DoesNotContain("AlbumName", result, StringComparison.Ordinal);
+        Assert.DoesNotContain("SongTitle", result, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The other undeclared shape: a STATIC values seed for a synced type no
+    /// slot declares stays BYTE-UNTOUCHED, never converted to a catalog
+    /// supplier (a static seed must not become the full catalog behind a
+    /// model that cannot read it, the fr-FR SongTitle-seed scenario). The
+    /// fresh-template half of the heal rides the same branch: a fresh rebuild
+    /// of the non-declaring locales keeps their tiny Album/Movie seeds.
+    /// </summary>
+    [Fact]
+    public void InjectCatalogReferences_StaticUndeclaredBlock_IsLeftUntouched()
+    {
+        string model = BuildInteractionModelJson(
+            existingTypes: new[]
+            {
+                ("AlbumName", "{\"type\":\"PLAIN_TEXT\",\"values\":[{\"name\":{\"value\":\"Thriller\"}}]}")
+            },
+            intents: new[] { ("AMAZON.StopIntent", Array.Empty<(string SlotName, string SlotType)>()) });
+
+        string result = CatalogManager.InjectCatalogReferences(
+            model, null, "album-cat", null, null, null,
+            null, "5", null, null, null, _loggerMock.Object);
+
+        using var resultDoc = JsonDocument.Parse(result);
+        var types = resultDoc.RootElement.GetProperty("interactionModel").GetProperty("languageModel").GetProperty("types");
+
+        Assert.Equal(1, types.GetArrayLength());
+        var albumType = TestHelpers.GetModelTypeNode(result, "AlbumName");
+        Assert.Equal("AlbumName", albumType.GetProperty("name").GetString());
+        Assert.False(albumType.TryGetProperty("valueSupplier", out _), "an undeclared static seed must never be converted to a catalog supplier");
+        Assert.True(albumType.TryGetProperty("values", out var values), "the static seed stays untouched");
+        // The helper's static-block fixture always writes the placeholder value "test";
+        // what is pinned here is the untouched shape, not the seed text.
+        Assert.Equal("test", values[0].GetProperty("name").GetProperty("value").GetString());
     }
 
     /// <summary>
@@ -244,8 +253,10 @@ public class CatalogManagerTests
     /// committed model must create those blocks ONLY in the declaring locales
     /// (where the static seed is replaced in place); the other locales' fresh
     /// templates receive NO inert block. A live model already carrying a
-    /// pre-JF-952 inert block is a different shape (kept, never removed),
-    /// pinned separately by InjectCatalogReferences_ExistingBlocksSurviveWhenNothingDeclares.
+    /// pre-JF-952 inert WIRED block is a different shape: the next sync
+    /// REMOVES it (the JF-946 heal generalized), pinned by
+    /// InjectCatalogReferences_WiredUndeclaredBlock_IsRemoved; a static seed
+    /// stays untouched, pinned by InjectCatalogReferences_StaticUndeclaredBlock_IsLeftUntouched.
     /// The expected roster is asserted from this table, NOT recomputed from the
     /// model, so the test stays independent of the gate it pins.
     /// </summary>
@@ -293,6 +304,31 @@ public class CatalogManagerTests
         using var stream = assembly.GetManifestResourceStream(resourcePath)!;
         using var reader = new System.IO.StreamReader(stream);
         return "{\"interactionModel\":" + reader.ReadToEnd() + "}";
+    }
+
+    [Fact]
+    public void InjectCatalogReferences_AddsSeriesCatalog_ReplacingStaticSeed()
+    {
+        // JF-493: every locale model declares SeriesName with a static seed list;
+        // the series catalog injection must REPLACE that definition in place
+        // (same slot type name) instead of adding a parallel type. The fixture
+        // DECLARES the slot (PlayEpisodeIntent) because the JF-952 review-round
+        // rule leaves an undeclared static seed untouched.
+        string model = BuildInteractionModelJson(existingTypes: new[]
+        {
+            ("SeriesName", "{\"type\":\"PLAIN_TEXT\",\"values\":[{\"name\":{\"value\":\"Breaking Bad\"}}]}")
+        }, intents: new[] { ("PlayEpisodeIntent", new[] { ("series_name", "SeriesName") }) });
+
+        string result = CatalogManager.InjectCatalogReferences(model, null, null, "series-cat-9", null, null, null, null, "4", null, null, _loggerMock.Object);
+
+        using var resultDoc = JsonDocument.Parse(result);
+        var types = resultDoc.RootElement.GetProperty("interactionModel").GetProperty("languageModel").GetProperty("types");
+
+        Assert.Equal(1, types.GetArrayLength());
+        Assert.Equal("SeriesName", types[0].GetProperty("name").GetString());
+        Assert.Equal("CatalogValueSupplier", types[0].GetProperty("valueSupplier").GetProperty("type").GetString());
+        Assert.Equal("series-cat-9", types[0].GetProperty("valueSupplier").GetProperty("valueCatalog").GetProperty("catalogId").GetString());
+        Assert.Equal("4", types[0].GetProperty("valueSupplier").GetProperty("valueCatalog").GetProperty("version").GetString());
     }
 
     [Fact]
