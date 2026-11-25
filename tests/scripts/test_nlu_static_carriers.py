@@ -311,3 +311,64 @@ def test_unknown_locale_is_refused(capsys):
     )
     assert exit_code == 2
     assert "error" in capsys.readouterr().err
+
+
+# ------------------- code-review round: CLI contract guarantees
+
+
+def test_text_format_renders_and_out_writes_file(capsys, tmp_path):
+    """--format text renders the human table; --out is honored in text mode
+    too (a silent no-op --out with exit 0 is the failure this pins out)."""
+    exit_code = nlu_cli.main([
+        "carriers", "--format", "text", "--locale", "en-US",
+        "--intent", "PlayByGenreIntent", "--sample", "play some {genre}",
+    ])
+    assert exit_code == 0
+    out = capsys.readouterr().out
+    assert "SAME_CARRIER" in out
+    assert "play some {musician} @ PlayArtistSongsIntent" in out
+    assert "CATALOG" in out
+    # --out in text mode writes the file (same contract as JSON)
+    report = tmp_path / "report.txt"
+    exit_code = nlu_cli.main([
+        "carriers", "--format", "text", "--locale", "en-US",
+        "--intent", "PlayByGenreIntent", "--sample", "play some {genre}",
+        "--out", str(report),
+    ])
+    assert exit_code == 0
+    assert "SAME_CARRIER" in report.read_text(encoding="utf-8")
+
+
+def test_typoed_intent_is_refused_not_silently_clean(capsys, tmp_path):
+    """A named intent absent from the locale's model is a hard refusal: a
+    typo must never read as SAME_CARRIER/ABSENT with PRESENT silently dead."""
+    exit_code = nlu_cli.main([
+        "carriers", "--format", "json", "--locale", "en-US",
+        "--intent", "PlayByGenreTypo", "--sample", "play some {genre}",
+    ])
+    assert exit_code == 2
+    assert "unknown intent" in capsys.readouterr().err
+
+
+def test_intent_and_locale_flags_with_file_are_refused(capsys, tmp_path):
+    """--intent/--locale/--all apply to inline samples only; pairing them
+    with --file is refused instead of silently ignored."""
+    tsv = tmp_path / "c.tsv"
+    tsv.write_text("en-US\tPlaySongIntent\tplay {song}\n", encoding="utf-8")
+    for extra in (["--intent", "PlaySongIntent"], ["--locale", "en-US"], ["--all"]):
+        capsys.readouterr()
+        exit_code = nlu_cli.main(["carriers", "--format", "json", "--file", str(tsv)] + extra)
+        assert exit_code == 2, extra
+        assert "apply to inline" in capsys.readouterr().err, extra
+
+
+def test_tsv_empty_edge_columns_are_countable(tmp_path):
+    """An empty first or last column keeps its column count (the loader
+    splits before stripping), so an empty locale column means all-locales
+    instead of a bogus 'got 2' refusal."""
+    from nlu_static.cli import _load_candidate_file
+
+    tsv = tmp_path / "edge.tsv"
+    tsv.write_text("\tPlaySongIntent\tplay {song}\n", encoding="utf-8")
+    rows = _load_candidate_file(str(tsv))
+    assert rows == [{"locale": None, "intent": "PlaySongIntent", "sample": "play {song}"}]

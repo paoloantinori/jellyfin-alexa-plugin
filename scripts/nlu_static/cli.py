@@ -912,6 +912,11 @@ def _carriers_candidates(args: argparse.Namespace) -> list[dict] | None:
     Returns None after printing a refusal.
     """
     candidates: list[dict] = []
+    if args.file and (args.intent or args.locale or args.all):
+        _fail(ValueError(
+            "--intent/--locale/--all apply to inline --sample candidates only; "
+            "file rows carry their own columns"))
+        return None
     if args.sample:
         if not args.locale and not args.all:
             _fail(
@@ -947,10 +952,12 @@ def _load_candidate_file(path: str) -> list[dict]:
     text = Path(path).read_text(encoding="utf-8")
     rows: list[dict] = []
     for line_no, line in enumerate(text.splitlines(), start=1):
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#"):
+        if not line.strip() or line.strip().startswith("#"):
             continue
-        columns = stripped.split("\t")
+        # Split BEFORE stripping so an empty first or last column stays
+        # countable (a whole-line strip would eat "\tA\tb" down to "A\tb"
+        # and refuse a visibly three-column row with a bogus count).
+        columns = line.split("\t")
         if len(columns) != 3:
             raise ValueError(
                 f"{path}: line {line_no} must have three tab-separated columns "
@@ -986,6 +993,7 @@ def cmd_carriers(args: argparse.Namespace) -> int:
         return 2
     all_locales = fixture_vocab.committed_locales()
     indexes: dict[str, dict] = {}
+    intent_names: dict[str, set] = {}
     rows: list[dict] = []
     for candidate in candidates:  # candidates in input order
         locale = candidate["locale"]
@@ -1000,14 +1008,24 @@ def cmd_carriers(args: argparse.Namespace) -> int:
                 if model is None:
                     return 2
                 indexes[name] = nlu_carriers.build_index(name, model)
+                intent_names[name] = {i.name for i in model.intents}
+            if candidate["intent"] is not None and candidate["intent"] not in intent_names[name]:
+                # A typo'd intent silently kills the PRESENT check (the same
+                # "a typo must never read as all-clean" rule as the locale).
+                _fail(ValueError(
+                    f"{name}: unknown intent {candidate['intent']!r} in the committed model"))
+                return 2
             rows.append(
                 nlu_carriers.analyze_candidate(
                     name, candidate["intent"], candidate["sample"], indexes[name]
                 )
             )
     if args.format == "text":
-        for row in rows:
-            for line in _carriers_row_text(row):
+        lines = [line for row in rows for line in _carriers_row_text(row)]
+        if args.out:
+            Path(args.out).write_text("\n".join(lines) + "\n", encoding="utf-8")
+        else:
+            for line in lines:
                 print(line)
     else:
         _print_json(rows, args.out)
@@ -1035,7 +1053,7 @@ def _register_carriers(subparsers: argparse._SubParsersAction) -> None:
     locale_group.add_argument("--all", action="store_true", help="expand the inline samples across every committed locale")
     parser.add_argument(
         "--file",
-        help="candidate file: a JSON list of {locale, intent, sample} rows or a TSV (locale, intent, sample); a locale of * expands to every committed locale",
+        help="candidate file: a TSV of locale<TAB>intent<TAB>sample rows (an empty intent column means unnamed; # comments and blank lines skipped; a locale of * expands to every committed locale)",
     )
     parser.add_argument(
         "--format",

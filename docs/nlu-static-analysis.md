@@ -187,6 +187,9 @@ python3 scripts/nlu_static/cli.py classify-fixtures --locale es-ES
 python3 scripts/nlu_static/cli.py classify-fixtures --all --snapshot catalog-snapshot.json
 ```
 
+### Limits: what the graph does NOT tell you
+The graph computes rival readings, nothing else. It does NOT predict which intent Amazon's trainer picks, does NOT weight edges by anything other than sample counts, and does NOT model ASR, entity resolution ranking, or the default-music-service arbitration. A SWALLOW edge says the phrasing is contestable in principle; whether the trainer actually ever picks the rival is a live question for profile-nlu, simulate-skill or a device test. This exact over-trust failure already happened once: in an es-US lab ablation on 2026-11-23, removing five bare PlaySong carriers moved song requests that used UNTOUCHED carriers ("escucha", "quiero escuchar") to PlayArtistSongsIntent. The graph showed PlayArtistSongsIntent as a neighbour all along; it could not and did not predict that the trainer would move the untouched carriers' traffic. Read an edge as "this row is marginal", never as "this edge is the cause of the red". Also note the graph reads the SAVED model only: utterances whose routing depends on catalog values the model never sees are invisible to it until a `--snapshot` overlays one.
+
 ## The `carriers` subcommand: does this candidate sample already exist (JF-970)
 
 `carriers` answers the model-content question behind every "add this sample" premise: does the candidate SAMPLE already exist in a locale, on which intent, and under which carrier. A CARRIER is a sample with every `{slot}` placeholder reduced to ONE anonymous token, so `play some {genre}` and `play some {musician}` are the identical carrier even though their slot types differ; two samples share a carrier exactly when Alexa could read them as the same pattern with different slot vocabulary. Normalization reuses the shared normalizer (casefold, NFC, punctuation at token edges stripped) and the ONE placeholder regex; slot NAMES never participate, only slot position count.
@@ -212,9 +215,6 @@ python3 scripts/nlu_static/cli.py carriers --locale en-US --intent PlayByGenreIn
 python3 scripts/nlu_static/cli.py carriers --all --intent PlaySongIntent --sample "play {song}"
 python3 scripts/nlu_static/cli.py carriers --file candidates.tsv --format text
 ```
-
-### Limits: what the graph does NOT tell you
-The graph computes rival readings, nothing else. It does NOT predict which intent Amazon's trainer picks, does NOT weight edges by anything other than sample counts, and does NOT model ASR, entity resolution ranking, or the default-music-service arbitration. A SWALLOW edge says the phrasing is contestable in principle; whether the trainer actually ever picks the rival is a live question for profile-nlu, simulate-skill or a device test. This exact over-trust failure already happened once: in an es-US lab ablation on 2026-11-23, removing five bare PlaySong carriers moved song requests that used UNTOUCHED carriers ("escucha", "quiero escuchar") to PlayArtistSongsIntent. The graph showed PlayArtistSongsIntent as a neighbour all along; it could not and did not predict that the trainer would move the untouched carriers' traffic. Read an edge as "this row is marginal", never as "this edge is the cause of the red". Also note the graph reads the SAVED model only: utterances whose routing depends on catalog values the model never sees are invisible to it until a `--snapshot` overlays one.
 
 ## The `ledger` subcommand: the results ledger and per-row flip statistics
 
