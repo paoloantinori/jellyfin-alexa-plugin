@@ -4,9 +4,10 @@ title: >-
   Post-1.1.2.0 NLU red census: the remaining singles (hi-IN films+song, ja
   playlist steal, ar video steal, en-US artist/mood steals, de no-selection,
   it-IT wrapper catalog-gate, es-US song Fallback)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-11-24 20:13'
+updated_date: '2026-11-25 10:56'
 labels:
   - nlu
   - triage
@@ -34,3 +35,15 @@ The post-1.1.2.0 fresh-suite red census (2026-11-24, 1365 passed / 79 failed / 5
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+gate-exempt: documentation-only (a census report from live/lab probing; no code, fixtures, templates or models changed); the probing protocol with evergreen controls and dual-probe variance acceptance is documented in the report.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Re-verification complete 2026-11-25, report committed at claudedocs/census_jf959_reverify_2026-11-25.md (602 profile-nlu probes across live and lab, evergreen it+en controls green both passes, 2s spacing). VERDICTS: FIXED (5 rows: the it-IT soul-coughing family already correctly pinned; en-US normal speed now SetPlaybackSpeedIntent; the ja shuffle form green on kana) — STILL-RED-CONFIRMED (5: hi-IN films systematic incl. exact template-sample instantiation; ar-SA song post-rebuild actual flipped PlayVideo->Fallback; the it-IT rapsodia wrapper and es-US luciernagas both PROVEN live-only with identical template content verified, catalog wiring the structural difference) — NEEDS-CARRIER-DECISION (2: hi-IN gana the issue-46 token class live-reproduced; en-US coldplay the missing music-by artist carrier with the identical hallucinated entity in live AND lab) — UNSTABLE (1: en-US dinner music, trainer-marginal). TWO CENSUS FACTS CORRECTED: the 'de-DE no-selection' rows were Italian utterances under a locale mislabel (the JF-684 gating is it-IT-only); es-US is NOT catalog-free (SeriesName/AudiobookTitle/JellyfinArtist wired, get-interaction-model verified). Follow-ups filed: JF-961 (the live-only Fallback pair + the unprobed ja-JP play-form row) and JF-962 (hi-IN systematic + the two carrier decisions + the dinner annotation). The census WAS the deliverable; the task closes as the triage layer, its actions landing in JF-961/JF-962.
+<!-- SECTION:FINAL_SUMMARY:END -->
