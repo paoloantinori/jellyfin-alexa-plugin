@@ -88,6 +88,13 @@ class RunRecord:
     # can refuse an A/A pair whose two runs probed different BUILDS even when
     # the model file sha matches (the false-pass direction of the sha guard).
     build_etag: str | None = None
+    # JF-971: the ER canary blocks (catalog_canary block dicts: status ok or
+    # not_run with a mandatory reason). Recorded on the --live path at run
+    # start and run end, so the catalog state the rows ran under is part of
+    # the run's own identity like build_etag. None on non-live paths and in
+    # files written before the field.
+    catalog_start: dict | None = None
+    catalog_end: dict | None = None
     intent_roster: list[dict] = field(default_factory=list)
     results: list[RowResult] = field(default_factory=list)
 
@@ -155,6 +162,8 @@ def _to_dict(run: RunRecord) -> dict:
         "status": run.status,
         "error": run.error,
         "build_etag": run.build_etag,
+        "catalog_start": run.catalog_start,
+        "catalog_end": run.catalog_end,
         "intent_roster": run.intent_roster,
         "results": [_row_to_dict(r) for r in run.results],
     }
@@ -202,6 +211,8 @@ def load_run(path: Path) -> RunRecord:
             status=data["status"],
             error=data.get("error"),
             build_etag=data.get("build_etag"),
+            catalog_start=data.get("catalog_start"),
+            catalog_end=data.get("catalog_end"),
             intent_roster=data.get("intent_roster") or [],
             results=results,
         )

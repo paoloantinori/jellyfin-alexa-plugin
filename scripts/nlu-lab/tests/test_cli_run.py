@@ -552,3 +552,80 @@ def test_run_live_probes_real_skill_no_lab_guard(tmp_path, monkeypatch, capsys):
     assert run.model_source.startswith("live:")
     assert run.status == "ok"
     assert len(run.results) == 2  # the two fixture rows
+
+
+def test_run_live_records_catalog_canary_blocks(tmp_path, monkeypatch, capsys):
+    """JF-971: an armed NLU_CANARY_SNAPSHOT brackets a --live run with the
+    ER canary, recorded on the run file at start and end."""
+    monkeypatch.setenv("SMAPI_DELAY", "0")
+    monkeypatch.delenv("NLU_CANARY", raising=False)
+    snap = tmp_path / "snap.json"
+    snap.write_text(json.dumps({"schema": 1, "locales": {"*": {
+        "SongTitle": [{"value": "rosanna", "synonyms": []}]}}}), encoding="utf-8")
+    monkeypatch.setenv("NLU_CANARY_SNAPSHOT", str(snap))
+    plan = [{"type": "SongTitle", "value": "rosanna",
+             "intent": "PlayLibrarySongIntent", "slot": "librarySong",
+             "utterance": "riproduci il brano rosanna"}]
+    monkeypatch.setattr("nlu_static.catalog_canary.build_canary_plan",
+                        lambda *a, **k: list(plan))
+    lab = tmp_path
+    fx = _fixtures(tmp_path, [FX_ROW_A, FX_ROW_B])
+    model_path = _model_file(tmp_path, _valid_model())
+    monkeypatch.setattr(cli, "_discover_live_skill_id",
+                        lambda: "amzn1.ask.skill.LIVE-002")
+
+    def _er_match():
+        authority = [{"status": {"code": "ER_SUCCESS_MATCH"},
+                      "authority": "AMAZON.SongTitle",
+                      "values": [{"value": {"name": "rosanna"}}]}]
+        slot = {"value": "rosanna", "resolutions": {"resolutionsPerAuthority": authority}}
+        return {"selectedIntent": {"name": "PlayLibrarySongIntent",
+                                   "slots": {"librarySong": slot}},
+                "consideredIntents": [{"name": "PlayLibrarySongIntent",
+                                       "slots": {"librarySong": slot}}]}
+
+    def profile(sid, loc, utterance):
+        if utterance == "riproduci il brano rosanna":
+            return _er_match()
+        return _ok_response()
+
+    _happy_smapi(monkeypatch, profile=profile)
+    args = cli.build_parser().parse_args(
+        ["run", "--locale", "de-DE", "--model", str(model_path),
+         "--label", "live-canary", "--live"])
+    rc = cli.cmd_run(args, lab_dir=lab, fixtures_dir=fx)
+    assert rc == 0
+    run = _single_run(lab)
+    assert run.catalog_start["status"] == "ok"
+    assert run.catalog_start["types"]["SongTitle"]["resolved"] is True
+    assert run.catalog_end["status"] == "ok"
+    assert run.catalog_end["types"]["SongTitle"]["resolved"] is True
+    out = capsys.readouterr().out
+    assert "catalog canary (start): ok" in out
+    assert "catalog canary (end): ok" in out
+
+
+def test_run_live_without_snapshot_records_explicit_not_run(tmp_path, monkeypatch, capsys):
+    """JF-971 AC 4: no snapshot is an explicit not_run block on the run file,
+    never a silent skip."""
+    monkeypatch.setenv("SMAPI_DELAY", "0")
+    monkeypatch.delenv("NLU_CANARY", raising=False)
+    monkeypatch.delenv("NLU_CANARY_SNAPSHOT", raising=False)
+    lab = tmp_path
+    fx = _fixtures(tmp_path, [FX_ROW_A, FX_ROW_B])
+    model_path = _model_file(tmp_path, _valid_model())
+    monkeypatch.setattr(cli, "_discover_live_skill_id",
+                        lambda: "amzn1.ask.skill.LIVE-003")
+    log = _happy_smapi(monkeypatch)
+    args = cli.build_parser().parse_args(
+        ["run", "--locale", "de-DE", "--model", str(model_path),
+         "--label", "live-nosnap", "--live"])
+    rc = cli.cmd_run(args, lab_dir=lab, fixtures_dir=fx)
+    assert rc == 0
+    run = _single_run(lab)
+    assert run.catalog_start["status"] == "not_run"
+    assert "NLU_CANARY_SNAPSHOT" in run.catalog_start["reason"]
+    assert run.catalog_end["status"] == "not_run"
+    # the not_run path fired NO extra profile calls: battery rows only
+    kinds = [e[0] for e in log]
+    assert kinds.count("profile") >= 2

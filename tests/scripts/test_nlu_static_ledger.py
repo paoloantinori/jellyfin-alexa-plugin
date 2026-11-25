@@ -44,6 +44,28 @@ def _fixed_clock(minute: int = 0):
     return lambda: FIXED_MOMENT.replace(minute=minute)
 
 
+# JF-971: a stable catalog canary block. Same-model flips require the
+# catalog proof too since JF-971, so the default scenario sessions carry a
+# proven-equal state; the canary-specific tests build their own not_run,
+# changed and failed blocks explicitly instead of relying on this default.
+_STABLE_CATALOG_BLOCK = {
+    "status": "ok",
+    "reason": None,
+    "types": {
+        "SongTitle": {
+            "value": "rosanna",
+            "intent": "PlayLibrarySongIntent",
+            "slot": "librarySong",
+            "utterance": "riproduci il brano rosanna",
+            "resolved": True,
+            "code": "ER_SUCCESS_MATCH",
+            "authority": "AMAZON.SongTitle",
+            "error": None,
+        },
+    },
+}
+
+
 def _writer(tmp_path: Path, **over) -> nlu_ledger.LedgerWriter:
     kwargs = dict(
         out_dir=tmp_path,
@@ -52,6 +74,7 @@ def _writer(tmp_path: Path, **over) -> nlu_ledger.LedgerWriter:
         identity_reader=lambda locale: "etag-1",
         model_sha256_fn=lambda locale: f"sha-{locale}",
         pid=4242,
+        catalog_reader=lambda locale: _STABLE_CATALOG_BLOCK,
     )
     kwargs.update(over)
     return nlu_ledger.LedgerWriter(**kwargs)

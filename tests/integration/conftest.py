@@ -8,6 +8,7 @@ Provides:
 - E2E options: --jellyfin-url, --jellyfin-api-key, --jellyfin-user
 - Custom markers: nlu, locale, e2e
 - NLU_ROW_FILTER: run only the NLU rows a `nlu_static select` output lists (JF-954.7)
+- Catalog ER canary per locale per session endcap, recorded in the ledger (JF-971)
 """
 
 from __future__ import annotations
@@ -42,6 +43,9 @@ import yaml
 # JF-954.5: the results ledger. The bridge is a separate module (the
 # smapi_timeouts lesson) so test_nlu.py and this file share ONE holder.
 from nlu_static import ledger as nlu_ledger  # noqa: E402
+# JF-971: the ER canary. The ONE helper lives in nlu_static (the lab imports
+# the same module), so the suite never forks a second probe builder.
+from nlu_static import catalog_canary as nlu_catalog_canary  # noqa: E402
 # JF-954.7: the change-driven row selection. The pure decision function and
 # the filter-file loader live in scripts/nlu_static/selection.py; the hook
 # below only calls them.
@@ -326,6 +330,40 @@ _ledger_resolved_skill_id: str | None = None
 _ledger_identity_broken: bool = False
 _ledger_identity_null_streak: int = 0
 IDENTITY_NULL_BREAKER_STREAK = 3
+# JF-971: the catalog canary's session-wide breaker, same shape as the
+# identity breaker: after one unexpected reader fault the rest of the
+# session records the explicit broken-reason block instead of paying the
+# probes again on every locale endcap.
+_ledger_catalog_broken: bool = False
+
+
+def _ledger_catalog_reader(locale: str) -> dict:
+    """The JF-971 catalog state block for one locale, or an explicit not_run.
+
+    One endcap per locale per session at each side (locale start and session
+    end), at most six profile-nlu probes per call. The probes ride the SAME
+    SmapiClient pacing discipline as the suite rows (the client self-paces
+    against the shared last-call timestamp, hence delay 0 here), and every
+    failure shape collapses into an explicit not_run block with a reason:
+    NLU_CANARY=0 disables by note, a missing NLU_CANARY_SNAPSHOT records
+    the no-snapshot reason, and a fault trips the session breaker so a dead
+    CLI cannot tax every locale. The ledger never changes a test outcome.
+    """
+    global _ledger_catalog_broken
+    if _ledger_catalog_broken:
+        return nlu_catalog_canary.not_run_block(nlu_catalog_canary.REASON_SESSION_BROKEN)
+    if not _ledger_resolved_skill_id:
+        return nlu_catalog_canary.not_run_block(nlu_catalog_canary.REASON_NO_SKILL_ID)
+    try:
+        from smapi_client import SmapiClient
+
+        client = SmapiClient(skill_id=_ledger_resolved_skill_id, locale=locale)
+        return nlu_catalog_canary.environment_block(locale, client.profile_nlu, delay=0.0)
+    except Exception:
+        _ledger_catalog_broken = True
+        logger.warning("NLU ledger catalog canary disabled for this session "
+                       "after a reader fault")
+        return nlu_catalog_canary.not_run_block(nlu_catalog_canary.REASON_SESSION_BROKEN)
 
 
 def _ledger_identity_reader(locale: str) -> str | None:
@@ -428,6 +466,7 @@ def pytest_configure(config: pytest.Config) -> None:
     writer = nlu_ledger.writer_for_environment(
         dry_run=bool(config.getoption("--dry-run")),
         identity_reader=_ledger_identity_reader,
+        catalog_reader=_ledger_catalog_reader,
     )
     _ledger_writer = writer
     _ledger_resolved_skill_id = _resolve_skill_id()

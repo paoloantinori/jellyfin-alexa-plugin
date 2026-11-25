@@ -224,7 +224,7 @@ def build_effective_model(
     notes: list[str] = []
     if snapshot is not None:
         validate_snapshot(snapshot)
-        table = _resolve_locale_table(snapshot, locale)
+        table = resolve_locale_table(snapshot, locale)
         if table is None:
             notes.append(
                 f"snapshot has no entry for locale {locale} and no "
@@ -342,8 +342,13 @@ def validate_snapshot(doc: dict, context: str = "snapshot") -> None:
             _parse_snapshot_entries(entries, f"{context}: locales.{locale_key}.{type_name}")
 
 
-def _resolve_locale_table(snapshot: dict, locale: str) -> dict | None:
-    """The snapshot's table for one locale: its own entry, else the "*" fallback."""
+def resolve_locale_table(snapshot: dict, locale: str) -> dict | None:
+    """The snapshot's table for one locale: its own entry, else the "*" fallback.
+
+    Public since JF-971: the ER canary reads the same table the effective
+    model applies, so a snapshot value a model would train on is the value
+    the canary probes with. The ONE resolution, two consumers, no fork.
+    """
     locales = snapshot.get("locales", {})
     if locale in locales:
         return locales[locale]
