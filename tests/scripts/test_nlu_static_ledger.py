@@ -64,7 +64,7 @@ def _run_session(
     *,
     minute: int = 0,
     sha: str | None = "sha-A",
-    identities="etag-A",
+    identities: str | list[str] = "etag-A",
     complete: bool = True,
     skill_id="sk-1",
 ) -> None:
@@ -605,7 +605,7 @@ def test_row_record_field_set(tmp_path):
     row = [r for r in rows if r["type"] == "row"][-1]
     assert set(row) == {
         "type", "locale", "utterance", "expected_intent", "expected_slots",
-        "actual_intent", "slots", "outcome", "failure_kind", "detail",
+        "actual_intent", "slots", "considered", "outcome", "failure_kind", "detail",
     }
     assert row["locale"] == "es-ES"
     assert row["utterance"] == "pon adolescencia temporada uno episodio tres"
@@ -616,6 +616,33 @@ def test_row_record_field_set(tmp_path):
 
 
 # --- the observation bridge --------------------------------------------------------------
+
+
+def test_row_considered_column_round_trips(tmp_path):
+    """JF-968: the hypotheses ride the row's dedicated considered column at
+    full fidelity, and rows written before the field read back as []."""
+    writer = _writer(tmp_path, pid=7, clock=_fixed_clock(0),
+                     identity_reader=lambda _l: "etag-A",
+                     model_sha256_fn=lambda _l: "sha-A")
+    writer.start_session("sk-1")
+    writer.record_row(
+        locale="it-IT", utterance="suona coldplay", expected_intent="PlayArtistSongsIntent",
+        actual_intent="PlayByGenreIntent", outcome="fail",
+        considered=[{"intent": "PlayArtistSongsIntent", "slots": {"musician": "coldplay"},
+                     "er": {"musician": [{"authority": "amzn1.er...JellyfinArtist",
+                                          "code": "ER_SUCCESS_MATCH",
+                                          "canonical": "Coldplay"}]}}],
+    )
+    writer.record_row(
+        locale="it-IT", utterance="vecchia riga", expected_intent="AnyIntent",
+        actual_intent="AnyIntent", outcome="pass",
+    )
+    writer.finish()
+    sessions = nlu_ledger.load_sessions(tmp_path)
+    rows = [r for r in sessions[0]["rows"] if r.get("type") == "row"]
+    assert rows[0]["considered"][0]["intent"] == "PlayArtistSongsIntent"
+    assert rows[0]["considered"][0]["er"]["musician"][0]["canonical"] == "Coldplay"
+    assert rows[1]["considered"] == []  # pre-field row shape reads back empty
 
 
 def test_bridge_observe_flattens_slots_and_is_defensive():

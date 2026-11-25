@@ -671,20 +671,14 @@ def _ledger_record_row(item: pytest.Item, rep) -> None:
             crash_message = lines[-1] if lines else ""
         row_outcome, failure_kind = nlu_ledger.classify_failure(full_text or crash_message)
         detail = crash_message.splitlines()[0][:240] if crash_message else None
-    # JF-968: the consideredIntents hypotheses ride the row's detail field
-    # for now, as a bounded JSON appendix. scripts/nlu_static/ledger.py is
-    # owned by another worker this round, so record_row cannot gain a
-    # dedicated column yet; the hypotheses (name + slot values + ER codes,
-    # never the raw response) are the capture. Nothing parses detail
-    # programmatically, so this is annotation-only.
-    if considered:
-        note = json.dumps(considered, ensure_ascii=False, separators=(",", ":"))
-        if len(note) > 600:
-            note = note[:600] + "...(truncated)"
-        detail = f"{detail} | considered={note}" if detail else f"considered={note}"
+    # JF-968: the consideredIntents hypotheses ride the row's DEDICATED
+    # considered column (annotation-only, never gates; [] when none or the
+    # extractor was unavailable). Full fidelity, no truncation: the slot
+    # segmentation of each discarded hypothesis is the diagnostic.
     writer.record_row(
         locale=str(case.get("locale", "")),
         utterance=case.get("utterance", ""),
+        considered=considered or [],
         expected_intent=case.get("expected_intent", ""),
         expected_slots=case.get("expected_slots", {}),
         actual_intent=actual_intent,

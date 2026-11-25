@@ -308,6 +308,7 @@ class LedgerWriter:
         expected_slots=None,
         actual_intent: str | None = None,
         slots=None,
+        considered=None,
         outcome: str,
         failure_kind: str | None = None,
         detail: str | None = None,
@@ -317,7 +318,11 @@ class LedgerWriter:
         ``expected_slots`` is stored exactly as given (the fixture's verbatim
         object; an empty object for any-value expectations and for fixtures
         with no slot expectations), so later analysis never has to re-read a
-        fixture file that may have changed since the run.
+        fixture file that may have changed since the run. ``considered``
+        (JF-968) is the full consideredIntents hypotheses list ({intent,
+        slots, er} dicts from the ONE extractor), annotation-only: it never
+        gates an outcome, and rows written before the field default to []
+        on read.
         """
         if self._disabled or not self._started or self._finished:
             return
@@ -334,6 +339,7 @@ class LedgerWriter:
                 "expected_slots": {} if expected_slots is None else expected_slots,
                 "actual_intent": actual_intent,
                 "slots": {} if slots is None else slots,
+                "considered": [] if considered is None else considered,
                 "outcome": outcome,
                 "failure_kind": failure_kind,
                 "detail": detail,
