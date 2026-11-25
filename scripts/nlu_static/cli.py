@@ -110,10 +110,13 @@ def cmd_snapshot(args: argparse.Namespace) -> int:
                     "--from-plugin requires --user-id (the configured plugin user's GUID)"
                 )
             )
-    elif args.locale:
+    elif args.locale or args.user_id:
+        # --user-id is a plugin-export flag: a forgotten --from-plugin must
+        # refuse here (exit 2), not silently produce the name-level snapshot.
+        misplaced = "--locale" if args.locale else "--user-id"
         return _fail(
             ValueError(
-                "--locale restricts the plugin export and only applies with --from-plugin"
+                f"{misplaced} belongs to the plugin export and only applies with --from-plugin"
             )
         )
     try:

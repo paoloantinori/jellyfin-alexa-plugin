@@ -248,6 +248,18 @@ def test_cli_locale_without_from_plugin_is_refused(monkeypatch, capsys):
     assert "--from-plugin" in capsys.readouterr().err
 
 
+def test_cli_user_id_without_from_plugin_is_refused(monkeypatch, capsys):
+    """A forgotten --from-plugin must refuse, not silently produce the
+    name-level snapshot under the given --user-id (review round symmetry)."""
+    monkeypatch.setenv("JELLYFIN_URL", "http://jf.test")
+    monkeypatch.setenv("JELLYFIN_API_KEY", API_KEY)
+    code = nlu_cli.main(["snapshot", "--user-id", "u-1"])
+    assert code == 2
+    captured = capsys.readouterr()
+    assert "--user-id" in captured.err
+    assert "--from-plugin" in captured.err
+
+
 def test_cli_from_plugin_redacts_failures(monkeypatch, capsys):
     def boom(url: str, api_key: str):
         raise RuntimeError(f"GET {url} exploded")

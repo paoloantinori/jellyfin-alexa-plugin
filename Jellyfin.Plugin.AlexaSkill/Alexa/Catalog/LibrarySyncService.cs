@@ -1722,7 +1722,9 @@ public class LibrarySyncService
     /// (<see cref="IsCatalogTypeSyncedForUser"/>). Items fetch
     /// ONCE per type through the shared fetch (<see cref="FetchTypeItems"/>),
     /// and a zero-item type contributes nothing exactly because the sync mints
-    /// nothing for one (SyncCatalogForLocaleAsync's early return). Every
+    /// nothing for one (SyncCatalogForLocaleAsync's early return). An empty
+    /// locale roster (a filter matching nothing) ends the export BEFORE the
+    /// type sweep, paying no fetch at all. Every
     /// (type, locale) payload comes from <see cref="BuildFinalCatalogPayload"/>,
     /// the shared builder, so this export and the next real upload cannot
     /// drift. NO SMAPI call, no catalog version, no CatalogController cache
@@ -1751,6 +1753,28 @@ public class LibrarySyncService
                 .Where(l => string.Equals(l, localeFilter, StringComparison.OrdinalIgnoreCase))
                 .ToList();
         }
+
+        // JF-954.8 review round: a locale roster that resolved to NOTHING (a
+        // locale filter matching nothing: ar-SA, or a typo) ends the export
+        // here, BEFORE the type sweep, so the discarded-everything case does
+        // not pay the five capped queries and the song pipeline first.
+        if (locales.Count == 0)
+        {
+            _logger.LogInformation(
+                "Catalog snapshot export for user {UserId}: no locales to export (the resolved roster is empty); nothing fetched",
+                user.Id);
+            return new CatalogSnapshotExport(new Dictionary<string, Dictionary<string, List<CatalogSnapshotEntry>>>(StringComparer.Ordinal));
+        }
+
+        // The roster source rides the completion line (review round): the
+        // export's "*" expands over the EMBEDDED-model roster, so its locale
+        // list is what a freshly-created skill would carry; a pre-existing
+        // skill whose SMAPI manifest declares fewer locales is a subset.
+        _logger.LogInformation(
+            "Catalog snapshot export for user {UserId}: {LocaleCount} locales ({Locales}) from the embedded-model roster (a pre-existing skill's manifest may declare fewer)",
+            user.Id,
+            locales.Count,
+            string.Join(", ", locales));
 
         var table = new Dictionary<string, Dictionary<string, List<CatalogSnapshotEntry>>>(StringComparer.Ordinal);
         foreach (CatalogType catalogType in CatalogSlotTypes.CatalogSlotTypeNames.Keys)
@@ -1797,12 +1821,19 @@ public class LibrarySyncService
     /// JF-954.8: which locales the snapshot export covers, the sync's locale
     /// resolution WITHOUT its one SMAPI call: the same parse (<see cref="ResolveLocaleList"/>:
     /// it-IT always, the "*" roster, the explicit comma list) over a "*" roster
-    /// read from the EMBEDDED interaction models instead of the SMAPI manifest
-    /// (the embedded roster is the SMAPI-free analogue of the manifest's
-    /// declared locales), then the SAME ar-SA exclusion the sync applies
+    /// read from the EMBEDDED interaction models instead of the SMAPI manifest,
+    /// then the SAME ar-SA exclusion the sync applies
     /// (<see cref="CatalogManager.IsCatalogWiringSupported"/>). The roster is
     /// sorted Ordinal so the appended locales ride a deterministic order
-    /// (it-IT still leads).
+    /// (it-IT still leads). STATED DIVERGENCE (review round): the sync's "*"
+    /// expands over the LIVE skill's SMAPI manifest declared locales (with the
+    /// it-IT fallback when that read fails), so the export's roster answers
+    /// "what would the sync upload for the locales a FRESHLY-CREATED skill
+    /// would carry"; a pre-existing skill whose manifest declares fewer
+    /// locales has a live wiring that is a SUBSET of the snapshot's locale
+    /// list. The divergence is accepted on purpose: resolving it would need
+    /// the SMAPI read the export's no-SMAPI contract forbids. The roster and
+    /// its source ride the export's completion log line.
     /// </summary>
     /// <param name="syncLocalesConfig">The CatalogSyncLocales configuration string.</param>
     /// <returns>The locales the export processes, ar-SA excluded.</returns>
@@ -1863,11 +1894,9 @@ public class LibrarySyncService
     /// dedicated source (the Song precedent: play-count ordering,
     /// uncapped-then-prepared) fails LOUDLY here at the first export instead
     /// of silently riding the generic SortName fetch the sync does not use
-    /// for it. Song rides the SAME dedicated source the sync's wiring table
-    /// uses (<see cref="FetchAndPrepareSongTitles"/>, the preparation
-    /// pipeline included; its pre-cap total lands on a throwaway SyncResult
-    /// the export never reports); every other type rides the shared query
-    /// through <see cref="FetchCatalogItems"/> with the kind resolved by
+    /// for it. Song rides <see cref="FetchSongItemsForSnapshot"/>; every
+    /// other type rides the shared query through
+    /// <see cref="FetchCatalogItems"/> with the kind resolved by
     /// <see cref="CatalogTypeItemKind"/>. NOTE: the sync's own fetches stay on
     /// its wiring-table lambdas (the structural pin on FetchLibraryItems binds
     /// exactly those five call sites); this dispatch is the export's only
@@ -1883,12 +1912,47 @@ public class LibrarySyncService
         Entities.User user)
         => catalogType switch
         {
-            CatalogType.Song => FetchAndPrepareSongTitles(jellyfinUser, user, new SyncResult()),
+            CatalogType.Song => FetchSongItemsForSnapshot(jellyfinUser, user),
             CatalogType.Artist or CatalogType.Album or CatalogType.Series
                 or CatalogType.Audiobook or CatalogType.Movie =>
                 FetchCatalogItems(jellyfinUser, user, CatalogTypeItemKind(catalogType), EffectiveMaxCatalogValues),
             _ => throw new ArgumentOutOfRangeException(nameof(catalogType), catalogType, "no catalog item source for this type"),
         };
+
+    /// <summary>
+    /// The song leg's export source (JF-954.8 review round): the SAME
+    /// dedicated source the sync's wiring table uses
+    /// (<see cref="FetchAndPrepareSongTitles"/>, preparation pipeline
+    /// included), plus the honest cut signal the throwaway SyncResult used to
+    /// swallow. The response shape is pinned to values and synonyms only, so
+    /// the cut rides the plugin LOG in the sync's own wording (the JF-946
+    /// warning), suffixed so triage can tell the export's line from the sync
+    /// run's; the docs page names the log as the place to read the cut from.
+    /// A cut means the export's SongTitle table is the kept most-played head,
+    /// not the full distinct set.
+    /// </summary>
+    /// <param name="jellyfinUser">The Jellyfin user whose library scope applies.</param>
+    /// <param name="user">The plugin user (allowed-library filtering).</param>
+    /// <returns>The prepared, capped song items.</returns>
+    private List<BaseItem> FetchSongItemsForSnapshot(
+        Jellyfin.Database.Implementations.Entities.User jellyfinUser,
+        Entities.User user)
+    {
+        var counts = new SyncResult();
+        List<BaseItem> items = FetchAndPrepareSongTitles(jellyfinUser, user, counts);
+        if (counts.SongTitleTotal > items.Count)
+        {
+            _logger.LogWarning(
+                "Song title catalog cut for user {UserId}: kept the {Kept} most-played of {Distinct} distinct titles (cap {Cap}); the least-played {Dropped} titles have no catalog value (JF-946; snapshot export)",
+                user.Id,
+                items.Count,
+                counts.SongTitleTotal,
+                EffectiveMaxCatalogValues,
+                counts.SongTitleTotal - items.Count);
+        }
+
+        return items;
+    }
 
     /// <summary>
     /// The ONE per-user type-in-sync-scope gate (JF-954.8): Song rides the

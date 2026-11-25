@@ -112,13 +112,15 @@ public class CatalogSnapshotExportTests : PluginTestBase, IDisposable
     private readonly Mock<CatalogManager> _catalogManagerMock;
     private readonly ILoggerFactory _loggerFactory;
     private readonly LibrarySyncService _exportService;
+    private readonly List<(LogLevel Level, string Message)> _logCapture;
 
     public CatalogSnapshotExportTests()
     {
         _libraryManagerMock = new Mock<ILibraryManager>();
         _userDataManagerMock = new Mock<IUserDataManager>();
         _catalogManagerMock = new Mock<CatalogManager>(Mock.Of<System.Net.Http.IHttpClientFactory>(), NullLogger<CatalogManager>.Instance);
-        _loggerFactory = LoggerFactory.Create(b => { });
+        _logCapture = new List<(LogLevel Level, string Message)>();
+        _loggerFactory = LoggerFactory.Create(b => b.AddProvider(TestCaptureLogger.Into(_logCapture)));
 
         // The export never touches the CatalogManager; the mock lets the
         // no-SMAPI pin prove it (VerifyNoOtherCalls).
@@ -139,6 +141,8 @@ public class CatalogSnapshotExportTests : PluginTestBase, IDisposable
     {
         _loggerFactory.Dispose();
     }
+
+    private List<string> Logs() => TestCaptureLogger.Snapshot(_logCapture).Select(l => l.Message).ToList();
 
     private static List<BaseItem> Artists(params string[] names) =>
         names.Select(n => (BaseItem)new MusicArtist { Name = n, Id = Guid.NewGuid() }).ToList();
@@ -367,6 +371,52 @@ public class CatalogSnapshotExportTests : PluginTestBase, IDisposable
         // An explicit locale filter for ar-SA.
         CatalogSnapshotExport filtered = _exportService.BuildCatalogSnapshot(jellyfinUser, user, "ar-SA", CancellationToken.None);
         Assert.Empty(filtered.Locales);
+    }
+
+    /// <summary>
+    /// JF-954.8 review round: a locale filter matching nothing (ar-SA, or a
+    /// typo) ends the export BEFORE the type sweep, paying no fetch at all.
+    /// </summary>
+    [Fact]
+    public void Export_LocaleFilterMatchingNothing_PaysNoFetch()
+    {
+        SetupLibraryByKind((BaseItemKind.Series, Series("Dark")));
+        var user = TestHelpers.CreateSyncUser();
+
+        CatalogSnapshotExport filtered = _exportService.BuildCatalogSnapshot(JellyfinUser, user, "es_ES", CancellationToken.None);
+
+        Assert.Empty(filtered.Locales);
+        _libraryManagerMock.Verify(l => l.GetItemList(It.IsAny<InternalItemsQuery>()), Times.Never);
+    }
+
+    /// <summary>
+    /// JF-954.8 review round: the song leg's cut signal is NOT swallowed. A
+    /// SongTitle table that hit the cap announces the cut in the sync's own
+    /// JF-946 wording (the response shape is pinned to values and synonyms,
+    /// so the log is the honest channel), suffixed so triage can tell the
+    /// export's line from a sync run's.
+    /// </summary>
+    [Fact]
+    public void Export_CappedSongTitle_AnnouncesTheCutInTheLog()
+    {
+        SetupLibraryByKind((BaseItemKind.Audio, Songs("Track A", "Track B", "Track C", "Track D", "Track E")));
+        var user = TestHelpers.CreateSyncUser();
+        user.CatalogSongSyncEnabled = true;
+        _exportService.MaxCatalogValuesForTest = 3;
+        try
+        {
+            CatalogSnapshotExport export = _exportService.BuildCatalogSnapshot(JellyfinUser, user, "it-IT", CancellationToken.None);
+            Assert.Equal(3, export.Locales["it-IT"]["SongTitle"].Count);
+
+            string warning = Assert.Single(
+                Logs().Where(l => l.Contains("Song title catalog cut", StringComparison.Ordinal)));
+            Assert.Contains("most-played of 5 distinct titles", warning, StringComparison.Ordinal);
+            Assert.Contains("snapshot export", warning, StringComparison.Ordinal);
+        }
+        finally
+        {
+            _exportService.MaxCatalogValuesForTest = null;
+        }
     }
 
     /// <summary>

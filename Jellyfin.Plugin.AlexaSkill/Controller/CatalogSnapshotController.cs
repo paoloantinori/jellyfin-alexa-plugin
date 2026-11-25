@@ -61,10 +61,14 @@ public class CatalogSnapshotController : ControllerBase
     /// Export the catalog snapshot for one configured plugin user. Synchronous
     /// by design: the build is the sync's own library-read plus computation
     /// (no SMAPI round trip anywhere), so there is no async work to await and
-    /// no sync-over-async; the request's cancellation token (bound by ASP.NET
-    /// to RequestAborted) is honored at the roster, per-type and per-locale
-    /// boundaries inside the build, which is what bounds a disconnected
-    /// client's work.
+    /// no sync-over-async. HONEST CANCELLATION SCOPE (review round): the
+    /// request's cancellation token (bound by ASP.NET to RequestAborted) is
+    /// checked at the roster, per-type and per-locale ITERATION BOUNDARIES
+    /// inside the build; an in-flight library query and the song leg's
+    /// per-track preparation loop run to completion once entered, because
+    /// Jellyfin's InternalItemsQuery/GetItemList carries no token to abort
+    /// them. A disconnected client therefore stops after the current fetch or
+    /// payload build, not mid-fetch.
     /// </summary>
     /// <param name="userId">The configured plugin user's id (required).</param>
     /// <param name="locale">Optional single locale to restrict the export to; a locale the sync would not process contributes nothing.</param>
