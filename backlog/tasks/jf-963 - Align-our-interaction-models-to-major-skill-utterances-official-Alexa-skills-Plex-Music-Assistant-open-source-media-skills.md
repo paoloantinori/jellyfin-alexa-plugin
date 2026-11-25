@@ -6,7 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-11-25 14:21'
-updated_date: '2026-11-25 14:54'
+updated_date: '2026-11-25 22:05'
 labels:
   - nlu
   - research
@@ -34,6 +34,12 @@ Maintainer directive (2026-11-25): align our interaction models to the utterance
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+FOLLOW-UPS from the JF-965 review round (2026-11-25 sera, filed same-turn per discipline): (1) SIBLING LOCALES: the batch-1 eleven rows landed in en-US/es-ES/fr-FR/de-DE only; the same-language siblings (en-GB/en-AU/en-CA/en-IN, es-MX/es-US, fr-CA) carry the identical base carrier families and keep the gap - each trains its own model, so en-US rows do not generalize cross-locale. The next batch must START with a carriers delta per sibling locale (the JF-970 tool makes this a minutes-long check) before any row lands. (2) DE CONTRACTION FAMILY: the new de carrier-noun row pins only the uncontracted 'von dem Kunstler' form; spoken German contracts to 'vom Kunstler', which is in neither model, fixtures, nor the lab battery. Candidates for the next batch: 'Spiele Musik vom Kunstler {musician}', 'Spiele Lieder vom Kunstler {musician}' (same carriers-check + lab discipline first; the corpus research doc's askplex de grid is the source to re-read for the exact measured forms).
+<!-- SECTION:NOTES:END -->
 
 ## Final Summary
 
