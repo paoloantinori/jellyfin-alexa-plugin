@@ -143,6 +143,13 @@ tests:
       album: {}
       musician: {}
 
+  # JF-965 alignment row (corpus): Starte joins the album carriers
+  # ("Starte {musician}" already owns the artist side on PlayArtistSongsIntent).
+  - utterance: "Starte das Album thriller"
+    expected_intent: PlayAlbumIntent
+    expected_slots:
+      album: {}
+
   # -------------------------------------------------------------------------
   # 7. PlayVideoIntent (title)
   # -------------------------------------------------------------------------
@@ -160,6 +167,25 @@ tests:
       musician: {}
 
   - utterance: "Spiele Musik von the beatles"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+
+  # JF-965 alignment rows (corpus D3): the carrier-noun artist forms.
+  # "Künstler" is a BrowseCategory value and "Band"/"Künstler" are
+  # MediaInfoType entries (the issue #46 class): the MediaInfo
+  # sentinels must keep routing to MediaInfoIntent for these to be safe.
+  - utterance: "Spiele Lieder von dem Künstler queen"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+
+  - utterance: "Spiele Musik von der Band the beatles"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+
+  - utterance: "Spiele Musik von der Gruppe the beatles"
     expected_intent: PlayArtistSongsIntent
     expected_slots:
       musician: {}
@@ -306,6 +332,17 @@ tests:
     expected_slots: {}
 
   - utterance: "Welches Genre ist das"
+    expected_intent: MediaInfoIntent
+    expected_slots: {}
+
+  # JF-965 sentinels: "Band" and "Künstler" are MediaInfoType entries, so
+  # the new carrier-noun artist rows on PlayArtistSongsIntent must not steal
+  # these question shapes.
+  - utterance: "Welche Band ist das"
+    expected_intent: MediaInfoIntent
+    expected_slots: {}
+
+  - utterance: "Erzähl mir von dem Künstler"
     expected_intent: MediaInfoIntent
     expected_slots: {}
 

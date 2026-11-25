@@ -201,6 +201,9 @@
         "name": "PlayArtistSongsIntent",
         "samples": [
           "Reproduce canciones de {musician}",
+          "Reproduce canciones del artista {musician}",
+          "Reproduce canciones del cantante {musician}",
+          "Reproduce canciones del grupo {musician}",
           "Reproduce música de {musician}",
           "Reproduce temas de {musician}",
           "Reproduce {musician}",

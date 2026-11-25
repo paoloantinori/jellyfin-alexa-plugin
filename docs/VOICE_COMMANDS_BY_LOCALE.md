@@ -4494,7 +4494,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (776 phrases across 71 commands):
+Complete phrase list (778 phrases across 71 commands):
 
 #### Play music
 
@@ -4898,6 +4898,8 @@ Complete phrase list (776 phrases across 71 commands):
 - `put on the album <album title>`
 - `play the record <album title>`
 - `play the record <album title> by <artist name>`
+- `start the album <album title>`
+- `start the record <album title>`
 - `an album by <artist name>`
 - `play an album by <artist name>`
 - `listen to an album by <artist name>`
@@ -6267,7 +6269,7 @@ Placeholder legend:
 | `<mots du titre de la chanson>` | `{titleKeywords}` |
 | `<nom d'utilisateur>` | `{username}` |
 
-Complete phrase list (493 phrases across 74 commands):
+Complete phrase list (495 phrases across 74 commands):
 
 #### Play music
 
@@ -6322,6 +6324,8 @@ Complete phrase list (493 phrases across 74 commands):
 - `Passe les chansons de <nom de l'artiste>`
 - `Commence <nom de l'artiste>`
 - `Joue les <nom de l'artiste>`
+- `Joue des chansons de <nom de l'artiste>`
+- `Joue de la musique de <nom de l'artiste>`
 - `Mets les <nom de l'artiste>`
 - `Passe les <nom de l'artiste>`
 - `Écoute les <nom de l'artiste>`
@@ -7024,7 +7028,7 @@ Placeholder legend:
 | `<Wörter aus dem Songtitel>` | `{titleKeywords}` |
 | `<Benutzername>` | `{username}` |
 
-Complete phrase list (494 phrases across 75 commands):
+Complete phrase list (498 phrases across 75 commands):
 
 #### Play music
 
@@ -7062,6 +7066,9 @@ Complete phrase list (494 phrases across 75 commands):
 - `Spiele Musik von <Name des Künstlers>`
 - `Spiele Titel von <Name des Künstlers>`
 - `Spiele Songs von <Name des Künstlers>`
+- `Spiele Lieder von dem Künstler <Name des Künstlers>`
+- `Spiele Musik von der Band <Name des Künstlers>`
+- `Spiele Musik von der Gruppe <Name des Künstlers>`
 - `Spiele <Name des Künstlers>`
 - `Spiele etwas von <Name des Künstlers>`
 - `Höre <Name des Künstlers>`
@@ -7176,6 +7183,7 @@ Complete phrase list (494 phrases across 75 commands):
 - `Höre das Album <Titel des Albums>`
 - `Höre das Album <Titel des Albums> von <Name des Künstlers>`
 - `Gib das Album <Titel des Albums> wieder`
+- `Starte das Album <Titel des Albums>`
 - `Spiele die Platte <Titel des Albums>`
 - `Spiele die Platte <Titel des Albums> von <Name des Künstlers>`
 - `ein Album von <Name des Künstlers>`
@@ -11831,7 +11839,7 @@ Placeholder legend:
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (483 phrases across 70 commands):
+Complete phrase list (486 phrases across 70 commands):
 
 #### Play music
 
@@ -11862,6 +11870,9 @@ Complete phrase list (483 phrases across 70 commands):
 **Play an artist**
 
 - `Reproduce canciones de <nombre del artista>`
+- `Reproduce canciones del artista <nombre del artista>`
+- `Reproduce canciones del cantante <nombre del artista>`
+- `Reproduce canciones del grupo <nombre del artista>`
 - `Reproduce música de <nombre del artista>`
 - `Reproduce temas de <nombre del artista>`
 - `Reproduce <nombre del artista>`
