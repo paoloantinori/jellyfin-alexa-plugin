@@ -3,17 +3,23 @@
 The composer's invocation name now derives from the committed model JSON by
 default (model_<locale>.json invocationName, read through nlu_static's
 ONE loader), and a fixture header only overrides when present. The tests
-here pin the three load-bearing pieces:
+here pin the load-bearing pieces:
 
 - the conftest model-name reader (_model_invocation_name): model read,
-  per-session cache on the production path, explicit-dir bypass, and the
-  loud failure when no usable model name exists;
+  per-session cache on the production path, explicit-dir bypass, the
+  STRIPPED value, and the loud failure when no usable model name exists;
 - the override precedence through load_locale_fixtures on tmp fixture and
   model trees (present header wins; absent or empty falls back to the
-  model; no model fails at load, never silently composes);
+  model; no model fails at load, never silently composes; a present
+  NON-STRING header refuses loudly, review round 2 finding 1);
 - the parity lint's narrowed contract: an absent or empty header is the
   supported default and never warns, a present-but-stale override still
-  warns.
+  warns, a non-string header warns (finding 1), and each smoke fixture's
+  open_utterance must CONTAIN the model name (finding 2, the embedded
+  copy no mechanism derives);
+- the wrapper battery containment (finding 3): every simulate row and
+  evergreen control contains its model's invocationName; profile rows are
+  never checked.
 
 The integration conftest module is loaded fresh per test via importlib
 (the JF-954.7 pattern), which also gives every test an empty name cache.
@@ -41,7 +47,11 @@ from nlu_static.effective_model import (  # noqa: E402
     load_locale_model,
 )
 from smapi_client import SmapiClient  # noqa: E402
-from validate_interaction_models import lint_fixture_invocation_names  # noqa: E402
+from validate_interaction_models import (  # noqa: E402
+    FIXTURES_DIR,
+    lint_fixture_invocation_names,
+    lint_wrapper_battery_invocation,
+)
 
 LOCALE = "xx-XX"
 
@@ -145,6 +155,60 @@ def test_model_with_an_empty_name_fails_loudly(tmp_path):
     _write_model(tmp_path, LOCALE, {"invocationName": "  ", "intents": [], "types": []})
     with pytest.raises(RuntimeError, match="no usable invocationName"):
         conftest._model_invocation_name(LOCALE, models_dir=tmp_path)
+
+
+def test_padded_model_name_is_returned_and_cached_stripped(tmp_path, monkeypatch):
+    # Review round 2, finding 5: the strip is the cached and returned value,
+    # not only the usability gate.
+    conftest = _load_integration_conftest()
+    _write_model(tmp_path, LOCALE, {"invocationName": "  padded name  ", "intents": [], "types": []})
+    assert conftest._model_invocation_name(LOCALE, models_dir=tmp_path) == "padded name"
+
+    calls: list[str] = []
+    real = conftest._load_locale_model
+
+    def counting(locale, models_dir=None):
+        calls.append(locale)
+        return real(locale, models_dir)
+
+    monkeypatch.setattr(conftest, "_load_locale_model", counting)
+    assert conftest._model_invocation_name(LOCALE, models_dir=tmp_path) == "padded name"
+    assert calls, "the explicit-dir test path re-reads (no cache pollution)"
+
+
+def test_non_string_header_refuses_loudly(tmp_path):
+    # Review round 2, finding 1: a present-but-non-string header is a
+    # fixture bug, not a missing override; the old lint warned for exactly
+    # this shape and the loader now refuses it at collection.
+    conftest = _load_integration_conftest()
+    fixtures_dir = tmp_path / "fixtures"
+    fixtures_dir.mkdir()
+    (fixtures_dir / f"{LOCALE}.yaml").write_text(
+        f"locale: {LOCALE}\n"
+        "invocation_name: 42\n"
+        "tests:\n"
+        '  - utterance: "una riga"\n'
+        "    expected_intent: FooIntent\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(RuntimeError, match=r"non-string invocation_name header \(int\)"):
+        conftest.load_locale_fixtures(fixtures_dir, models_dir=tmp_path)
+
+
+def test_non_string_list_header_refuses_loudly(tmp_path):
+    conftest = _load_integration_conftest()
+    fixtures_dir = tmp_path / "fixtures"
+    fixtures_dir.mkdir()
+    (fixtures_dir / f"{LOCALE}.yaml").write_text(
+        f"locale: {LOCALE}\n"
+        "invocation_name: [a, b]\n"
+        "tests:\n"
+        '  - utterance: "una riga"\n'
+        "    expected_intent: FooIntent\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(RuntimeError, match=r"non-string invocation_name header \(list\)"):
+        conftest.load_locale_fixtures(fixtures_dir, models_dir=tmp_path)
 
 
 # ------------------------------------------------- the override precedence
@@ -281,3 +345,154 @@ def test_lint_matching_header_is_clean(tmp_path):
 
 def test_lint_headerless_e2e_family_is_clean(tmp_path):
     assert _lint(tmp_path, None, name=f"e2e_smoke_{LOCALE}.yaml") == []
+
+
+def test_lint_non_string_header_warns(tmp_path):
+    # Review round 2, finding 1, the lint side: the old lint warned for a
+    # non-string header, so the narrowed lint must keep seeing it.
+    _write_fixture(tmp_path, f"{LOCALE}.yaml", LOCALE, None)
+    (tmp_path / f"{LOCALE}.yaml").write_text(
+        f"locale: {LOCALE}\n"
+        "invocation_name: true\n"
+        "tests:\n"
+        '  - utterance: "una riga"\n'
+        "    expected_intent: FooIntent\n",
+        encoding="utf-8",
+    )
+    warnings = lint_fixture_invocation_names(
+        {LOCALE: {"invocationName": "model name"}}, fixtures_dir=tmp_path
+    )
+    assert len(warnings) == 1
+    assert "invocation_name header is a bool, not a string" in warnings[0]
+
+
+def test_lint_stale_smoke_open_warns(tmp_path):
+    # Review round 2, finding 2: the smoke open embeds the invocation name
+    # as authored text; a model rename leaves it stale and only this lint
+    # sees it.
+    _write_fixture(tmp_path, f"e2e_smoke_{LOCALE}.yaml", LOCALE, None)
+    (tmp_path / f"e2e_smoke_{LOCALE}.yaml").write_text(
+        f"locale: {LOCALE}\n"
+        'open_utterance: "open the old name"\n'
+        "tests:\n"
+        '  - utterance: "una riga"\n'
+        "    expected_intent: FooIntent\n",
+        encoding="utf-8",
+    )
+    warnings = lint_fixture_invocation_names(
+        {LOCALE: {"invocationName": "model name"}}, fixtures_dir=tmp_path
+    )
+    assert len(warnings) == 1
+    assert "open_utterance does not contain the model invocationName" in warnings[0]
+
+
+def test_lint_matching_smoke_open_is_clean(tmp_path):
+    _write_fixture(tmp_path, f"e2e_smoke_{LOCALE}.yaml", LOCALE, None)
+    (tmp_path / f"e2e_smoke_{LOCALE}.yaml").write_text(
+        f"locale: {LOCALE}\n"
+        'open_utterance: "open model name now"\n'
+        "tests:\n"
+        '  - utterance: "una riga"\n'
+        "    expected_intent: FooIntent\n",
+        encoding="utf-8",
+    )
+    assert lint_fixture_invocation_names(
+        {LOCALE: {"invocationName": "model name"}}, fixtures_dir=tmp_path
+    ) == []
+
+
+def test_lint_smoke_open_without_the_key_is_clean(tmp_path):
+    _write_fixture(tmp_path, f"e2e_smoke_{LOCALE}.yaml", LOCALE, None)
+    assert lint_fixture_invocation_names(
+        {LOCALE: {"invocationName": "model name"}}, fixtures_dir=tmp_path
+    ) == []
+
+
+def test_lint_padded_model_name_agrees_with_the_loader(tmp_path):
+    # Review round 2, finding 5, the lint side: the composer sends the
+    # stripped model name, so the exact header equality compares against
+    # the stripped value too.
+    warnings = lint_fixture_invocation_names(
+        {LOCALE: {"invocationName": "  model name  "}}, fixtures_dir=tmp_path
+    )
+    assert _lint(tmp_path, "model name") == []
+    assert warnings == []
+
+
+def _committed_models() -> dict:
+    """{locale: languageModel} for every committed model (read-only)."""
+    models: dict = {}
+    for path in sorted(DEFAULT_MODELS_DIR.glob("model_*.json")):
+        locale = path.stem.removeprefix("model_")
+        models[locale] = load_locale_model(locale)
+    return models
+
+
+def test_committed_smoke_opens_contain_their_model_names():
+    # Real-data touch: the committed-tree check the validator performs;
+    # all 17 smoke opens embed the current model invocationName.
+    assert lint_fixture_invocation_names(
+        _committed_models(), fixtures_dir=FIXTURES_DIR
+    ) == []
+
+
+# ------------------------------------------------- the wrapper battery
+
+
+def _write_battery(path: Path, simulate_row: str, control: str | None) -> None:
+    rows = [
+        '        ("profile", "bare payload senza invocation", "SomeIntent"),',
+        f'        ("simulate", "{simulate_row}", "SomeIntent"),',
+    ]
+    lines = ["BATTERY = {", '    "it-IT": [', *rows, "    ],", "}"]
+    if control is not None:
+        lines += ["EVERGREEN_CONTROLS = {", f'    "it-IT": "{control}",', "}"]
+    else:
+        lines.append("EVERGREEN_CONTROLS = {}")
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def test_battery_stale_simulate_row_and_control_warn(tmp_path):
+    battery_path = tmp_path / "nlu_wrapper_battery.py"
+    _write_battery(battery_path, "chiedi a vecchio nome di riproduci x", "chiedi a vecchio nome di controllo")
+    warnings = lint_wrapper_battery_invocation(
+        {"it-IT": {"invocationName": "mia collezione"}}, battery_path=battery_path
+    )
+    assert len(warnings) == 2
+    assert all("does not contain the model invocationName 'mia collezione'" in w for w in warnings)
+    assert any("simulate row" in w for w in warnings)
+    assert any("evergreen control" in w for w in warnings)
+
+
+def test_battery_matching_rows_are_clean(tmp_path):
+    battery_path = tmp_path / "nlu_wrapper_battery.py"
+    _write_battery(
+        battery_path,
+        "chiedi a mia collezione di riproduci x",
+        "chiedi a mia collezione di controllo",
+    )
+    assert lint_wrapper_battery_invocation(
+        {"it-IT": {"invocationName": "mia collezione"}}, battery_path=battery_path
+    ) == []
+
+
+def test_battery_profile_rows_are_never_checked(tmp_path):
+    battery_path = tmp_path / "nlu_wrapper_battery.py"
+    _write_battery(battery_path, "chiedi a mia collezione di x", None)
+    # The profile row embeds a stale name on purpose: no warning, because a
+    # profile row carries no invocation prefix by design.
+    assert lint_wrapper_battery_invocation(
+        {"it-IT": {"invocationName": "mia collezione"}}, battery_path=battery_path
+    ) == []
+
+
+def test_battery_locale_without_a_model_is_skipped(tmp_path):
+    battery_path = tmp_path / "nlu_wrapper_battery.py"
+    _write_battery(battery_path, "chiedi a chiunque di x", None)
+    assert lint_wrapper_battery_invocation({}, battery_path=battery_path) == []
+
+
+def test_committed_wrapper_battery_matches_the_models():
+    # Real-data touch: the committed battery's it-IT and fr-FR simulate
+    # rows and controls embed the current model invocationNames.
+    assert lint_wrapper_battery_invocation(_committed_models()) == []

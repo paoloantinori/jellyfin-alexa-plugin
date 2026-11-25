@@ -2,8 +2,10 @@
 command feeds to profile-nlu. Two sources per locale: the locale's NLU fixture file
 (fixtures/<locale>.yaml, the e2e_* family excluded by the exact stem match in
 load_battery, mirroring load_locale_fixtures in tests/integration/conftest.py) and an
-optional workingset file in the SAME fixture format (top-level locale/invocation_name,
-a tests list) where expected_intent is OPTIONAL. A row without expected_intent is an
+optional workingset file in the SAME fixture format (top-level locale plus a tests
+list; since JF-912 the invocation_name header is optional everywhere, because the
+pytest loader falls back to the model's invocationName, and this module reads only
+the tests list anyway) where expected_intent is OPTIONAL. A row without expected_intent is an
 observation row (expected_intent stays None; the judgment layer treats it amber-only).
 Rows are keyed by (utterance, source): the same utterance in both sources stays
 distinct. expected_intent is carried verbatim, including "A|B" pipe alternatives, which
@@ -94,7 +96,9 @@ def load_battery(locale: str, fixtures_dir: Path, workingset: Path | None,
                 raise WorkingsetRefused(
                     f"fixture {path} top level is "
                     f"{type(data).__name__ if data is not None else 'empty'}, "
-                    "expected a mapping with locale/invocation_name/tests")
+                    "expected a mapping with locale and a tests list (the "
+                    "invocation_name header is optional since JF-912; this "
+                    "loader reads only tests)")
             for i, case in enumerate(data.get("tests") or []):
                 rows.append(_battery_row(case, path, SOURCE_FIXTURE, i))
 

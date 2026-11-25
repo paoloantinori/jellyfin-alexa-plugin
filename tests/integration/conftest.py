@@ -153,6 +153,10 @@ def _model_invocation_name(locale: str, models_dir: str | Path | None = None) ->
             f"a fixture without an invocation_name header cannot be loaded, "
             f"because there is no name to compose one-shots with"
         )
+    # The STRIPPED value is what composes (review round 2, finding 5): a
+    # padded model name must not cache double spaces into every composed
+    # one-shot, nor mismatch the parity lint's exact header equality.
+    name = name.strip()
     if models_dir is None:
         _MODEL_INVOCATION_NAME_CACHE[locale] = name
     return name
@@ -208,6 +212,17 @@ def load_locale_fixtures(
 
         locale = data.get("locale", "unknown")
         invocation_name = data.get("invocation_name")
+        if invocation_name is not None and not isinstance(invocation_name, str):
+            # A present-but-non-string header (a YAML int, bool or list) is a
+            # fixture bug, not a missing override: refuse at collection,
+            # naming the file and the value type (review round 2, finding 1;
+            # the old parity lint warned for exactly this shape).
+            raise RuntimeError(
+                f"JF-912: {path.name} carries a non-string invocation_name "
+                f"header ({type(invocation_name).__name__}); the header must "
+                f"be a string override or omitted so the model supplies the "
+                f"name"
+            )
         if not isinstance(invocation_name, str) or not invocation_name:
             # JF-912: absent or empty header falls back to the model. A
             # headerless fixture whose locale has no committed model raises
