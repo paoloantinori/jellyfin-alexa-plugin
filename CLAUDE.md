@@ -26,6 +26,11 @@ python3 scripts/validate_apl.py                       # Check APL templates vali
 # PreToolUse hook blocks a suite launch when template HEAD is newer than the deployed DLL
 # (phantom-reds incident 2026-11-24: b6da49e7 sat undeployed for a day while the suite
 # measured 16 stale locales). Within 30 min it is advisory (deploy-then-commit lag).
+# CI-status gate: the ci-status-push-gate PreToolUse hook BLOCKS a push to origin main when
+# the latest ci.yml run on main FAILED (2026-11-25 incident: four pushes over a red CI; local
+# runs cannot catch -warnaserror-only CS errors or shallow-clone history dependence). The
+# warnaserror-parity PostToolUse reminder fires when a local dotnet build runs without the
+# flag CI compiles every project with.
 ./scripts/run_nlu_tests.sh -k "en-US"                 # single locale
 ./scripts/run_nlu_tests.sh --dry-run                  # validate fixtures only, no SMAPI calls
 python3 scripts/nlu_static/cli.py triage --snapshot <file>   # classify red NLU rows after a live suite (see docs/nlu-static-analysis.md)
