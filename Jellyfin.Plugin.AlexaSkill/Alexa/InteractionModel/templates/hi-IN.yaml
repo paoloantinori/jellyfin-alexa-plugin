@@ -746,7 +746,13 @@ types:
     - value: फिल्में
     - value: गाने
       synonyms:
-      - गाना
+      # JF-962 (maintainer + Fable consult, 2026-11-25): the singular
+      # removed. The word is a PlaySongIntent carrier in ~20 intents AND
+      # was a BrowseCategory synonym: the issue-46 token-ownership class,
+      # live-reproduced twice ('गाना शहर की आवाज़ चलाओ' stole to
+      # BrowseLibraryIntent with browse_category=गाना). The same cut as
+      # the de-DE 'Lied' fix: qualify/remove the colliding VALUE, never
+      # the carrier. The plural and the other synonyms stay.
       - म्यूज़िक
       - ट्रैक
       id: songs
