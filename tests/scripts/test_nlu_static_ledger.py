@@ -638,11 +638,35 @@ def test_row_considered_column_round_trips(tmp_path):
         actual_intent="AnyIntent", outcome="pass",
     )
     writer.finish()
+    # A REAL pre-field file: raw JSONL written by pre-JF-968 code carries no
+    # considered key at all, and load_sessions must default it so consumers
+    # may index (the writer-default path alone would be false coverage).
+    (session_file,) = tmp_path.glob("*.jsonl")
+    pre_dir = tmp_path / "pre"
+    pre_dir.mkdir()
+    pre = pre_dir / "nlu-pre-field.jsonl"
+    import json as _json
+
+    kept = []
+    for line in session_file.read_text(encoding="utf-8").splitlines():
+        row = _json.loads(line)
+        if row.get("type") == "row" and "vecchia" not in row.get("utterance", ""):
+            continue
+        if row.get("type") == "row":
+            # strip the key: this line is what pre-JF-968 code wrote
+            row.pop("considered", None)
+        kept.append(_json.dumps(row, ensure_ascii=False, sort_keys=True))
+    pre.write_text("\n".join(kept) + "\n", encoding="utf-8")
+    for line in kept:
+        if '"vecchia' in line:
+            assert "considered" not in _json.loads(line)  # genuinely pre-field
+    pre_sessions = nlu_ledger.load_sessions(pre_dir)
+    pre_rows = [r for s in pre_sessions for r in s["rows"] if r.get("type") == "row"]
+    assert pre_rows[0]["considered"] == []  # read-side default, not writer default
     sessions = nlu_ledger.load_sessions(tmp_path)
     rows = [r for r in sessions[0]["rows"] if r.get("type") == "row"]
     assert rows[0]["considered"][0]["intent"] == "PlayArtistSongsIntent"
     assert rows[0]["considered"][0]["er"]["musician"][0]["canonical"] == "Coldplay"
-    assert rows[1]["considered"] == []  # pre-field row shape reads back empty
 
 
 def test_bridge_observe_flattens_slots_and_is_defensive():

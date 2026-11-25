@@ -6,7 +6,6 @@ import json
 import logging
 import subprocess
 import time
-from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger("nlu.smapi")
@@ -131,6 +130,73 @@ def _parse_json_output(raw: str) -> dict[str, Any]:
             if line.startswith("{"):
                 return json.loads(line)
     raise SmapiError(f"Could not parse JSON from output: {raw[:500]}")
+
+
+def _slot_resolutions(slot: Any) -> list[dict]:
+    """The per-authority ER records of one considered-slot object.
+
+    A list of {authority, code, canonical?} dicts, canonical present only
+    on ER_SUCCESS_MATCH (values[0].value.name). Anything unexpected
+    (missing resolutions, non-dict authority, empty values) degrades to
+    what is verifiably there; this helper never raises.
+    """
+    records: list[dict] = []
+    resolutions = slot.get("resolutions") if isinstance(slot, dict) else None
+    if not isinstance(resolutions, dict):
+        return records
+    authorities = resolutions.get("resolutionsPerAuthority") or []
+    if not isinstance(authorities, list):
+        return records
+    for auth in authorities:
+        if not isinstance(auth, dict):
+            continue
+        status = auth.get("status")
+        code = status.get("code") if isinstance(status, dict) else None
+        rec: dict = {"authority": auth.get("authority"), "code": code}
+        if code == "ER_SUCCESS_MATCH":
+            values = auth.get("values")
+            if isinstance(values, list) and values and isinstance(values[0], dict):
+                v = values[0].get("value")
+                if isinstance(v, dict) and v.get("name") is not None:
+                    rec["canonical"] = v.get("name")
+        records.append(rec)
+    return records
+
+
+def considered_hypotheses(response: dict) -> list[dict]:
+    """The FULL consideredIntents hypotheses (JF-968): the ONE extractor.
+
+    Home is this module (the layer every consumer already imports; the lab
+    re-exports it from smapi_ops so both spellings stay reachable). One
+    dict per entry, order preserved (the SAME intent can appear multiple
+    times with different slot segmentations; entry rank is as received,
+    unverified). Live shape (probed 2026-11-25): each entry is a full
+    Intent object {name, slots: {slot_name: {value, resolutions?}}};
+    there is NO score field. Per entry: {"intent": name, "slots":
+    {slot: value}, "er": {slot: [{authority, code, canonical?}]}}.
+    Guarded, never raises: a malformed entry or slot degrades to empty
+    fields instead of aborting the battery (a non-dict slot reads as
+    value None, never the raw object). The names-only projections (the
+    battery row column, the no-selection error message) derive from this
+    one list.
+    """
+    out: list[dict] = []
+    for entry in response.get("consideredIntents") or []:
+        if not isinstance(entry, dict):
+            continue
+        slots: dict = {}
+        er: dict = {}
+        raw_slots = entry.get("slots")
+        if isinstance(raw_slots, dict):
+            for slot_name, slot in raw_slots.items():
+                slots[str(slot_name)] = (
+                    slot.get("value") if isinstance(slot, dict) else None
+                )
+                per_authority = _slot_resolutions(slot)
+                if per_authority:
+                    er[str(slot_name)] = per_authority
+        out.append({"intent": entry.get("name"), "slots": slots, "er": er})
+    return out
 
 
 class SmapiClient:
@@ -538,36 +604,6 @@ class SmapiClient:
             ) from exc
 
     @staticmethod
-    def _considered_hypotheses(response: dict[str, Any]) -> list[dict]:
-        """The consideredIntents hypotheses via the ONE lab extractor
-        (JF-968 one-parser doctrine).
-
-        Imported lazily from scripts/nlu-lab/smapi_ops: a module-level import
-        would cycle (smapi_ops imports SmapiClient back from this module) and
-        would force the lab directory onto sys.path for every caller of this
-        module, not just the parser. The path bootstrap mirrors conftest's
-        (tests/integration and repo scripts) and adds scripts/nlu-lab, so
-        smapi_ops's own repo imports (nlu_wrapper_battery, runs,
-        smapi_client) resolve under both pytest invocation styles. Any
-        import failure degrades to [] rather than breaking the parse: the
-        hypotheses are an observation, never a gate."""
-        import importlib
-        import sys
-
-        repo = Path(__file__).resolve().parents[2]
-        for p in (repo / "tests" / "integration", repo / "scripts",
-                  repo / "scripts" / "nlu-lab"):
-            s = str(p)
-            if s not in sys.path:
-                sys.path.insert(0, s)
-        try:
-            smapi_ops = importlib.import_module("smapi_ops")
-            return smapi_ops.considered_hypotheses(response)
-        except Exception as exc:  # noqa: BLE001 - observation must not gate
-            logger.warning("considered-hypotheses extractor unavailable: %s", exc)
-            return []
-
-    @staticmethod
     def parse_profile_nlu_result(response: dict[str, Any]) -> dict[str, Any]:
         """Extract intent and slots from profile-nlu response.
 
@@ -577,12 +613,12 @@ class SmapiClient:
                 slots:  dict mapping slot_name to
                         {"name": str, "value": str}
                 considered: the full consideredIntents hypotheses (list of
-                        {intent, slots, er}; [] when none) via the ONE lab
-                        extractor
+                        {intent, slots, er}; [] when none) via the ONE
+                        module-level extractor (considered_hypotheses)
                 raw:   full response payload for debugging
         """
         selected = response.get("selectedIntent")
-        considered = SmapiClient._considered_hypotheses(response)
+        considered = considered_hypotheses(response)
         if not selected:
             if considered:
                 names = [h.get("intent") or "?" for h in considered]

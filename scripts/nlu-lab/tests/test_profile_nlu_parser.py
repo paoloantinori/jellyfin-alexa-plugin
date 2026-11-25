@@ -49,15 +49,6 @@ def test_parse_success_returns_considered_hypotheses():
     ]
 
 
-def test_parse_considered_matches_the_one_extractor():
-    """One-definition doctrine: the suite's considered is byte-equal to the
-    lab extractor's output on the same response."""
-    import smapi_ops
-    response = _fixture_response()
-    assert (SmapiClient.parse_profile_nlu_result(response)["considered"]
-            == smapi_ops.considered_hypotheses(response))
-
-
 def test_parse_no_selection_raises_with_considered_names():
     response = {"selectedIntent": None,
                 "consideredIntents": [{"name": "IntentForDifferentSkill"},

@@ -39,7 +39,7 @@ class RowResult:
     slots: dict
     considered_intents: list[str]
     raw: dict
-    # JF-968: the full consideredIntents hypotheses (smapi_ops.
+    # JF-968: the full consideredIntents hypotheses (smapi_client.
     # considered_hypotheses shape: intent name, slot values, ER summaries).
     # Defaults to [] so run files written before the field keep loading.
     considered_hypotheses: list[dict] = field(default_factory=list)

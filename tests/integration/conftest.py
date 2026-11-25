@@ -678,7 +678,7 @@ def _ledger_record_row(item: pytest.Item, rep) -> None:
     writer.record_row(
         locale=str(case.get("locale", "")),
         utterance=case.get("utterance", ""),
-        considered=considered or [],
+        considered=considered,
         expected_intent=case.get("expected_intent", ""),
         expected_slots=case.get("expected_slots", {}),
         actual_intent=actual_intent,

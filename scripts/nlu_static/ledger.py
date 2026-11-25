@@ -501,6 +501,9 @@ def load_sessions(results_dir) -> list[dict]:
                 entry["model_sha256"] = record.get("model_sha256")
                 entry["live_identity_start"] = record.get("live_identity_start")
             elif rtype == "row":
+                # JF-968: pre-field files carry no considered key; the read
+                # side owns the documented default so consumers may index it.
+                record.setdefault("considered", [])
                 session["rows"].append(record)
             elif rtype == "row_filter":
                 # JF-954.7: the session was run under NLU_ROW_FILTER; keep
