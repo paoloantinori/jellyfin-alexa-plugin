@@ -104,7 +104,7 @@ Invocation name: **"jellyfin player"**
 | Mark Favorite | `Das gefaellt mir` · `Das Video gefaellt mir` · `Das Lied gefaellt mir` · `Die Musik gefaellt mir` · `Fuege das Video zu meinen Favoriten hinzu` · `Fuege das Lied zu meinen Favoriten hinzu` |
 | Media Info | `Was ist der {media_info_type}` · `Was läuft gerade` · `Was ist die {media_info_type}` · `Sag mir den {media_info_type}` · `Sag mir die {media_info_type}` · `Welcher {media_info_type} ist das` |
 | Play Album | `Spiele das Album {album}` · `Spiele das Album {album} von {musician}` · `ein Album von {musician}` · `Spiele Album {album}` · `Spiele Album {album} von {musician}` · `Höre das Album {album}` |
-| Play Artist Songs | `Spiele Lieder von {musician}` · `Spiele Musik von {musician}` · `Spiele Titel von {musician}` · `Spiele Songs von {musician}` · `Spiele {musician}` · `Spiele etwas von {musician}` |
+| Play Artist Songs | `Spiele Lieder von {musician}` · `Spiele Musik von {musician}` · `Spiele Titel von {musician}` · `Spiele Songs von {musician}` · `Spiele Lieder von dem Künstler {musician}` · `Spiele Musik von der Band {musician}` |
 | Play Book | `spiele {book}` · `spiele das buch {book}` · `spiele hörbuch {book}` · `hör {book}` · `hör das buch {book}` |
 | Play By Decade | `Spiele Lieder aus den {decade}` · `Spiele {genre} aus den {decade}` · `Spiele Titel aus den {decade}` · `Spiele Hits aus den {decade}` · `Spiele Musik aus den {decade}` · `Spiele {decade} Hits` |
 | Play By Genre | `Spiele {genre} Musik` · `Spiele {genre}` · `Spiele etwas {genre}` · `Ich möchte {genre} hören` · `Spiele mir {genre} Musik` |
@@ -475,7 +475,7 @@ Invocation name: **"jellyfin player"**
 | Mark Favorite | `Me gusta` · `Me gusta el vídeo` · `Me gusta la canción` · `Me gusta la música` · `Añade el vídeo a mis favoritos` · `Añade la canción a mis favoritos` |
 | Media Info | `Cuál es el {media_info_type}` · `Qué está sonando` · `Cuál es la {media_info_type}` · `Dime el {media_info_type}` · `Dime la {media_info_type}` · `Qué {media_info_type} es` |
 | Play Album | `Reproduce el álbum {album}` · `Reproduce el álbum {album} de {musician}` · `un álbum de {musician}` · `Reproduce álbum {album}` · `Escucha el álbum {album}` · `Escucha el álbum {album} de {musician}` |
-| Play Artist Songs | `Reproduce canciones de {musician}` · `Reproduce música de {musician}` · `Reproduce temas de {musician}` · `Reproduce {musician}` · `Escucha {musician}` · `Escucha canciones de {musician}` |
+| Play Artist Songs | `Reproduce canciones de {musician}` · `Reproduce canciones del artista {musician}` · `Reproduce canciones del cantante {musician}` · `Reproduce canciones del grupo {musician}` · `Reproduce música de {musician}` · `Reproduce temas de {musician}` |
 | Play Book | `reproduce {book}` · `reproduce el libro {book}` · `escucha {book}` · `escucha el libro {book}` · `escucha el audiolibro {book}` |
 | Play By Decade | `Reproduce canciones de los {decade}` · `Reproduce {genre} de los {decade}` · `Reproduce temas de los {decade}` · `Reproduce éxitos de los {decade}` · `Reproduce música de los {decade}` · `Reproduce {decade} éxitos` |
 | Play By Genre | `Reproduce música {genre}` · `Pon música {genre}` · `Quiero escuchar {genre}` · `Reproduce canciones de {genre}` |

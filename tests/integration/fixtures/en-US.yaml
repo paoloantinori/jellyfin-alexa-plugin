@@ -85,6 +85,19 @@ tests:
       album: {}
       musician: {}
 
+  # JF-965 alignment rows (corpus A4): the start-carriers join play/put on.
+  # PlayVideoIntent owns "start the video {title}", so that shape is the
+  # competition sentinel for this family.
+  - utterance: "start the album thriller"
+    expected_intent: PlayAlbumIntent
+    expected_slots:
+      album: {}
+
+  - utterance: "start the record thriller"
+    expected_intent: PlayAlbumIntent
+    expected_slots:
+      album: {}
+
   # -------------------------------------------------------------------------
   # 5. PlayVideoIntent (title)
   # -------------------------------------------------------------------------
@@ -94,6 +107,13 @@ tests:
       title: {}
 
   - utterance: "Play the video the godfather"
+    expected_intent: PlayVideoIntent
+    expected_slots:
+      title: {}
+
+  # JF-965 sentinel: the start-carrier family ("start the album/record") must
+  # not steal PlayVideoIntent's own "start the video {title}" shape.
+  - utterance: "start the video star wars"
     expected_intent: PlayVideoIntent
     expected_slots:
       title: {}

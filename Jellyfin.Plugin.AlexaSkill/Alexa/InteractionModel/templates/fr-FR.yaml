@@ -163,6 +163,8 @@ intents:
   - Passe les chansons de {musician}
   - Commence {musician}
   - Joue les {musician}
+  - Joue des chansons de {musician}
+  - Joue de la musique de {musician}
   - Mets les {musician}
   - Passe les {musician}
   - Écoute les {musician}
