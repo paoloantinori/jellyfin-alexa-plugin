@@ -132,6 +132,84 @@ def _parse_json_output(raw: str) -> dict[str, Any]:
     raise SmapiError(f"Could not parse JSON from output: {raw[:500]}")
 
 
+def _slot_resolutions(slot: Any) -> list[dict]:
+    """The per-authority ER records of one considered-slot object.
+
+    A list of {authority, code, canonical?, matches?} dicts: canonical is the
+    first matched value (the JF-659 contract), matches the FULL list when
+    an authority matched more than one (the JF-690 multi-value class).
+    Anything unexpected
+    (missing resolutions, non-dict authority, empty values) degrades to
+    what is verifiably there; this helper never raises.
+    """
+    records: list[dict] = []
+    resolutions = slot.get("resolutions") if isinstance(slot, dict) else None
+    if not isinstance(resolutions, dict):
+        return records
+    authorities = resolutions.get("resolutionsPerAuthority") or []
+    if not isinstance(authorities, list):
+        return records
+    for auth in authorities:
+        if not isinstance(auth, dict):
+            continue
+        status = auth.get("status")
+        code = status.get("code") if isinstance(status, dict) else None
+        rec: dict = {"authority": auth.get("authority"), "code": code}
+        if code == "ER_SUCCESS_MATCH":
+            names = []
+            for v in (auth.get("values") or []):
+                if isinstance(v, dict) and isinstance(v.get("value"), dict):
+                    name = v["value"].get("name")
+                    if name is not None:
+                        names.append(name)
+            if names:
+                # canonical mirrors the JF-659 C# contract (Values[0]);
+                # matches carries EVERY matched value so the multi-value
+                # ER class (JF-690/JF-885: 'pink' -> P!nk + Pink Floyd)
+                # stays visible in the capture, not just rank #1.
+                rec["canonical"] = names[0]
+                if len(names) > 1:
+                    rec["matches"] = names
+        records.append(rec)
+    return records
+
+
+def considered_hypotheses(response: dict) -> list[dict]:
+    """The FULL consideredIntents hypotheses (JF-968): the ONE extractor.
+
+    Home is this module (the layer every consumer already imports; the lab
+    re-exports it from smapi_ops so both spellings stay reachable). One
+    dict per entry, order preserved (the SAME intent can appear multiple
+    times with different slot segmentations; entry rank is as received,
+    unverified). Live shape (probed 2026-11-25): each entry is a full
+    Intent object {name, slots: {slot_name: {value, resolutions?}}};
+    there is NO score field. Per entry: {"intent": name, "slots":
+    {slot: value}, "er": {slot: [{authority, code, canonical?}]}}.
+    Guarded, never raises: a malformed entry or slot degrades to empty
+    fields instead of aborting the battery (a non-dict slot reads as
+    value None, never the raw object). The names-only projections (the
+    battery row column, the no-selection error message) derive from this
+    one list.
+    """
+    out: list[dict] = []
+    for entry in response.get("consideredIntents") or []:
+        if not isinstance(entry, dict):
+            continue
+        slots: dict = {}
+        er: dict = {}
+        raw_slots = entry.get("slots")
+        if isinstance(raw_slots, dict):
+            for slot_name, slot in raw_slots.items():
+                slots[str(slot_name)] = (
+                    slot.get("value") if isinstance(slot, dict) else None
+                )
+                per_authority = _slot_resolutions(slot)
+                if per_authority:
+                    er[str(slot_name)] = per_authority
+        out.append({"intent": entry.get("name"), "slots": slots, "er": er})
+    return out
+
+
 class SmapiClient:
     """Wrapper for ASK CLI simulate-skill SMAPI endpoint.
 
@@ -545,28 +623,38 @@ class SmapiClient:
                 intent: resolved intent name (str)
                 slots:  dict mapping slot_name to
                         {"name": str, "value": str}
+                considered: the full consideredIntents hypotheses (list of
+                        {intent, slots, er}; [] when none) via the ONE
+                        module-level extractor (considered_hypotheses)
                 raw:   full response payload for debugging
         """
         selected = response.get("selectedIntent")
+        considered = considered_hypotheses(response)
         if not selected:
-            considered = response.get("consideredIntents", [])
+            # The computed list rides the exception so the caller reads one
+            # extraction per row on this branch too (no second walk).
             if considered:
-                names = [c.get("name", "?") for c in considered]
-                raise SmapiError(
-                    f"No selectedIntent; considered: {names}"
-                )
-            raise SmapiError("No selectedIntent or consideredIntents in response")
+                names = [h.get("intent") or "?" for h in considered]
+                err = SmapiError(f"No selectedIntent; considered: {names}")
+            else:
+                err = SmapiError("No selectedIntent or consideredIntents in response")
+            err.considered = considered  # noqa: B010 - attribute contract
+            raise err
 
         intent_name = selected.get("name", "")
         slots: dict[str, dict[str, Any]] = {}
-        for slot_name, slot_data in selected.get("slots", {}).items():
-            slots[slot_name] = {
-                "name": slot_name,
-                "value": slot_data.get("value", ""),
-            }
+        selected_slots = selected.get("slots")
+        if isinstance(selected_slots, dict):
+            for slot_name, slot_data in selected_slots.items():
+                slots[slot_name] = {
+                    "name": slot_name,
+                    "value": (slot_data.get("value", "")
+                              if isinstance(slot_data, dict) else ""),
+                }
 
         return {
             "intent": intent_name,
             "slots": slots,
+            "considered": considered,
             "raw": response,
         }

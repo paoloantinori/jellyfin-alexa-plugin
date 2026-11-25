@@ -76,7 +76,8 @@ def test_utterance_resolves_correct_intent(dry_run, nlu_fixture, smapi_client):
     # the assertions, so the recorded row carries what the NLU actually
     # resolved whether the assertions then pass or fail. Observation only:
     # the assertions and their messages below are untouched.
-    nlu_ledger_bridge.observe(resolved_intent, result["slots"])
+    nlu_ledger_bridge.observe(resolved_intent, result["slots"],
+                              result.get("considered"))
 
     # --- Intent assertion ---
     # 'A|B' alternation (the nlu_wrapper_battery.py convention): every listed

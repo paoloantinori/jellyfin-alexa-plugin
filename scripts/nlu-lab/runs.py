@@ -39,10 +39,21 @@ class RowResult:
     slots: dict
     considered_intents: list[str]
     raw: dict
+    # JF-968: the full consideredIntents hypotheses (smapi_client.
+    # considered_hypotheses shape: intent name, slot values, ER summaries).
+    # Defaults to [] so run files written before the field keep loading.
+    considered_hypotheses: list[dict] = field(default_factory=list)
 
     @property
     def expectation_alternatives(self) -> list[str] | None:
-        """expected_intent split on '|'; None when the row carries no usable expectation."""
+        """
+    Slot-shape note: `slots` keeps Alexa's per-slot objects ({name: {name,
+    value}}) verbatim (compare fixtures depend on that shape), while
+    `considered_hypotheses` flattens slots to {name: value} as the
+    distilled evidence shape; the ledger bridge flattens selected slots a
+    third way. Renderers must use the accessor matching the field they
+    read; the divergence is deliberate (verbatim vs distilled).
+expected_intent split on '|'; None when the row carries no usable expectation."""
         if self.expected_intent is None or not self.expected_intent.strip():
             return None
         alts = [p for p in (part.strip() for part in self.expected_intent.split("|")) if p]
@@ -128,6 +139,7 @@ def _row_to_dict(r: RowResult) -> dict:
         "slots": r.slots,
         "considered_intents": r.considered_intents,
         "raw": r.raw,
+        "considered_hypotheses": r.considered_hypotheses,
     }
 
 
@@ -175,6 +187,7 @@ def load_run(path: Path) -> RunRecord:
                 slots=r.get("slots") or {},
                 considered_intents=r.get("considered_intents") or [],
                 raw=r.get("raw") or {},
+                considered_hypotheses=r.get("considered_hypotheses") or [],
             )
             for r in data.get("results", [])
         ]

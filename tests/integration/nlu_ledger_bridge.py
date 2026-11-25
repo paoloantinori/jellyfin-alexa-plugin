@@ -13,12 +13,17 @@ from __future__ import annotations
 
 import warnings
 
-_observation: dict = {"intent": None, "slots": None}
+_observation: dict = {"intent": None, "slots": None, "considered": []}
 _fault_warned = False
 
 
-def observe(intent, slots) -> None:
-    """Record what the NLU resolved for the current test, before assertions run."""
+def observe(intent, slots, considered=None) -> None:
+    """Record what the NLU resolved for the current test, before assertions run.
+
+    ``considered`` (JF-968) carries the full consideredIntents hypotheses
+    (the {intent, slots, er} list from the ONE extractor); it defaults to
+    [] for older callers.
+    """
     global _fault_warned
     try:
         flattened: dict = {}
@@ -28,12 +33,14 @@ def observe(intent, slots) -> None:
                 flattened[str(name)] = "" if value is None else str(value)
         _observation["intent"] = None if intent is None else str(intent)
         _observation["slots"] = flattened
+        _observation["considered"] = list(considered) if considered else []
     except Exception as exc:
         # A malformed payload must never raise into the test body, but an
         # observation that silently degrades to empty would read as plausible
         # data in the row, so the first fault is warned (once per process).
         _observation["intent"] = None
         _observation["slots"] = {}
+        _observation["considered"] = []
         if not _fault_warned:
             _fault_warned = True
             warnings.warn(
@@ -44,8 +51,9 @@ def observe(intent, slots) -> None:
 
 
 def take():
-    """Return (intent, slots) for the current test and reset the holder."""
-    current = (_observation["intent"], _observation["slots"])
+    """Return (intent, slots, considered) for the current test and reset the holder."""
+    current = (_observation["intent"], _observation["slots"],
+               _observation["considered"])
     reset()
     return current
 
@@ -54,3 +62,4 @@ def reset() -> None:
     """Drop any observation left over from a previous test."""
     _observation["intent"] = None
     _observation["slots"] = None
+    _observation["considered"] = []

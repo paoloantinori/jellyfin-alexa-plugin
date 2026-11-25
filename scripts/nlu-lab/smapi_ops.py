@@ -20,7 +20,7 @@ from pathlib import Path
 
 from nlu_wrapper_battery import _run_ask
 from runs import RowStatus
-from smapi_client import SmapiClient, SmapiError
+from smapi_client import SmapiClient, SmapiError, considered_hypotheses
 
 BUILD_SUCCEEDED = "SUCCEEDED"
 BUILD_FAILED = "FAILED"
@@ -265,11 +265,6 @@ def profile_row(skill_id: str, locale: str, utterance: str) -> dict:
                       "--utterance", utterance])
 
 
-def _considered_names(response: dict) -> list[str]:
-    return [c.get("name") for c in response.get("consideredIntents", [])
-            if isinstance(c, dict)]
-
-
 def run_battery_rows(profile_fn, rows, delay: float | None = None) -> list[dict]:
     """Run the battery rows through profile_fn with SMAPI pacing and the
     JF-406 single-transient retry.
@@ -278,7 +273,7 @@ def run_battery_rows(profile_fn, rows, delay: float | None = None) -> list[dict]
     dict (profile_row partial-applied). rows are battery.BatteryRow objects
     (anything with .utterance works); the result preserves input order, one
     dict per row: {utterance, selected_intent, slots, considered_intents,
-    status} with status from runs.RowStatus. Every pair of consecutive
+    considered_hypotheses, status} with status from runs.RowStatus. Every pair of consecutive
     profile calls (retries included) is spaced by `delay` (None =
     SMAPI_DELAY env, repo default 1.5). A row whose profile call raises or
     returns a non-dict is retried exactly once (the JF-406 single-500
@@ -314,17 +309,31 @@ def run_battery_rows(profile_fn, rows, delay: float | None = None) -> list[dict]
         if response is _MISSING:
             out.append({"utterance": utterance, "selected_intent": None,
                         "slots": {}, "considered_intents": [],
+                        "considered_hypotheses": [],
                         "status": RowStatus.ERROR})
             continue
         try:
             parsed = SmapiClient.parse_profile_nlu_result(response)
-        except SmapiError:
-            out.append({"utterance": utterance, "selected_intent": None,
-                        "slots": {}, "considered_intents": _considered_names(response),
-                        "status": RowStatus.NO_SELECTION})
-            continue
-        out.append({"utterance": utterance, "selected_intent": parsed["intent"],
-                    "slots": parsed["slots"],
-                    "considered_intents": _considered_names(response),
-                    "status": RowStatus.OK})
+        except SmapiError as exc:
+            status = RowStatus.NO_SELECTION
+            selected = None
+            slots: dict = {}
+            # ONE extraction per row on this branch too: the parser
+            # attached its computed list to the exception; the direct
+            # call stays only as the fallback for foreign SmapiErrors.
+            hyps = getattr(exc, "considered", None)
+            if hyps is None:
+                hyps = considered_hypotheses(response)
+        else:
+            status = RowStatus.OK
+            selected = parsed["intent"]
+            slots = parsed["slots"]
+            # ONE extraction per row: the parser already computed the
+            # hypotheses; the names-only column is their projection.
+            hyps = parsed["considered"]
+        out.append({"utterance": utterance, "selected_intent": selected,
+                    "slots": slots,
+                    "considered_intents": [h["intent"] for h in hyps],
+                    "considered_hypotheses": hyps,
+                    "status": status})
     return out

@@ -397,3 +397,114 @@ def test_get_build_entry_extracts_and_raises_on_read_failure(monkeypatch):
     with pytest.raises(SmapiError):
         smapi_ops.get_build_entry("skill", "de-DE")  # read failure PROPAGATES: the CLI distinguishes
 
+
+# --- JF-968: considered_hypotheses (the ONE full-hypotheses extractor) ---
+
+def _hyp_response():
+    """Live probe shape (2026-11-25): full Intent objects, no score field,
+    the SAME intent twice with different slot segmentations, one ER match,
+    one NO_MATCH, one slot with no resolutions key."""
+    return {
+        "selectedIntent": None,
+        "sessionEnded": True,
+        "consideredIntents": [
+            {"name": "PlayByGenreIntent",
+             "slots": {"genre": {"value": "some jazz",
+                                 "resolutions": {"resolutionsPerAuthority": [
+                                     {"authority": "amzn1.er-authority..GENRE",
+                                      "status": {"code": "ER_SUCCESS_MATCH"},
+                                      "values": [{"value": {"name": "jazz",
+                                                            "id": "J123"}}]}]}}}},
+            {"name": "PlayByGenreIntent",
+             "slots": {"genre": {"value": "jazz",
+                                 "resolutions": {"resolutionsPerAuthority": [
+                                     {"authority": "amzn1.er-authority..GENRE",
+                                      "status": {"code": "ER_SUCCESS_NO_MATCH"}}]}}}},
+            {"name": "FallbackIntent",
+             "slots": {"bare": {"value": "hello"},
+                       "missing_resolutions_slot": {"value": "y"}}},
+        ],
+    }
+
+
+def test_considered_hypotheses_full_capture():
+    out = smapi_ops.considered_hypotheses(_hyp_response())
+    assert [h["intent"] for h in out] == ["PlayByGenreIntent",
+                                          "PlayByGenreIntent", "FallbackIntent"]
+    # order preserved, duplicate intent kept with its own fill
+    assert out[0]["slots"] == {"genre": "some jazz"}
+    assert out[1]["slots"] == {"genre": "jazz"}
+    # ER match: canonical extracted
+    assert out[0]["er"]["genre"] == [
+        {"authority": "amzn1.er-authority..GENRE",
+         "code": "ER_SUCCESS_MATCH", "canonical": "jazz"}]
+    # NO_MATCH: code recorded, no canonical key
+    assert out[1]["er"]["genre"] == [
+        {"authority": "amzn1.er-authority..GENRE",
+         "code": "ER_SUCCESS_NO_MATCH"}]
+    # slots without a resolutions key: values kept, no er entries
+    assert out[2]["slots"] == {"bare": "hello", "missing_resolutions_slot": "y"}
+    assert out[2]["er"] == {}
+
+
+def test_considered_hypotheses_empty_and_malformed():
+    assert smapi_ops.considered_hypotheses({}) == []
+    assert smapi_ops.considered_hypotheses({"consideredIntents": []}) == []
+    # non-dict entries are skipped, not fatal
+    assert smapi_ops.considered_hypotheses(
+        {"consideredIntents": ["junk", {"name": "X"}]}) == [
+        {"intent": "X", "slots": {}, "er": {}}]
+
+
+def test_battery_rows_populate_considered_hypotheses():
+    ok = smapi_ops.considered_hypotheses(_hyp_response())
+    out = run_battery_rows(lambda u: _hyp_response(), _rows("u"), 0)
+    assert out[0]["status"] is RowStatus.NO_SELECTION
+    assert out[0]["considered_hypotheses"] == ok
+    assert out[0]["considered_intents"] == [h["intent"] for h in ok]
+
+    out2 = run_battery_rows(lambda u: {"consideredIntents": []}, _rows("empty"), 0)
+    assert out2[0]["considered_hypotheses"] == []
+
+    # error path (both attempts raise): empty list, no crash
+    def boom(u):
+        raise RuntimeError("500")
+    out3 = run_battery_rows(boom, _rows("a"), 0)
+    assert out3[0]["status"] is RowStatus.ERROR
+    assert out3[0]["considered_hypotheses"] == []
+
+
+def test_battery_rows_ok_path_carries_considered_hypotheses():
+    response = _ok_response("u")
+    out = run_battery_rows(lambda u: response, _rows("u"), 0)
+    assert out[0]["status"] is RowStatus.OK
+    assert out[0]["considered_hypotheses"] == [
+        {"intent": "PlaySongIntent", "slots": {}, "er": {}},
+        {"intent": "PlayAlbumIntent", "slots": {}, "er": {}},
+    ]
+
+
+
+def test_considered_hypotheses_multi_value_match_keeps_the_tail():
+    """JF-690/JF-885 class: an authority matching MORE than one value keeps
+    every name (matches), not just rank #1 (canonical)."""
+    response = {
+        "selectedIntent": None,
+        "consideredIntents": [{
+            "name": "PlayArtistSongsIntent",
+            "slots": {"musician": {
+                "value": "pink",
+                "resolutions": {"resolutionsPerAuthority": [{
+                    "authority": "amzn1.er-authority..JellyfinArtist",
+                    "status": {"code": "ER_SUCCESS_MATCH"},
+                    "values": [
+                        {"value": {"name": "P!nk"}},
+                        {"value": {"name": "Pink Floyd"}},
+                    ],
+                }]},
+            }},
+        }],
+    }
+    (rec,) = smapi_ops.considered_hypotheses(response)[0]["er"]["musician"]
+    assert rec["canonical"] == "P!nk"          # JF-659 contract: Values[0]
+    assert rec["matches"] == ["P!nk", "Pink Floyd"]  # the full arbitration set
