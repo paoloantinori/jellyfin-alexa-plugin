@@ -725,17 +725,28 @@ def lint_fixture_carriers(all_models: dict[str, dict], fixtures_dir: Path = FIXT
 
 
 def lint_fixture_invocation_names(all_models: dict[str, dict], fixtures_dir: Path = FIXTURES_DIR) -> list[str] | None:
-    """WARNING lint: NLU fixture invocation_name headers drifting from the models.
+    """WARNING lint: PRESENT fixture invocation_name overrides drifting from the models.
 
-    The fixtures' invocation_name header feeds the simulate one-shot composer
-    (SmapiClient prefixes the locale's invocation pattern with it), so a stale
-    header false-reds every composed-wrapper row under any simulate run. The
-    drift class is real: JF-558 renamed the locales' invocation names on
-    2026-09-13 and the NLU fixture headers lagged a month (caught 2026-10-20,
-    the JF-877 es/nl lane). The models carry invocationName as a
-    machine-readable field, so the equality is exact, not heuristic. Custom
-    per-user invocation names are runtime config and never appear in either
-    place, so a mismatch is always drift.
+    Since JF-912 the fixture's invocation_name header is an optional
+    per-fixture override: absent or empty falls back to the committed
+    model's invocationName, which the simulate one-shot composer reads
+    through conftest's loader, so a headerless fixture can never drift.
+    What the lint still polices is the override: a PRESENT header that
+    differs from the model means someone intentionally diverged (or the
+    override went stale), and the composer would prefix composed one-shots
+    with the wrong name. The drift class is real: JF-558 renamed the
+    locales' invocation names on 2026-09-13 and the NLU fixture headers
+    lagged a month (caught 2026-10-20, the JF-877 es/nl lane). The models
+    carry invocationName as a machine-readable field, so the equality is
+    exact, not heuristic. Custom per-user invocation names are runtime
+    config and never appear in either place, so a mismatch is always drift.
+
+    Two more shapes, added in the JF-912 review round 2: a present-but-
+    NON-STRING header (a YAML int, bool or list) warns the same bug the
+    fixture loader refuses at collection; and the smoke fixtures'
+    open_utterance embeds the invocation name as authored free text no
+    mechanism derives, so each open phrase must still CONTAIN the model
+    name (exact substring) or the embedded name went stale.
     """
     warnings: list[str] = []
     if not fixtures_dir.is_dir():
@@ -747,8 +758,7 @@ def lint_fixture_invocation_names(all_models: dict[str, dict], fixtures_dir: Pat
         print("  SKIP: PyYAML not installed, fixture lint not run")
         return None
 
-    def _check(fixture_path: Path, locale: str, model_name: str | None,
-               required: bool) -> None:
+    def _check(fixture_path: Path, locale: str, model_name: str | None) -> None:
         if not fixture_path.is_file():
             return
         try:
@@ -758,33 +768,149 @@ def lint_fixture_invocation_names(all_models: dict[str, dict], fixtures_dir: Pat
         if not isinstance(data, dict):
             return
         header = data.get("invocation_name")
-        # Drift by DELETION must warn too (review round 3 F7): the composer
-        # silently degrades when the header vanishes, so absence is not a
-        # clean skip where the fixture family carries the field by convention.
+        if header is not None and not isinstance(header, str):
+            # A present-but-non-string header (a YAML int, bool or list) is
+            # a fixture bug the loader refuses at collection; warn the same
+            # shape so the committed-tree check sees it too (review round 2,
+            # finding 1).
+            warnings.append(
+                f"  [{locale}] {fixture_path.name}: invocation_name header is "
+                f"a {type(header).__name__}, not a string (the fixture loader "
+                f"refuses this shape; use a string override or drop the "
+                f"header to follow the model)"
+            )
+            return
+        # Absent or empty is the SUPPORTED default since JF-912 (the composer
+        # derives the name from the model): no header, nothing to police. The
+        # former deletion warning (review round 3 F7) died with the
+        # three-copy invariant this override model retires.
         if not isinstance(header, str) or not header:
-            if required:
-                warnings.append(
-                    f"  [{locale}] {fixture_path.name}: invocation_name header "
-                    f"is missing or empty (the simulate composer needs it)"
-                )
             return
         if isinstance(model_name, str) and header != model_name:
             warnings.append(
                 f"  [{locale}] {fixture_path.name}: invocation_name '{header}' "
-                f"!= model invocationName '{model_name}' (stale header; the "
+                f"!= model invocationName '{model_name}' (stale override; the "
                 f"simulate composer would prefix composed one-shots with the "
-                f"wrong name)"
+                f"wrong name; drop the header to follow the model)"
+            )
+
+    def _check_smoke_open(fixture_path: Path, locale: str, model_name: str | None) -> None:
+        """The smoke open embeds the invocation name as authored free text
+        (the JF-413 open phrases): no mechanism derives it, so a model
+        rename leaves a stale embedded name silently. Exact substring
+        containment against the model name, warn on absence (review round
+        2, finding 2; the same guard shape as the header equality)."""
+        if not isinstance(model_name, str) or not model_name:
+            return
+        if not fixture_path.is_file():
+            return
+        try:
+            data = yaml.safe_load(fixture_path.read_text())
+        except yaml.YAMLError:
+            return
+        if not isinstance(data, dict):
+            return
+        open_utterance = data.get("open_utterance")
+        if not isinstance(open_utterance, str) or not open_utterance:
+            return
+        if model_name not in open_utterance:
+            warnings.append(
+                f"  [{locale}] {fixture_path.name}: open_utterance does not "
+                f"contain the model invocationName '{model_name}' (stale "
+                f"embedded name in the smoke open; the JF-558 rename class "
+                f"survives there)"
             )
 
     for locale, lm in sorted(all_models.items()):
         model_name = lm.get("invocationName")
-        # The NLU fixture: the header is part of the schema (all 17 carry it).
-        _check(fixtures_dir / f"{locale}.yaml", locale, model_name, required=True)
+        if isinstance(model_name, str):
+            # Mirror the loader's normalization (review round 2, finding 5):
+            # the composer sends the STRIPPED name, so every equality and
+            # containment below must compare against the stripped value.
+            model_name = model_name.strip() or None
+        # The NLU fixture.
+        _check(fixtures_dir / f"{locale}.yaml", locale, model_name)
         # Every e2e-family fixture for the locale (e2e_, e2e_smoke_,
-        # e2e_reliability_): the header feeds the same composer (review round
-        # 3 F4; all 20 carry it today).
+        # e2e_reliability_): any of them may override for the composer.
         for fixture_path in sorted(fixtures_dir.glob(f"e2e_*{locale}.yaml")):
-            _check(fixture_path, locale, model_name, required=True)
+            _check(fixture_path, locale, model_name)
+        # The smoke family's open phrase (its own embedded copy of the name).
+        _check_smoke_open(fixtures_dir / f"e2e_smoke_{locale}.yaml", locale, model_name)
+
+    return warnings
+
+
+WRAPPER_BATTERY_PATH = Path(__file__).resolve().parent / "nlu_wrapper_battery.py"
+
+
+def lint_wrapper_battery_invocation(
+    all_models: dict[str, dict], battery_path: Path = WRAPPER_BATTERY_PATH
+) -> list[str] | None:
+    """WARNING lint: the wrapper battery's embedded invocation names.
+
+    The battery's simulate rows and evergreen controls are authored
+    device-truth: their literal one-shot wrappers are NOT rewritten to read
+    the model, so a model rename silently leaves a stale embedded name the
+    same way the JF-558 fixture headers lagged. The guard is the same shape
+    as the smoke open_utterance check: every simulate row and every
+    evergreen control of a locale with a committed model must CONTAIN the
+    model's invocationName (exact substring), warn on absence (JF-912
+    review round 2, finding 3). profile rows carry no invocation prefix by
+    design and are never checked; a locale with no committed model is
+    skipped (the battery's own configuration error covers that shape).
+    """
+    warnings: list[str] = []
+    if not battery_path.is_file():
+        print("  SKIP: wrapper battery not found:", battery_path)
+        return None
+    try:
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location(
+            "jf912_wrapper_battery_lint", battery_path
+        )
+        battery = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(battery)
+    except Exception as exc:  # noqa: BLE001 - warning-class: report, never fail
+        warnings.append(
+            f"  wrapper battery could not be imported ({exc}); invocation "
+            f"containment not checked"
+        )
+        return warnings
+
+    def _containment(locale: str, phrase: str, kind: str) -> None:
+        model = all_models.get(locale) or {}
+        model_name = model.get("invocationName")
+        if isinstance(model_name, str):
+            model_name = model_name.strip()
+        if not model_name:
+            return
+        if model_name not in phrase:
+            warnings.append(
+                f"  [{locale}] wrapper battery {kind} does not contain the "
+                f"model invocationName '{model_name}': '{phrase[:60]}' "
+                f"(stale embedded name; authored device-truth, so this lint "
+                f"is the guard)"
+            )
+
+    battery_map = getattr(battery, "BATTERY", {})
+    if isinstance(battery_map, dict):
+        for locale, rows in sorted(battery_map.items()):
+            if not isinstance(rows, list):
+                continue
+            for row in rows:
+                if not isinstance(row, tuple) or len(row) < 2:
+                    continue
+                mode, phrase = row[0], row[1]
+                if mode != "simulate" or not isinstance(phrase, str):
+                    continue
+                _containment(locale, phrase, "simulate row")
+    controls = getattr(battery, "EVERGREEN_CONTROLS", {})
+    if isinstance(controls, dict):
+        for locale, phrase in sorted(controls.items()):
+            if isinstance(phrase, str):
+                _containment(locale, phrase, "evergreen control")
 
     return warnings
 
@@ -1659,13 +1785,27 @@ def main() -> int:
             all_warnings,
         )
 
-    # Phase 3b: fixture invocation_name parity (JF-877 drift check; exact, not
-    # heuristic, but warning-class to match the fixture-lint contract)
+    # Phase 3b: fixture invocation_name override parity (JF-877 drift check;
+    # JF-912 narrowed it to the override case: absent headers are the
+    # supported model-derived default, present headers must still match;
+    # review round 2 added the non-string refusal shape and the smoke
+    # open_utterance containment)
     if all_models:
         run_warning_phase(
             "Fixture invocation_name parity",
             lambda: lint_fixture_invocation_names(all_models),
-            "Every fixture invocation_name matches its model's invocationName",
+            "Every PRESENT fixture invocation_name override matches its model's invocationName; every smoke open_utterance contains it",
+            all_warnings,
+        )
+
+    # Phase 3c: wrapper battery invocation containment (JF-912 review round 2,
+    # finding 3; the battery rows are authored device-truth, so the lint is
+    # the guard, the rows are never rewritten)
+    if all_models:
+        run_warning_phase(
+            "Wrapper battery invocation containment",
+            lambda: lint_wrapper_battery_invocation(all_models),
+            "Every wrapper battery simulate row and evergreen control contains its model's invocationName",
             all_warnings,
         )
 

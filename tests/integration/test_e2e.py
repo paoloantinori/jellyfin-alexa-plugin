@@ -1500,10 +1500,15 @@ def test_e2e_smoke_two_step(
     if open_response is None:
         invocation_name = fixture.get("invocation_name", "")
         if not invocation_name:
+            # JF-912: unreachable through load_locale_fixtures (an absent
+            # header falls back to the model there, which fails loudly when
+            # the model is unreadable); kept as the loud failure for a
+            # fixture dict built outside the shared loader, so the fallback
+            # one-shot can never silently compose without an invocation.
             pytest.fail(
                 f"Cannot one-shot '{utterance}' ({locale}): the open fell "
-                f"back to a one-shot but the fixture carries no "
-                f"invocation_name"
+                f"back to a one-shot but neither the fixture header nor the "
+                f"locale model resolved an invocation_name"
             )
         command_client = SmapiClient(
             skill_id=skill_id, locale=locale, delay=smapi_delay,
