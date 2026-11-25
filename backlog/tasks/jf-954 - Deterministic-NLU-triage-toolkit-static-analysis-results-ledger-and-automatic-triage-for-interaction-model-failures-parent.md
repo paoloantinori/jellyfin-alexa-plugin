@@ -3,10 +3,10 @@ id: JF-954
 title: >-
   Deterministic NLU triage toolkit: static analysis, results ledger and
   automatic triage for interaction-model failures (parent)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-11-23 21:09'
-updated_date: '2026-11-23 21:23'
+updated_date: '2026-11-25 05:24'
 labels:
   - nlu
   - tooling
@@ -76,5 +76,11 @@ Suggested order: 1, then 2, 3, 4 and 5 in any order, then 7, then 6 last. Subtas
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
-STATE CHANGE observed while these tasks were being filed (2026-11-23, uncommitted in the working tree of another session, expected to land soon): (a) `CatalogSeedEnrichment` is being changed so that Series seeds ARE merged into the catalog payload as a union across the locale models, the same pattern as Artist; (b) the episode fixture rows in es-ES, es-MX, es-US, fr-FR, fr-CA and en-IN are being renamed from the series "breaking bad" to "adolescencia", a series that exists in the test library and is NOT in the committed SeriesName seed of es-ES (seed today: Breaking Bad, Juego de Tronos, Stranger Things, La Casa de Papel, Peaky Blinders, The Walking Dead, Dark, Sherlock, Better Call Saul, El Internado). Read point 2 of the Why section as the description of the incident, not of the current code. Consequences for every subtask: never assert the CONTENT of a committed fixture file or the seed-merge behaviour in a test. Real-data tests may load the committed es-ES MODEL (its SeriesName seed contains Breaking Bad and lacks Adolescencia) and must build their fixture rows INLINE in the test. Before starting any subtask, run `git log --oneline -5 -- Jellyfin.Plugin.AlexaSkill/Alexa/Catalog/CatalogSeedEnrichment.cs tests/integration/fixtures/es-ES.yaml` to see what landed.
+gate-exempt: parent closure; all implementation gates ran per-subtask (worker /simplify + /code-review high or the equivalent coordinator rounds, every finding applied or tracked in the subtask records); this closure adds no code.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+PARENT CLOSED 2026-11-25: all eight subtasks Done (JF-954.1 foundation, JF-954.2 token collision lint, JF-954.3 fixture vocabulary check, JF-954.4 subsumption graph + matcher, JF-954.5 results ledger, JF-954.6 automatic triage report, JF-954.7 model identity + change-driven selection, JF-954.8 authoritative plugin export — each shipped with worker gates + an orchestrator code-review round whose findings were all applied). AC review: #1 all eight Done (this closure); #2 docs/nlu-static-analysis.md describes every subcommand with runnable examples and the does-not-predict-routing statement (verified across the subtask rounds); #3 pytest tests/scripts green (414 at final state) and the validator exit 0 with the new warning phases (Phase 11 token collisions, Phase 12 fixture vocabulary) on every round; #4 the CLAUDE.md Build & Test block carries the triage entry point (added by JF-954.6, one line as specced). The toolkit's end-to-end chain is live: snapshot --from-plugin -> identity/select -> NLU_ROW_FILTER fast loop -> ledger -> triage, with the full suite remaining the release gate.
+<!-- SECTION:FINAL_SUMMARY:END -->
