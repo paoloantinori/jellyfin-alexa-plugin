@@ -6,7 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-11-25 14:55'
-updated_date: '2026-11-25 17:06'
+updated_date: '2026-11-25 18:22'
 labels:
   - nlu
   - alignment
@@ -33,3 +33,19 @@ JF-963 alignment batch 1: the maintainer-approved safe rows from the major-skill
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+SESSION 2026-11-25 sera (lab arc, pre-deploy): SCOPE now ELEVEN rows - the twelfth (en 'shuffle the album') moved to JF-974 because no current handler gives it honest semantics (PlayAlbum plays ordered; a model row alone would be a semantic lie; the content-scoped feature needs its own design: see JF-974's description for the full constraint set gathered this session).
+
+GATE 1 re-verified in-session: carriers re-run on the final wording (/tmp/jf965_final_wording.tsv) reads 11/11 PRESENT on the named intents after the template edits; the es cantante row uses the task's pinned 'reproduce' verb for all three (the TSV's mixed 'pon' row and the task prose agree the carrier noun is the load-bearing part).
+
+GRAPH DIFF (working tree vs main): exactly ONE new edge - fr-FR PlayByGenreIntent->PlayArtistSongsIntent SWALLOW via 'Joue de la musique {genre}' / 'Joue des chansons {genre}' swallowing the two new Joue rows (genre slot is free-classed). DISCIPLINE says probe: the lab battery carries the fr genre sentinels ('Joue de la musique rock' etc.) + the two candidate rows. All other graph movement is pre-existing edges gaining members (de PlayByGenre/PlaySong vs PlayArtistSongs +3, de PlayArtistSongs/PlaySong/PlayByGenre ->PlayAlbum +1 Starte row, en PlaySong/PlayByGenre ->PlayAlbum +2, es PlaySong->PlayArtistSongs +3). No new IDENTICAL edge; no stop condition.
+
+TOKENS LINT: six new CARRIER_VS_VALUE findings, all the JF-955 issue-#46 class, all baselined deliberately (baseline diff is exactly +6; the 12 pre-existing stale hi-IN identities were left stale as on main, NOT swept into this change): de-DE BrowseCategory|kuenstler, de-DE MediaInfoType|band, de-DE MediaInfoType|kuenstler, es-ES MediaInfoType|artista, es-ES MediaInfoType|cantante, es-ES MediaInfoType|grupo (cantante/grupo are synonyms of the artist entry in the es template; de MediaInfoType carries Band/Kuenstler entries; de BrowseCategory owns kuenstler). Rationale: the es-ES baseline already carries 95 accepted members of this class incl. MediaInfoType|disco|PlayAlbumIntent; JF-955 tracks the class; the steal question is measured, not argued - MediaInfo sentinels added to de/es fixtures (Welche Band ist das / Erzaehl mir von dem Kuenstler / dime el nombre del artista / que grupo es este) and to the lab battery.
+
+CLASSIFY-FIXTURES: zero classification diffs on all pre-existing fixture rows across fr/de/en/es (probed main vs branch with the real classifier); new candidate rows classify UNCONTESTED in en, CONTESTED in fr/de/es exactly where the graph predicted competitions; sentinels UNCONTESTED.
+
+GATE-5 CARD (written before the lab round): QUESTION - do the eleven rows take their utterances without stealing neighbours? H1 (clean add): candidate rows route to their target intents; every sentinel row unchanged vs control. H2 (steal): >=1 sentinel flips (fr genre rows to PlayArtistSongs; de/es MediaInfo rows to PlayArtistSongs; en 'start the video' to PlayAlbum; PlaySong rows anywhere). H3 (no-op): candidate rows route as control (trainer does not pick the rows up). ARMS: control = main's committed model; change = branch templates. BATTERY: the graph select (148 rows: de 46, en 19, es 41, fr 42) + 11 candidate rows + 4 MediaInfo sentinels + en PlayVideo start sentinel. CONTROL RUNS FIRST AND LAST (drift check). DECISIONS: H1 -> merge candidate; H2 -> reword or drop the offending row (es 'banda' is the pre-analyzed non-colliding fallback noun) and re-run; H3 -> investigate trainer state before any conclusion (nlu_trainer_nondeterminism memory: rebuilds flip slot-filling).
+<!-- SECTION:NOTES:END -->
