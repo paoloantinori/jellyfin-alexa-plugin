@@ -77,3 +77,40 @@ def test_failure_count_pipe_and_no_selection():
                         make_row(utterance="noselection", status=RowStatus.NO_SELECTION, selected_intent=None),
                         make_row(utterance="error", status=RowStatus.ERROR, selected_intent=None, expected_intent=None)])
     assert run.expectation_failure_count == 2  # fail-pipe and no_selection (only ERROR rows are excluded)
+
+
+# --- JF-968: considered_hypotheses field (write + backward-compatible load) ---
+
+def test_considered_hypotheses_roundtrip(tmp_path):
+    hyps = [{"intent": "PlayByGenreIntent", "slots": {"genre": "some jazz"},
+             "er": {"genre": [{"authority": "amzn1.er-authority..GENRE",
+                               "code": "ER_SUCCESS_MATCH", "canonical": "jazz"}]}},
+            {"intent": "PlayByGenreIntent", "slots": {"genre": "jazz"},
+             "er": {"genre": [{"authority": "amzn1.er-authority..GENRE",
+                               "code": "ER_SUCCESS_NO_MATCH"}]}}]
+    run = RunRecord(id="hyp", timestamp="t", locale="it-IT", label="x",
+                    model_source="m", model_sha256="0" * 64, skill_id="s",
+                    status="ok", intent_roster=[],
+                    results=[make_row(considered_hypotheses=hyps)])
+    back = load_run(save_run(tmp_path, run))
+    assert back.results[0].considered_hypotheses == hyps
+    # the JSON file itself carries the field
+    saved = json.loads((tmp_path / "hyp.json").read_text())
+    assert saved["results"][0]["considered_hypotheses"] == hyps
+
+
+def test_old_run_file_without_considered_hypotheses_loads(tmp_path):
+    # a pre-JF-968 run file: no considered_hypotheses key anywhere
+    old = {"id": "old", "timestamp": "t", "locale": "it-IT", "label": "l",
+           "model_source": "m", "model_sha256": "0" * 64, "skill_id": "s",
+           "status": "ok",
+           "results": [{"utterance": "u", "source": "f", "status": "ok",
+                        "expected_intent": "PlaySongIntent",
+                        "selected_intent": "PlaySongIntent",
+                        "slots": {}, "considered_intents": ["PlaySongIntent"],
+                        "raw": {}}]}
+    p = tmp_path / "old.json"
+    p.write_text(json.dumps(old), encoding="utf-8")
+    back = load_run(p)
+    assert back.results[0].considered_hypotheses == []
+    assert back.results[0].considered_intents == ["PlaySongIntent"]

@@ -265,9 +265,61 @@ def profile_row(skill_id: str, locale: str, utterance: str) -> dict:
                       "--utterance", utterance])
 
 
+def considered_hypotheses(response: dict) -> list[dict]:
+    """The FULL consideredIntents hypotheses (JF-968): one dict per entry,
+    order preserved (the SAME intent can appear multiple times with
+    different slot segmentations; entry rank is as received, unverified).
+
+    Live shape (probed 2026-11-25): each entry is a full Intent object
+    {name, slots: {slot_name: {value, resolutions?}}}; there is NO score
+    field. Per entry: {"intent": name, "slots": {slot: value}, "er":
+    {slot: [{authority, code, canonical?}]}} where canonical is present
+    only on ER_SUCCESS_MATCH (values[0].value.name). Guarded, never raises:
+    a malformed entry or slot degrades to empty fields instead of aborting
+    the battery. _considered_names and the suite parser's "considered" both
+    derive from this ONE function."""
+    out: list[dict] = []
+    for entry in response.get("consideredIntents") or []:
+        if not isinstance(entry, dict):
+            continue
+        slots: dict = {}
+        er: dict = {}
+        raw_slots = entry.get("slots")
+        if isinstance(raw_slots, dict):
+            for slot_name, slot in raw_slots.items():
+                if not isinstance(slot, dict):
+                    slots[str(slot_name)] = slot
+                    continue
+                slots[str(slot_name)] = slot.get("value")
+                per_authority = []
+                resolutions = slot.get("resolutions")
+                if isinstance(resolutions, dict):
+                    authorities = resolutions.get("resolutionsPerAuthority") or []
+                    if isinstance(authorities, list):
+                        for auth in authorities:
+                            if not isinstance(auth, dict):
+                                continue
+                            status = auth.get("status")
+                            code = status.get("code") if isinstance(status, dict) else None
+                            rec: dict = {"authority": auth.get("authority"),
+                                         "code": code}
+                            if code == "ER_SUCCESS_MATCH":
+                                values = auth.get("values")
+                                if (isinstance(values, list) and values
+                                        and isinstance(values[0], dict)):
+                                    v = values[0].get("value")
+                                    if isinstance(v, dict) and v.get("name") is not None:
+                                        rec["canonical"] = v.get("name")
+                            per_authority.append(rec)
+                if per_authority:
+                    er[str(slot_name)] = per_authority
+        out.append({"intent": entry.get("name"), "slots": slots, "er": er})
+    return out
+
+
 def _considered_names(response: dict) -> list[str]:
-    return [c.get("name") for c in response.get("consideredIntents", [])
-            if isinstance(c, dict)]
+    """Names-only projection of considered_hypotheses (the ONE extractor)."""
+    return [h["intent"] for h in considered_hypotheses(response)]
 
 
 def run_battery_rows(profile_fn, rows, delay: float | None = None) -> list[dict]:
@@ -278,7 +330,7 @@ def run_battery_rows(profile_fn, rows, delay: float | None = None) -> list[dict]
     dict (profile_row partial-applied). rows are battery.BatteryRow objects
     (anything with .utterance works); the result preserves input order, one
     dict per row: {utterance, selected_intent, slots, considered_intents,
-    status} with status from runs.RowStatus. Every pair of consecutive
+    considered_hypotheses, status} with status from runs.RowStatus. Every pair of consecutive
     profile calls (retries included) is spaced by `delay` (None =
     SMAPI_DELAY env, repo default 1.5). A row whose profile call raises or
     returns a non-dict is retried exactly once (the JF-406 single-500
@@ -314,17 +366,25 @@ def run_battery_rows(profile_fn, rows, delay: float | None = None) -> list[dict]
         if response is _MISSING:
             out.append({"utterance": utterance, "selected_intent": None,
                         "slots": {}, "considered_intents": [],
+                        "considered_hypotheses": [],
                         "status": RowStatus.ERROR})
             continue
         try:
             parsed = SmapiClient.parse_profile_nlu_result(response)
         except SmapiError:
-            out.append({"utterance": utterance, "selected_intent": None,
-                        "slots": {}, "considered_intents": _considered_names(response),
-                        "status": RowStatus.NO_SELECTION})
-            continue
-        out.append({"utterance": utterance, "selected_intent": parsed["intent"],
-                    "slots": parsed["slots"],
-                    "considered_intents": _considered_names(response),
-                    "status": RowStatus.OK})
+            status = RowStatus.NO_SELECTION
+            selected = None
+            slots: dict = {}
+        else:
+            status = RowStatus.OK
+            selected = parsed["intent"]
+            slots = parsed["slots"]
+        # ONE extraction per row: the names-only column is a projection of
+        # the hypotheses list (_considered_names keeps the same function).
+        hyps = considered_hypotheses(response)
+        out.append({"utterance": utterance, "selected_intent": selected,
+                    "slots": slots,
+                    "considered_intents": [h["intent"] for h in hyps],
+                    "considered_hypotheses": hyps,
+                    "status": status})
     return out

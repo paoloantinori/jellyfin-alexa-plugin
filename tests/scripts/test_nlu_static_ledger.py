@@ -623,16 +623,18 @@ def test_bridge_observe_flattens_slots_and_is_defensive():
 
     nlu_ledger_bridge.reset()
     nlu_ledger_bridge.observe("PlaySongIntent", {"song": {"name": "song", "value": "x"}})
-    intent, slots = nlu_ledger_bridge.take()
+    intent, slots, considered = nlu_ledger_bridge.take()
     assert intent == "PlaySongIntent"
     assert slots == {"song": "x"}
-    assert nlu_ledger_bridge.take() == (None, None)  # take() resets
+    assert considered == []  # JF-968: default when the caller passes no hypotheses
+    assert nlu_ledger_bridge.take() == (None, None, [])  # take() resets
     # A malformed payload must never raise into the test body.
     nlu_ledger_bridge.observe("A", [("not", "a", "dict")])
     nlu_ledger_bridge.observe(None, None)
-    intent, slots = nlu_ledger_bridge.take()
+    intent, slots, considered = nlu_ledger_bridge.take()
     assert intent is None
     assert slots == {}
+    assert considered == []
 
 
 # --- the CLI paths -----------------------------------------------------------------------

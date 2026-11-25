@@ -6,6 +6,7 @@ import json
 import logging
 import subprocess
 import time
+from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger("nlu.smapi")
@@ -537,6 +538,36 @@ class SmapiClient:
             ) from exc
 
     @staticmethod
+    def _considered_hypotheses(response: dict[str, Any]) -> list[dict]:
+        """The consideredIntents hypotheses via the ONE lab extractor
+        (JF-968 one-parser doctrine).
+
+        Imported lazily from scripts/nlu-lab/smapi_ops: a module-level import
+        would cycle (smapi_ops imports SmapiClient back from this module) and
+        would force the lab directory onto sys.path for every caller of this
+        module, not just the parser. The path bootstrap mirrors conftest's
+        (tests/integration and repo scripts) and adds scripts/nlu-lab, so
+        smapi_ops's own repo imports (nlu_wrapper_battery, runs,
+        smapi_client) resolve under both pytest invocation styles. Any
+        import failure degrades to [] rather than breaking the parse: the
+        hypotheses are an observation, never a gate."""
+        import importlib
+        import sys
+
+        repo = Path(__file__).resolve().parents[2]
+        for p in (repo / "tests" / "integration", repo / "scripts",
+                  repo / "scripts" / "nlu-lab"):
+            s = str(p)
+            if s not in sys.path:
+                sys.path.insert(0, s)
+        try:
+            smapi_ops = importlib.import_module("smapi_ops")
+            return smapi_ops.considered_hypotheses(response)
+        except Exception as exc:  # noqa: BLE001 - observation must not gate
+            logger.warning("considered-hypotheses extractor unavailable: %s", exc)
+            return []
+
+    @staticmethod
     def parse_profile_nlu_result(response: dict[str, Any]) -> dict[str, Any]:
         """Extract intent and slots from profile-nlu response.
 
@@ -545,13 +576,16 @@ class SmapiClient:
                 intent: resolved intent name (str)
                 slots:  dict mapping slot_name to
                         {"name": str, "value": str}
+                considered: the full consideredIntents hypotheses (list of
+                        {intent, slots, er}; [] when none) via the ONE lab
+                        extractor
                 raw:   full response payload for debugging
         """
         selected = response.get("selectedIntent")
+        considered = SmapiClient._considered_hypotheses(response)
         if not selected:
-            considered = response.get("consideredIntents", [])
             if considered:
-                names = [c.get("name", "?") for c in considered]
+                names = [h.get("intent") or "?" for h in considered]
                 raise SmapiError(
                     f"No selectedIntent; considered: {names}"
                 )
@@ -568,5 +602,6 @@ class SmapiClient:
         return {
             "intent": intent_name,
             "slots": slots,
+            "considered": considered,
             "raw": response,
         }

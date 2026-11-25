@@ -651,7 +651,7 @@ def _ledger_record_row(item: pytest.Item, rep) -> None:
         # E2E, reliability, smoke and non-parametrized tests are out of scope.
         return
     case = callspec.params["nlu_fixture"]
-    actual_intent, resolved_slots = nlu_ledger_bridge.take()
+    actual_intent, resolved_slots, considered = nlu_ledger_bridge.take()
     if rep.outcome == "skipped":
         # Skipped rows are not recorded (the task contract).
         return
@@ -671,6 +671,17 @@ def _ledger_record_row(item: pytest.Item, rep) -> None:
             crash_message = lines[-1] if lines else ""
         row_outcome, failure_kind = nlu_ledger.classify_failure(full_text or crash_message)
         detail = crash_message.splitlines()[0][:240] if crash_message else None
+    # JF-968: the consideredIntents hypotheses ride the row's detail field
+    # for now, as a bounded JSON appendix. scripts/nlu_static/ledger.py is
+    # owned by another worker this round, so record_row cannot gain a
+    # dedicated column yet; the hypotheses (name + slot values + ER codes,
+    # never the raw response) are the capture. Nothing parses detail
+    # programmatically, so this is annotation-only.
+    if considered:
+        note = json.dumps(considered, ensure_ascii=False, separators=(",", ":"))
+        if len(note) > 600:
+            note = note[:600] + "...(truncated)"
+        detail = f"{detail} | considered={note}" if detail else f"considered={note}"
     writer.record_row(
         locale=str(case.get("locale", "")),
         utterance=case.get("utterance", ""),

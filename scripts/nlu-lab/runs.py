@@ -39,6 +39,10 @@ class RowResult:
     slots: dict
     considered_intents: list[str]
     raw: dict
+    # JF-968: the full consideredIntents hypotheses (smapi_ops.
+    # considered_hypotheses shape: intent name, slot values, ER summaries).
+    # Defaults to [] so run files written before the field keep loading.
+    considered_hypotheses: list[dict] = field(default_factory=list)
 
     @property
     def expectation_alternatives(self) -> list[str] | None:
@@ -128,6 +132,7 @@ def _row_to_dict(r: RowResult) -> dict:
         "slots": r.slots,
         "considered_intents": r.considered_intents,
         "raw": r.raw,
+        "considered_hypotheses": r.considered_hypotheses,
     }
 
 
@@ -175,6 +180,7 @@ def load_run(path: Path) -> RunRecord:
                 slots=r.get("slots") or {},
                 considered_intents=r.get("considered_intents") or [],
                 raw=r.get("raw") or {},
+                considered_hypotheses=r.get("considered_hypotheses") or [],
             )
             for r in data.get("results", [])
         ]
