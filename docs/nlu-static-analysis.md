@@ -187,8 +187,33 @@ python3 scripts/nlu_static/cli.py classify-fixtures --locale es-ES
 python3 scripts/nlu_static/cli.py classify-fixtures --all --snapshot catalog-snapshot.json
 ```
 
-### Limits: what the graph does NOT tell you
+## The `carriers` subcommand: does this candidate sample already exist (JF-970)
 
+`carriers` answers the model-content question behind every "add this sample" premise: does the candidate SAMPLE already exist in a locale, on which intent, and under which carrier. A CARRIER is a sample with every `{slot}` placeholder reduced to ONE anonymous token, so `play some {genre}` and `play some {musician}` are the identical carrier even though their slot types differ; two samples share a carrier exactly when Alexa could read them as the same pattern with different slot vocabulary. Normalization reuses the shared normalizer (casefold, NFC, punctuation at token edges stripped) and the ONE placeholder regex; slot NAMES never participate, only slot position count.
+
+Caveat first: `match` is NOT a presence check for catalog-slotted samples. It takes a real utterance and only fires where the spoken value sits in the slot vocabulary, so `match --locale en-US "play some jazz"` lists PlayByGenreIntent and PlaySongIntent and never reveals that en-US also carries `play some {musician}` on PlayArtistSongsIntent (slot type JellyfinArtist); when you are about to premise a task on "add `play some {genre}`", ask `carriers`, not `match`.
+
+Verdicts, per (candidate, locale):
+
+- `PRESENT`: an existing sample of the NAMED intent normalizes to the identical carrier (`present` carries the intent and the existing sample text). Only checked when `--intent` names one; an unnamed candidate reports only `SAME_CARRIER`/`ABSENT`.
+- `SAME_CARRIER`: another intent owns the identical carrier. `same_carrier` lists EVERY hit with the owner intent, its sample text and, per placeholder, the slot name, declared slot type and whether that type is catalog-backed (the six CATALOG types the sync replaces with library values; a candidate colliding with a catalog-backed slot behaves very differently from one colliding with a STATIC type).
+- `ABSENT`: no identical carrier anywhere in the locale model.
+
+A `PRESENT` row may still list cross-intent `same_carrier` hits: the carrier is owned twice, which is itself worth knowing before you premise an edit on it.
+
+Input forms, combinable: inline candidates (`--sample` repeatable, `--intent` optional) with `--locale LOCALE` or `--all` (expand across every committed locale), or `--file` with a JSON list of `{locale, intent, sample}` rows or a TSV with the three tab-separated columns `locale<TAB>intent<TAB>sample` (an empty intent column means "unnamed"; `#` comment and blank lines are skipped). A locale of `*` in a file row expands to every committed locale, the snapshot file's own glob convention. Exit code is 0 for every verdict including `ABSENT` (this is a lookup, not a lint); exit 2 only for refusals (no candidates, unknown locale, unreadable model or file).
+
+Output is deterministic: candidates in input order, locales sorted within a candidate, `same_carrier` hits sorted by intent then sample. `--format json` (default) prints one verdict row per candidate per locale; `--format text` prints the human table with the slot evidence indented under each hit.
+
+ja-JP convention: the locale has no word spaces, so the carrier there is plain character-level comparison after slot reduction (the placeholder becomes the anonymous marker, whitespace is dropped entirely, since the locale is defined by `NON_WHITESPACE_TOKENIZED_LOCALES` as one where word spaces carry no meaning). This follows the `fixtures` subcommand's precedent of answering ja-JP without word tokens instead of printing the SKIP line; the token-dependent tools (`tokens`, `graph`, `match`) still skip ja-JP, and `carriers` deliberately does not.
+
+```
+python3 scripts/nlu_static/cli.py carriers --locale en-US --intent PlayByGenreIntent --sample "play some {genre}"
+python3 scripts/nlu_static/cli.py carriers --all --intent PlaySongIntent --sample "play {song}"
+python3 scripts/nlu_static/cli.py carriers --file candidates.tsv --format text
+```
+
+### Limits: what the graph does NOT tell you
 The graph computes rival readings, nothing else. It does NOT predict which intent Amazon's trainer picks, does NOT weight edges by anything other than sample counts, and does NOT model ASR, entity resolution ranking, or the default-music-service arbitration. A SWALLOW edge says the phrasing is contestable in principle; whether the trainer actually ever picks the rival is a live question for profile-nlu, simulate-skill or a device test. This exact over-trust failure already happened once: in an es-US lab ablation on 2026-11-23, removing five bare PlaySong carriers moved song requests that used UNTOUCHED carriers ("escucha", "quiero escuchar") to PlayArtistSongsIntent. The graph showed PlayArtistSongsIntent as a neighbour all along; it could not and did not predict that the trainer would move the untouched carriers' traffic. Read an edge as "this row is marginal", never as "this edge is the cause of the red". Also note the graph reads the SAVED model only: utterances whose routing depends on catalog values the model never sees are invisible to it until a `--snapshot` overlays one.
 
 ## The `ledger` subcommand: the results ledger and per-row flip statistics
