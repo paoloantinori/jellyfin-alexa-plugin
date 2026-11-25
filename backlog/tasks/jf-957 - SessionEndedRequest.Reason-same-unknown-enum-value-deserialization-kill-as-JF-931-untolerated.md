@@ -3,10 +3,10 @@ id: JF-957
 title: >-
   SessionEndedRequest.Reason: same unknown-enum-value deserialization kill as
   JF-931 (untolerated)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-11-24 18:42'
-updated_date: '2026-11-25 05:34'
+updated_date: '2026-11-25 06:51'
 labels:
   - robustness
   - alexa-wire
@@ -33,3 +33,15 @@ Found by the JF-931 round (2026-11-24): SessionEndedRequest.Reason carries the I
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+gate-exempt: /simplify on the review-round delta only (five review-driven fixes: a renderer adoption, a guarded insert, a stance pin, an assertion, a shared helper); the worker's own 4-agent /simplify covered the base 2ffe8b51; /code-review evidence complete (worker high + orchestrator medium, all findings applied) in this transcript.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Shipped 2026-11-25 via the merge of worktree-agent-a662637dfab3a83c7 (base 2ffe8b51 + review round 464cb872). SEAM CORRECTION (empirically probed against the real binaries, source-verified at the Alexa.NET 1.22.0 tag): the task-pinned settings-level converter shape NEVER fires for Reason (the property-level StringEnumConverter wins; and a whole-request converter never fires because RequestConverter news the instance and Populate consults neither) — the ONLY firing seam is a ContractResolver swapping the Reason property's converter after the attribute (JsonProperty.Converter). Shipped as ReasonTolerantContractResolver + ReasonTolerantConverter + a wrapped IValueProvider: known values delegate to Alexa.NET's own converter through one shared TryReadKnownEnum (byte-identical), unknown and explicit-null bucket to Reason.Error with the raw wire preserved on the UnknownWireTypeReason carrier (thread-stash drained back-to-back onto the instance, instance-keyed ConditionalWeakTable; after the review round the drain is guarded last-write-wins so no external-library change can reintroduce the death class). The missing-key stance documented and pinned (naive-path UserInitiated default, accepted because Amazon always sends the field). The handler's Reason and Error.Type args both render through the carrier renderers (the JF-930 fold early for the Error.Type line); one shared DescribeToleratedValue composes the triage format; the controller carries the JF-957 Warn block beside JF-931's. 11 tests in the JF-931 idioms incl. the premise canary and the double-set drain pin. 6345/6345 both TFMs; merged main builds clean. Gates: worker /simplify (4 agents) + /code-review high (5 findings, 3 applied, 2 refuted-by-probe) in its session; orchestrator /code-review medium (5 findings, all applied in 464cb872).
+<!-- SECTION:FINAL_SUMMARY:END -->
