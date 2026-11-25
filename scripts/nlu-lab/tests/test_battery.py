@@ -53,6 +53,17 @@ def test_workingset_unparseable_yaml_refused(tmp_path):
         load_battery("de-DE", tmp_path, ws, None)
 
 
+def test_workingset_non_utf8_refuses(tmp_path):
+    """JF-956 follow-up: the workingset wrap covered only yaml.YAMLError, so a
+    non-UTF-8 workingset file raised raw UnicodeDecodeError while the fixture
+    path already refused the byte-identical corruption; both wraps now cover
+    decode failures with the same 'not valid UTF-8' message shape."""
+    ws = tmp_path / "ws.yaml"
+    ws.write_bytes(b"\xff\x00binary not utf-8")
+    with pytest.raises(WorkingsetRefused, match="not valid UTF-8"):
+        load_battery("de-DE", tmp_path / "absent-fixtures", ws, None)
+
+
 def test_workingset_non_mapping_top_level_refused(tmp_path):
     ws = _write(tmp_path, "ws.yaml", ["not", "a", "mapping"])
     with pytest.raises(WorkingsetRefused, match="expected a mapping"):
