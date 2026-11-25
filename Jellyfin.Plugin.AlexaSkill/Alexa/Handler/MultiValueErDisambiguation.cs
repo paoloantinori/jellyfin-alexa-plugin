@@ -156,9 +156,10 @@ internal static class MultiValueErDisambiguation
     /// JF-697 membership test for the generic-music-word fallback gate: true when
     /// the song query is a generic music word either bare or after stripping one
     /// leading article of the covered languages ("la musica" -> "musica"), OR
-    /// when it is one of the JF-917 observed whole-phrase wrapper residues
-    /// ("on music", "put on music"; matched whole, never by derivation).
-    /// The song search itself keeps the raw slot value.
+    /// when it is one of the observed whole-phrase fills whose substance is the
+    /// generic music word (the JF-917 wrapper residues "on music"/"put on music"
+    /// and the JF-962 hallucinated entity "give me music"; matched whole, never
+    /// by derivation). The song search itself keeps the raw slot value.
     /// JF-715: moved from PlaySongIntentHandler and made PRIVATE: every caller
     /// now goes through <see cref="IsGenericSongConstraint"/> (the ONE raw-slot
     /// probe), so the membership level and the normalization level cannot
@@ -174,7 +175,7 @@ internal static class MultiValueErDisambiguation
             return true;
         }
 
-        // JF-917 (2026-10-21): the OBSERVED wrapper-residue fills, matched as
+        // JF-917 (2026-10-21): the OBSERVED whole-phrase fills, matched as
         // whole phrases. The one-shot wrapper's invocation consumption eats the
         // verb of "put on" and can leave the particle in the slot: "ask
         // jellyfin player to put on music by pink floyd" delivered song
@@ -188,8 +189,18 @@ internal static class MultiValueErDisambiguation
         // some music"/"on the music" and the it "su" sibling ("metti su
         // musica di X"), on the normal song path until a live capture
         // condemns them. Membership-only: the song search keeps the raw value.
+        // JF-962 (decision 1.i, 2026-11-25): the third capture (register on the
+        // table below) came through a different failure path but is the same
+        // observed-fill class: the AMAZON.MusicRecording catalog expanded the
+        // generic "music" of "give me music by coldplay" into a real song
+        // entity, so the bypass never fired and the handler answered the honest
+        // not-found. A tokenized containment was REJECTED for this extension
+        // for the same round-3-F1 reason: "track"/"song" are themselves generic
+        // words, so containment would swallow the "On Track" title class and
+        // any real title containing a generic word ("Sweet Music"); the
+        // captured fill joins this table whole instead.
         string? trimmedFill = songQuery?.Trim();
-        foreach (string fill in ObservedWrapperResidueFills)
+        foreach (string fill in ObservedWholePhraseFills)
         {
             if (string.Equals(trimmedFill, fill, StringComparison.OrdinalIgnoreCase))
             {
@@ -200,13 +211,27 @@ internal static class MultiValueErDisambiguation
         return false;
     }
 
-    // The observed whole-phrase wrapper residues; new shapes join on first
-    // live capture, never by derivation. TWO captures exist for the same ask
-    // (the NLU's fill boundary varies per call): the verb-eaten "on music"
-    // (simulate 2026-10-20) and the whole-phrase "put on music" (the e2e
-    // harness's delivery 2026-10-21, log corr 0109f99f; both with musician
-    // filled and the AlexaEntities phantom resolution on the song slot).
-    private static readonly string[] ObservedWrapperResidueFills = { "on music", "put on music" };
+    // The observed whole-phrase fills whose substance is the generic music
+    // word; new shapes join on first live capture, never by derivation.
+    // Register of the three captures:
+    // - "on music" / "put on music": the JF-917 wrapper residues; the NLU's
+    //   fill boundary varies per call (simulate 2026-10-20; the e2e harness's
+    //   delivery 2026-10-21, log corr 0109f99f; both with musician filled and
+    //   the AlexaEntities phantom resolution on the song slot).
+    // - "give me music": the JF-962 en-US hallucinated entity (census
+    //   re-verification 2026-11-25, decision 1.i; the ER delivered the title
+    //   casing "Give Me Music", matched case-insensitively here).
+    //   Accepted loss (the JF-697 bare-word class, extended): a library song
+    //   titled exactly "Give Me Music" can no longer play AS the song when a
+    //   musician is named alongside it; the fill and that title are
+    //   string-indistinguishable on this path, and the probed live capture
+    //   outranks the hypothetical title.
+    private static readonly string[] ObservedWholePhraseFills =
+    {
+        "on music",
+        "put on music",
+        "give me music",
+    };
 
     /// <summary>
     /// Strips ONE leading space-separated article from the query; returns the
@@ -370,8 +395,9 @@ internal static class MultiValueErDisambiguation
 
     /// <param name="rawSongSlot">The RAW song slot value (pre-normalization).</param>
     /// <returns>True when the slot carries no song constraint worth preserving
-    /// (a generic music word after article strip, or a JF-917 observed
-    /// whole-phrase wrapper residue; see <see cref="IsGenericMusicQuery"/>).</returns>
+    /// (a generic music word after article strip, or an observed whole-phrase
+    /// fill whose substance is the generic word; see
+    /// <see cref="IsGenericMusicQuery"/>).</returns>
     internal static bool IsGenericSongConstraint(string? rawSongSlot)
     {
         if (string.IsNullOrWhiteSpace(rawSongSlot))

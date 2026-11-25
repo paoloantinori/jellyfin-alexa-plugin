@@ -107,13 +107,14 @@ public class PlaySongGenericMusicWordFallbackTests : PluginTestBase
     [Theory]
     [InlineData("on music")]        // simulate capture 2026-10-20
     [InlineData("put on music")]    // e2e harness capture 2026-10-21 (corr 0109f99f)
-    public async Task WrapperResidue_Fills_FallBackToArtistSongs(string fill)
+    [InlineData("Give Me Music")]   // JF-962 (decision 1.i, 2026-11-25): the ER's delivered title casing
+    public async Task ObservedWholePhraseFill_FallsBackToArtistSongs(string fill)
     {
-        // JF-917: the one-shot wrapper's fill boundary varies per call and has
-        // been captured as BOTH "on music" (simulate 2026-10-20) and the whole
-        // verb phrase "put on music" (e2e harness 2026-10-21, corr 0109f99f);
-        // the observed-fills table matches these whole phrases so the
-        // generic-word bypass fires and the artist plays.
+        // The observed whole-phrase fills (ObservedWholePhraseFills) reach the
+        // artist-songs fallback end to end; the captures' register and rationale
+        // live on the table in MultiValueErDisambiguation. The "Give Me Music"
+        // row pins the JF-962 fill's delivered ER casing at the delivery layer;
+        // the probe-level casings ride the membership theory below.
         var artistId = Guid.NewGuid();
         var song1 = new Audio { Name = "Comfortably Numb", Id = Guid.NewGuid() };
         var song2 = new Audio { Name = "Wish You Were Here", Id = Guid.NewGuid() };
@@ -148,6 +149,132 @@ public class PlaySongGenericMusicWordFallbackTests : PluginTestBase
         Assert.True(response.Response.ShouldEndSession);
         Assert.NotNull(session.NowPlayingQueue);
         Assert.Equal(2, session.NowPlayingQueue.Count);
+    }
+
+    [Fact]
+    public async Task ObservedFill_SwallowsTheExactlyTitledSong_WhenAMusicianIsNamed()
+    {
+        // JF-962 accepted loss, pinned: the whole-phrase fill and a REAL song
+        // titled exactly "Give Me Music" are string-indistinguishable on this
+        // path, so with a musician present the artist's catalog plays even when
+        // the library holds the song (the same trade-off the bare "music" word
+        // has carried since JF-697; the probed live capture outranks the
+        // hypothetical title). The queue-count discriminator: the artist path
+        // installs the catalog (2 songs), a title play would install exactly 1.
+        var artistId = Guid.NewGuid();
+        var theSong = new Audio { Name = "Give Me Music", Id = Guid.NewGuid() };
+        var otherSong = new Audio { Name = "Another Rambler Tune", Id = Guid.NewGuid() };
+
+        _fx.SetupUserMock();
+
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q =>
+            {
+                if (q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicArtist))
+                    return new List<BaseItem> { new MusicArtist { Name = "The Ramblers", Id = artistId } };
+                // The title search WOULD find the exactly-titled song: the
+                // swallow is the point.
+                if (q.SearchTerm != null && q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Audio))
+                    return new List<BaseItem> { theSong };
+                if (q.ArtistIds != null && q.ArtistIds.Length > 0 && q.IncludeItemTypes != null && q.IncludeItemTypes.Contains(BaseItemKind.Audio))
+                    return new List<BaseItem> { theSong, otherSong };
+                return new List<BaseItem>();
+            });
+
+        var handler = CreateHandler();
+        var request = CreateIntentWithBothSlots("Give Me Music", "the ramblers");
+        request.Locale = "en-US";
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        // The artist's catalog plays; the exactly-titled song is swallowed.
+        Assert.NotNull(response.Response?.Directives);
+        Assert.NotEmpty(response.Response.Directives);
+        Assert.True(response.Response.ShouldEndSession);
+        Assert.NotNull(session.NowPlayingQueue);
+        Assert.Equal(2, session.NowPlayingQueue.Count);
+    }
+
+    [Fact]
+    public async Task RealTitleWithMusician_StillPlaysTheSong()
+    {
+        // JF-962 boundary: a real title with a musician keeps the song play.
+        // "yellow" carries no generic music word, so the tolerance must not
+        // fire; the queue carries the one song, not the artist's catalog.
+        var artistId = Guid.NewGuid();
+        var theSong = new Audio { Name = "Yellow", Id = Guid.NewGuid() };
+
+        _fx.SetupUserMock();
+
+        var searchTermQueries = new List<string>();
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Callback<InternalItemsQuery>(q =>
+            {
+                if (q.SearchTerm != null)
+                    searchTermQueries.Add(q.SearchTerm);
+            })
+            .Returns<InternalItemsQuery>(q =>
+            {
+                if (q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicArtist))
+                    return new List<BaseItem> { new MusicArtist { Name = "Coldplay", Id = artistId } };
+
+                if (q.SearchTerm != null && q.SearchTerm.Contains("yellow", StringComparison.OrdinalIgnoreCase))
+                    return new List<BaseItem> { theSong };
+
+                return new List<BaseItem>();
+            });
+
+        var handler = CreateHandler();
+        var request = CreateIntentWithBothSlots("yellow", "coldplay");
+        request.Locale = "en-US";
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        // The title search ran with the real title and the song played.
+        Assert.Contains("yellow", searchTermQueries, StringComparer.OrdinalIgnoreCase);
+        Assert.NotNull(response.Response?.Directives);
+        Assert.NotEmpty(response.Response.Directives);
+        Assert.NotNull(session.NowPlayingQueue);
+        Assert.Single(session.NowPlayingQueue);
+        Assert.Equal(theSong.Id, session.NowPlayingQueue[0].Id);
+    }
+
+    [Fact]
+    public async Task GenericMusicWord_NoMusician_KeepsExistingPath()
+    {
+        // JF-962 boundary: the generic word with NO musician slot keeps today's
+        // path. The artist-play bypass requires a musician; without one the song
+        // search misses and the miss cascade (artist, album, video, not-found)
+        // answers, unchanged.
+        _fx.SetupUserMock();
+
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem>());
+
+        var handler = CreateHandler();
+        // A null musician VALUE and an absent musician slot take the same path:
+        // the slot read and every consumer branch gate on IsNullOrWhiteSpace, so
+        // the null value here pins the no-musician shape the NLU delivers when
+        // the utterance carries no artist.
+        var request = CreateIntentWithBothSlots("music", null);
+        request.Locale = "en-US";
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        // No artist playback: the not-found Tell (no directives), no queue items
+        // (the session fixture starts NowPlayingQueue as an empty list).
+        Assert.True(response.Response?.Directives == null || response.Response.Directives.Count == 0);
+        Assert.True(response.Response.ShouldEndSession);
+        Assert.Empty(session.NowPlayingQueue);
     }
 
     [Fact]
@@ -505,8 +632,12 @@ public class PlaySongGenericMusicWordFallbackTests : PluginTestBase
     [InlineData("musica", true)]
     [InlineData("on music", true)]       // JF-917 observed wrapper residue
     [InlineData("put on music", true)]   // JF-917 second observed fill (per-call variance)
+    [InlineData("give me music", true)]  // JF-962 observed hallucinated entity fill (decision 1.i, 2026-11-25)
+    [InlineData("Give Me Music", true)]  // JF-962: the ER-delivered title casing (case-insensitive whole-phrase match)
     [InlineData("on track", false)]      // JF-917 boundary: "on <generic>" TITLES never match (whole-phrase only)
     [InlineData("on some music", false)] // JF-917 unobserved shape stays on the normal path
+    [InlineData("give me the music", false)] // JF-962 boundary: unobserved carrier variants stay on the normal path
+    [InlineData("sweet music", false)]   // JF-962 boundary: a real title containing a generic word never matches (the rejected containment shape)
     [InlineData("la vie en rose", false)]
     [InlineData("a day in the life", false)]
     [InlineData("der hugenottenfestmarsch", false)]
