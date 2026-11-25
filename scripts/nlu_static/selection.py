@@ -15,11 +15,11 @@ loader and the ``should_keep`` decision the conftest hook calls.
 
 The safety rule is absolute: selection must never silently drop coverage.
 Anything that prevents a precise answer for a locale (an unreadable base
-model, a graph build error, a hash change with no attributable intent
-change) falls that locale back to ALL of its rows with an explicit reason
-in the payload. A locale whose model file does not exist at the base is not
-a fallback: it is a locale added after the base, so every intent counts as
-changed.
+model, an unreadable working-tree model, a graph build error, a hash change
+with no attributable intent change) falls that locale back to ALL of its
+rows with an explicit reason in the payload. A locale whose model file does
+not exist at the base is not a fallback: it is a locale added after the
+base, so every intent counts as changed.
 
 These tools detect necessary conditions and shrink the live suite. They do
 not predict how Amazon's trainer routes an utterance; the full suite
@@ -190,6 +190,20 @@ def git_show_model(base: str, locale: str, repo_root: Path | None = None) -> dic
     """
     path = DEFAULT_MODEL_REL_PATH.format(locale=locale)
     root = Path(repo_root) if repo_root is not None else REPO_ROOT
+    # Existence is decided by exit code (git cat-file -e), never by matching
+    # git's stderr message: under a non-English git locale the message is
+    # translated and message matching would misclassify a newly added locale
+    # as unreadable instead of fully changed. cat-file -e also fails for an
+    # unresolvable ref, which the select CLI rules out up front and the
+    # diff-git note wrapper maps to its own "not in <base>" note either way.
+    exists = subprocess.run(
+        ["git", "cat-file", "-e", f"{base}:{path}"],
+        capture_output=True,
+        check=False,
+        cwd=root,
+    )
+    if exists.returncode != 0:
+        raise ModelMissingAtBase(f"{path} does not exist at {base}")
     result = subprocess.run(
         ["git", "show", f"{base}:{path}"],
         capture_output=True,
@@ -199,8 +213,6 @@ def git_show_model(base: str, locale: str, repo_root: Path | None = None) -> dic
     )
     if result.returncode != 0:
         detail = _first_line(result.stderr) or f"git show exited {result.returncode}"
-        if "does not exist" in detail:
-            raise ModelMissingAtBase(detail)
         raise GitShowError(detail)
     doc = json.loads(result.stdout)
     if not isinstance(doc, dict):
@@ -260,7 +272,13 @@ def neighbour_set(changed: set[str], graphs: list[dict]) -> set[str]:
 
 
 class LocaleSelection(NamedTuple):
-    """One locale's select result plus the counts the totals need."""
+    """One locale's select result plus the counts the totals need.
+
+    ``rows_selected`` is the length of the payload's deduplicated ``rows``
+    (distinct selected utterances); ``rows_total`` is the locale's fixture
+    entry count; ``malformed`` counts entries without a string utterance or
+    expected_intent.
+    """
 
     payload: dict
     rows_total: int
@@ -269,31 +287,39 @@ class LocaleSelection(NamedTuple):
 
 
 def _fallback_from_rows(fixture_rows: list, reason: str, rows_total: int) -> LocaleSelection:
-    """The safety-rule payload: every utterance-bearing row, with the reason."""
-    rows = [
+    """The safety-rule payload: every utterance-bearing row, with the reason.
+
+    ``rows`` is deduplicated so ``rows_selected`` always equals
+    ``len(payload["rows"])`` (review round, finding 5): the totals count
+    distinct selected utterances while ``rows_total`` counts fixture
+    entries.
+    """
+    rows = sorted({
         row["utterance"]
         for row in fixture_rows
         if isinstance(row, dict) and isinstance(row.get("utterance"), str)
-    ]
+    })
     payload = {
         "status": "fallback_all",
         "reason": reason,
         "changed_intents": [],
         "neighbour_intents": [],
-        "rows": sorted(set(rows)),
+        "rows": rows,
     }
     return LocaleSelection(payload, rows_total, len(rows), 0)
 
 
-def _select_rows(fixture_rows: list, selected: set[str]) -> tuple[list[str], int, int]:
-    """(selected utterances, selected count, malformed count).
+def _select_rows(fixture_rows: list, selected: set[str]) -> tuple[list[str], int]:
+    """(deduplicated selected utterances, sorted; malformed row count).
 
     A row is selected when any of its ``A|B`` alternatives is in the
     selected intent set. A row without a string utterance or expected_intent
     is counted as malformed so the skip stays explicit instead of silent.
+    Deduplicating here keeps the selected count (the list's length) equal
+    to the payload's ``rows`` even when a fixture repeats one utterance
+    (review round, finding 5).
     """
-    rows: list[str] = []
-    selected_count = 0
+    rows: set[str] = set()
     malformed = 0
     for row in fixture_rows:
         if not isinstance(row, dict):
@@ -305,9 +331,8 @@ def _select_rows(fixture_rows: list, selected: set[str]) -> tuple[list[str], int
             malformed += 1
             continue
         if any(alt.strip() in selected for alt in expected.split("|")):
-            rows.append(utterance)
-            selected_count += 1
-    return rows, selected_count, malformed
+            rows.add(utterance)
+    return sorted(rows), malformed
 
 
 def select_locale(
@@ -378,16 +403,16 @@ def select_locale(
         selected = changed | neighbour_set(changed, graphs)
     else:
         selected = set(changed)
-    rows, selected_count, malformed = _select_rows(fixture_rows, selected)
+    rows, malformed = _select_rows(fixture_rows, selected)
     payload = {
         "status": "changed",
         "changed_intents": sorted(changed),
         "neighbour_intents": sorted(selected - changed),
-        "rows": sorted(set(rows)),
+        "rows": rows,
     }
     if note is not None:
         payload["note"] = note
-    return LocaleSelection(payload, rows_total, selected_count, malformed)
+    return LocaleSelection(payload, rows_total, len(rows), malformed)
 
 
 def compute_selection(
@@ -405,10 +430,16 @@ def compute_selection(
     The caller passes the locale list (sorted). Fixture rows come from
     ``<fixtures_dir>/<locale>.yaml`` (never ``e2e_*.yaml``); the old model
     comes from ``git show`` and the new one from the working tree. With
-    ``strict_locale`` (an explicitly named locale) a missing fixture file or
-    an unreadable working-tree model raises instead of noting, so a typo'd
-    locale never reads as all-clean. stdout is never written here; the notes
-    ride stderr through the CLI.
+    ``strict_locale`` (an explicitly named locale) a missing fixture file
+    raises instead of noting, so a typo'd locale never reads as all-clean;
+    an unreadable working-tree model is NOT a refusal in any mode: it falls
+    that locale back to ALL of its rows with the reason in the payload,
+    exactly like the base side (review round, finding 1), so a malformed
+    model mid-template-edit can never silently deselect a whole locale's
+    suite rows. stdout is never written here; the notes ride stderr through
+    the CLI. ``totals.rows_selected`` counts DISTINCT selected utterances
+    (it equals the sum of the payload ``rows`` lengths); ``rows_total``
+    counts fixture entries.
     """
     directory = Path(fixtures_dir) if fixtures_dir is not None else fixture_vocab.default_fixtures_dir()
     notes: list[str] = []
@@ -425,15 +456,21 @@ def compute_selection(
         try:
             new_raw = load_locale_model(locale, models_dir)
         except (OSError, ValueError) as err:
-            if strict_locale:
-                raise ValueError(f"locale {locale}: {err}") from err
-            notes.append(f"SKIP {locale}: {err}")
+            fallback = _fallback_from_rows(
+                rows, f"working-tree model unreadable: {err}", rows_total
+            )
+            locales_out[locale] = fallback.payload
+            totals["rows_selected"] += fallback.rows_selected
+            totals["rows_total"] += rows_total
             continue
         try:
             old_raw: dict | None = git_show_model(base, locale, repo_root=repo_root)
         except ModelMissingAtBase:
             old_raw = None
-        except (GitShowError, ValueError, OSError) as err:
+        except (GitShowError, ValueError) as err:
+            # Environmental failures (no git binary) are not content
+            # problems: OSError propagates to the CLI's refusal instead of
+            # reading as an unreadable base (review round, finding 6).
             fallback = _fallback_from_rows(rows, f"model at base unreadable: {err}", rows_total)
             locales_out[locale] = fallback.payload
             totals["rows_selected"] += fallback.rows_selected

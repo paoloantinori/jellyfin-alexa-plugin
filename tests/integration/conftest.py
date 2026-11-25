@@ -494,6 +494,16 @@ def pytest_collection_modifyitems(
             config.hook.pytest_deselected(items=dropped)
             dropped_ids = {id(item) for item in dropped}
             items[:] = [item for item in items if id(item) not in dropped_ids]
+        # JF-954.7 review round, finding 4: leave the filter in the ledger
+        # history so a filtered session is distinguishable from a
+        # full-coverage one (path plus kept/total; total is the rows the
+        # filter saw, so under --resume the checkpoint-skipped rows are
+        # already gone). record_row_filter is non-fatal by contract and the
+        # writer is None in dry-run, where the ledger writes nothing at all.
+        if _ledger_writer is not None:
+            _ledger_writer.record_row_filter(
+                path=filter_path, kept=len(kept), total=len(nlu_items)
+            )
         print(
             f"[nlu_row_filter] kept {len(kept)} of {len(nlu_items)} NLU rows "
             f"from {filter_path} ({len(dropped)} deselected)"

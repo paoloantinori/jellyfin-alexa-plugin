@@ -521,6 +521,24 @@ def test_select_counts_malformed_rows_and_skips_them_loudly():
     assert result.rows_total == 4
 
 
+def test_select_duplicate_utterance_counts_consistently():
+    # Review round, finding 5: rows_selected is the length of the
+    # deduplicated payload rows, so a fixture repeating one utterance cannot
+    # make the totals disagree with the payload or the kept count.
+    old = _model([_intent("AlphaIntent", ["vecchio"])])
+    new = _model([_intent("AlphaIntent", ["uno"])])
+    rows = _rows(("uno", "AlphaIntent"), ("uno", "AlphaIntent"), ("due", "AlphaIntent"))
+    result = nlu_selection.select_locale(ES_ES, old, new, rows)
+    assert result.payload["rows"] == ["due", "uno"]  # deduplicated, sorted
+    assert result.rows_selected == len(result.payload["rows"]) == 2
+    assert result.rows_total == 3  # entries: the duplicate still counts here
+    # The fallback path follows the same rule.
+    fallback = nlu_selection.select_locale(ES_ES, {"intents": 42}, new, rows)
+    assert fallback.payload["status"] == "fallback_all"
+    assert fallback.payload["rows"] == ["due", "uno"]
+    assert fallback.rows_selected == 2
+
+
 # ------------------------------------------------- driver and determinism
 
 
@@ -631,10 +649,44 @@ def test_compute_selection_unreadable_base_falls_back(tmp_path, monkeypatch):
     assert payload["totals"] == {"rows_selected": 3, "rows_total": 3}
 
 
-def test_select_cli_byte_identical_against_head(capsys):
-    # The working tree's es-ES model equals HEAD's (the toolkit never edits
-    # models), so the real CLI run must report unchanged and stay
-    # byte-identical across two runs.
+def test_compute_selection_unreadable_working_tree_falls_back(tmp_path, monkeypatch):
+    # Review round, finding 1: a malformed working-tree model is exactly the
+    # mid-template-edit fast-loop state, so the locale must fall back to ALL
+    # of its rows with the reason IN THE PAYLOAD, never be SKIP-noted and
+    # omitted (a filter file without the locale deselects every row of it).
+    models_dir, fixtures_dir, old_model, _new = _write_synthetic_tree(tmp_path)
+    (models_dir / f"model_{ES_ES}.json").write_text(
+        '{"invocationName": "x", "types": [{"name": 7}]}', encoding="utf-8"
+    )
+    monkeypatch.setattr(nlu_selection, "git_show_model", lambda base, locale, repo_root=None: old_model)
+    payload, notes = nlu_selection.compute_selection(
+        "HEAD~1", [ES_ES], fixtures_dir=fixtures_dir, models_dir=models_dir
+    )
+    assert notes == []
+    entry = payload["locales"][ES_ES]
+    assert entry["status"] == "fallback_all"
+    assert "working-tree model unreadable" in entry["reason"]
+    assert len(entry["rows"]) == 3
+    assert payload["totals"] == {"rows_selected": 3, "rows_total": 3}
+    # The same holds for an explicitly named locale: the refusal stays on
+    # the missing FIXTURE (the typo guard), not on a broken model.
+    payload_strict, _ = nlu_selection.compute_selection(
+        "HEAD~1", [ES_ES], fixtures_dir=fixtures_dir, models_dir=models_dir, strict_locale=True
+    )
+    assert payload_strict["locales"][ES_ES]["status"] == "fallback_all"
+
+
+def test_select_cli_byte_identical_against_the_working_tree(monkeypatch, capsys):
+    # The base reader returns the WORKING-TREE model, so the run reports
+    # unchanged by construction and stays byte-identical across two runs.
+    # Pinning to HEAD would go false-red on any uncommitted model edit,
+    # which is exactly the fast-loop state this suite runs in (review
+    # round, finding 2).
+    from nlu_static.effective_model import load_locale_model
+
+    monkeypatch.setattr(
+        nlu_selection, "git_show_model", lambda base, locale, repo_root=None: load_locale_model(locale)
+    )
     argv = ["select", "--base", "HEAD", "--locale", ES_ES]
     rc = nlu_cli.main(argv)
     out = capsys.readouterr().out
@@ -650,7 +702,12 @@ def test_select_cli_byte_identical_against_head(capsys):
     assert payload["totals"]["rows_total"] > 0
 
 
-def test_select_cli_text_mode_is_deterministic(tmp_path, capsys):
+def test_select_cli_text_mode_is_deterministic(tmp_path, monkeypatch, capsys):
+    from nlu_static.effective_model import load_locale_model
+
+    monkeypatch.setattr(
+        nlu_selection, "git_show_model", lambda base, locale, repo_root=None: load_locale_model(locale)
+    )
     text_path = tmp_path / "rows.txt"
     rc1 = nlu_cli.main(["select", "--base", "HEAD", "--locale", ES_ES, "--format", "text"])
     capsys.readouterr()
@@ -674,6 +731,20 @@ def test_select_cli_refuses_unresolvable_base(capsys):
 
 def test_verify_git_ref_accepts_head():
     nlu_selection.verify_git_ref("HEAD")  # must not raise
+
+
+def test_git_show_model_missing_path_raises_missing_at_base(monkeypatch):
+    # Review round, finding 3: existence is decided by git cat-file -e's
+    # exit code, never by matching the (translated) stderr message, so a
+    # locale added after the base is ModelMissingAtBase (every intent
+    # changed) even under a non-English git locale, where message matching
+    # used to misclassify it as GitShowError and fall back instead.
+    with pytest.raises(nlu_selection.ModelMissingAtBase):
+        nlu_selection.git_show_model("HEAD", "zz-ZZ")
+    monkeypatch.setenv("LANG", "it_IT.UTF-8")
+    monkeypatch.setenv("LC_ALL", "it_IT.UTF-8")
+    with pytest.raises(nlu_selection.ModelMissingAtBase):
+        nlu_selection.git_show_model("HEAD", "zz-ZZ")
 
 
 # ------------------------------------------------- Part C: the filter
@@ -827,6 +898,30 @@ def test_conftest_filter_deselects_unlisted_and_spares_e2e(tmp_path, monkeypatch
     assert "2 deselected" in out
 
 
+def test_conftest_filter_records_the_ledger_trace(tmp_path, monkeypatch, capsys):
+    # Review round, finding 4: an active filter leaves a row_filter trace in
+    # the ledger session (path plus kept/total), so a filtered session is
+    # distinguishable from a full-coverage one in the history.
+    conftest = _load_integration_conftest()
+    rows_path = tmp_path / "rows.json"
+    rows_path.write_text(
+        json.dumps(_payload_with_rows(
+            {ES_ES: {"status": "changed", "changed_intents": [], "neighbour_intents": [],
+                     "rows": ["keep me"]}}
+        )),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("NLU_ROW_FILTER", str(rows_path))
+    calls: list[dict] = []
+    monkeypatch.setattr(
+        conftest, "_ledger_writer", SimpleNamespace(record_row_filter=lambda **kw: calls.append(kw))
+    )
+    items = [_fake_nlu_item(ES_ES, "keep me"), _fake_nlu_item(ES_ES, "drop me")]
+    conftest.pytest_collection_modifyitems(_fake_config([]), items)
+    capsys.readouterr()
+    assert calls == [{"path": str(rows_path), "kept": 1, "total": 2}]
+
+
 def test_conftest_filter_keeps_normalized_matches(tmp_path, monkeypatch, capsys):
     conftest = _load_integration_conftest()
     rows_path = tmp_path / "rows.json"
@@ -863,6 +958,10 @@ def test_conftest_filter_missing_file_aborts(tmp_path, monkeypatch):
 def test_conftest_filter_unset_is_a_noop(monkeypatch, capsys):
     conftest = _load_integration_conftest()
     monkeypatch.delenv("NLU_ROW_FILTER", raising=False)
+    calls: list[dict] = []
+    monkeypatch.setattr(
+        conftest, "_ledger_writer", SimpleNamespace(record_row_filter=lambda **kw: calls.append(kw))
+    )
     first = _fake_nlu_item(ES_ES, "x")
     second = _fake_e2e_item(ES_ES, "y")
     items = [first, second]
@@ -870,7 +969,55 @@ def test_conftest_filter_unset_is_a_noop(monkeypatch, capsys):
     conftest.pytest_collection_modifyitems(_fake_config(deselected), items)
     assert items == [first, second]
     assert deselected == []
+    assert calls == []  # no trace, no deselect, no output when unset
     assert "[nlu_row_filter]" not in capsys.readouterr().out
+
+
+def test_ledger_row_filter_record_round_trip(tmp_path):
+    # The writer emits a row_filter record and the loader surfaces it in the
+    # session dict and the payload; a fault in the trace must not disable
+    # the writer or touch the rows.
+    from datetime import datetime, timezone
+
+    import nlu_static.ledger as nlu_ledger
+
+    writer = nlu_ledger.LedgerWriter(
+        tmp_path,
+        clock=lambda: datetime(2026, 11, 25, 12, 0, 0, tzinfo=timezone.utc),
+        git_reader=lambda: ("head123", False),
+        identity_reader=lambda locale: None,
+        model_sha256_fn=lambda locale: "sha-x",
+        pid=4242,
+    )
+    writer.start_session(skill_id="sk-1")
+    writer.record_row_filter(path="/tmp/rows.json", kept=24, total=282)
+    writer.record_row(
+        locale=ES_ES, utterance="uno", expected_intent="AlphaIntent", outcome="pass"
+    )
+    writer.finish()
+    sessions = nlu_ledger.load_sessions(tmp_path)
+    assert len(sessions) == 1
+    assert sessions[0]["row_filter"] == {"path": "/tmp/rows.json", "kept": 24, "total": 282}
+    payload = nlu_ledger.session_payload(sessions[0])
+    assert payload["row_filter"] == {"path": "/tmp/rows.json", "kept": 24, "total": 282}
+    assert payload["rows"] == 1
+    # A session without the record reads as row_filter None.
+    empty_dir = tmp_path / "plain"
+    empty_dir.mkdir()
+    plain = nlu_ledger.LedgerWriter(
+        empty_dir,
+        clock=lambda: datetime(2026, 11, 25, 12, 0, 0, tzinfo=timezone.utc),
+        git_reader=lambda: ("head123", False),
+        pid=1,
+    )
+    plain.start_session()
+    plain.record_row(
+        locale=ES_ES, utterance="dos", expected_intent="BetaIntent", outcome="pass"
+    )
+    plain.finish()
+    loaded = nlu_ledger.load_sessions(empty_dir)
+    assert loaded[0].get("row_filter") is None  # absent, not just falsy
+    assert nlu_ledger.session_payload(loaded[0])["row_filter"] is None
 
 
 def test_normalize_helper_is_the_shared_one():

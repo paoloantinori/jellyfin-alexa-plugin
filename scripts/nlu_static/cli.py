@@ -552,10 +552,17 @@ def _git_show_model(base: str, locale: str) -> dict | None:
     path = DEFAULT_MODEL_REL_PATH.format(locale=locale)
     try:
         return selection.git_show_model(base, locale)
+    except OSError as err:
+        # A spawn failure (no git binary, exec trouble) is environmental,
+        # not a base-content problem: it gets its own honest note instead of
+        # the unreadable-model label, which would send triage the wrong way
+        # (review round, finding 6).
+        print(f"  note [{locale}]: git failed to run ({err})", file=sys.stderr)
+        return None
     except (selection.ModelMissingAtBase, selection.GitShowError):
         print(f"  note [{locale}]: not in {base} ({path})", file=sys.stderr)
         return None
-    except (ValueError, OSError) as err:
+    except ValueError as err:
         # A malformed model at the base ref is that locale's problem only:
         # note it and let the other locales still diff (review round,
         # finding 1).

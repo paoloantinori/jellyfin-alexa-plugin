@@ -342,6 +342,29 @@ class LedgerWriter:
 
         self._try(True, action, None)
 
+    def record_row_filter(self, *, path: str, kept: int, total: int) -> None:
+        """Write one row_filter record for a NLU_ROW_FILTER session (JF-954.7).
+
+        ``path`` is the select output the suite was filtered by, ``total``
+        the NLU rows the filter saw and ``kept`` those it kept, so a
+        filtered session is distinguishable from a full-coverage one in the
+        ledger history. Non-fatal by contract: a fault here warns once and
+        the session keeps recording rows; it must never disable the writer
+        or change a test outcome.
+        """
+        if self._disabled or not self._started or self._finished:
+            return
+
+        def action() -> None:
+            self._emit({
+                "type": "row_filter",
+                "path": path,
+                "kept": kept,
+                "total": total,
+            })
+
+        self._try(False, action, None)
+
     def finish(self) -> None:
         """Write session_end and close; a session with no rows is removed.
 
@@ -473,6 +496,16 @@ def load_sessions(results_dir) -> list[dict]:
                 entry["live_identity_start"] = record.get("live_identity_start")
             elif rtype == "row":
                 session["rows"].append(record)
+            elif rtype == "row_filter":
+                # JF-954.7: the session was run under NLU_ROW_FILTER; keep
+                # the trace so a filtered session is distinguishable from a
+                # full-coverage one. Unknown record types stay skipped, so
+                # files carrying this record still load on an older reader.
+                session["row_filter"] = {
+                    "path": record.get("path"),
+                    "kept": record.get("kept"),
+                    "total": record.get("total"),
+                }
             elif rtype == "session_end":
                 session["complete"] = True
                 ends = record.get("live_identity_end")
@@ -675,6 +708,7 @@ def session_payload(session: dict, locale_filter: str | None = None) -> dict:
         "git_dirty": session["git_dirty"],
         "complete": session["complete"],
         "rows": len(session["rows"]),
+        "row_filter": session.get("row_filter"),
         "locales": locales,
     }
 
