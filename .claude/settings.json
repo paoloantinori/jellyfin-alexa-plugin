@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/hooks/pre-tool-use-protect-skills.sh"
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/pre-tool-use-protect-skills.sh"
           }
         ]
       }
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/hooks/post-release-push-reminder.sh"
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/post-release-push-reminder.sh"
           }
         ]
       },
@@ -26,7 +26,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/hooks/model-change-guard.sh"
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/model-change-guard.sh"
           }
         ]
       }
