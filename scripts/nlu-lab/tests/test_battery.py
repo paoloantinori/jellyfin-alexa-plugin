@@ -53,6 +53,17 @@ def test_workingset_unparseable_yaml_refused(tmp_path):
         load_battery("de-DE", tmp_path, ws, None)
 
 
+def test_workingset_non_utf8_refuses(tmp_path):
+    """JF-956 follow-up: the workingset wrap covered only yaml.YAMLError, so a
+    non-UTF-8 workingset file raised raw UnicodeDecodeError while the fixture
+    path already refused the byte-identical corruption; both wraps now cover
+    decode failures with the same 'not valid UTF-8' message shape."""
+    ws = tmp_path / "ws.yaml"
+    ws.write_bytes(b"\xff\x00binary not utf-8")
+    with pytest.raises(WorkingsetRefused, match="not valid UTF-8"):
+        load_battery("de-DE", tmp_path / "absent-fixtures", ws, None)
+
+
 def test_workingset_non_mapping_top_level_refused(tmp_path):
     ws = _write(tmp_path, "ws.yaml", ["not", "a", "mapping"])
     with pytest.raises(WorkingsetRefused, match="expected a mapping"):
@@ -206,3 +217,27 @@ def test_non_string_expected_intent_refuses_with_row_context(tmp_path):
     )
     with pytest.raises(battery.WorkingsetRefused, match="expected_intent"):
         battery.load_battery("de-DE", tmp_path / "absent-fixtures", ws, None)
+
+
+# --- JF-956: fixture-read parse and decode refusals (the workingset twin's wrap) -----------
+
+
+def test_fixture_malformed_yaml_refuses(tmp_path):
+    """JF-956: malformed fixture YAML text raised yaml.YAMLError raw from the
+    fixture loop while the workingset twin refused the byte-identical
+    corruption; the fixture read now wraps its read the same way."""
+    fixtures = tmp_path / "fixtures"
+    fixtures.mkdir()
+    (fixtures / "de-DE.yaml").write_text("tests: [unclosed", encoding="utf-8")
+    with pytest.raises(WorkingsetRefused, match="not parseable YAML"):
+        battery.load_battery("de-DE", fixtures, None, None)
+
+
+def test_fixture_non_utf8_refuses(tmp_path):
+    """JF-956: a non-UTF-8 fixture file raised UnicodeDecodeError from the
+    strict utf-8 read before yaml ever parsed; it refuses cleanly instead."""
+    fixtures = tmp_path / "fixtures"
+    fixtures.mkdir()
+    (fixtures / "de-DE.yaml").write_bytes(b"\xff\x00binary not utf-8")
+    with pytest.raises(WorkingsetRefused, match="not valid UTF-8"):
+        battery.load_battery("de-DE", fixtures, None, None)

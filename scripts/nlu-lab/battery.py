@@ -19,7 +19,8 @@ SOURCE_WORKINGSET = "workingset"
 
 class WorkingsetRefused(ValueError):
     """A battery input cannot join the battery: a workingset file that is
-    missing, unparseable YAML, a non-mapping top level, or a locale differing
+    missing, unparseable YAML, not valid UTF-8, a non-mapping top level, or a
+    locale differing
     from the run locale; or a tests[] row from EITHER source (fixture or
     workingset) that is not a mapping or lacks the utterance key (JF-935).
     Raised by load_battery (the one place the workingset and the fixture rows
@@ -83,7 +84,18 @@ def load_battery(locale: str, fixtures_dir: Path, workingset: Path | None,
             # e2e_* family out of the battery
             if path.stem != locale:
                 continue
-            data = yaml.safe_load(path.read_text(encoding="utf-8"))
+            # JF-956: the fixture read wraps parse and decode failures the
+            # same way the workingset twin below does (yaml.YAMLError, plus
+            # UnicodeDecodeError: the strict utf-8 decode runs before yaml
+            # sees any bytes, so a non-UTF-8 file raised raw before the wrap).
+            try:
+                data = yaml.safe_load(path.read_text(encoding="utf-8"))
+            except yaml.YAMLError as exc:
+                raise WorkingsetRefused(
+                    f"fixture {path} is not parseable YAML: {exc}") from exc
+            except UnicodeDecodeError as exc:
+                raise WorkingsetRefused(
+                    f"fixture {path} is not valid UTF-8: {exc}") from exc
             if not isinstance(data, dict):
                 # A fixture file whose YAML top level is not a mapping (a
                 # mangled paste, a top-level list, an empty file parsing to
@@ -107,6 +119,9 @@ def load_battery(locale: str, fixtures_dir: Path, workingset: Path | None,
         except yaml.YAMLError as exc:
             raise WorkingsetRefused(
                 f"workingset {ws_path} is not parseable YAML: {exc}") from exc
+        except UnicodeDecodeError as exc:
+            raise WorkingsetRefused(
+                f"workingset {ws_path} is not valid UTF-8: {exc}") from exc
         if not isinstance(data, dict):
             raise WorkingsetRefused(
                 f"workingset {ws_path}: top level is {type(data).__name__}, "

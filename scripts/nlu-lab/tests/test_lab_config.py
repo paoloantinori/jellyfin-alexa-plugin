@@ -16,6 +16,14 @@ def test_unparseable_refuses(tmp_path):
     with pytest.raises(LabConfigError, match="refuse"):
         LabConfig.load(p)
 
+def test_undecodable_lab_json_refuses(tmp_path):
+    """JF-956: a binary/undecodable lab.json raised UnicodeDecodeError from
+    read_text, escaping the JSONDecodeError-only except as a raw traceback;
+    the refusal keeps the same 'refuses rather than re-init' text shape."""
+    p = tmp_path / "lab.json"; p.write_bytes(b"\xff\x00binary not utf-8")
+    with pytest.raises(LabConfigError, match="refuses rather than re-init"):
+        LabConfig.load(p)
+
 def test_non_mapping_refuses(tmp_path):
     """JF-935: a JSON-valid non-dict lab.json (e.g. the list
     ["not","a","dict"]) used to raise AttributeError on data.get; the module
