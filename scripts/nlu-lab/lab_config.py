@@ -19,7 +19,13 @@ class LabConfig:
             raise LabConfigError(f"lab.json missing at {path}: the lab refuses to run rather than re-init; run init-skill once")
         try:
             data = json.loads(path.read_text())
-        except json.JSONDecodeError as e:
+        except (json.JSONDecodeError, UnicodeDecodeError, OSError) as e:
+            # JF-956: a binary/undecodable lab.json raised UnicodeDecodeError
+            # from read_text before json ever parsed, and OSError covers a
+            # directory at the path or an unreadable file; both escape the
+            # CLI's except (RunRefused, LabConfigError) as a raw traceback.
+            # The refusal text is the same shape for every failure mode: the
+            # lab refuses rather than re-init.
             raise LabConfigError(f"lab.json unparseable ({e}): the lab refuses rather than re-init; fix or delete and re-run init-skill")
         if not isinstance(data, dict):
             # JF-935: a JSON-valid non-dict file (e.g. the list ["not","a","dict"])

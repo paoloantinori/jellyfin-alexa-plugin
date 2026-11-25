@@ -83,7 +83,19 @@ def load_battery(locale: str, fixtures_dir: Path, workingset: Path | None,
             # e2e_* family out of the battery
             if path.stem != locale:
                 continue
-            data = yaml.safe_load(path.read_text(encoding="utf-8"))
+            # JF-956: the workingset twin below wraps its read for
+            # yaml.YAMLError; the fixture read mirrors that wrap, plus
+            # UnicodeDecodeError (the strict utf-8 decode runs before yaml
+            # sees any bytes, and the twin's wrap does not cover it either,
+            # so a non-UTF-8 file raised raw on both paths).
+            try:
+                data = yaml.safe_load(path.read_text(encoding="utf-8"))
+            except yaml.YAMLError as exc:
+                raise WorkingsetRefused(
+                    f"fixture {path} is not parseable YAML: {exc}") from exc
+            except UnicodeDecodeError as exc:
+                raise WorkingsetRefused(
+                    f"fixture {path} is not valid UTF-8: {exc}") from exc
             if not isinstance(data, dict):
                 # A fixture file whose YAML top level is not a mapping (a
                 # mangled paste, a top-level list, an empty file parsing to
