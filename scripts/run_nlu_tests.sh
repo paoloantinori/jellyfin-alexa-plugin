@@ -12,6 +12,7 @@
 #   ASK_SKILL_ID      Override auto-detected skill ID
 #   SMAPI_DELAY       Seconds between SMAPI calls (default: 1.5)
 #   SMAPI_TIMEOUT     Per-test timeout in seconds (default: 120)
+#   NLU_ROW_FILTER    Path to an `nlu_static select` output; run only the listed NLU rows (JF-954.7)
 #   PYTEST_ARGS       Extra pytest arguments
 
 set -euo pipefail

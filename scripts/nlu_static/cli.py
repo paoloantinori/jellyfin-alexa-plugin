@@ -24,13 +24,12 @@ _SCRIPTS_DIR = Path(__file__).resolve().parents[1]
 if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 
-from nlu_static import fixture_vocab, ledger, matcher, producer_jellyfin, token_collisions, triage as nlu_triage  # noqa: E402
+from nlu_static import fixture_vocab, ledger, matcher, producer_jellyfin, selection, token_collisions, triage as nlu_triage  # noqa: E402
 from nlu_static import graph as nlu_graph  # noqa: E402
 from nlu_static.effective_model import (  # noqa: E402
     EffectiveModel,
     build_effective_model,
     load_snapshot,
-    unwrap_language_model,
 )
 from nlu_static.normalize import skip_line  # noqa: E402
 
@@ -539,40 +538,34 @@ def _register_graph_diff(sub: argparse.ArgumentParser) -> None:
     sub.set_defaults(func=cmd_graph_diff)
 
 
-DEFAULT_MODEL_REL_PATH = "Jellyfin.Plugin.AlexaSkill/Alexa/InteractionModel/model_{locale}.json"
+DEFAULT_MODEL_REL_PATH = selection.DEFAULT_MODEL_REL_PATH
 
 
 def _git_show_model(base: str, locale: str) -> dict | None:
-    """The old model dict from ``git show <base>:<path>``; None after printing the note."""
-    import subprocess
+    """The old model dict from ``git show <base>:<path>``; None after printing the note.
 
+    Thin delegate to selection.git_show_model (JF-954.7 hoisted the git-show
+    plumbing there so identity and select share it); this wrapper keeps the
+    diff-git note behavior verbatim, including the message wording the
+    review rounds pinned.
+    """
     path = DEFAULT_MODEL_REL_PATH.format(locale=locale)
-    result = subprocess.run(
-        ["git", "show", f"{base}:{path}"],
-        capture_output=True,
-        text=True,
-        check=False,
-        cwd=Path(__file__).resolve().parents[2],
-    )
-    if result.returncode != 0:
+    try:
+        return selection.git_show_model(base, locale)
+    except OSError as err:
+        # A spawn failure (no git binary, exec trouble) is environmental,
+        # not a base-content problem: it gets its own honest note instead of
+        # the unreadable-model label, which would send triage the wrong way
+        # (review round, finding 6).
+        print(f"  note [{locale}]: git failed to run ({err})", file=sys.stderr)
+        return None
+    except (selection.ModelMissingAtBase, selection.GitShowError):
         print(f"  note [{locale}]: not in {base} ({path})", file=sys.stderr)
         return None
-    try:
-        doc = json.loads(result.stdout)
-        if not isinstance(doc, dict):
-            raise ValueError("top level must be a JSON object")
     except ValueError as err:
         # A malformed model at the base ref is that locale's problem only:
         # note it and let the other locales still diff (review round,
         # finding 1).
-        print(f"  note [{locale}]: unreadable model JSON at {base} ({path}: {err})", file=sys.stderr)
-        return None
-    # The unwrap rides the ONE three-shape discriminator in
-    # effective_model (JF-954.7's git-show path needs the same rule as a
-    # library function, not this CLI's private copy).
-    try:
-        return unwrap_language_model(doc)
-    except ValueError as err:
         print(f"  note [{locale}]: unreadable model JSON at {base} ({path}: {err})", file=sys.stderr)
         return None
 
@@ -817,6 +810,111 @@ def _register_triage(subparsers: argparse._SubParsersAction) -> None:
     parser.set_defaults(func=cmd_triage)
 
 
+def cmd_identity(args: argparse.Namespace) -> int:
+    """Print the canonical per-locale model identity hashes."""
+    snapshot, refusal = _load_optional_snapshot(args)
+    if refusal is not None:
+        return refusal
+    locales = [args.locale] if args.locale else fixture_vocab.committed_locales()
+    try:
+        entries = selection.identity_entries(locales, snapshot)
+    except (OSError, ValueError) as err:
+        return _fail(err)
+    if args.format == "text":
+        text = selection.render_identity_text(entries, args.snapshot)
+        if args.out:
+            Path(args.out).write_text(text, encoding="utf-8")
+        else:
+            sys.stdout.write(text)
+    else:
+        _print_json({"schema": selection.IDENTITY_SCHEMA, "locales": entries}, args.out)
+    return 0
+
+
+def _register_identity(subparsers: argparse._SubParsersAction) -> None:
+    """Register the identity subcommand (JF-954.7, Part A)."""
+    parser = subparsers.add_parser(
+        "identity",
+        help="canonical model identity hashes per locale (committed and, with --snapshot, effective)",
+    )
+    locale_group = parser.add_mutually_exclusive_group(required=True)
+    locale_group.add_argument("--locale", help="single Alexa locale, for example es-ES")
+    locale_group.add_argument("--all", action="store_true", help="hash every committed locale")
+    parser.add_argument(
+        "--snapshot",
+        help="catalog snapshot JSON file; adds effective_sha256 per locale",
+    )
+    parser.add_argument(
+        "--format",
+        choices=("json", "text"),
+        default="json",
+        help="output format (default: json, a deterministic document)",
+    )
+    parser.add_argument("--out", help="write the output here instead of stdout")
+    parser.set_defaults(func=cmd_identity)
+
+
+def cmd_select(args: argparse.Namespace) -> int:
+    """Print the change-driven NLU row selection against a base git ref."""
+    locales = _resolve_graph_locales(args)
+    try:
+        selection.verify_git_ref(args.base)
+    except (ValueError, OSError) as err:
+        return _fail(err)
+    try:
+        payload, notes = selection.compute_selection(
+            args.base,
+            locales,
+            neighbours=not args.no_neighbours,
+            strict_locale=bool(args.locale),
+        )
+    except (OSError, ValueError) as err:
+        return _fail(err)
+    for line in notes:
+        print(line, file=sys.stderr)
+    if args.format == "text":
+        text = selection.render_select_text(payload, neighbours_on=not args.no_neighbours)
+        if args.out:
+            Path(args.out).write_text(text, encoding="utf-8")
+        else:
+            sys.stdout.write(text)
+    else:
+        _print_json(payload, args.out)
+    return 0
+
+
+def _register_select(subparsers: argparse._SubParsersAction) -> None:
+    """Register the select subcommand (JF-954.7, Part B)."""
+    parser = subparsers.add_parser(
+        "select",
+        help="select the NLU fixture rows a model change since a base ref can affect",
+    )
+    parser.add_argument(
+        "--base",
+        required=True,
+        help="git ref to compare against, for example main or HEAD~1",
+    )
+    locale_group = parser.add_mutually_exclusive_group(required=True)
+    locale_group.add_argument("--locale", help="single Alexa locale, for example es-ES")
+    locale_group.add_argument("--all", action="store_true", help="select across every committed locale")
+    parser.add_argument(
+        "--no-neighbours",
+        action="store_true",
+        help="do not add the subsumption-graph neighbours of the changed intents",
+    )
+    parser.add_argument(
+        "--format",
+        choices=("json", "text"),
+        default="json",
+        help="output format (default: json, the rows file the suite filter reads)",
+    )
+    parser.add_argument(
+        "--out",
+        help="write the rows JSON here instead of stdout, for example /tmp/rows.json for NLU_ROW_FILTER",
+    )
+    parser.set_defaults(func=cmd_select)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="nlu_static", description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -829,6 +927,8 @@ def main(argv: list[str] | None = None) -> int:
     _register_match(subparsers)
     _register_classify_fixtures(subparsers)
     _register_triage(subparsers)
+    _register_identity(subparsers)
+    _register_select(subparsers)
     args = parser.parse_args(argv)
     return int(args.func(args))
 
