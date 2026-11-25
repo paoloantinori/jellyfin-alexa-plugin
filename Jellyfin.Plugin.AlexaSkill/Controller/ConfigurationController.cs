@@ -176,6 +176,17 @@ public class ConfigurationController : ControllerBase
             updated = true;
         }
 
+        // Handle CatalogSongSynonymsEnabled (boolean, JF-951): the per-user
+        // opt-in to phonetic song-title synonyms in the synced catalog. Same
+        // null/absent-leaves-untouched rule; only meaningful while
+        // CatalogSongSyncEnabled is on.
+        if (req.TryGetValue("CatalogSongSynonymsEnabled", out var songSynonymsToken)
+            && songSynonymsToken.Type == JTokenType.Boolean)
+        {
+            pluginUser!.CatalogSongSynonymsEnabled = songSynonymsToken.Value<bool>();
+            updated = true;
+        }
+
         // Handle LastCatalogSync reset (explicit null, JF-946 verification
         // seam): clears the throttle timestamp so the next scheduled catalog
         // sync runs immediately instead of waiting out the interval.

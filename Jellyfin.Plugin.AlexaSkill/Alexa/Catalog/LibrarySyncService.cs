@@ -471,27 +471,38 @@ public class LibrarySyncService
                     Minted(CatalogType.Audiobook).Version,
                     Minted(CatalogType.Movie).Version,
                     Minted(CatalogType.Song).CatalogId,
-                    Minted(CatalogType.Song).Version,
-                    payloadBytesByType,
-                    cancellationToken).ConfigureAwait(false);
-
-                // JF-495: catalog-sync model PUTs must appear in the per-locale
-                // status ledger, not just ModelDeploymentManager deployments.
-                // JF-705: the leg's frozen types ride the entry too.
-                RecordModelUpdateInLedger(locale, modelUpdate, frozenTypes);
+                    songCatalogVersion: Minted(CatalogType.Song).Version,
+                    payloadBytesByType: payloadBytesByType,
+                    cancellationToken: cancellationToken).ConfigureAwait(false);
 
                 // JF-951: a pre-flight size-guard skip keeps the locale's previous
-                // good model, so the leg still counts as completed (no PUT failed),
-                // but the user must learn their chosen combination is incompatible:
-                // the skipped locale lands in the SyncResult (the config page's
-                // signal) and a loud line names the levers (CatalogManager logged
-                // the exact numbers).
+                // good model, so the leg still counts as completed (no PUT failed).
+                // The skip is an EXPECTED user-configuration outcome: ONE warning
+                // per skipped locale carries the numbers (from the guard's result)
+                // and the levers, the locale lands in the SyncResult, and the
+                // ledger row records it WITHOUT clobbering a settled status (see
+                // RecordOversizeSkipInLedger). Every other outcome takes the
+                // normal PUT path.
                 if (modelUpdate.BuildStatus == CatalogManager.BuildStatusSkippedOversize)
                 {
                     result.RecordSkippedOversizeLocale(locale);
+                    RecordOversizeSkipInLedger(locale, modelUpdate);
                     _logger.LogWarning(
-                        "Catalog sync locale {Locale} SKIPPED its model PUT for user {UserId}: the effective model size exceeds Amazon's per-model cap, so the previous good model stays live. The synced catalogs themselves uploaded fine. {Levers} (JF-951)",
-                        locale, user.Id, CatalogManager.OversizeGuardLeversText);
+                        "Catalog sync locale {Locale} SKIPPED its model PUT for user {UserId} (JF-951 pre-flight size guard): {Reason}. Amazon's per-model cap is {CapBytes} bytes; the guard compares against the {ThresholdBytes}-byte safety threshold (a {Margin}-byte margin over the estimator's gaps), so a locale under the threshold clears Amazon's cap with headroom. The previous good model stays live and the catalogs themselves uploaded fine. {Levers}",
+                        locale,
+                        user.Id,
+                        modelUpdate.CanaryError,
+                        CatalogManager.ModelSizeCapBytes,
+                        CatalogManager.ModelSizeSafetyThresholdBytes,
+                        CatalogManager.ModelSizeCapBytes - CatalogManager.ModelSizeSafetyThresholdBytes,
+                        CatalogManager.OversizeGuardLeversText);
+                }
+                else
+                {
+                    // JF-495: catalog-sync model PUTs must appear in the per-locale
+                    // status ledger, not just ModelDeploymentManager deployments.
+                    // JF-705: the leg's frozen types ride the entry too.
+                    RecordModelUpdateInLedger(locale, modelUpdate, frozenTypes);
                 }
             }
             else if (frozenTypes.Count > 0)
@@ -834,6 +845,42 @@ public class LibrarySyncService
             FrozenCatalogTypes = frozenCatalogTypes,
             Source = CatalogSyncLedgerSource
         }, "catalog-sync model update");
+    }
+
+    /// <summary>
+    /// Records a JF-951 pre-flight size-guard SKIP in the per-locale status
+    /// ledger WITHOUT clobbering the settled status: the guard sent no PUT and
+    /// the locale's live model is UNCHANGED, so a SUCCEEDED row from a previous
+    /// run stays SUCCEEDED (DiagnosticsController.ModelsDeployed and the admin
+    /// panel's ModelsDeployed checklist match only Succeeded, and
+    /// <see cref="RecordModelUpdateInLedger"/>'s own doc rejected a distinct
+    /// failing status for exactly this reason). What changes is the CATALOG
+    /// state, which is durable: the row's caveat carries the new
+    /// OversizeSkipped bit and the Error carries the guard's numbers (the
+    /// effective size, the threshold, and the two levers), so the config page's
+    /// locale-status dump tells the user their chosen combination is
+    /// incompatible. The write REPLACES the previous row wholesale (the skip
+    /// text is this writer's own diagnostic; a previous foreign Error is
+    /// superseded by it, and a previous FrozenCatalogs caveat describes a
+    /// freeze the skip-run's own frozenTypes did not add; the next real PUT
+    /// write or startup capture rewrites the row either way). A later run that
+    /// wires the locale again overwrites the row with a plain SUCCEEDED row and
+    /// the caveat clears.
+    /// </summary>
+    private void RecordOversizeSkipInLedger(string locale, CatalogModelUpdateResult modelUpdate)
+    {
+        WriteLedgerEntry(locale, previous => new Configuration.LocaleModelStatus
+        {
+            // The settled-status clamp (the no-PUT writer's rule): a previous
+            // SUCCEEDED stays SUCCEEDED (the good model IS still live), FAILED/
+            // TIMEOUT keep their diagnostic weight, anything transient clamps
+            // to the healthy-neutral "Skipped".
+            Status = PreservedOrSkippedStatus(previous?.Status),
+            LastUpdated = DateTime.UtcNow,
+            Error = modelUpdate.CanaryError,
+            Caveat = Configuration.CatalogLedgerCaveats.OversizeSkipped,
+            Source = CatalogSyncLedgerSource
+        }, "JF-951 size-guard skip");
     }
 
     /// <summary>

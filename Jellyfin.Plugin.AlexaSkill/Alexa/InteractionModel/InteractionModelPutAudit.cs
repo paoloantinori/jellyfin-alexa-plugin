@@ -80,6 +80,36 @@ public static class InteractionModelPutAudit
     }
 
     /// <summary>
+    /// The node-based form of <see cref="CountFromJson"/> (JF-951): identical
+    /// counts for a caller that ALREADY holds the parsed model tree, so the
+    /// injection path reports its PUT counts without re-parsing the same JSON
+    /// a fourth time per locale leg. Envelope-tolerant like the string form;
+    /// returns (0, 0) for a null node or a missing intents array.
+    /// </summary>
+    /// <param name="root">The parsed model root node (may be null or an unexpected shape).</param>
+    /// <returns>Intent count and total sample count.</returns>
+    public static (int IntentCount, int SampleCount) CountFromNode(System.Text.Json.Nodes.JsonNode? root)
+    {
+        var lm = root?["interactionModel"]?["languageModel"] as System.Text.Json.Nodes.JsonObject
+            ?? root?["languageModel"] as System.Text.Json.Nodes.JsonObject;
+        if (lm?["intents"] is not System.Text.Json.Nodes.JsonArray intents)
+        {
+            return (0, 0);
+        }
+
+        int samples = 0;
+        foreach (System.Text.Json.Nodes.JsonNode? intent in intents)
+        {
+            if (intent?["samples"] is System.Text.Json.Nodes.JsonArray samplesArray)
+            {
+                samples += samplesArray.Count;
+            }
+        }
+
+        return (intents.Count, samples);
+    }
+
+    /// <summary>
     /// Counts intents and total samples in a raw interaction-model JSON string
     /// (wrapped or unwrapped in the "interactionModel" envelope). Returns (0, 0)
     /// for unparseable input or a missing intents array rather than throwing.

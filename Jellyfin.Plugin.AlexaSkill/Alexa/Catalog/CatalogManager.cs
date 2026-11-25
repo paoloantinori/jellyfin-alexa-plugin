@@ -605,17 +605,19 @@ public class CatalogManager
         string modelJson = await FetchLiveModelAsync(
             accessToken, client, modelUrl, skillId, locale, cancellationToken).ConfigureAwait(false);
 
-        string modifiedJson = InjectCatalogReferences(modelJson, artistCatalogId, albumCatalogId, seriesCatalogId, audiobookCatalogId, movieCatalogId, artistCatalogVersion, albumCatalogVersion, seriesCatalogVersion, audiobookCatalogVersion, movieCatalogVersion, _logger, songCatalogId, songCatalogVersion);
+        // JF-951 review round: the injection reports what it ACTUALLY wired
+        // (the JF-952 declare check's verdict included) and the PUT counts,
+        // all from the single parse it already did.
+        InjectCatalogReferencesResult injection = InjectCatalogReferencesDetailed(modelJson, artistCatalogId, albumCatalogId, seriesCatalogId, audiobookCatalogId, movieCatalogId, artistCatalogVersion, albumCatalogVersion, seriesCatalogVersion, audiobookCatalogVersion, movieCatalogVersion, _logger, songCatalogId, songCatalogVersion);
+        string modifiedJson = injection.ModifiedJson;
+        int putIntents = injection.PutIntents;
+        int putSamples = injection.PutSamples;
 
         // JF-951: the model is UTF-8 encoded ONCE. The guard below counts these
         // exact bytes and the PUT sends the same array, so the guard's model
         // figure is provably the wire bytes (identical content to the former
         // StringContent re-encode).
         byte[] modelUtf8 = Encoding.UTF8.GetBytes(modifiedJson);
-
-        // The PUT audit counts, computed once for the audit line and the
-        // SkippedOversize outcome.
-        var (putIntents, putSamples) = InteractionModelPutAudit.CountFromJson(modifiedJson);
 
         // JF-951 pre-flight size guard: Amazon's per-locale interaction-model cap is
         // EFFECTIVE (the serialized model plus the bytes of every catalog referenced
@@ -626,20 +628,25 @@ public class CatalogManager
         // 2.5MB). The payload bytes are in memory at the sync's call site, the
         // post-injection model bytes are in memory here, so the check runs LOCALLY
         // before the PUT: on exceed, skip the PUT (the previous good model stays
-        // live), report a SkippedOversize outcome the sync surfaces in its
-        // SyncResult, and log the numbers and the levers the user controls. The
-        // wired set is read from the POST-INJECTION MODEL ITSELF (the valueSupplier
-        // carriers, the IsCatalogWired predicate): exactly what Amazon will count,
-        // so a mapping the JF-952 declare check skipped contributes no payload
-        // bytes, and a wired block is counted only when this run knows its bytes.
-        // KNOWN RESIDUAL GAP (absorbed by the safety margin): a STALE wired block
-        // of a type that minted no version this run (zero items, or a frozen type)
-        // keeps Amazon counting its PREVIOUS run's payload, which no local byte
-        // count can know; the worst case degrades to the pre-guard behavior (a
-        // server-side build failure on that locale), never to a wrong skip.
+        // live) and report the SkippedOversize outcome the sync surfaces. The
+        // wired set is the injection's own report (a JF-952 declare-skipped
+        // mapping contributes no bytes). For a wired type whose payload bytes
+        // this run does NOT know (a block persisted by a PRIOR run whose type
+        // minted no version now), the block's CURRENT serialized bytes stand in
+        // as the payload contribution: an approximation, but on the safe side of
+        // zero (the pre-review guard counted those stale blocks as zero and
+        // could wave through the exact over-cap PUT).
         if (payloadBytesByType != null)
         {
-            List<long> wiredPayloadBytes = CollectWiredPayloadBytes(modifiedJson, payloadBytesByType);
+            var wiredPayloadBytes = new List<long>(injection.WiredBlocks.Count);
+            foreach (WiredBlock block in injection.WiredBlocks)
+            {
+                wiredPayloadBytes.Add(
+                    block.Type is CatalogType type && payloadBytesByType.TryGetValue(type, out long bytes)
+                        ? bytes
+                        : block.BlockBytes);
+            }
+
             long modelBytes = modelUtf8.Length;
             long thresholdBytes = EffectiveModelSizeSafetyThresholdBytes;
             long effectiveBytes = EstimateEffectiveModelSizeBytes(modelBytes, wiredPayloadBytes);
@@ -649,9 +656,10 @@ public class CatalogManager
             long payloadBytes = effectiveBytes - modelBytes;
             if (effectiveBytes > thresholdBytes)
             {
-                _logger.LogError(
-                    "Interaction model update SKIPPED for skill {SkillId} locale {Locale} (JF-951 pre-flight size guard): effective size {EffectiveBytes} bytes exceeds the {ThresholdBytes}-byte safety threshold (Amazon's per-model cap is {CapBytes} bytes; model JSON {ModelBytes} bytes + wired catalog payloads {PayloadBytes} bytes). The locale keeps its previous good model. {Levers}",
-                    skillId, locale, effectiveBytes, thresholdBytes, ModelSizeCapBytes, modelBytes, payloadBytes, OversizeGuardLeversText);
+                // The skip is an EXPECTED user-configuration outcome, not a
+                // failure: the numbers ride the SkippedOversize result (the
+                // sync's single Warning and the ledger row carry them), so no
+                // second log line fires here.
                 return new CatalogModelUpdateResult(BuildStatusSkippedOversize, null, putIntents, putSamples, CanaryError: $"skipped by the JF-951 pre-flight size guard: effective {effectiveBytes} bytes > threshold {thresholdBytes} (model {modelBytes} + payloads {payloadBytes})");
             }
 
@@ -1422,54 +1430,6 @@ public class CatalogManager
         modelBytes + wiredPayloadBytes.Sum();
 
     /// <summary>
-    /// JF-951: the payload byte counts of the catalog blocks ACTUALLY WIRED into
-    /// the post-injection model (each type block carrying a valueSupplier, the
-    /// <see cref="IsCatalogWired"/> definition). Reading the model itself, not
-    /// the caller's forwarded ids, is load-bearing: the JF-952 declare check can
-    /// skip a mapping whose id was forwarded (a non-declaring locale never
-    /// carries the block, so Amazon never counts its payload), and a wired
-    /// block with no bytes in the dictionary (a STALE block of a type that
-    /// minted nothing this run) contributes nothing locally (the guard's
-    /// documented residual gap). A malformed body yields an empty list (the
-    /// guard then never fires; the malformed-model case fails loudly earlier).
-    /// </summary>
-    internal static List<long> CollectWiredPayloadBytes(
-        string modifiedJson,
-        IReadOnlyDictionary<CatalogType, long> payloadBytesByType)
-    {
-        var wired = new List<long>(6);
-        try
-        {
-            var typesArray = JsonNode.Parse(modifiedJson)?["interactionModel"]?["languageModel"]?["types"] as JsonArray;
-            if (typesArray == null)
-            {
-                return wired;
-            }
-
-            foreach (JsonNode? typeNode in typesArray)
-            {
-                string? slotTypeName = typeNode?["name"]?.GetValue<string>();
-                if (slotTypeName == null || !IsCatalogWired(typeNode!))
-                {
-                    continue;
-                }
-
-                if (TryGetCatalogTypeForSlotTypeName(slotTypeName, out CatalogType type)
-                    && payloadBytesByType.TryGetValue(type, out long bytes))
-                {
-                    wired.Add(bytes);
-                }
-            }
-        }
-        catch (JsonException)
-        {
-            // Malformed model: no wired bytes to count; the guard stays silent.
-        }
-
-        return wired;
-    }
-
-    /// <summary>
     /// The reverse of <see cref="CatalogSlotTypes.CatalogSlotTypeNames"/>: a
     /// wired model block's slot type name back to its CatalogType. Built once;
     /// an unknown name (a block the catalog family does not own) resolves
@@ -1512,20 +1472,31 @@ public class CatalogManager
     /// <param name="audiobookCatalogVersion">The audiobook catalog version (JF-823).</param>
     /// <param name="movieCatalogVersion">The movie catalog version (JF-874).</param>
     /// <returns>The modified interaction model JSON string.</returns>
-    internal static string InjectCatalogReferences(string modelJson, string? artistCatalogId, string? albumCatalogId, string? seriesCatalogId, string? audiobookCatalogId, string? movieCatalogId, string? artistCatalogVersion, string? albumCatalogVersion, string? seriesCatalogVersion, string? audiobookCatalogVersion, string? movieCatalogVersion, ILogger? logger = null, string? songCatalogId = null, string? songCatalogVersion = null)
+    internal static string InjectCatalogReferences(string modelJson, string? artistCatalogId, string? albumCatalogId, string? seriesCatalogId, string? audiobookCatalogId, string? movieCatalogId, string? artistCatalogVersion, string? albumCatalogVersion, string? seriesCatalogVersion, string? audiobookCatalogVersion, string? movieCatalogVersion, ILogger? logger = null, string? songCatalogId = null, string? songCatalogVersion = null) =>
+        InjectCatalogReferencesDetailed(modelJson, artistCatalogId, albumCatalogId, seriesCatalogId, audiobookCatalogId, movieCatalogId, artistCatalogVersion, albumCatalogVersion, seriesCatalogVersion, audiobookCatalogVersion, movieCatalogVersion, logger, songCatalogId, songCatalogVersion).ModifiedJson;
+
+    /// <summary>
+    /// The detailed form of <see cref="InjectCatalogReferences"/> (JF-951
+    /// review round): same transformation, plus the wired-block report and the
+    /// PUT counts, so the pre-flight size guard derives its bytes from what
+    /// was ACTUALLY written instead of re-parsing the model or trusting the
+    /// caller's forwarded ids.
+    /// </summary>
+    internal static InjectCatalogReferencesResult InjectCatalogReferencesDetailed(string modelJson, string? artistCatalogId, string? albumCatalogId, string? seriesCatalogId, string? audiobookCatalogId, string? movieCatalogId, string? artistCatalogVersion, string? albumCatalogVersion, string? seriesCatalogVersion, string? audiobookCatalogVersion, string? movieCatalogVersion, ILogger? logger = null, string? songCatalogId = null, string? songCatalogVersion = null)
     {
         logger ??= NullLogger.Instance;
+        var wiredBlocks = new List<WiredBlock>(6);
         JsonNode? root = JsonNode.Parse(modelJson);
         if (root == null)
         {
-            return modelJson;
+            return new InjectCatalogReferencesResult(modelJson, wiredBlocks, 0, 0);
         }
 
         var lmNode = root["interactionModel"]?["languageModel"] as JsonObject;
         if (lmNode == null)
         {
             logger.LogWarning("Interaction model has unexpected structure, skipping catalog injection");
-            return modelJson;
+            return new InjectCatalogReferencesResult(modelJson, wiredBlocks, 0, 0);
         }
 
         var typesArray = lmNode["types"] as JsonArray;
@@ -1699,6 +1670,14 @@ public class CatalogManager
 
             wiredTypes.Add(slotTypeName);
 
+            // JF-951 review round: report what was ACTUALLY wired, with the
+            // block's own serialized byte count standing in for a type whose
+            // payload bytes this run does not know (see the guard's comment).
+            wiredBlocks.Add(new WiredBlock(
+                TryGetCatalogTypeForSlotTypeName(slotTypeName, out CatalogType wiredType) ? wiredType : null,
+                slotTypeName,
+                Encoding.UTF8.GetByteCount(catalogType.ToJsonString())));
+
             if (replacesType != null)
             {
                 UpdateIntentSlotTypes(lmNode, replacesType, slotTypeName, logger);
@@ -1722,7 +1701,10 @@ public class CatalogManager
             keptStaticTypes.Count == 0 ? "none" : string.Join(", ", keptStaticTypes),
             removedTypes.Count == 0 ? "none" : string.Join(", ", removedTypes));
 
-        return root.ToJsonString();
+        // JF-951 review round: the PUT counts come from the already-parsed tree,
+        // not another string parse.
+        var (putIntents, putSamples) = InteractionModelPutAudit.CountFromNode(root);
+        return new InjectCatalogReferencesResult(root.ToJsonString(), wiredBlocks, putIntents, putSamples);
     }
 
     /// <summary>
@@ -2103,3 +2085,33 @@ public sealed record CatalogModelUpdateResult(
     int? LiveIntents = null,
     int? LiveSamples = null,
     string? CanaryError = null);
+
+/// <summary>
+/// One wired block the injection actually WROTE (JF-951 review round): the
+/// block's CatalogType when it belongs to the catalog family (null for an
+/// unknown slot type name), its slot type name, and the block's own
+/// serialized byte count. This is the size guard's wired-set source of truth:
+/// a mapping the JF-952 declare check skipped never lands here, and a block
+/// whose type minted no version this run still carries its CURRENT block
+/// bytes, which stand in (approximate, conservative-side) for the previous
+/// run's catalog payload Amazon keeps counting.
+/// </summary>
+/// <param name="Type">The block's CatalogType, or null when the slot type name is not one of the catalog family's.</param>
+/// <param name="SlotTypeName">The wired block's slot type name.</param>
+/// <param name="BlockBytes">The serialized byte count of the block as written.</param>
+public sealed record WiredBlock(CatalogType? Type, string SlotTypeName, int BlockBytes);
+
+/// <summary>
+/// The outcome of one injection (JF-951 review round): the modified model
+/// JSON, the blocks actually wired, and the PUT audit counts computed from
+/// the already-parsed tree (no re-parse).
+/// </summary>
+/// <param name="ModifiedJson">The modified interaction model JSON.</param>
+/// <param name="WiredBlocks">The blocks the injection wrote, in wiring order.</param>
+/// <param name="PutIntents">Intent count of the modified model.</param>
+/// <param name="PutSamples">Sample count of the modified model.</param>
+public sealed record InjectCatalogReferencesResult(
+    string ModifiedJson,
+    IReadOnlyList<WiredBlock> WiredBlocks,
+    int PutIntents,
+    int PutSamples);

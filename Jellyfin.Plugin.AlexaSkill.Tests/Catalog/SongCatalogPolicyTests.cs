@@ -61,55 +61,46 @@ public class SongCatalogPolicyUnitTests
     }
 
     /// <summary>
-    /// The wired-set read (the JF-951 code-review systemic fix): the guard's
-    /// payload feed counts ONLY blocks that carry a valueSupplier in the
-    /// POST-INJECTION model. A mapping the JF-952 declare check skipped (the
-    /// SongTitle id forwarded but the locale declares no SongTitle slot, so
-    /// the injection added no block) contributes NOTHING, and a static seed
-    /// block contributes nothing; a wired block of a type whose bytes the run
-    /// knows is counted once.
+    /// The wired-set read (the JF-951 code-review systemic fix, refined by the
+    /// merge-review round): the injection's own report is the guard's wired
+    /// source of truth. A mapping the JF-952 declare check skipped (the
+    /// SongTitle id forwarded but the locale declares no SongTitle slot) is
+    /// NOT reported; a wired block of a type whose bytes the run does not know
+    /// still reports its CURRENT block bytes (the stale-block approximation,
+    /// never zero).
     /// </summary>
     [Fact]
-    public void CollectWiredPayloadBytes_ReadsTheInjectedModel_NotTheForwardedIds()
+    public void InjectCatalogReferencesDetailed_ReportsWiredBlocksNotForwardedIds()
     {
-        // en-US shape: the song id was forwarded but the locale declares no
-        // SongTitle slot, so the injected model carries no SongTitle block at
-        // all (the JF-952 skip). The artist block IS wired.
-        string declareSkipped = """
-            {"interactionModel":{"languageModel":{"types":[
-              {"name":"JellyfinArtist","valueSupplier":{"type":"CatalogValueSupplier","valueCatalog":{"catalogId":"a1","version":"1"}}}
-            ]}}}
+        // Declaring model (a slot names both types): both blocks wire and are
+        // reported with nonzero block bytes.
+        string declaringModel = """
+            {"interactionModel":{"languageModel":{"intents":[{"name":"I","slots":[{"name":"a","type":"JellyfinArtist"},{"name":"s","type":"SongTitle"}]}],"types":[]}}}
             """;
-        var bytesByType = new Dictionary<CatalogType, long>
-        {
-            [CatalogType.Artist] = 1_000,
-            [CatalogType.Song] = 2_000_000
-        };
+        var both = CatalogManager.InjectCatalogReferencesDetailed(declaringModel, "a1", null, null, null, null, "1", null, null, null, null, songCatalogId: "s1", songCatalogVersion: "1");
+        Assert.Equal(2, both.WiredBlocks.Count);
+        Assert.Contains(both.WiredBlocks, w => w.Type == CatalogType.Artist && w.BlockBytes > 0);
+        Assert.Contains(both.WiredBlocks, w => w.Type == CatalogType.Song && w.BlockBytes > 0);
 
-        List<long> wired = CatalogManager.CollectWiredPayloadBytes(declareSkipped, bytesByType);
-        Assert.Equal(new List<long> { 1_000 }, wired);
-
-        // it-IT shape: both blocks wired, both counted.
-        string bothWired = """
-            {"interactionModel":{"languageModel":{"types":[
-              {"name":"JellyfinArtist","valueSupplier":{"type":"CatalogValueSupplier","valueCatalog":{"catalogId":"a1","version":"1"}}},
-              {"name":"SongTitle","valueSupplier":{"type":"CatalogValueSupplier","valueCatalog":{"catalogId":"s1","version":"1"}}}
-            ]}}}
+        // Undeclared model (no slot names either type): nothing wires, the
+        // forwarded ids contribute NOTHING to the report (the JF-952 skip).
+        string undeclaredModel = """
+            {"interactionModel":{"languageModel":{"intents":[{"name":"I","slots":[]}],"types":[]}}}
             """;
-        Assert.Equal(
-            new List<long> { 1_000, 2_000_000 },
-            CatalogManager.CollectWiredPayloadBytes(bothWired, bytesByType).OrderBy(b => b).ToList());
+        var none = CatalogManager.InjectCatalogReferencesDetailed(undeclaredModel, "a1", null, null, null, null, "1", null, null, null, null, songCatalogId: "s1", songCatalogVersion: "1");
+        Assert.Empty(none.WiredBlocks);
 
-        // A static seed block (plain values) is never counted, wired or not.
-        string staticSeed = """
-            {"interactionModel":{"languageModel":{"types":[
-              {"name":"SongTitle","values":[{"name":{"value":"brano"}}]}
-            ]}}}
+        // A static seed block that the declare check keeps untouched is not
+        // a wired block either.
+        string staticSeedModel = """
+            {"interactionModel":{"languageModel":{"intents":[{"name":"I","slots":[]}],"types":[{"name":"SongTitle","values":[{"name":{"value":"brano"}}]}]}}}
             """;
-        Assert.Empty(CatalogManager.CollectWiredPayloadBytes(staticSeed, bytesByType));
+        var seedKept = CatalogManager.InjectCatalogReferencesDetailed(staticSeedModel, null, null, null, null, null, null, null, null, null, null, songCatalogId: "s1", songCatalogVersion: "1");
+        Assert.Empty(seedKept.WiredBlocks);
 
-        // A malformed body yields no bytes (the guard stays silent on it).
-        Assert.Empty(CatalogManager.CollectWiredPayloadBytes("not-json-at-all", bytesByType));
+        // The PUT counts ride the outcome (no second parse).
+        Assert.Equal(1, both.PutIntents);
+        Assert.Equal(0, both.PutSamples);
     }
 
     /// <summary>Disabled (the default) three-argument form matches the values-only policy; the two-argument shipped-default pin lives in SongTitlePreparationTests.</summary>
@@ -263,8 +254,55 @@ public class SongCatalogPolicySyncTests : PluginTestBase, IDisposable
         Assert.Equal(1, _smapiHandler.CatalogCreationCount);
 
         var records = TestCaptureLogger.Snapshot(_logRecords);
-        Assert.Contains(records, r => r.Level == LogLevel.Error && r.Message.Contains("JF-951 pre-flight size guard", StringComparison.Ordinal));
+        // ONE warning per skipped locale (the skip is an expected
+        // user-configuration outcome, not a failure): it names the guard, the
+        // safety threshold and Amazon's cap as separate facts, and the levers.
+        Assert.Contains(records, r => r.Level == LogLevel.Warning && r.Message.Contains("JF-951 pre-flight size guard", StringComparison.Ordinal));
+        Assert.Contains(records, r => r.Level == LogLevel.Warning && r.Message.Contains("safety threshold", StringComparison.Ordinal));
         Assert.Contains(records, r => r.Message.Contains("sync fewer titles", StringComparison.Ordinal));
+        Assert.DoesNotContain(records, r => r.Level == LogLevel.Error && r.Message.Contains("JF-951", StringComparison.Ordinal));
+
+        // The ledger row (fresh ledger: no previous settled status) carries the
+        // skip as the durable signal WITHOUT a failing status: clamped to the
+        // healthy-neutral Skipped, the OversizeSkipped caveat bit set, the
+        // numbers in Error.
+        var entry = Plugin.Instance!.Configuration.GetLocaleModelStatusSnapshot().Single(e => e.Locale == "it-IT");
+        Assert.Equal("Skipped", entry.Status);
+        Assert.True(entry.Caveat.HasFlag(Configuration.CatalogLedgerCaveats.OversizeSkipped));
+        Assert.Contains("size guard", entry.Error, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// THE LEDGER SEMANTICS (JF-951 merge-review item 2): a skip must NOT
+    /// clobber a previous run's SUCCEEDED row. Run 1 (default threshold) PUTs
+    /// and records Succeeded; run 2 (seam threshold 0) skips the PUT and the
+    /// row must STILL read Succeeded (ModelsDeployed matches only Succeeded),
+    /// with the caveat bit carrying the skip signal instead.
+    /// </summary>
+    [Fact]
+    public async Task SkipAfterSuccess_PreservesSucceededLedgerRow()
+    {
+        SetupSongsOnlyLibrary();
+        var user = CreateUser(songSyncEnabled: true, songSynonymsEnabled: false);
+        var jellyfinUser = TestHelpers.CreateJellyfinUser();
+
+        var first = await _service.SyncUserLibraryAsync(user, jellyfinUser, CancellationToken.None);
+        Assert.True(first.Success);
+        Assert.Empty(first.SkippedOversizeLocales);
+        var entry = Plugin.Instance!.Configuration.GetLocaleModelStatusSnapshot().Single(e => e.Locale == "it-IT");
+        Assert.Equal("SUCCEEDED", entry.Status);
+        Assert.False(entry.Caveat.HasFlag(Configuration.CatalogLedgerCaveats.OversizeSkipped));
+
+        // Second run over the SAME ledger: the guard skips the PUT.
+        _catalogManager.ModelSizeSafetyThresholdBytesForTest = 0;
+        var second = await _service.SyncUserLibraryAsync(user, jellyfinUser, CancellationToken.None);
+
+        Assert.Contains("it-IT", second.SkippedOversizeLocales);
+        Assert.True(second.Success);
+        var entryAfterSkip = Plugin.Instance!.Configuration.GetLocaleModelStatusSnapshot().Single(e => e.Locale == "it-IT");
+        Assert.Equal("SUCCEEDED", entryAfterSkip.Status);
+        Assert.True(entryAfterSkip.Caveat.HasFlag(Configuration.CatalogLedgerCaveats.OversizeSkipped));
+        Assert.Contains("size guard", entryAfterSkip.Error, StringComparison.Ordinal);
     }
 
     /// <summary>

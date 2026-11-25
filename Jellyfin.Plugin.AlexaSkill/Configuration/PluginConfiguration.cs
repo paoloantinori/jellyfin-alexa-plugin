@@ -911,6 +911,18 @@ public enum CatalogLedgerCaveats
     /// Never co-occurs with <see cref="FrozenCatalogs"/>: the own-errors arms replace
     /// the row wholesale and never preserve.</summary>
     ObservedBuildErrors = 4,
+
+    /// <summary>Durable catalog state (JF-951): the last catalog sync SKIPPED
+    /// this locale's model PUT because the pre-flight size guard measured the
+    /// effective model size over the safety threshold. The live model is the
+    /// PREVIOUS good one (unchanged), so the row's Status keeps its settled
+    /// value (SUCCEEDED stays SUCCEEDED); what this bit adds is the
+    /// incompatible-combination signal: the Error carries the measured numbers
+    /// and the two levers (disable song phonetic synonyms, fewer titles).
+    /// Heals when a later sync PUTs the locale again (a fresh wholesale row) or
+    /// the combination changes; carried like the other durable bits by the
+    /// startup capture's preserve.</summary>
+    OversizeSkipped = 8,
 }
 
 /// <summary>
@@ -1024,6 +1036,11 @@ public record LocaleModelStatus
             if (Caveat.HasFlag(CatalogLedgerCaveats.ObservedBuildErrors))
             {
                 parts.Add("build errors");
+            }
+
+            if (Caveat.HasFlag(CatalogLedgerCaveats.OversizeSkipped))
+            {
+                parts.Add("model PUT skipped: effective size over the safety threshold (previous good model kept)");
             }
 
             // Every Caveat != None shape contributes a part (the frozen arm
