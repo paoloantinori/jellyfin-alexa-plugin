@@ -3,9 +3,10 @@ id: JF-957
 title: >-
   SessionEndedRequest.Reason: same unknown-enum-value deserialization kill as
   JF-931 (untolerated)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-11-24 18:42'
+updated_date: '2026-11-25 05:34'
 labels:
   - robustness
   - alexa-wire

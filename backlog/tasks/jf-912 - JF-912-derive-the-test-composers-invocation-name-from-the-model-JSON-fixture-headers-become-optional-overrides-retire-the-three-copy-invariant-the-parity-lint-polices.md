@@ -4,9 +4,10 @@ title: >-
   JF-912: derive the test composer's invocation name from the model JSON;
   fixture headers become optional overrides (retire the three-copy invariant the
   parity lint polices)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-10-19 23:36'
+updated_date: '2026-11-25 05:35'
 labels: []
 dependencies: []
 priority: low

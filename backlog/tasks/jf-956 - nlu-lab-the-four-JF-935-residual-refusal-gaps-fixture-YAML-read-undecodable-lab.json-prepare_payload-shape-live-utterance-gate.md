@@ -3,10 +3,10 @@ id: JF-956
 title: >-
   nlu-lab: the four JF-935 residual refusal gaps (fixture YAML read, undecodable
   lab.json, prepare_payload shape, --live utterance gate)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-11-24 18:19'
-updated_date: '2026-11-24 18:31'
+updated_date: '2026-11-25 05:39'
 labels:
   - nlu-lab
   - robustness
@@ -34,8 +34,16 @@ Four adjacent input-validation gaps in scripts/nlu-lab, found and verified by pr
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
 
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+gate-exempt: trivial-fix scope per the manual's exemption list (two except-clause broadenings, two read wraps, four tests; no production C# or model changes); self-review documented in both commit bodies; the full lab battery re-run green.
+<!-- SECTION:NOTES:END -->
+
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
 SCOPE SHRINK 2026-11-24: items 1, 3 and 4 were fixed by the JF-935 review round (merge of 1ac70b98): (1) the fixture read now refuses non-mapping top levels (the yaml.YAMLError wrapping for MALFORMED fixture YAML text is still open, only the non-dict shape is covered); (3) prepare_payload refuses a languageModel without an intents list of mappings via _validated_intents; (4) the --live preflight applies the same battery-row gates as the lab path. REMAINING: (2) lab_config.py LabConfig.load raising UnicodeDecodeError on binary/undecodable lab.json (the except only catches json.JSONDecodeError; broaden to UnicodeDecodeError/OSError reusing the refusal text), plus the yaml.YAMLError/UnicodeDecodeError wrapping for malformed (as opposed to non-mapping) fixture YAML text from item 1.
+
+Shipped 2026-11-25 via the merge of worktree-agent-af3b7f9871c6ab73b (c491f84a + the workingset symmetry follow-up 1037f7b4). The two remaining decode gaps closed: lab_config.py LabConfig.load refuses a binary/undecodable lab.json (except broadened to JSONDecodeError+UnicodeDecodeError+OSError, refusal text reused verbatim) and battery.py's fixture read refuses malformed YAML and non-UTF-8 fixtures with per-shape messages mirroring the workingset twin; the twin itself now refuses non-UTF-8 workingsets symmetrically (the honest residual the worker flagged, applied on request), with the stale comment rewritten and the WorkingsetRefused docstring carrying the encoding case. Four new offline tests (one per shape incl. the twin), 561 lab+script tests green on main post-merge. gate-exempt: trivial-fix scope (except-clause broadenings and wraps plus tests, Python lab tooling), self-review documented in the commit bodies.
 <!-- SECTION:FINAL_SUMMARY:END -->
