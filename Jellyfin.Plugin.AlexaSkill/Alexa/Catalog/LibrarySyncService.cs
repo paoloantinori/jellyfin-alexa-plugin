@@ -377,7 +377,7 @@ public class LibrarySyncService
             // whole-leg handling in the locale attempt loop below (the 401
             // refresh-retry, transient-fetch exhaustion, timeouts): catching
             // those here would swallow the leg-level retry semantics.
-            async Task<string?> SyncTypeLegAsync(
+            async Task<(string? Version, long PayloadBytes)> SyncTypeLegAsync(
                 CatalogType catalogType,
                 IReadOnlyList<BaseItem> items,
                 string? existingCatalogId,
@@ -409,7 +409,7 @@ public class LibrarySyncService
                         "Catalog {CatalogType} payload build violated a construction invariant for locale {Locale}, user {UserId}; freezing the type for this run (its last-good version stays pinned and its catalog id is not forwarded to the model injection) while the remaining types continue (JF-695)",
                         catalogType, locale, user.Id);
                     frozenTypes.Add(catalogType);
-                    return null;
+                    return (null, 0);
                 }
             }
 
@@ -420,14 +420,14 @@ public class LibrarySyncService
             // null-id-with-null-version rule the injection reads below. A
             // byte-identical-payload skip contributes the class's shared mint
             // (JF-717), a version this run minted for this same catalog.
-            var minted = new Dictionary<CatalogType, (string? Version, string? CatalogId)>();
+            var minted = new Dictionary<CatalogType, (string? Version, string? CatalogId, long PayloadBytes)>();
             foreach (var leg in typeLegs)
             {
-                string? version = await SyncTypeLegAsync(
+                (string? version, long payloadBytes) = await SyncTypeLegAsync(
                     leg.Type, leg.Items, leg.StoredCatalogId(), leg.StoreCatalogId, leg.Name, leg.Description).ConfigureAwait(false);
                 if (version != null)
                 {
-                    minted[leg.Type] = (version, leg.StoredCatalogId());
+                    minted[leg.Type] = (version, leg.StoredCatalogId(), payloadBytes);
                 }
             }
 
@@ -446,7 +446,14 @@ public class LibrarySyncService
                 // a dictionary), so the arguments are extracted per type at this
                 // ONE place from the minted collection; an absent type reads as
                 // (null, null), which is that same rule made structural.
-                (string? Version, string? CatalogId) Minted(CatalogType type) => minted.GetValueOrDefault(type);
+                (string? Version, string? CatalogId, long PayloadBytes) Minted(CatalogType type) => minted.GetValueOrDefault(type);
+
+                // JF-951: the pre-flight size guard's payload feed. The bytes of
+                // every type that minted a version this run ride the leg; the
+                // guard inside CatalogManager sums only the types actually wired
+                // (a non-null catalog id). Frozen and zero-item types are absent
+                // and contribute nothing, matching what the injection forwards.
+                var payloadBytesByType = minted.ToDictionary(static kv => kv.Key, static kv => kv.Value.PayloadBytes);
 
                 var modelUpdate = await _catalogManager.UpdateInteractionModelAsync(
                     user.SmapiDeviceToken.AccessToken,
@@ -464,13 +471,39 @@ public class LibrarySyncService
                     Minted(CatalogType.Audiobook).Version,
                     Minted(CatalogType.Movie).Version,
                     Minted(CatalogType.Song).CatalogId,
-                    Minted(CatalogType.Song).Version,
-                    cancellationToken).ConfigureAwait(false);
+                    songCatalogVersion: Minted(CatalogType.Song).Version,
+                    payloadBytesByType: payloadBytesByType,
+                    cancellationToken: cancellationToken).ConfigureAwait(false);
 
-                // JF-495: catalog-sync model PUTs must appear in the per-locale
-                // status ledger, not just ModelDeploymentManager deployments.
-                // JF-705: the leg's frozen types ride the entry too.
-                RecordModelUpdateInLedger(locale, modelUpdate, frozenTypes);
+                // JF-951: a pre-flight size-guard skip keeps the locale's previous
+                // good model, so the leg still counts as completed (no PUT failed).
+                // The skip is an EXPECTED user-configuration outcome: ONE warning
+                // per skipped locale carries the numbers (from the guard's result)
+                // and the levers, the locale lands in the SyncResult, and the
+                // ledger row records it WITHOUT clobbering a settled status (see
+                // RecordOversizeSkipInLedger). Every other outcome takes the
+                // normal PUT path.
+                if (modelUpdate.BuildStatus == CatalogManager.BuildStatusSkippedOversize)
+                {
+                    result.RecordSkippedOversizeLocale(locale);
+                    RecordOversizeSkipInLedger(locale, modelUpdate);
+                    _logger.LogWarning(
+                        "Catalog sync locale {Locale} SKIPPED its model PUT for user {UserId} (JF-951 pre-flight size guard): {Reason}. Amazon's per-model cap is {CapBytes} bytes; the guard compares against the {ThresholdBytes}-byte safety threshold (a {Margin}-byte margin over the estimator's gaps), so a locale under the threshold clears Amazon's cap with headroom. The previous good model stays live and the catalogs themselves uploaded fine. {Levers}",
+                        locale,
+                        user.Id,
+                        modelUpdate.CanaryError,
+                        CatalogManager.ModelSizeCapBytes,
+                        CatalogManager.ModelSizeSafetyThresholdBytes,
+                        CatalogManager.ModelSizeCapBytes - CatalogManager.ModelSizeSafetyThresholdBytes,
+                        CatalogManager.OversizeGuardLeversText);
+                }
+                else
+                {
+                    // JF-495: catalog-sync model PUTs must appear in the per-locale
+                    // status ledger, not just ModelDeploymentManager deployments.
+                    // JF-705: the leg's frozen types ride the entry too.
+                    RecordModelUpdateInLedger(locale, modelUpdate, frozenTypes);
+                }
             }
             else if (frozenTypes.Count > 0)
             {
@@ -608,9 +641,12 @@ public class LibrarySyncService
         string frozenClause = result.FrozenTypes.Count > 0
             ? $" (partial: {string.Join(", ", result.FrozenTypes)} frozen, Success=false)"
             : string.Empty;
+        string skippedClause = result.SkippedOversizeLocales.Count > 0
+            ? $" (JF-951 size-guard skips: {string.Join(", ", result.SkippedOversizeLocales)}; previous good models kept)"
+            : string.Empty;
         _logger.LogInformation(
             "Catalog sync completed for user {UserId}: {Succeeded}/{Total} locales, {Artists} artists, {Albums} albums, {Series} series, {Audiobooks} audiobooks, {Movies} movies, {Songs}/{SongTotal} song titles, {ElapsedMs}ms total{FrozenClause}",
-            user.Id, localesSucceeded, locales.Count, result.ArtistCount, result.AlbumCount, result.SeriesCount, result.AudiobookCount, result.MovieCount, result.SongCount, result.SongTitleTotal, totalSw.ElapsedMilliseconds, frozenClause);
+            user.Id, localesSucceeded, locales.Count, result.ArtistCount, result.AlbumCount, result.SeriesCount, result.AudiobookCount, result.MovieCount, result.SongCount, result.SongTitleTotal, totalSw.ElapsedMilliseconds, frozenClause + skippedClause);
 
         return result;
     }
@@ -809,6 +845,42 @@ public class LibrarySyncService
             FrozenCatalogTypes = frozenCatalogTypes,
             Source = CatalogSyncLedgerSource
         }, "catalog-sync model update");
+    }
+
+    /// <summary>
+    /// Records a JF-951 pre-flight size-guard SKIP in the per-locale status
+    /// ledger WITHOUT clobbering the settled status: the guard sent no PUT and
+    /// the locale's live model is UNCHANGED, so a SUCCEEDED row from a previous
+    /// run stays SUCCEEDED (DiagnosticsController.ModelsDeployed and the admin
+    /// panel's ModelsDeployed checklist match only Succeeded, and
+    /// <see cref="RecordModelUpdateInLedger"/>'s own doc rejected a distinct
+    /// failing status for exactly this reason). What changes is the CATALOG
+    /// state, which is durable: the row's caveat carries the new
+    /// OversizeSkipped bit and the Error carries the guard's numbers (the
+    /// effective size, the threshold, and the two levers), so the config page's
+    /// locale-status dump tells the user their chosen combination is
+    /// incompatible. The write REPLACES the previous row wholesale (the skip
+    /// text is this writer's own diagnostic; a previous foreign Error is
+    /// superseded by it, and a previous FrozenCatalogs caveat describes a
+    /// freeze the skip-run's own frozenTypes did not add; the next real PUT
+    /// write or startup capture rewrites the row either way). A later run that
+    /// wires the locale again overwrites the row with a plain SUCCEEDED row and
+    /// the caveat clears.
+    /// </summary>
+    private void RecordOversizeSkipInLedger(string locale, CatalogModelUpdateResult modelUpdate)
+    {
+        WriteLedgerEntry(locale, previous => new Configuration.LocaleModelStatus
+        {
+            // The settled-status clamp (the no-PUT writer's rule): a previous
+            // SUCCEEDED stays SUCCEEDED (the good model IS still live), FAILED/
+            // TIMEOUT keep their diagnostic weight, anything transient clamps
+            // to the healthy-neutral "Skipped".
+            Status = PreservedOrSkippedStatus(previous?.Status),
+            LastUpdated = DateTime.UtcNow,
+            Error = modelUpdate.CanaryError,
+            Caveat = Configuration.CatalogLedgerCaveats.OversizeSkipped,
+            Source = CatalogSyncLedgerSource
+        }, "JF-951 size-guard skip");
     }
 
     /// <summary>
@@ -1360,13 +1432,16 @@ public class LibrarySyncService
     /// Sync a catalog for a specific locale: build locale-specific payload with phonetic synonyms,
     /// upload to SMAPI, and return the minted version. Creates the catalog when no id is
     /// stored yet, persisting the new id through <paramref name="storeCatalogId"/> (the
-    /// per-type wiring table's paired setter, JF-711). Returns null when the type has no
-    /// items this run. A payload byte-identical to one
-    /// already uploaded this run skips the upload and returns the version that earlier leg
-    /// minted (JF-717), so the caller wires the equivalence class's shared
-    /// (catalogId, version) pair into this locale's model.
+    /// per-type wiring table's paired setter, JF-711). Returns a null version with
+    /// zero payload bytes when the type has no items this run. A payload byte-identical
+    /// to one already uploaded this run skips the upload and returns the version that
+    /// earlier leg minted (JF-717), so the caller wires the equivalence class's shared
+    /// (catalogId, version) pair into this locale's model. JF-951: the pair also
+    /// carries the payload's serialized byte length, the feed for the pre-flight
+    /// effective-size guard (always computed: the JF-717 skip path reports the same
+    /// bytes as the leg that minted the shared version).
     /// </summary>
-    private async Task<string?> SyncCatalogForLocaleAsync(
+    private async Task<(string? Version, long PayloadBytes)> SyncCatalogForLocaleAsync(
         Entities.User user,
         string accessToken,
         string vendorId,
@@ -1382,7 +1457,7 @@ public class LibrarySyncService
     {
         if (items.Count == 0)
         {
-            return null;
+            return (null, 0);
         }
 
         // Materialized once (JF-874 simplify finding): FromItems and the dedup
@@ -1413,11 +1488,15 @@ public class LibrarySyncService
                 user.Id);
         }
 
-        // JF-946: the song leg rides the phonetic generator through the
-        // qualifying-word gate (short-title noise suppression); every other
-        // type passes the raw generator, byte-identical to before.
+        // JF-946: the song leg's synonym policy lives on SongTitlePreparation;
+        // every other type passes the raw generator, byte-identical to before.
+        // JF-951: the song synonyms are USER-CONTROLLED. Disabled (the default)
+        // keeps the shipped values-only policy byte-identical; enabled flows
+        // the user's choice into the locale's phonetic generator per leg. The
+        // effective-size consequence is the CatalogManager pre-flight guard's
+        // job, which reads these payloads' bytes.
         Func<string, string, List<string>> synonymGenerator = catalogType == CatalogType.Song
-            ? SongTitlePreparation.SongSynonyms
+            ? (name, syncLocale) => SongTitlePreparation.SongSynonyms(name, syncLocale, user.CatalogSongSynonymsEnabled)
             : PhoneticSynonymGenerator.GenerateSynonyms;
 
         CatalogPayload payload = CatalogPayload.FromItems(catalogType, itemTuples, synonymGenerator, locale);
@@ -1501,6 +1580,10 @@ public class LibrarySyncService
         }
 
         string payloadJson = JsonSerializer.Serialize(payload, CatalogManager.JsonOptions);
+        // JF-951: the payload is UTF-8 encoded ONCE; the byte count feeds the
+        // pre-flight size guard and the same bytes hash for the JF-717 dedup key.
+        byte[] payloadUtf8 = System.Text.Encoding.UTF8.GetBytes(payloadJson);
+        long payloadBytes = payloadUtf8.Length;
 
         // JF-513.3: skip the version upload when this exact payload was already
         // minted in this run (same user/catalog type across locale legs). JF-717:
@@ -1521,8 +1604,7 @@ public class LibrarySyncService
         // locale order evicts it on every class switch and re-mints identical
         // content), while keying by payload keeps the dedup at exactly one
         // upload per byte-identical payload per run.
-        string payloadHash = Convert.ToHexString(
-            SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(payloadJson)));
+        string payloadHash = Convert.ToHexString(SHA256.HashData(payloadUtf8));
         string payloadKey = $"{catalogType}:{catalogId}:{payloadHash}";
         if (mintedVersionsByPayload.TryGetValue(payloadKey, out string? sharedVersion))
         {
@@ -1532,7 +1614,7 @@ public class LibrarySyncService
                 user.Id,
                 locale,
                 sharedVersion);
-            return sharedVersion;
+            return (sharedVersion, payloadBytes);
         }
 
         string serverAddress = Plugin.Instance!.Configuration.ServerAddress.TrimEnd('/');
@@ -1556,7 +1638,7 @@ public class LibrarySyncService
         // full rationale at the skip check above).
         mintedVersionsByPayload[payloadKey] = catalogVersion;
 
-        return catalogVersion;
+        return (catalogVersion, payloadBytes);
     }
 
     /// <summary>

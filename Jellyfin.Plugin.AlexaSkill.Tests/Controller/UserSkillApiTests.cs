@@ -352,6 +352,29 @@ public class UserSkillApiTests : PluginTestBase, IDisposable
         Assert.Equal(new List<string> { "lib1", "lib2" }, _config.Users[0].AllowedLibraryIds);
     }
 
+    /// <summary>
+    /// JF-951: the song-phonetic-synonyms toggle round-trips through the PATCH
+    /// endpoint (the config page's user-control surface), both directions, and
+    /// an absent key leaves the flag untouched.
+    /// </summary>
+    [Fact]
+    public async Task UpdateUserSkill_CatalogSongSynonymsEnabled_RoundTrips()
+    {
+        var id = Guid.NewGuid();
+        AddUserDirect(id, "alice");
+        Assert.False(_config.Users[0].CatalogSongSynonymsEnabled);
+
+        await _controller.UpdateUserSkill(id.ToString(), JsonConvert.SerializeObject(new { CatalogSongSynonymsEnabled = true }));
+        Assert.True(_config.Users[0].CatalogSongSynonymsEnabled);
+
+        await _controller.UpdateUserSkill(id.ToString(), JsonConvert.SerializeObject(new { CatalogSongSynonymsEnabled = false }));
+        Assert.False(_config.Users[0].CatalogSongSynonymsEnabled);
+
+        // Absent key: untouched (the JF-946 null/absent rule).
+        await _controller.UpdateUserSkill(id.ToString(), JsonConvert.SerializeObject(new { AllowedLibraryIds = new List<string>() }));
+        Assert.False(_config.Users[0].CatalogSongSynonymsEnabled);
+    }
+
     [Fact]
     public async Task UpdateUserSkill_AllowedLibraryIds_EmptyArray_ClearsToNull()
     {

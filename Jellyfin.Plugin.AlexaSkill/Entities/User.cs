@@ -273,6 +273,23 @@ public class User
     public bool CatalogSongSyncEnabled { get; set; }
 
     /// <summary>
+    /// Gets or sets a value indicating whether the user's song-title catalog
+    /// carries per-locale PHONETIC synonyms (JF-951). DEFAULT FALSE = the
+    /// shipped values-only policy (the 2026-11-23 live finding: 9,458 titles
+    /// with phonetic synonyms exceeded Amazon's 1.5MB effective per-model cap,
+    /// so synonyms are an explicit per-user choice, not a default). Only
+    /// meaningful while <see cref="CatalogSongSyncEnabled"/> is on. When the
+    /// resulting effective model size would exceed the pre-flight guard
+    /// threshold (CatalogManager.ModelSizeSafetyThresholdBytes), the locale's
+    /// model PUT is skipped locally and the skipped locale surfaces in the
+    /// sync's SyncResult instead of failing on Amazon's servers.
+    /// The initializer-free bool keeps the default for configs persisted before
+    /// this field existed (XmlSerializer only overwrites elements present in
+    /// the file, and the compiler default for bool is already false).
+    /// </summary>
+    public bool CatalogSongSynonymsEnabled { get; set; }
+
+    /// <summary>
     /// Gets or sets the timestamp of the last successful catalog sync.
     /// </summary>
     public DateTime? LastCatalogSync { get; set; }

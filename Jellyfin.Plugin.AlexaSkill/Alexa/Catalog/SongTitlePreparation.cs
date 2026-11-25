@@ -84,13 +84,36 @@ internal static class SongTitlePreparation
     /// The catalog's selection job is EXACT-title anchoring; ASR drift after
     /// selection is the handler-side fuzzy chain's job, so dropping song
     /// synonyms trades a redundant defense for the headroom that keeps the
-    /// FULL library under the cap. If phonetic song variants are ever
-    /// reintroduced, they must ride a per-title variant budget computed from
-    /// the payload bytes against the 1.5MB effective-model limit (JF-951's
-    /// pre-flight guard is the home; do not re-stub a policy).
+    /// FULL library under the cap. JF-951 made the policy USER-CONTROLLED: the
+    /// two-argument overload stays the shipped VALUES-ONLY default (the tests
+    /// pin it), and the three-argument overload carries the per-user
+    /// CatalogSongSynonymsEnabled choice (true = the locale's phonetic
+    /// generator, the same family the sibling types ride). A user who opts in
+    /// on a large library is covered by the sync's pre-flight size guard,
+    /// which skips any locale whose effective model size would exceed the cap
+    /// instead of shipping a build Amazon rejects.
     /// </summary>
+    /// <param name="name">The stripped catalog value.</param>
+    /// <param name="locale">The sync locale.</param>
+    /// <returns>The synonym list (empty under the values-only policy).</returns>
     public static List<string> SongSynonyms(string name, string locale) =>
-        new List<string>();
+        SongSynonyms(name, locale, phoneticSynonymsEnabled: false);
+
+    /// <summary>
+    /// The user-controlled form (JF-951): disabled yields the values-only
+    /// shipped behavior (empty); enabled delegates to the locale's phonetic
+    /// generator, producing exactly what
+    /// <see cref="PhoneticSynonymGenerator.GenerateSynonyms"/> produces, so no
+    /// second synonym implementation exists.
+    /// </summary>
+    /// <param name="name">The stripped catalog value.</param>
+    /// <param name="locale">The sync locale.</param>
+    /// <param name="phoneticSynonymsEnabled">The user's per-user toggle.</param>
+    /// <returns>The synonym list.</returns>
+    public static List<string> SongSynonyms(string name, string locale, bool phoneticSynonymsEnabled) =>
+        phoneticSynonymsEnabled
+            ? PhoneticSynonymGenerator.GenerateSynonyms(name, locale)
+            : new List<string>();
 
     /// <summary>
     /// The full pipeline over the raw candidates: strip, junk-exclude, order
