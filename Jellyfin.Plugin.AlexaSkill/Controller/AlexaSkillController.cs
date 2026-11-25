@@ -332,6 +332,19 @@ public class AlexaSkillController : ControllerBase
                     req?.Request?.RequestId);
             }
 
+            // JF-957: the same warning surface for a tolerated unknown
+            // SessionEndedRequest.Reason. Without it the handler's own line would
+            // render only the Error fallback bucket, and the raw wire value Amazon
+            // actually sent would be lost.
+            if (SkillRequestDeserializer.FindToleratedReason(req) is { } toleratedReason)
+            {
+                _logger.LogWarning(
+                    "Tolerated unknown Alexa session-ended reason '{RawWireReason}' (mapped to {FallbackMember}) [RequestId={RequestId}]",
+                    toleratedReason.RawWireReason,
+                    toleratedReason.Reason,
+                    req?.Request?.RequestId);
+            }
+
             // JF-311: Reject requests outside the 150-second timestamp window (replay protection).
             DateTime now = DateTime.UtcNow;
             if (req?.Request?.Timestamp is DateTime ts && !AlexaRequestTimestampPolicy.IsWithinWindow(ts, now))

@@ -16,6 +16,7 @@ using MediaBrowser.Model.Session;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Serialization;
 using Xunit;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Controller;
@@ -32,6 +33,13 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Controller;
 /// so the mapped vocabulary is wire names plus member names, and a value absent from
 /// BOTH (Amazon keeps adding error.type values; the enum has grown 4 to 33 members)
 /// threw "Requested value ... was not found" before JF-931.
+/// The JF-957 tests extend the same seam to SessionEndedRequest.Reason, whose
+/// property-level StringEnumConverter killed unknown reason values the same way.
+/// Its seam is the contract resolver's property-converter replacement (the
+/// RequestConverter news the instance and serializer.Populate consults converters
+/// neither for the root type nor against the property attribute), and its raw wire
+/// value rides an instance-keyed tolerance table instead of a value subclass (an enum
+/// slot cannot carry one).
 /// </summary>
 [Collection("Plugin")]
 public class SkillRequestDeserializerTests : IDisposable
@@ -40,6 +48,11 @@ public class SkillRequestDeserializerTests : IDisposable
     // (and from member-name matching in any casing), so it can never silently start
     // mapping and turn the tolerance test into a known-value test.
     private const string UnknownWireType = "MEDIA_ERROR_IO_LAG";
+
+    // Same discipline for the reason vocabulary (JF-957): a plausible future
+    // SessionEndedRequest.Reason value absent from every Reason member name (and from
+    // member-name matching in any casing).
+    private const string UnknownWireReason = "SESSION_TIMED_OUT";
 
     private readonly Mock<ISessionManager> _sessionManagerMock = new();
     private readonly PluginConfiguration _config = new();
@@ -285,6 +298,24 @@ public class SkillRequestDeserializerTests : IDisposable
       "}";
 
     /// <summary>
+    /// Build a realistic SessionEndedRequest wire body with a parameterized reason
+    /// (JF-957): the reason slot is the carrier under test here, so no error payload.
+    /// </summary>
+    /// <param name="reason">The raw reason wire value.</param>
+    /// <param name="requestId">The request id.</param>
+    /// <returns>The raw body JSON.</returns>
+    private static string SessionEndedBodyWithReason(string reason, string requestId) =>
+        "{" +
+        "\"version\":\"1.0\"," +
+        "\"context\":{}," +
+        "\"request\":{" +
+          "\"type\":\"SessionEndedRequest\"," +
+          "\"requestId\":\"" + requestId + "\"," +
+          "\"reason\":\"" + reason + "\"" +
+        "}" +
+      "}";
+
+    /// <summary>
     /// Build a realistic System.ExceptionEncountered wire body carrying an error payload.
     /// </summary>
     /// <param name="errorType">The raw error.type wire value.</param>
@@ -341,6 +372,217 @@ public class SkillRequestDeserializerTests : IDisposable
         Assert.NotNull(tolerated);
         Assert.Equal("MEDIA_ERROR_X", tolerated!.RawWireType);
         Assert.DoesNotContain("\"", UnknownWireTypeError.DescribeWireType(tolerated));
+    }
+
+    // ==== JF-957: tolerated unknown SessionEndedRequest.Reason values ====
+
+    [Fact]
+    public void UnknownReason_DoesNotKillDeserialization_AndReachesSessionEndedHandler()
+    {
+        string body = SessionEndedBodyWithReason(UnknownWireReason, "req-unknown-reason-1");
+
+        var request = SkillRequestDeserializer.Deserialize(body);
+
+        Assert.NotNull(request);
+        Assert.IsType<SessionEndedRequest>(request!.Request);
+
+        var handler = new SessionEndedRequestHandler(_sessionManagerMock.Object, _config, _loggerFactory);
+        Assert.True(handler.CanHandle(request.Request));
+    }
+
+    [Fact]
+    public void UnknownReason_PreservesRawWireValue_AndBucketsToError()
+    {
+        string body = SessionEndedBodyWithReason(UnknownWireReason, "req-unknown-reason-2");
+
+        var request = SkillRequestDeserializer.Deserialize(body);
+        var endedRequest = Assert.IsType<SessionEndedRequest>(request!.Request);
+        var tolerated = SkillRequestDeserializer.FindToleratedReason(request);
+        Assert.NotNull(tolerated);
+        Assert.Equal(UnknownWireReason, tolerated!.RawWireReason);
+        Assert.Equal(Reason.Error, tolerated.Reason);
+        Assert.Equal(Reason.Error, endedRequest.Reason);
+        Assert.Equal(UnknownWireReason + " (mapped to Error)", UnknownWireTypeReason.DescribeReason(endedRequest));
+    }
+
+    [Fact]
+    public async Task UnknownReason_SessionEndedHandlerRuns_AndCompletesEmpty()
+    {
+        string body = SessionEndedBodyWithReason(UnknownWireReason, "req-unknown-reason-3");
+
+        var request = SkillRequestDeserializer.Deserialize(body);
+        var handler = new SessionEndedRequestHandler(_sessionManagerMock.Object, _config, _loggerFactory);
+
+        var response = await handler.HandleAsync(
+            request!.Request,
+            TestHelpers.CreateTestContext($"jf957-{Guid.NewGuid():N}"),
+            TestHelpers.CreateTestUser(),
+            TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory),
+            CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.Null(response.Response!.OutputSpeech);
+    }
+
+    [Fact]
+    public void KnownReason_MapsToTheSameEnumMember_ThroughTheProductionAndTheNaivePaths()
+    {
+        // The member-name form is in the mapped vocabulary. The production seam must
+        // keep the mapped path byte-identical: the same body deserializes to the same
+        // enum member with and without the tolerant settings.
+        string body = SessionEndedBodyWithReason("Error", "req-known-reason-1");
+
+        var request = SkillRequestDeserializer.Deserialize(body);
+        var endedRequest = Assert.IsType<SessionEndedRequest>(request!.Request);
+        Assert.Equal(Reason.Error, endedRequest.Reason);
+        Assert.Null(SkillRequestDeserializer.FindToleratedReason(request));
+        Assert.Equal("Error", UnknownWireTypeReason.DescribeReason(endedRequest));
+
+        var naive = JsonConvert.DeserializeObject<SkillRequest>(body);
+        var naiveEnded = Assert.IsType<SessionEndedRequest>(naive!.Request);
+        Assert.Equal(Reason.Error, naiveEnded.Reason);
+    }
+
+    [Fact]
+    public void KnownWireFormReason_MapsViaEnumMember_ThroughTheProductionAndTheNaivePaths()
+    {
+        // The EnumMember wire names are the other half of the mapped vocabulary: the
+        // SCREAMING_SNAKE form the Amazon session-ended tables use must keep mapping
+        // through the tolerant seam exactly as it did through the naive path (no
+        // tolerance bucket, no raw-value stash, byte-identical member).
+        string body = SessionEndedBodyWithReason("USER_INITIATED", "req-known-reason-2");
+
+        var request = SkillRequestDeserializer.Deserialize(body);
+        var endedRequest = Assert.IsType<SessionEndedRequest>(request!.Request);
+        Assert.Equal(Reason.UserInitiated, endedRequest.Reason);
+        Assert.Null(SkillRequestDeserializer.FindToleratedReason(request));
+
+        var naive = JsonConvert.DeserializeObject<SkillRequest>(body);
+        var naiveEnded = Assert.IsType<SessionEndedRequest>(naive!.Request);
+        Assert.Equal(Reason.UserInitiated, naiveEnded.Reason);
+    }
+
+    [Fact]
+    public void UnknownReason_NaivePath_Throws_PremiseCanary()
+    {
+        // Pins the premise the tolerance exists for: without the tolerant settings
+        // (the pre-JF-957 call shape) an unknown reason kills the whole request.
+        // If this test ever greens, Alexa.NET gained native tolerance and the
+        // ReasonTolerantConverter seam deserves a simplification pass.
+        string body = SessionEndedBodyWithReason(UnknownWireReason, "req-unknown-reason-4");
+
+        Assert.ThrowsAny<JsonException>(
+            () => JsonConvert.DeserializeObject<SkillRequest>(body));
+    }
+
+    [Fact]
+    public void ExplicitNullReason_IsToleratedNotSilentlyDefaulted()
+    {
+        // Mirrors the JF-931 explicit-null convention: the pre-fix naive contract
+        // failed loudly on "reason": null ("Cannot convert null value to Reason"),
+        // so a silent default with no Warn trace would contradict the fix's principle.
+        string body = "{" +
+            "\"version\":\"1.0\",\"context\":{}," +
+            "\"request\":{" +
+              "\"type\":\"SessionEndedRequest\"," +
+              "\"requestId\":\"req-null-reason\"," +
+              "\"reason\":null" +
+            "}" +
+          "}";
+        var req = SkillRequestDeserializer.Deserialize(body);
+        var endedRequest = Assert.IsType<SessionEndedRequest>(req!.Request);
+        var tolerated = SkillRequestDeserializer.FindToleratedReason(req);
+        Assert.NotNull(tolerated);
+        Assert.Equal("null", tolerated!.RawWireReason);
+        Assert.Equal(Reason.Error, tolerated!.Reason);
+        Assert.Equal(Reason.Error, endedRequest.Reason);
+    }
+
+    [Fact]
+    public void ToleratedReason_IsInstanceKeyed_AndAbsentOnOtherCarriers()
+    {
+        // The raw wire value is keyed on the request instance (an enum slot cannot
+        // carry a subclass like the Error carrier does), so two session-ended
+        // requests tolerate their own values independently and no other request
+        // shape ever reports a tolerated reason.
+        var first = SkillRequestDeserializer.Deserialize(SessionEndedBodyWithReason(UnknownWireReason, "req-keyed-1"));
+        var second = SkillRequestDeserializer.Deserialize(SessionEndedBodyWithReason("NEW_ALEXA_REASON", "req-keyed-2"));
+
+        Assert.Equal(UnknownWireReason, SkillRequestDeserializer.FindToleratedReason(first)!.RawWireReason);
+        Assert.Equal("NEW_ALEXA_REASON", SkillRequestDeserializer.FindToleratedReason(second)!.RawWireReason);
+        Assert.Equal(UnknownWireReason, SkillRequestDeserializer.FindToleratedReason(first)!.RawWireReason);
+
+        var audio = SkillRequestDeserializer.Deserialize(
+            PlaybackFailedBody(UnknownWireType, token: Guid.NewGuid().ToString(), requestId: "req-keyed-audio"));
+        Assert.Null(SkillRequestDeserializer.FindToleratedReason(audio));
+    }
+
+    [Fact]
+    public void MissingReasonKey_StaysNaiveDefault_WithoutTolerance()
+    {
+        // Pinning the missing-key stance: a body with NO reason key never reaches the
+        // tolerant converter (Populate skips absent properties), so the request keeps
+        // the C# enum default UserInitiated with no tolerated entry and no Warn, the
+        // exact pre-fix behavior. The converter's doc names why this is accepted
+        // (Amazon always sends the field; a silent default is indistinguishable from
+        // the wire's own user-initiated semantics). If this ever changes, it is a
+        // conscious decision, not drift.
+        string body = "{" +
+            "\"version\":\"1.0\",\"context\":{}," +
+            "\"request\":{" +
+              "\"type\":\"SessionEndedRequest\"," +
+              "\"requestId\":\"req-missing-reason\"" +
+            "}" +
+          "}";
+        var req = SkillRequestDeserializer.Deserialize(body);
+        var endedRequest = Assert.IsType<SessionEndedRequest>(req!.Request);
+        Assert.Equal(Reason.UserInitiated, endedRequest.Reason);
+        Assert.Null(SkillRequestDeserializer.FindToleratedReason(req));
+    }
+
+    [Fact]
+    public void ToleratedReasonDrain_GuardedAgainstDuplicateSetValue()
+    {
+        // The drain must be failure-tolerant: the current no-collision guarantee rests
+        // on two external behaviors (JObject.Load collapsing duplicate keys, one fresh
+        // instance per Populate), so the insert is guarded (remove-then-add). A future
+        // Alexa.NET change that populated one request instance twice must land as
+        // last-write-wins, never as an ArgumentException killing the request at
+        // deserialization, the exact death class this fix exists to eliminate.
+        var request = new SessionEndedRequest { Reason = Reason.Error };
+        var provider = new TolerantReasonValueProvider(new NoopValueProvider());
+        var wrapper = new SkillRequest { Request = request };
+
+        ReasonTolerantConverter.PendingUnknownWireReason = new UnknownWireTypeReason("FIRST_REASON", Reason.Error);
+        provider.SetValue(request, Reason.Error);
+        ReasonTolerantConverter.PendingUnknownWireReason = new UnknownWireTypeReason("SECOND_REASON", Reason.Error);
+        provider.SetValue(request, Reason.Error);
+
+        // Each SetValue drains the stash it just drained; the surviving keyed value is
+        // the last write, and the thread stash is clean for the next deserialization.
+        Assert.Null(ReasonTolerantConverter.PendingUnknownWireReason);
+        Assert.Equal("SECOND_REASON", SkillRequestDeserializer.FindToleratedReason(wrapper)!.RawWireReason);
+    }
+
+    /// <summary>
+    /// A do-nothing inner value provider for driving the tolerant drain directly: the
+    /// tests here exercise the wrapper's stash-drain contract, not the reflection set.
+    /// </summary>
+    private sealed class NoopValueProvider : IValueProvider
+    {
+        /// <inheritdoc/>
+        public object? GetValue(object target) => null;
+
+        /// <inheritdoc/>
+        public void SetValue(object target, object? value)
+        {
+        }
+    }
+
+    [Fact]
+    public void DescribeReason_RendersUnknownSentinelForAbsentRequest()
+    {
+        Assert.Equal("UNKNOWN", UnknownWireTypeReason.DescribeReason(null));
     }
 
     public class SliceBodyExcerptTests
