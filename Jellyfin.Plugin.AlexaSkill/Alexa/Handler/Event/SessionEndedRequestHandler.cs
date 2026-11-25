@@ -4,6 +4,7 @@ using Alexa.NET;
 using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
@@ -41,11 +42,15 @@ public class SessionEndedRequestHandler : BaseHandler
     public override Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
         SessionEndedRequest sessionEnded = (SessionEndedRequest)request;
+        // DescribeReason renders a tolerated unknown reason (JF-957) as the raw wire
+        // value with its fallback bucket, and a known reason as the member name
+        // (byte-identical to Reason.ToString()), so the raw value Amazon actually sent
+        // survives in these lines instead of only the Error bucket.
         if (sessionEnded.Error != null)
         {
             Logger.LogWarning(
                 "Session ended with error: {Reason} - {ErrorType}: {ErrorMessage} [RequestId={RequestId}]",
-                sessionEnded.Reason,
+                UnknownWireTypeReason.DescribeReason(sessionEnded),
                 sessionEnded.Error.Type,
                 sessionEnded.Error.Message,
                 request.RequestId);
@@ -54,7 +59,7 @@ public class SessionEndedRequestHandler : BaseHandler
         {
             Logger.LogInformation(
                 "Session ended: {Reason} [RequestId={RequestId}]",
-                sessionEnded.Reason,
+                UnknownWireTypeReason.DescribeReason(sessionEnded),
                 request.RequestId);
         }
 
