@@ -3,10 +3,10 @@ id: JF-968
 title: >-
   Surface profile-nlu consideredIntents on wrong selections (self-diagnosing red
   rows)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-11-25 16:05'
-updated_date: '2026-11-25 16:26'
+updated_date: '2026-11-25 17:20'
 labels:
   - nlu-tooling
   - triage
@@ -30,6 +30,18 @@ Today the considered list is parsed as NAMES ONLY in the lab parser: scripts/nlu
 - [ ] #6 NLU test fixtures updated if interaction model changed
 - [ ] #7 E2E test added for new intent or handler logic
 - [ ] #8 Locale response strings added to all 17 locales
-- [ ] #9 /simplify passed (no blocking cleanups remaining)
-- [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
+- [x] #9 /simplify passed (no blocking cleanups remaining)
+- [x] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+DoD notes: pure-Python change (scripts/nlu-lab + tests/integration + scripts/nlu_static/ledger.py); the dotnet and C#-specific DoD items do not apply; python suites are the test evidence (605 green in-worktree, 621 on merged main, collection 1498 intact, both re-run by the orchestrator). /simplify: four parallel review agents, findings applied (extractor moved home killing the shim/bootstrap/except-all; single extraction per row; dead _considered_names deleted; guard ladder flattened; non-dict slot degrades to None; load_sessions read default; redundant defaultings dropped). code-review high ran twice on the branch; the second round's five findings all applied (multi-value matches, slot-convention documentation, exception-carried extraction, hardened slot walk, stale docstring).
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Capture slice landed on main (merge after two review rounds): considered_hypotheses lives module-level in smapi_client (the layer every consumer imports; smapi_ops re-exports it on its existing import, no cycle, no lazy shim, no silent except-all), run files carry the full hypotheses with backward-compatible loading, the ledger row gained a dedicated full-fidelity considered column with the read-side default owned by load_sessions, the suite parser returns considered and the no-selection SmapiError carries the computed list (one extraction per row on every branch), multi-value ER matches keep the whole set (canonical = Values[0] per JF-659, matches = full list for the JF-690/JF-885 class), the selected-slots walk degrades on malformed shapes instead of aborting a battery. 605+ python tests green, suite collection intact (1498). Deferred to the batch-parallel slice (per the scope split): red-report surfacing, triage-doc updates, any considered-based triage automation (evaluate after 2-3 live suites).
+<!-- SECTION:FINAL_SUMMARY:END -->
