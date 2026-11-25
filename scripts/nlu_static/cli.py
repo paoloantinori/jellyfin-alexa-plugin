@@ -89,14 +89,48 @@ def _fail(err: Exception) -> int:
 
 
 def cmd_snapshot(args: argparse.Namespace) -> int:
-    """Fetch item names from a Jellyfin server and write a catalog snapshot."""
+    """Write a catalog snapshot: item names from a Jellyfin server by default,
+    or the authoritative plugin export with --from-plugin."""
+    # The producer-specific flag checks run BEFORE the connection resolution,
+    # so a mis-flagged invocation reports the actionable error first (the
+    # connection error would otherwise mask the flag diagnostics).
+    if args.from_plugin:
+        # The name-level --types subset has no meaning for the plugin
+        # export: the endpoint emits whatever the sync would upload.
+        if args.types:
+            return _fail(
+                ValueError(
+                    "--types and --from-plugin are mutually exclusive: "
+                    "the plugin export carries whatever the sync uploads"
+                )
+            )
+        if not args.user_id:
+            return _fail(
+                ValueError(
+                    "--from-plugin requires --user-id (the configured plugin user's GUID)"
+                )
+            )
+    elif args.locale or args.user_id:
+        # --user-id is a plugin-export flag: a forgotten --from-plugin must
+        # refuse here (exit 2), not silently produce the name-level snapshot.
+        misplaced = "--locale" if args.locale else "--user-id"
+        return _fail(
+            ValueError(
+                f"{misplaced} belongs to the plugin export and only applies with --from-plugin"
+            )
+        )
     try:
         url, api_key = producer_jellyfin.resolve_connection(args.url, args.api_key)
     except ValueError as err:
         return _fail(err)
     try:
-        item_types = tuple(args.types) if args.types else None
-        snapshot = producer_jellyfin.build_snapshot(url, api_key, item_types=item_types)
+        if args.from_plugin:
+            snapshot = producer_jellyfin.build_snapshot_from_plugin(
+                url, api_key, args.user_id, locale=args.locale
+            )
+        else:
+            item_types = tuple(args.types) if args.types else None
+            snapshot = producer_jellyfin.build_snapshot(url, api_key, item_types=item_types)
     except Exception as err:  # the HTTP layer raises many shapes; redact them all
         return _fail(ValueError(producer_jellyfin.redact(str(err), api_key)))
     _print_json(snapshot, args.out)
@@ -133,22 +167,36 @@ def cmd_effective(args: argparse.Namespace) -> int:
 
 
 def _register_snapshot(subparsers: argparse._SubParsersAction) -> None:
-    """Register the snapshot subcommand (JF-954 subtask 8 adds --from-plugin here)."""
+    """Register the snapshot subcommand with its two producers (JF-954.1 names,
+    JF-954.8 --from-plugin)."""
     parser = subparsers.add_parser(
         "snapshot",
-        help="fetch item names from Jellyfin and write a catalog snapshot",
+        help="write a catalog snapshot: item names from Jellyfin (default) or the authoritative plugin export (--from-plugin)",
     )
     parser.add_argument("--url", help="Jellyfin base URL (default: env JELLYFIN_URL)")
     parser.add_argument(
         "--api-key",
-        help="Jellyfin API key (default: env JELLYFIN_API_KEY); sent only as the ApiKey query parameter and never printed",
+        help="Jellyfin API key (default: env JELLYFIN_API_KEY); sent only in the Authorization MediaBrowser Token header and never printed",
     )
     parser.add_argument(
         "--types",
         nargs="+",
         metavar="ITEM_TYPE",
         choices=sorted(producer_jellyfin.ITEM_TYPE_TO_SLOT_TYPE),
-        help="subset of Jellyfin item types to fetch (default: all of Series, MusicArtist, MusicAlbum, Movie, AudioBook, Audio)",
+        help="name-level producer only: subset of Jellyfin item types to fetch (default: all of Series, MusicArtist, MusicAlbum, Movie, AudioBook, Audio)",
+    )
+    parser.add_argument(
+        "--from-plugin",
+        action="store_true",
+        help="authoritative producer (JF-954.8): fetch the snapshot from the plugin export endpoint, which builds the exact payloads the sync uploads; needs --user-id and an admin API key",
+    )
+    parser.add_argument(
+        "--user-id",
+        help="authoritative producer only: the configured plugin user's GUID (required with --from-plugin)",
+    )
+    parser.add_argument(
+        "--locale",
+        help="authoritative producer only: restrict the export to one locale, for example es-ES",
     )
     parser.add_argument("--out", help="write the snapshot JSON here instead of stdout")
     parser.set_defaults(func=cmd_snapshot)

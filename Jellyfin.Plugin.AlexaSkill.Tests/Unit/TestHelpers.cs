@@ -473,6 +473,71 @@ internal static class TestHelpers
     }
 
     /// <summary>
+    /// The ONE owner of the CatalogController stored-payload cache field
+    /// lookup (JF-954.8; the per-test reset in PluginCollection.ClearCatalogPayloadCache
+    /// reads through <see cref="TryGetCatalogPayloadCache"/> too, so the field
+    /// name has exactly one owner in the test assembly). The per-test reset
+    /// empties the cache, so its contents are THIS test's sync/export
+    /// activity alone.
+    /// </summary>
+    /// <returns>The cache dictionary, or null when the field is missing or
+    /// reshaped (the caller decides whether that is best-effort or loud).
+    /// </returns>
+    internal static System.Collections.IDictionary? TryGetCatalogPayloadCache()
+    {
+        var cacheField = typeof(global::Jellyfin.Plugin.AlexaSkill.Controller.CatalogController).GetField(
+            "CatalogCache", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+        return cacheField?.GetValue(null) as System.Collections.IDictionary;
+    }
+
+    /// <summary>
+    /// The loud form of <see cref="TryGetCatalogPayloadCache"/> for the pins
+    /// that assert against the cache's contents.
+    /// </summary>
+    /// <returns>The cache dictionary.</returns>
+    private static System.Collections.IDictionary CatalogPayloadCache()
+    {
+        System.Collections.IDictionary? cache = TryGetCatalogPayloadCache();
+        Assert.True(cache != null, "CatalogController.CatalogCache must still exist (this pin's lookup target)");
+        return cache!;
+    }
+
+    /// <summary>
+    /// Reads the catalog payload the sync stored for SMAPI to fetch (the
+    /// static CatalogController cache), selecting the entry that contains the
+    /// given marker.
+    /// </summary>
+    /// <param name="marker">A string the wanted payload carries verbatim.</param>
+    /// <returns>The stored payload JSON.</returns>
+    internal static string ReadStoredCatalogPayloadContaining(string marker)
+    {
+        System.Reflection.PropertyInfo? payloadProp = null;
+        foreach (System.Collections.DictionaryEntry entry in CatalogPayloadCache())
+        {
+            // Every entry is the same CacheEntry shape; resolve and pin the
+            // Payload property once, then scan for the marker.
+            payloadProp ??= entry.Value!.GetType().GetProperty("Payload");
+            Assert.True(payloadProp != null, "CatalogController.CacheEntry must still expose Payload (this pin's lookup target)");
+            string payload = (string)payloadProp.GetValue(entry.Value)!;
+            if (payload.Contains(marker, StringComparison.Ordinal))
+            {
+                return payload;
+            }
+        }
+
+        throw new Xunit.Sdk.XunitException($"No stored catalog payload contains the marker '{marker}'");
+    }
+
+    /// <summary>
+    /// The stored-payload cache's entry count, read through
+    /// <see cref="CatalogPayloadCache"/> so a cache reshape breaks ONE assert.
+    /// A zero count after an operation proves that operation registered
+    /// nothing in the single-fetch payload cache.
+    /// </summary>
+    /// <returns>The number of entries currently stored.</returns>
+    internal static int StoredCatalogPayloadCount() => CatalogPayloadCache().Count;
+
+    /// <summary>
     /// JF-505: a screen-capable device (SupportedInterfaces reports the VideoApp key,
     /// the Echo Show shape).
     /// </summary>
