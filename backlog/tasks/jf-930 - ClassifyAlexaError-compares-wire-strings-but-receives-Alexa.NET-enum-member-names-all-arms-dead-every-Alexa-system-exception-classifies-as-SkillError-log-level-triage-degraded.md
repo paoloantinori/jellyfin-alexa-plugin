@@ -4,10 +4,10 @@ title: >-
   ClassifyAlexaError compares wire strings but receives Alexa.NET enum member
   names: all arms dead, every Alexa system exception classifies as SkillError
   (log-level triage degraded)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-11-20 09:12'
-updated_date: '2026-11-24 18:42'
+updated_date: '2026-11-25 09:45'
 labels: []
 dependencies: []
 references:
@@ -45,13 +45,15 @@ Test note: StructuredLoggingTests asserts ExceptionHandler logs LogLevel.Critica
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
-JF-929 code-review round (2026-11-20) folded two sibling findings into this same vocabulary/formatting cluster: (1) three divergent hand-rolled idioms now format the same Alexa Error shape in log lines (ExceptionHandler.cs:60 and SessionEndedRequestHandler.cs:49 pass the raw enum unguarded; PlaybackFailedEventHandler.cs now uses guarded ToString() + UNKNOWN sentinel); a tiny shared formatter (or uniform arg-passing style across the three sites) removes the drift the next handler would copy. (2) The logged ErrorType renders the Alexa.NET enum member name (MediaServiceUnknown), never the Amazon wire vocabulary (MEDIA_ERROR_UNKNOWN) that Amazon's error tables use, so log-to-docs correlation during triage requires a mental mapping; logging the wire form (or both) would make the lines self-correlating. Both live in the same files/fix as the dead-arm switch.
+gate-exempt: /simplify on the review-round delta only (six review-driven fixes: a comment rewrite, a generic builder adoption, a collision test, a severity change, a dead-code removal, a rationale correction); the worker's own 4-agent /simplify covered the base 5b2b0c1b; /code-review evidence complete (worker high + orchestrator medium, all findings applied) in this transcript.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
 SCOPE NOTE from the JF-931 round (2026-11-24, commit 878d3871): the tolerated-unknown rendering folds into this task's shared-formatter scope. ExceptionHandler and SessionEndedRequestHandler still render the fallback enum member (ErrorType.InternalError) for an unknown error.type wire value, and ClassifyAlexaError sees the bucket member name rather than the raw wire string; the controller's Warning line carries the raw wire value for all three Error carriers meanwhile (that part shipped with JF-931). When this task fixes the member-name-vs-wire-string comparison, also give the unknown-unknown path one shared formatter that prefers RawWireType when present.
+
+Shipped 2026-11-25 via the merge of worktree-agent-a1f74e0d958cea82e (base 5b2b0c1b + review round 6512d3d8). ClassifyAlexaError now switches on the ErrorType ENUM (ground truth: 33 members, every one with an EnumMember wire name, NO timeout-shaped member; three of the four dead-switch strings have no enum member at all): TransientBackend/Warning covers 9 device-communication and service-transient members, everything else falls to SkillError through a discard that now fires by design; Timeout/UserError documented unreachable with a sweep test forcing a deliberate decision on any future member. The ONE shared Error formatter: UnknownWireTypeError.DescribeWireType renders the EnumMember WIRE form (via the generic BuildWireNamesByMember reflection map) for every Error-bearing log line — PlaybackFailed, SessionEnded (both args, incl. the JF-957 Reason side whose wire form arrived with this round), and ExceptionHandler, which was the last raw-enum site; tolerated unknowns keep RAW (mapped to InternalError); null payloads render UNKNOWN. Bonus hardening: an explicit "error": null payload (tolerated by the JF-931 converter) used to NRE on the classify line — now null-guards, classifies InternalError, renders UNKNOWN, and logs WARNING not Critical (a degenerate shape is not a real fault; the noise-vs-Critical fix was the review round's finding 4). Dead code removed: ErrorCategoryInfo.LocaleKey (zero production callers; class doc no longer claims locale strings). Rationale corrected: RateLimitExceeded stays TransientBackend/Warning but the arm comment says the condition self-resolves under backoff (immediate retry amplifies throttling). Collision pin: all 33 ErrorType + 3 Reason wire renderings distinct. Changed test expectations justified: five StructuredLoggingTests pins moved from member names to wire forms (the wire form is the fix's own output; log-LEVEL expectations untouched, INTERNAL_ERROR -> SkillError -> Critical holds); the removed string theory asserted the bug's own inputs. The two pre-existing CS0105 duplicate-usings in SongNgramIndexServiceTests were also removed, making the build literally 0-warning. 6360/6360 both TFMs; merged main builds clean. Gates: worker /simplify (4 agents) + /code-review high (3 applied, 1 justified) in its session; orchestrator /code-review medium (6 findings, all applied in 6512d3d8).
 <!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
