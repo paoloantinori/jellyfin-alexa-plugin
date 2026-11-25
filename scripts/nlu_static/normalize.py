@@ -80,6 +80,27 @@ def is_whitespace_tokenized(locale: str) -> bool:
     return locale not in NON_WHITESPACE_TOKENIZED_LOCALES
 
 
+def iter_segments(sample: str):
+    """Yield the sample's parts as ("lit", text) / ("slot", name), in order.
+
+    The ONE placeholder walk: compile_pattern (patterns.py) and carrier_key
+    (carriers.py) both consume this generator, so the lit/slot segmentation
+    of a sample can never drift between the pattern layer and the carrier
+    layer (empty literals are skipped; both consumers tokenize literals
+    themselves, so an empty segment tokenizes to nothing either way).
+    """
+    cursor = 0
+    for match in SLOT_PLACEHOLDER_RE.finditer(sample):
+        literal = sample[cursor : match.start()]
+        if literal:
+            yield ("lit", literal)
+        yield ("slot", match.group(0)[1:-1])
+        cursor = match.end()
+    tail = sample[cursor:]
+    if tail:
+        yield ("lit", tail)
+
+
 def skip_line(locale: str) -> str | None:
     """The mandated SKIP line for a locale word tokens cannot serve, or None.
 

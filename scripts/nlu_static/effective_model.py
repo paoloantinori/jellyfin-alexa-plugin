@@ -46,6 +46,19 @@ def is_catalog_type(type_name: str) -> bool:
     return type_name in _CATALOG_TYPE_SET
 
 
+def slot_type_of(name: str, slots) -> str:
+    """The declared type of one slot name, or the empty string.
+
+    The ONE declared-slot-type lookup: pattern compilation (patterns.py)
+    and the carriers slot evidence (carriers.py) resolve a placeholder to
+    its declared type through this instead of each writing the scan.
+    """
+    for slot in slots:
+        if slot.name == name:
+            return slot.type
+    return ""
+
+
 def entry_texts(vocab: SlotTypeVocab) -> list[str]:
     """Every canonical value and synonym of one type, in entry order.
 

@@ -24,10 +24,12 @@ _SCRIPTS_DIR = Path(__file__).resolve().parents[1]
 if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 
+from nlu_static import carriers as nlu_carriers  # noqa: E402
 from nlu_static import fixture_vocab, ledger, matcher, producer_jellyfin, selection, token_collisions, triage as nlu_triage  # noqa: E402
 from nlu_static import graph as nlu_graph  # noqa: E402
 from nlu_static.effective_model import (  # noqa: E402
     EffectiveModel,
+    SNAPSHOT_GLOB_KEY,
     build_effective_model,
     load_snapshot,
 )
@@ -902,6 +904,167 @@ def _register_identity(subparsers: argparse._SubParsersAction) -> None:
     parser.set_defaults(func=cmd_identity)
 
 
+def _carriers_candidates(args: argparse.Namespace) -> list[dict] | None:
+    """Collect the candidate rows from --sample/--intent/--locale/--all and --file.
+
+    Each candidate is ``{"locale": str | None, "intent": str | None,
+    "sample": str}``; a None locale expands to every committed locale.
+    Returns None after printing a refusal.
+    """
+    candidates: list[dict] = []
+    if args.file and (args.intent or args.locale or args.all):
+        _fail(ValueError(
+            "--intent/--locale/--all apply to inline --sample candidates only; "
+            "file rows carry their own columns"))
+        return None
+    if args.sample:
+        if not args.locale and not args.all:
+            _fail(
+                ValueError(
+                    "inline samples need --locale LOCALE or --all "
+                    "(a candidate without a locale has nowhere to live)"
+                )
+            )
+            return None
+        locale = None if args.all else args.locale
+        for sample in args.sample:
+            candidates.append({"locale": locale, "intent": args.intent, "sample": sample})
+    if args.file:
+        try:
+            candidates.extend(_load_candidate_file(args.file))
+        except (OSError, ValueError) as err:
+            _fail(err)
+            return None
+    if not candidates:
+        _fail(ValueError("no candidates: pass --sample (repeatable) or --file"))
+        return None
+    return candidates
+
+
+def _load_candidate_file(path: str) -> list[dict]:
+    """Read candidates from a TSV file (locale, intent, sample).
+
+    The intent column may be empty (unnamed candidate). A locale of ``*``
+    expands to every committed locale, the snapshot file's own glob
+    convention, and is normalized to None here so cmd_carriers tests only
+    ``locale is None``. Comment (#) and blank lines are skipped.
+    """
+    text = Path(path).read_text(encoding="utf-8")
+    rows: list[dict] = []
+    for line_no, line in enumerate(text.splitlines(), start=1):
+        if not line.strip() or line.strip().startswith("#"):
+            continue
+        # Split BEFORE stripping so an empty first or last column stays
+        # countable (a whole-line strip would eat "\tA\tb" down to "A\tb"
+        # and refuse a visibly three-column row with a bogus count).
+        columns = line.split("\t")
+        if len(columns) != 3:
+            raise ValueError(
+                f"{path}: line {line_no} must have three tab-separated columns "
+                f"(locale, intent, sample); got {len(columns)}"
+            )
+        locale, intent, sample = (column.strip() for column in columns)
+        if locale == SNAPSHOT_GLOB_KEY:
+            locale = None
+        rows.append({"locale": locale or None, "intent": intent or None, "sample": sample})
+    return rows
+
+
+def _carriers_row_text(row: dict) -> list[str]:
+    """The human lines for one verdict row (the text-format table)."""
+    lines = [
+        f"[{row['locale']}] {row['verdict']} sample='{row['sample']}'"
+        + (f" intent={row['intent']}" if row["intent"] else "")
+    ]
+    if row["present"] is not None:
+        lines.append(f"    existing: {row['present']['sample']} @ {row['present']['intent']}")
+    for hit in row["same_carrier"]:
+        lines.append(f"    {hit['sample']} @ {hit['intent']}")
+        for slot in hit["slots"]:
+            kind = "CATALOG" if slot["catalog"] else "not catalog-backed"
+            lines.append(f"        slot {slot['name']}: {slot['type']} ({kind})")
+    return lines
+
+
+def cmd_carriers(args: argparse.Namespace) -> int:
+    """Report where candidate samples already exist, on which intent and carrier."""
+    candidates = _carriers_candidates(args)
+    if candidates is None:
+        return 2
+    all_locales = fixture_vocab.committed_locales()
+    indexes: dict[str, dict] = {}
+    intent_names: dict[str, set] = {}
+    rows: list[dict] = []
+    for candidate in candidates:  # candidates in input order
+        locale = candidate["locale"]
+        locales = all_locales if locale is None else [locale]
+        for name in sorted(locales):  # locales sorted within a candidate
+            if name not in indexes:
+                # No ja-JP skip here: the carrier comparison is character-level
+                # for the non-whitespace-tokenized locales (carriers.py), the
+                # fixtures subcommand's precedent, so every committed locale
+                # is answerable. An unreadable model is still a hard refusal.
+                model = _build_model_or_fail(name, None)
+                if model is None:
+                    return 2
+                indexes[name] = nlu_carriers.build_index(name, model)
+                intent_names[name] = {i.name for i in model.intents}
+            if candidate["intent"] is not None and candidate["intent"] not in intent_names[name]:
+                # A typo'd intent silently kills the PRESENT check (the same
+                # "a typo must never read as all-clean" rule as the locale).
+                _fail(ValueError(
+                    f"{name}: unknown intent {candidate['intent']!r} in the committed model"))
+                return 2
+            rows.append(
+                nlu_carriers.analyze_candidate(
+                    name, candidate["intent"], candidate["sample"], indexes[name]
+                )
+            )
+    if args.format == "text":
+        lines = [line for row in rows for line in _carriers_row_text(row)]
+        if args.out:
+            Path(args.out).write_text("\n".join(lines) + "\n", encoding="utf-8")
+        else:
+            for line in lines:
+                print(line)
+    else:
+        _print_json(rows, args.out)
+    return 0
+
+
+def _register_carriers(subparsers: argparse._SubParsersAction) -> None:
+    """Register the carriers subcommand (JF-970)."""
+    parser = subparsers.add_parser(
+        "carriers",
+        help="report whether candidate samples already exist, on which intent and carrier",
+    )
+    parser.add_argument(
+        "--sample",
+        action="append",
+        metavar="SAMPLE",
+        help="a candidate sample, for example 'play some {genre}' (repeatable)",
+    )
+    parser.add_argument(
+        "--intent",
+        help="the candidate's intent; PRESENT is only checked when named (default: report SAME_CARRIER/ABSENT across all intents)",
+    )
+    locale_group = parser.add_mutually_exclusive_group()
+    locale_group.add_argument("--locale", help="single Alexa locale for the inline samples, for example en-US")
+    locale_group.add_argument("--all", action="store_true", help="expand the inline samples across every committed locale")
+    parser.add_argument(
+        "--file",
+        help="candidate file: a TSV of locale<TAB>intent<TAB>sample rows (an empty intent column means unnamed; # comments and blank lines skipped; a locale of * expands to every committed locale)",
+    )
+    parser.add_argument(
+        "--format",
+        choices=("json", "text"),
+        default="json",
+        help="output format (default: json, one verdict row per candidate per locale)",
+    )
+    parser.add_argument("--out", help="write the JSON output here instead of stdout")
+    parser.set_defaults(func=cmd_carriers)
+
+
 def cmd_select(args: argparse.Namespace) -> int:
     """Print the change-driven NLU row selection against a base git ref."""
     locales = _resolve_graph_locales(args)
@@ -977,6 +1140,7 @@ def main(argv: list[str] | None = None) -> int:
     _register_triage(subparsers)
     _register_identity(subparsers)
     _register_select(subparsers)
+    _register_carriers(subparsers)
     args = parser.parse_args(argv)
     return int(args.func(args))
 
