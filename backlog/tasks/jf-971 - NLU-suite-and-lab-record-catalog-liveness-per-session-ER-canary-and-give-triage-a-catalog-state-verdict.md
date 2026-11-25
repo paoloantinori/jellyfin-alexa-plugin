@@ -3,9 +3,10 @@ id: JF-971
 title: >-
   NLU suite and lab: record catalog liveness per session (ER canary) and give
   triage a catalog-state verdict
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-11-25 16:24'
+updated_date: '2026-11-25 18:00'
 labels:
   - nlu-tooling
   - triage
@@ -27,12 +28,24 @@ The results ledger identifies a session by the committed model sha and the live 
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Each live suite session and each nlu-lab --live run records, per exercised locale and per wired catalog type, the canary value and whether ER resolved on the catalog authority, at start and at end
-- [ ] #2 ledger stats does not count a pair toward flips_same_model when the catalog state of the two sessions differs or is unknown; the per-session output shows the catalog state
-- [ ] #3 triage classifies red rows of catalog-slotted intents in a session with a failed or changed canary under a dedicated verdict placed before FIXTURE_VOCAB, with unit tests for the precedence
-- [ ] #4 A session without a snapshot records the canary as not-run with a reason; no silent skip
-- [ ] #5 docs/nlu-static-analysis.md documents the fields and the reading rule
+- [x] #1 Each live suite session and each nlu-lab --live run records, per exercised locale and per wired catalog type, the canary value and whether ER resolved on the catalog authority, at start and at end
+- [x] #2 ledger stats does not count a pair toward flips_same_model when the catalog state of the two sessions differs or is unknown; the per-session output shows the catalog state
+- [x] #3 triage classifies red rows of catalog-slotted intents in a session with a failed or changed canary under a dedicated verdict placed before FIXTURE_VOCAB, with unit tests for the precedence
+- [x] #4 A session without a snapshot records the canary as not-run with a reason; no silent skip
+- [x] #5 docs/nlu-static-analysis.md documents the fields and the reading rule
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+DoD notes: pure-Python change; dotnet/C# DoD items do not apply. /simplify and code-review high ran inside the worker's transcript (10 simplify findings applied, 5 skipped-as-marginal; 8 code-review findings: 3 code fixes, 2 documented, 1 wording, 1 restructure, 1 out-of-scope filed as JF-973); the orchestrator independently re-ran the full suites (674 green in worktree and on merged main), re-read the load-bearing rules (entry_stable_canonical's stricter Gate-2 comparison, the vacuous-evidence guard, the unknown-probe neutrality) and removed the reviewer scratch file before merge. Deviation from AC #2's letter, in the stricter direction and documented: failed-but-identical pairs are ALSO excluded from flips_same_model (Gate 2: a canary-failed session's flips are not trainer noise even against another failed session).
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Catalog ER canary landed on main: scripts/nlu_static/catalog_canary.py is the ONE definition (probe planner over wired catalog types from the snapshot, SMAPI-paced runner, stable/changed/failed/unknown entry semantics per Gate 2); the suite records catalog_state blocks on locale_start and session_end (never silent: every not_run carries a named reason, NLU_CANARY=0 and missing-snapshot both explicit); nlu-lab --live runs carry the same blocks at both endcaps; flips_same_model now requires a proven-clean-equal catalog state on both sessions (all pre-JF-971 sessions read UNKNOWN, so KNOWN_FLAKY stays dormant until NLU_CANARY_SNAPSHOT is armed: the operational consequence is documented); triage gained the eighth verdict CATALOG_STATE after UNSTABLE_BUILD and before FIXTURE_VOCAB with precedence pinned by tests. 53 new tests, 674 total green (re-run by the orchestrator in-worktree and on merged main), suite collection intact. The pre-existing --live deploy fall-through double-run is filed as JF-973.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
@@ -44,6 +57,6 @@ The results ledger identifies a session by the committed model sha and the live 
 - [ ] #6 NLU test fixtures updated if interaction model changed
 - [ ] #7 E2E test added for new intent or handler logic
 - [ ] #8 Locale response strings added to all 17 locales
-- [ ] #9 /simplify passed (no blocking cleanups remaining)
-- [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
+- [x] #9 /simplify passed (no blocking cleanups remaining)
+- [x] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
