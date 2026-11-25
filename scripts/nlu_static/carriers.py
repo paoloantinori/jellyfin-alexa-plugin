@@ -22,9 +22,14 @@ and ``SLOT_PLACEHOLDER_RE``); no second normalizer lives here.
 
 from __future__ import annotations
 
-from nlu_static.effective_model import EffectiveModel, is_catalog_type
+from nlu_static.effective_model import (
+    EffectiveModel,
+    is_catalog_type,
+    slot_type_of,
+)
 from nlu_static.normalize import (
     SLOT_PLACEHOLDER_RE,
+    iter_segments,
     is_whitespace_tokenized,
     normalize_text,
     tokenize,
@@ -52,12 +57,11 @@ def carrier_key(sample: str, locale: str) -> tuple[str, ...]:
     """
     if is_whitespace_tokenized(locale):
         parts: list[str] = []
-        cursor = 0
-        for match in SLOT_PLACEHOLDER_RE.finditer(sample):
-            parts.extend(tokenize(sample[cursor : match.start()]))
-            parts.append(CARRIER_SLOT_TOKEN)
-            cursor = match.end()
-        parts.extend(tokenize(sample[cursor:]))
+        for kind, value in iter_segments(sample):
+            if kind == "lit":
+                parts.extend(tokenize(value))
+            else:
+                parts.append(CARRIER_SLOT_TOKEN)
         return tuple(parts)
     reduced = SLOT_PLACEHOLDER_RE.sub(CARRIER_SLOT_TOKEN, normalize_text(sample))
     # Whitespace is meaningless in a locale whose samples carry no word
@@ -76,47 +80,60 @@ def slot_infos(sample: str, intent) -> list[dict]:
     infos: list[dict] = []
     for match in SLOT_PLACEHOLDER_RE.finditer(sample):
         name = match.group(0)[1:-1]
-        type_name = ""
-        for slot in intent.slots:
-            if slot.name == name:
-                type_name = slot.type
-                break
+        type_name = slot_type_of(name, intent.slots)
         infos.append(
             {"name": name, "type": type_name, "catalog": is_catalog_type(type_name)}
         )
     return infos
 
 
+def build_index(locale: str, model: EffectiveModel) -> dict:
+    """The carrier -> owners index of one locale's effective model.
+
+    Maps every existing sample's carrier key to its ``(intent, sample)``
+    owners in model order (intents name-sorted, samples in model order),
+    so a lookup pass computes each sample's carrier exactly once per
+    invocation instead of once per candidate (the review round measured
+    ~98% of a 50-candidate run inside redundant re-tokenization).
+    ``analyze_candidate`` consumes this; ``slot_infos`` stays lazy on the
+    hits only, so the index build does not precompute slot evidence.
+    """
+    index: dict[tuple[str, ...], list] = {}
+    for intent in model.intents:
+        for existing in intent.samples:
+            index.setdefault(carrier_key(existing, locale), []).append(
+                (intent, existing)
+            )
+    return index
+
+
 def analyze_candidate(
-    locale: str, intent_name: str | None, sample: str, model: EffectiveModel
+    locale: str, intent_name: str | None, sample: str, index: dict
 ) -> dict:
-    """One candidate's verdict row against one locale's effective model.
+    """One candidate's verdict row against one locale's carrier index.
 
     The row carries the candidate echo, the verdict, the PRESENT evidence
     (the named intent's first identical-carrier sample, in model order)
     and EVERY same-carrier hit of the other intents, each with owner
     intent, sample text and per-placeholder slot name/type. Both lists
-    are deterministic (model intents are name-sorted; hits are sorted by
-    intent then sample).
+    are deterministic (the index preserves model order; hits are sorted
+    by intent then sample).
     """
     key = carrier_key(sample, locale)
     present: dict | None = None
     hits: list[dict] = []
-    for intent in model.intents:
-        for existing in intent.samples:
-            if carrier_key(existing, locale) != key:
-                continue
-            if intent_name is not None and intent.name == intent_name:
-                if present is None:
-                    present = {"intent": intent.name, "sample": existing}
-            else:
-                hits.append(
-                    {
-                        "intent": intent.name,
-                        "sample": existing,
-                        "slots": slot_infos(existing, intent),
-                    }
-                )
+    for intent, existing in index.get(key, ()):
+        if intent_name is not None and intent.name == intent_name:
+            if present is None:
+                present = {"intent": intent.name, "sample": existing}
+        else:
+            hits.append(
+                {
+                    "intent": intent.name,
+                    "sample": existing,
+                    "slots": slot_infos(existing, intent),
+                }
+            )
     hits.sort(key=lambda hit: (hit["intent"], hit["sample"]))
     if present is not None:
         verdict = PRESENT

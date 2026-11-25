@@ -29,6 +29,7 @@ from nlu_static import fixture_vocab, ledger, matcher, producer_jellyfin, select
 from nlu_static import graph as nlu_graph  # noqa: E402
 from nlu_static.effective_model import (  # noqa: E402
     EffectiveModel,
+    SNAPSHOT_GLOB_KEY,
     build_effective_model,
     load_snapshot,
 )
@@ -912,9 +913,6 @@ def _carriers_candidates(args: argparse.Namespace) -> list[dict] | None:
     """
     candidates: list[dict] = []
     if args.sample:
-        if args.locale and args.all:
-            _fail(ValueError("--locale and --all are mutually exclusive"))
-            return None
         if not args.locale and not args.all:
             _fail(
                 ValueError(
@@ -939,30 +937,15 @@ def _carriers_candidates(args: argparse.Namespace) -> list[dict] | None:
 
 
 def _load_candidate_file(path: str) -> list[dict]:
-    """Read candidates from a .json list or a TSV file (locale, intent, sample).
+    """Read candidates from a TSV file (locale, intent, sample).
 
-    A TSV intent column may be empty; a JSON row omits the key. A locale
-    of ``*`` (or the literal ``all``) expands to every committed locale,
-    the snapshot file's own glob convention. Comment (#) and blank TSV
-    lines are skipped.
+    The intent column may be empty (unnamed candidate). A locale of ``*``
+    expands to every committed locale, the snapshot file's own glob
+    convention, and is normalized to None here so cmd_carriers tests only
+    ``locale is None``. Comment (#) and blank lines are skipped.
     """
     text = Path(path).read_text(encoding="utf-8")
     rows: list[dict] = []
-    if path.endswith(".json"):
-        doc = json.loads(text)
-        if not isinstance(doc, list):
-            raise ValueError(f"{path}: candidate JSON must be a list of rows")
-        for index, row in enumerate(doc):
-            if not isinstance(row, dict) or not isinstance(row.get("sample"), str):
-                raise ValueError(f"{path}: row {index} must be an object with a string 'sample'")
-            locale = row.get("locale")
-            intent = row.get("intent")
-            if locale is not None and not isinstance(locale, str):
-                raise ValueError(f"{path}: row {index} 'locale' must be a string")
-            if intent is not None and not isinstance(intent, str):
-                raise ValueError(f"{path}: row {index} 'intent' must be a string")
-            rows.append({"locale": locale, "intent": intent, "sample": row["sample"]})
-        return rows
     for line_no, line in enumerate(text.splitlines(), start=1):
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
@@ -974,6 +957,8 @@ def _load_candidate_file(path: str) -> list[dict]:
                 f"(locale, intent, sample); got {len(columns)}"
             )
         locale, intent, sample = (column.strip() for column in columns)
+        if locale == SNAPSHOT_GLOB_KEY:
+            locale = None
         rows.append({"locale": locale or None, "intent": intent or None, "sample": sample})
     return rows
 
@@ -1000,23 +985,24 @@ def cmd_carriers(args: argparse.Namespace) -> int:
     if candidates is None:
         return 2
     all_locales = fixture_vocab.committed_locales()
-    models: dict[str, EffectiveModel | None] = {}
+    indexes: dict[str, dict] = {}
     rows: list[dict] = []
     for candidate in candidates:  # candidates in input order
         locale = candidate["locale"]
-        locales = all_locales if locale is None or locale in ("*", "all") else [locale]
+        locales = all_locales if locale is None else [locale]
         for name in sorted(locales):  # locales sorted within a candidate
-            if name not in models:
+            if name not in indexes:
                 # No ja-JP skip here: the carrier comparison is character-level
                 # for the non-whitespace-tokenized locales (carriers.py), the
                 # fixtures subcommand's precedent, so every committed locale
                 # is answerable. An unreadable model is still a hard refusal.
-                models[name] = _build_model_or_fail(name, None)
-                if models[name] is None:
+                model = _build_model_or_fail(name, None)
+                if model is None:
                     return 2
+                indexes[name] = nlu_carriers.build_index(name, model)
             rows.append(
                 nlu_carriers.analyze_candidate(
-                    name, candidate["intent"], candidate["sample"], models[name]
+                    name, candidate["intent"], candidate["sample"], indexes[name]
                 )
             )
     if args.format == "text":

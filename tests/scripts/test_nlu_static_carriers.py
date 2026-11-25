@@ -133,7 +133,9 @@ def test_present_on_named_intent_same_carrier_different_slot_name():
             "types": [],
         },
     )
-    row = carriers.analyze_candidate("x-x", "TargetIntent", "play {artist}", model)
+    row = carriers.analyze_candidate(
+        "x-x", "TargetIntent", "play {artist}", carriers.build_index("x-x", model)
+    )
     assert row["verdict"] == "PRESENT"
     assert row["present"]["sample"] == "play {genre}"
     assert row["same_carrier"] == []
@@ -176,7 +178,9 @@ def test_absent_with_punctuation_and_case_folds_to_seen_carrier_shape():
             "types": [],
         },
     )
-    row = carriers.analyze_candidate("x-x", "B", "Pon, POP!", model)
+    row = carriers.analyze_candidate(
+        "x-x", "B", "Pon, POP!", carriers.build_index("x-x", model)
+    )
     assert row["verdict"] == "SAME_CARRIER"
     assert row["same_carrier"][0]["sample"] == "pon pop"
 
@@ -216,14 +220,15 @@ def test_file_rows_and_all_expansion_deterministic(tmp_path, capsys):
     assert song_row["verdict"] == "PRESENT"
     assert song_row["present"]["sample"] == "play {song}"
 
-    # A JSON candidate file parses the same shape.
+    # A .json file is not a candidate format anymore (TSV is the one form):
+    # parsed as TSV lines it refuses with the column error, exit 2.
     json_file = tmp_path / "candidates.json"
     json_file.write_text(
         json.dumps([{"locale": "en-US", "intent": "PlayByGenreIntent", "sample": "play some {genre}"}]),
         encoding="utf-8",
     )
-    rows = _run(capsys, ["--file", str(json_file)])
-    assert rows == first[:1]
+    exit_code = nlu_cli.main(["carriers", "--format", "json", "--file", str(json_file)])
+    assert exit_code == 2
 
 
 def test_inline_all_expansion_covers_every_committed_locale(capsys):
@@ -253,10 +258,14 @@ def test_slot_name_differences_reduce_to_same_carrier(tmp_path):
         ],
         types={"JellyfinArtist": ["someone"]},
     )
-    row = carriers.analyze_candidate("x-x", "AIntent", "play {artist}", model)
+    row = carriers.analyze_candidate(
+        "x-x", "AIntent", "play {artist}", carriers.build_index("x-x", model)
+    )
     assert row["verdict"] == "PRESENT"  # named intent's own identical carrier
     # The same candidate WITHOUT a named intent reports the cross-intent owner.
-    row = carriers.analyze_candidate("x-x", None, "play {artist}", model)
+    row = carriers.analyze_candidate(
+        "x-x", None, "play {artist}", carriers.build_index("x-x", model)
+    )
     assert row["verdict"] == "SAME_CARRIER"
     hit = row["same_carrier"][0]
     assert hit["intent"] == "AIntent"

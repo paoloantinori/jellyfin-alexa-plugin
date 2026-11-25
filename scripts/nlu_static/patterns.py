@@ -24,8 +24,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from nlu_static.effective_model import EffectiveModel, SlotTypeVocab, classify_slot_type, entry_texts
-from nlu_static.normalize import SLOT_PLACEHOLDER_RE, tokenize
+from nlu_static.effective_model import (
+    EffectiveModel,
+    SlotTypeVocab,
+    classify_slot_type,
+    entry_texts,
+    slot_type_of,
+)
+from nlu_static.normalize import iter_segments, tokenize
 
 # Slot item classes, exactly the classify_slot_type vocabulary plus the
 # UNKNOWN_BUILTIN downgrade (treated as FREE, reported by the caller).
@@ -94,14 +100,6 @@ class CompiledPattern:
         return self.pattern[-1] if self.pattern else None
 
 
-def _type_of_slot(name: str, slots: tuple) -> str:
-    """The declared type of one slot name, or the empty string."""
-    for slot in slots:
-        if slot.name == name:
-            return slot.type
-    return ""
-
-
 def _entry_token_lists(vocab: SlotTypeVocab) -> frozenset[tuple[str, ...]]:
     """The token tuples of every entry text of one type (non-empty only)."""
     lists: set[tuple[str, ...]] = set()
@@ -153,14 +151,13 @@ def compile_pattern(
     """
     pattern: list[tuple] = []
     witness: list[tuple] = []
-    cursor = 0
-    for match in SLOT_PLACEHOLDER_RE.finditer(sample):
-        literal = sample[cursor:match.start()]
-        for token in tokenize(literal):
-            pattern.append(("lit", token))
-            witness.append(("lit", token))
-        name = match.group(0)[1:-1]
-        type_name = _type_of_slot(name, intent.slots)
+    for kind, value in iter_segments(sample):
+        if kind == "lit":
+            for token in tokenize(value):
+                pattern.append(("lit", token))
+                witness.append(("lit", token))
+            continue
+        type_name = slot_type_of(value, intent.slots)
         cls = classify_slot_type(type_name, model)
         if cls == CLASS_UNKNOWN:
             if unclassified is not None:
@@ -168,10 +165,6 @@ def compile_pattern(
             cls = CLASS_FREE
         pattern.append(("slot", cls, type_name))
         witness.append(("cls", _class_label(cls, type_name)))
-        cursor = match.end()
-    for token in tokenize(sample[cursor:]):
-        pattern.append(("lit", token))
-        witness.append(("lit", token))
     # The skeleton is the pattern with CLOSED slots keeping their type and
     # every other slot collapsed to (class,): derived here so the two
     # shapes can never drift (simplify round).

@@ -201,7 +201,7 @@ Verdicts, per (candidate, locale):
 
 A `PRESENT` row may still list cross-intent `same_carrier` hits: the carrier is owned twice, which is itself worth knowing before you premise an edit on it.
 
-Input forms, combinable: inline candidates (`--sample` repeatable, `--intent` optional) with `--locale LOCALE` or `--all` (expand across every committed locale), or `--file` with a JSON list of `{locale, intent, sample}` rows or a TSV with the three tab-separated columns `locale<TAB>intent<TAB>sample` (an empty intent column means "unnamed"; `#` comment and blank lines are skipped). A locale of `*` in a file row expands to every committed locale, the snapshot file's own glob convention. Exit code is 0 for every verdict including `ABSENT` (this is a lookup, not a lint); exit 2 only for refusals (no candidates, unknown locale, unreadable model or file).
+Input forms, combinable: inline candidates (`--sample` repeatable, `--intent` optional) with `--locale LOCALE` or `--all` (expand across every committed locale), or `--file` with a TSV of three tab-separated columns `locale<TAB>intent<TAB>sample` (an empty intent column means "unnamed"; `#` comment and blank lines are skipped). A locale of `*` in a file row expands to every committed locale, the snapshot file's own glob convention. Exit code is 0 for every verdict including `ABSENT` (this is a lookup, not a lint); exit 2 only for refusals (no candidates, unknown locale, unreadable model or file).
 
 Output is deterministic: candidates in input order, locales sorted within a candidate, `same_carrier` hits sorted by intent then sample. `--format json` (default) prints one verdict row per candidate per locale; `--format text` prints the human table with the slot evidence indented under each hit.
 
