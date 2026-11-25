@@ -149,6 +149,21 @@ public static class SkillRequestDeserializer
             ? token.Value<string>() ?? string.Empty
             : token.ToString(Formatting.None);
     }
+
+    /// <summary>
+    /// The shared triage rendering for a tolerated unknown slot value (JF-931/JF-957):
+    /// the raw wire value with the fallback member in parentheses. Both carriers'
+    /// render helpers compose through this one helper, so a format change lands in
+    /// exactly one place. The controller Warn blocks keep their separate structured
+    /// args instead, so they stay untouched.
+    /// </summary>
+    /// <param name="rawWireValue">The raw wire value Alexa.NET's enum did not know.</param>
+    /// <param name="fallbackMember">The fallback enum member the request was bucketed to.</param>
+    /// <returns>The composed triage rendering.</returns>
+    internal static string DescribeToleratedValue(string rawWireValue, Enum fallbackMember)
+    {
+        return $"{rawWireValue} (mapped to {fallbackMember})";
+    }
 }
 
 /// <summary>
@@ -298,6 +313,13 @@ public sealed class ReasonTolerantConverter : JsonConverter<Reason>
     /// tolerated path too: the pre-fix contract failed loudly on it ("Cannot convert
     /// null value to Reason"), and silently defaulting with no Warn trace would
     /// contradict the fix's own principle that every unrecognized reason surfaces.
+    /// A MISSING reason key never reaches this converter (Populate skips absent
+    /// properties): the property keeps the C# enum default UserInitiated with no
+    /// tolerated entry and no Warn, the exact pre-fix behavior. That stance is
+    /// deliberate and pinned by the MissingReasonKey test: Amazon always sends the
+    /// field on session-ended requests, so a silent default is indistinguishable from
+    /// the wire's own user-initiated semantics rather than a lost unknown; only a
+    /// value Amazon actually SENT but Alexa.NET did not know earns the tolerated path.
     /// </summary>
     /// <param name="reader">The reader positioned at the Reason value.</param>
     /// <param name="objectType">The declared type (Alexa.NET's Reason enum).</param>
@@ -421,8 +443,12 @@ internal sealed class TolerantReasonValueProvider : IValueProvider
     /// The direct cast is deliberate: the resolver attaches this provider to the Reason
     /// property of SessionEndedRequest only, so a non-SessionEndedRequest target would
     /// be a resolver bug, and throwing beats silently dropping the tolerated value.
-    /// The insert-only Add cannot collide: RequestConverter's JObject.Load collapses
-    /// duplicate JSON keys, and each Populate news a fresh instance.
+    /// The insert is guarded (remove-then-add, last write wins) so a duplicate SetValue
+    /// can never throw: the current no-collision guarantee rests on two external
+    /// behaviors (RequestConverter's JObject.Load collapsing duplicate JSON keys, and
+    /// one fresh instance per Populate), and a future Alexa.NET change that populated
+    /// one instance twice would otherwise kill the request at deserialization with an
+    /// ArgumentException, the exact death class this fix exists to eliminate.
     /// </summary>
     /// <param name="target">The SessionEndedRequest being populated.</param>
     /// <param name="value">The parsed property value.</param>
@@ -432,7 +458,9 @@ internal sealed class TolerantReasonValueProvider : IValueProvider
         if (tolerated is not null)
         {
             ReasonTolerantConverter.PendingUnknownWireReason = null;
-            SkillRequestDeserializer.ToleratedReasons.Add((SessionEndedRequest)target, tolerated);
+            SessionEndedRequest sessionEnded = (SessionEndedRequest)target;
+            SkillRequestDeserializer.ToleratedReasons.Remove(sessionEnded);
+            SkillRequestDeserializer.ToleratedReasons.Add(sessionEnded, tolerated);
         }
 
         _inner.SetValue(target, value);
@@ -489,7 +517,7 @@ public sealed class UnknownWireTypeReason
         }
 
         return SkillRequestDeserializer.ToleratedReasons.TryGetValue(sessionEnded, out UnknownWireTypeReason? tolerated)
-            ? $"{tolerated.RawWireReason} (mapped to {tolerated.Reason})"
+            ? SkillRequestDeserializer.DescribeToleratedValue(tolerated.RawWireReason, tolerated.Reason)
             : sessionEnded.Reason.ToString();
     }
 }
@@ -529,7 +557,7 @@ public sealed class UnknownWireTypeError : Error
         return error switch
         {
             null => "UNKNOWN",
-            UnknownWireTypeError unknown => $"{unknown.RawWireType} (mapped to {unknown.Type})",
+            UnknownWireTypeError unknown => SkillRequestDeserializer.DescribeToleratedValue(unknown.RawWireType, unknown.Type),
             _ => error.Type.ToString()
         };
     }

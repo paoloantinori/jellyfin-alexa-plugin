@@ -45,13 +45,18 @@ public class SessionEndedRequestHandler : BaseHandler
         // DescribeReason renders a tolerated unknown reason (JF-957) as the raw wire
         // value with its fallback bucket, and a known reason as the member name
         // (byte-identical to Reason.ToString()), so the raw value Amazon actually sent
-        // survives in these lines instead of only the Error bucket.
+        // survives in these lines instead of only the Error bucket. The Error.Type arg
+        // gets the same treatment through DescribeWireType: a session ended with an
+        // unknown error.type (JF-931) would otherwise print InternalError here while
+        // the PlaybackFailed sibling line renders the raw value. This is the JF-930
+        // shared-formatter fold arriving early for THIS line; the remaining
+        // ExceptionHandler adoption stays JF-930's.
         if (sessionEnded.Error != null)
         {
             Logger.LogWarning(
                 "Session ended with error: {Reason} - {ErrorType}: {ErrorMessage} [RequestId={RequestId}]",
                 UnknownWireTypeReason.DescribeReason(sessionEnded),
-                sessionEnded.Error.Type,
+                UnknownWireTypeError.DescribeWireType(sessionEnded.Error),
                 sessionEnded.Error.Message,
                 request.RequestId);
         }

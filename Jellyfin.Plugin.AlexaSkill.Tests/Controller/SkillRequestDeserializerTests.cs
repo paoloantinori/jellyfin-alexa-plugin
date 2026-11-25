@@ -16,6 +16,7 @@ using MediaBrowser.Model.Session;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Serialization;
 using Xunit;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Controller;
@@ -420,6 +421,7 @@ public class SkillRequestDeserializerTests : IDisposable
             CancellationToken.None);
 
         Assert.NotNull(response);
+        Assert.Null(response.Response!.OutputSpeech);
     }
 
     [Fact]
@@ -513,6 +515,68 @@ public class SkillRequestDeserializerTests : IDisposable
         var audio = SkillRequestDeserializer.Deserialize(
             PlaybackFailedBody(UnknownWireType, token: Guid.NewGuid().ToString(), requestId: "req-keyed-audio"));
         Assert.Null(SkillRequestDeserializer.FindToleratedReason(audio));
+    }
+
+    [Fact]
+    public void MissingReasonKey_StaysNaiveDefault_WithoutTolerance()
+    {
+        // Pinning the missing-key stance: a body with NO reason key never reaches the
+        // tolerant converter (Populate skips absent properties), so the request keeps
+        // the C# enum default UserInitiated with no tolerated entry and no Warn, the
+        // exact pre-fix behavior. The converter's doc names why this is accepted
+        // (Amazon always sends the field; a silent default is indistinguishable from
+        // the wire's own user-initiated semantics). If this ever changes, it is a
+        // conscious decision, not drift.
+        string body = "{" +
+            "\"version\":\"1.0\",\"context\":{}," +
+            "\"request\":{" +
+              "\"type\":\"SessionEndedRequest\"," +
+              "\"requestId\":\"req-missing-reason\"" +
+            "}" +
+          "}";
+        var req = SkillRequestDeserializer.Deserialize(body);
+        var endedRequest = Assert.IsType<SessionEndedRequest>(req!.Request);
+        Assert.Equal(Reason.UserInitiated, endedRequest.Reason);
+        Assert.Null(SkillRequestDeserializer.FindToleratedReason(req));
+    }
+
+    [Fact]
+    public void ToleratedReasonDrain_GuardedAgainstDuplicateSetValue()
+    {
+        // The drain must be failure-tolerant: the current no-collision guarantee rests
+        // on two external behaviors (JObject.Load collapsing duplicate keys, one fresh
+        // instance per Populate), so the insert is guarded (remove-then-add). A future
+        // Alexa.NET change that populated one request instance twice must land as
+        // last-write-wins, never as an ArgumentException killing the request at
+        // deserialization, the exact death class this fix exists to eliminate.
+        var request = new SessionEndedRequest { Reason = Reason.Error };
+        var provider = new TolerantReasonValueProvider(new NoopValueProvider());
+        var wrapper = new SkillRequest { Request = request };
+
+        ReasonTolerantConverter.PendingUnknownWireReason = new UnknownWireTypeReason("FIRST_REASON", Reason.Error);
+        provider.SetValue(request, Reason.Error);
+        ReasonTolerantConverter.PendingUnknownWireReason = new UnknownWireTypeReason("SECOND_REASON", Reason.Error);
+        provider.SetValue(request, Reason.Error);
+
+        // Each SetValue drains the stash it just drained; the surviving keyed value is
+        // the last write, and the thread stash is clean for the next deserialization.
+        Assert.Null(ReasonTolerantConverter.PendingUnknownWireReason);
+        Assert.Equal("SECOND_REASON", SkillRequestDeserializer.FindToleratedReason(wrapper)!.RawWireReason);
+    }
+
+    /// <summary>
+    /// A do-nothing inner value provider for driving the tolerant drain directly: the
+    /// tests here exercise the wrapper's stash-drain contract, not the reflection set.
+    /// </summary>
+    private sealed class NoopValueProvider : IValueProvider
+    {
+        /// <inheritdoc/>
+        public object? GetValue(object target) => null;
+
+        /// <inheritdoc/>
+        public void SetValue(object target, object? value)
+        {
+        }
     }
 
     [Fact]
