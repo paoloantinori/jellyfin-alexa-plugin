@@ -160,6 +160,51 @@ public static class SkillRequestDeserializer
     internal const string UnknownSentinel = "UNKNOWN";
 
     /// <summary>
+    /// The ErrorType member to EnumMember wire-name map backing the known-value branch
+    /// of <see cref="UnknownWireTypeError.DescribeWireType"/> (JF-930), built once by
+    /// reflection over the pinned Alexa.NET enum, so a future library version that adds
+    /// members or renames wire values needs no change here. Every member of 1.22.0
+    /// carries an EnumMember SCREAMING_SNAKE wire name (reflection-verified); a member
+    /// without one, should a future version ever ship it, falls back to the member name
+    /// in the renderer.
+    /// </summary>
+    internal static readonly Dictionary<ErrorType, string> ErrorWireNamesByMember = BuildWireNamesByMember<ErrorType>();
+
+    /// <summary>
+    /// The Reason member to EnumMember wire-name map backing the known-value branch of
+    /// <see cref="UnknownWireTypeReason.DescribeReason"/> (JF-930 review round), built
+    /// by the same reflection walk as the error side. All three members of 1.22.0
+    /// carry wire names (USER_INITIATED, ERROR, EXCEEDED_MAX_REPROMPTS), so the reason
+    /// half of the session-ended log line greps with the same Amazon vocabulary as its
+    /// error half.
+    /// </summary>
+    internal static readonly Dictionary<Reason, string> ReasonWireNamesByMember = BuildWireNamesByMember<Reason>();
+
+    /// <summary>
+    /// Build a member to EnumMember wire-name map for an Alexa.NET enum from its
+    /// EnumMember attributes.
+    /// </summary>
+    /// <typeparam name="TEnum">The Alexa.NET enum whose members to map.</typeparam>
+    /// <returns>The member to wire-name map.</returns>
+    private static Dictionary<TEnum, string> BuildWireNamesByMember<TEnum>()
+        where TEnum : struct, Enum
+    {
+        Dictionary<TEnum, string> map = new();
+        foreach (FieldInfo field in typeof(TEnum).GetFields(BindingFlags.Public | BindingFlags.Static))
+        {
+            string? wireName = field.GetCustomAttribute<EnumMemberAttribute>()?.Value;
+            if (!string.IsNullOrEmpty(wireName))
+            {
+                // GetFields(Public | Static) on an enum returns only its literal fields,
+                // so the value is always a boxed member.
+                map[(TEnum)field.GetValue(null)!] = wireName;
+            }
+        }
+
+        return map;
+    }
+
+    /// <summary>
     /// The shared triage rendering for a tolerated unknown slot value (JF-931/JF-957):
     /// the raw wire value with the fallback member in parentheses. Both carriers'
     /// render helpers compose through this one helper, so a format change lands in
@@ -219,12 +264,15 @@ public sealed class ErrorTypeTolerantConverter : JsonConverter<Error>
         }
 
         // A non-object error payload (never seen on the wire) must not kill the request
-        // either, but it must not become a null Error either: ExceptionHandler reads
-        // Error.Type unguarded, so null would trade a clean deserialization failure for a
-        // NullReferenceException. Tolerate it like an unknown type value, with the raw
-        // payload text preserved for triage; a STRING payload renders unquoted, the same
-        // rendering contract the object branch's type token uses (review round: the
-        // JSON-serialized form kept its quotes and broke grep parity between branches).
+        // either, and a plain null Error would carry no triage trail: since the JF-930
+        // review round ExceptionHandler null-guards the payload (a null payload logs at
+        // Warning with the UNKNOWN rendering instead of crashing), but only an
+        // UnknownWireTypeError preserves the raw payload text the handler line and the
+        // controller's tolerated-value Warn can surface. Tolerate it like an unknown
+        // type value, with the raw payload text preserved for triage; a STRING payload
+        // renders unquoted, the same rendering contract the object branch's type token
+        // uses (review round: the JSON-serialized form kept its quotes and broke grep
+        // parity between branches).
         if (reader.TokenType != JsonToken.StartObject)
         {
             JToken rawToken = JToken.ReadFrom(reader);
@@ -510,11 +558,14 @@ public sealed class UnknownWireTypeReason
     public Reason Reason { get; }
 
     /// <summary>
-    /// Render the SessionEndedRequest.Reason value for a log line (JF-957): the raw wire
-    /// value with the fallback member in parentheses for tolerated unknowns, the enum
-    /// member name for known values, and UNKNOWN for an absent request. The production
-    /// renderer for the handler's Reason lines, mirroring
-    /// <see cref="UnknownWireTypeError.DescribeWireType"/> for the error side.
+    /// Render the SessionEndedRequest.Reason value for a log line (JF-957; the
+    /// known-value vocabulary switched to the Amazon wire form in the JF-930 review
+    /// round, so the reason half of the session-ended line greps with the same
+    /// vocabulary as its error half): the raw wire value with the fallback member in
+    /// parentheses for tolerated unknowns, the EnumMember wire form for known values,
+    /// and UNKNOWN for an absent request. The production renderer for the handler's
+    /// Reason lines, mirroring <see cref="UnknownWireTypeError.DescribeWireType"/> for
+    /// the error side.
     /// </summary>
     /// <param name="sessionEnded">The deserialized session-ended request.</param>
     /// <returns>The triage-friendly reason rendering.</returns>
@@ -527,7 +578,9 @@ public sealed class UnknownWireTypeReason
 
         return SkillRequestDeserializer.ToleratedReasons.TryGetValue(sessionEnded, out UnknownWireTypeReason? tolerated)
             ? SkillRequestDeserializer.DescribeToleratedValue(tolerated.RawWireReason, tolerated.Reason)
-            : sessionEnded.Reason.ToString();
+            : SkillRequestDeserializer.ReasonWireNamesByMember.TryGetValue(sessionEnded.Reason, out string? wireName)
+                ? wireName
+                : sessionEnded.Reason.ToString();
     }
 }
 
@@ -555,39 +608,6 @@ public sealed class UnknownWireTypeError : Error
     public string RawWireType { get; }
 
     /// <summary>
-    /// The ErrorType member to EnumMember wire-name map backing the known-value branch
-    /// of <see cref="DescribeWireType"/> (JF-930), built once by reflection over the
-    /// pinned Alexa.NET enum, so a future library version that adds members or renames
-    /// wire values needs no change here. Every member of 1.22.0 carries an EnumMember
-    /// SCREAMING_SNAKE wire name (reflection-verified); a member without one, should a
-    /// future version ever ship it, falls back to the member name in
-    /// <see cref="DescribeWireType"/>.
-    /// </summary>
-    private static readonly Dictionary<ErrorType, string> WireNamesByMember = BuildWireNamesByMember();
-
-    /// <summary>
-    /// Build the <see cref="WireNamesByMember"/> map from the enum's EnumMember
-    /// attributes.
-    /// </summary>
-    /// <returns>The member to wire-name map.</returns>
-    private static Dictionary<ErrorType, string> BuildWireNamesByMember()
-    {
-        Dictionary<ErrorType, string> map = new();
-        foreach (FieldInfo field in typeof(ErrorType).GetFields(BindingFlags.Public | BindingFlags.Static))
-        {
-            string? wireName = field.GetCustomAttribute<EnumMemberAttribute>()?.Value;
-            if (!string.IsNullOrEmpty(wireName))
-            {
-                // GetFields(Public | Static) on an enum returns only its literal fields,
-                // so the value is always a boxed member.
-                map[(ErrorType)field.GetValue(null)!] = wireName;
-            }
-        }
-
-        return map;
-    }
-
-    /// <summary>
     /// The ONE triage rendering for an error.type value on any Error-bearing log line
     /// (JF-930; ExceptionHandler, PlaybackFailedEventHandler, and
     /// SessionEndedRequestHandler all pass their payload through this helper): the raw
@@ -604,7 +624,7 @@ public sealed class UnknownWireTypeError : Error
         {
             null => SkillRequestDeserializer.UnknownSentinel,
             UnknownWireTypeError unknown => SkillRequestDeserializer.DescribeToleratedValue(unknown.RawWireType, unknown.Type),
-            _ => WireNamesByMember.TryGetValue(error.Type, out string? wireName) ? wireName : error.Type.ToString()
+            _ => SkillRequestDeserializer.ErrorWireNamesByMember.TryGetValue(error.Type, out string? wireName) ? wireName : error.Type.ToString()
         };
     }
 }

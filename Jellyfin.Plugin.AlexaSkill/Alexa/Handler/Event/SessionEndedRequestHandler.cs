@@ -43,14 +43,16 @@ public class SessionEndedRequestHandler : BaseHandler
     {
         SessionEndedRequest sessionEnded = (SessionEndedRequest)request;
         // DescribeReason renders a tolerated unknown reason (JF-957) as the raw wire
-        // value with its fallback bucket, and a known reason as the member name
-        // (byte-identical to Reason.ToString()), so the raw value Amazon actually sent
-        // survives in these lines instead of only the Error bucket. The Error.Type arg
-        // gets the same treatment through DescribeWireType: a session ended with an
-        // unknown error.type (JF-931) would otherwise print InternalError here while
-        // the PlaybackFailed sibling line renders the raw value. Since JF-930 this is
-        // the one shared Error formatter, and its known-value branch renders the
-        // Amazon wire form.
+        // value with its fallback bucket, and a known reason as its Amazon EnumMember
+        // wire form since the JF-930 review round (the member name it printed before
+        // made the reason half of this line grep with a different vocabulary than the
+        // error half), so the raw value Amazon actually sent survives in these lines
+        // instead of only the Error bucket. The Error.Type arg gets the same
+        // treatment through DescribeWireType: a session ended with an unknown
+        // error.type (JF-931) would otherwise print InternalError here while the
+        // PlaybackFailed sibling line renders the raw value. Since JF-930 this is the
+        // one shared Error formatter, and its known-value branch renders the Amazon
+        // wire form.
         if (sessionEnded.Error != null)
         {
             Logger.LogWarning(

@@ -56,12 +56,15 @@ public static class ErrorClassifier
         {
             // Transient conditions: the device-connectivity family, the
             // service-availability and throttling members, and the media-internal
-            // server/device faults. Retry plausibly helps for each, so these log at
-            // Warning instead of the SkillError Critical the dead discard arm
-            // produced. These are the existing members of the classes the pre-JF-930
-            // TransientBackend intent (DEVICE_NOT_CONNECTED, itself absent from the
-            // enum) covered; the media family's unknown and invalid-shape members
-            // (MediaErrorUnknown, InvalidMediaRequest) stay in the discard below.
+            // server/device faults. Each is a condition that plausibly self-resolves
+            // (connectivity blips, service outages, throttling that clears under
+            // backoff; a rate limit needs backoff, not an unmodified immediate retry,
+            // which would amplify it), so these log at Warning instead of the
+            // SkillError Critical the dead discard arm produced. These are the
+            // existing members of the classes the pre-JF-930 TransientBackend intent
+            // (DEVICE_NOT_CONNECTED, itself absent from the enum) covered; the media
+            // family's unknown and invalid-shape members (MediaErrorUnknown,
+            // InvalidMediaRequest) stay in the discard below.
             ErrorType.DeviceCommunicationError
                 or ErrorType.EndpointUnreachable
                 or ErrorType.BridgeUnreachable

@@ -1,6 +1,7 @@
 #nullable enable
 
 using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using global::Alexa.NET.Request;
@@ -302,6 +303,26 @@ public class SkillRequestDeserializerTests : IDisposable
         }
     }
 
+    [Fact]
+    public void WireNameRenderings_AreDistinctWithinEachEnum()
+    {
+        // The wire-name maps are last-writer-wins, so a future Alexa.NET version that
+        // gave two members the same EnumMember wire value would silently render the
+        // wrong member's name on log lines with no error anywhere. Distinct renderings
+        // across every member of each enum turn that collision into a red (JF-930
+        // review round; ground truth: 33 ErrorType members, 3 Reason members, every
+        // one attributed).
+        var errorRenderings = Enum.GetValues<ErrorType>()
+            .Select(member => UnknownWireTypeError.DescribeWireType(new Error { Type = member }))
+            .ToList();
+        Assert.Equal(errorRenderings.Count, errorRenderings.Distinct().Count());
+
+        var reasonRenderings = Enum.GetValues<Reason>()
+            .Select(reason => UnknownWireTypeReason.DescribeReason(new SessionEndedRequest { Reason = reason }))
+            .ToList();
+        Assert.Equal(reasonRenderings.Count, reasonRenderings.Distinct().Count());
+    }
+
     /// <summary>
     /// Build a realistic AudioPlayer.PlaybackFailed wire body.
     /// </summary>
@@ -490,7 +511,10 @@ public class SkillRequestDeserializerTests : IDisposable
         var endedRequest = Assert.IsType<SessionEndedRequest>(request!.Request);
         Assert.Equal(Reason.Error, endedRequest.Reason);
         Assert.Null(SkillRequestDeserializer.FindToleratedReason(request));
-        Assert.Equal("Error", UnknownWireTypeReason.DescribeReason(endedRequest));
+        // The known-value branch renders the EnumMember wire form since the JF-930
+        // review round, the same vocabulary as the error half of the session-ended
+        // line.
+        Assert.Equal("ERROR", UnknownWireTypeReason.DescribeReason(endedRequest));
 
         var naive = JsonConvert.DeserializeObject<SkillRequest>(body);
         var naiveEnded = Assert.IsType<SessionEndedRequest>(naive!.Request);

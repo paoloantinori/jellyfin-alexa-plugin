@@ -144,16 +144,6 @@ public class ErrorClassifierTests
     }
 
     [Fact]
-    public void ErrorCategoryInfo_LocaleKey_ReturnsExpectedKeys()
-    {
-        Assert.Equal("ServerUnavailable", ErrorCategoryInfo.LocaleKey(ErrorCategory.TransientBackend));
-        Assert.Equal("ErrorPermanentBackend", ErrorCategoryInfo.LocaleKey(ErrorCategory.PermanentBackend));
-        Assert.Equal("ErrorUserError", ErrorCategoryInfo.LocaleKey(ErrorCategory.UserError));
-        Assert.Equal("ErrorSkillError", ErrorCategoryInfo.LocaleKey(ErrorCategory.SkillError));
-        Assert.Equal("ErrorTimeout", ErrorCategoryInfo.LocaleKey(ErrorCategory.Timeout));
-    }
-
-    [Fact]
     public void ErrorCategoryInfo_LogLevel_MapsCorrectly()
     {
         Assert.Equal(LogLevel.Warning, ErrorCategoryInfo.LogLevel(ErrorCategory.TransientBackend));
