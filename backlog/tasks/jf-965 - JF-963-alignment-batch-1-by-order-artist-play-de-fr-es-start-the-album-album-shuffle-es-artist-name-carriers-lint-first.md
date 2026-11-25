@@ -3,10 +3,10 @@ id: JF-965
 title: >-
   JF-963 alignment batch 1: by-order artist play (de/fr/es), start-the-album,
   album-shuffle, es artist name-carriers (lint-first)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-11-25 14:55'
-updated_date: '2026-11-25 21:43'
+updated_date: '2026-11-25 23:02'
 labels:
   - nlu
   - alignment
@@ -54,4 +54,6 @@ LAB ROUND RESULTS (partial, updating live): fr H1: A/A 0/131, change 4/131 (cand
 OPERATIONAL NOTE: the OS memory reaper killed the batched lab script once (20:51; cause: host Firefox ~9GB + qemu 2GB, not the lab); resumed as one-run-per-command. SMAPI stream kept strictly sequential throughout.
 
 LAB ROUND COMPLETE: ALL FOUR LOCALES H1 (the clean-add hypothesis; zero steals anywhere; every control-first/last drift check zero). es-ES detail: control had the three candidate utterances at NO-SELECTION on main's model (dead air today, the strongest user-facing gap of the batch); change routes all three to PlayArtistSongsIntent with musician=queen (the carrier noun correctly excluded from the slot value); the MediaInfo sentinels (dime el nombre del artista / que grupo es este) hold on BOTH battery sources in the change arm; the six baselined JF-955-class collisions produce NO steal, measured. A/A 0/129; change 6/129 (exactly the candidate instances, all green); residual red only the pre-existing stable 'Reproduce jazz' PlaySong steal (2 instances). en control-3 drift 0/199. fr: 4/131 candidates green (control misrouted to PlayRandom/PlayMoodMusic). de: 0/146 (pinning only). Pre-existing control reds observed, all stable, none ours: fr (Repete->RepeatSingleOn, Reprendre->FollowMe, joue-la-saison->None), de (PlayLibrarySong-vs-PlaySong x2, spiele-den-song-streithoernschen->None x2, the JF-933 canary reading None on MAIN's model on the lab skill, worth a maintainer look), en (give-me-music-by steal, What-am-I-watching, play-dinner-music). Run ids: fr 192317/193327/194158/195207, de 200207/201404/202544/203730, en 211612/213059/214920(+reprobe 220301)/220330, es 221655/222604/223353(+control-3).
+
+MERGED to main (0c15c0cf, pushed; branch jf-965-alignment-batch-1) after simplify (3 agents, clean; one prose fix) and code-review high (3 findings: sibling-locale gap + de vom-Kuenstler contraction filed in JF-963 notes; one em-dash fixed). LIVE-STATE PASSES on the real skill (read-only, 4 locales, run ids jf965-live-state-*): candidates on the DEPLOYED main models read fr Joue-pair -> PlayRandomIntent/PlayMoodMusicIntent (misroutes, will be fixed by the deploy), es carrier-triplet -> NO SELECTION (dead air, fixed by the deploy), de/en candidates already correct (generalization, pinned). CANARY CAVEAT: the JF-971 canary reads not_run on these runs (NLU_CANARY_SNAPSHOT not armed - the dormant-until-armed design); the formal pre-deploy A/A pair must either arm the snapshot or run the manual Gate-2 canary. Live-skill-only observations for the maintainer: de lab reds did NOT reproduce live (lab-skill artifacts: the PlayLibrarySong pair and streithoernschen->None need catalog wiring); fr 'Repete'->RepeatSingleOn and 'Reprendre'->FollowMe reproduce live; es 'Pon el canal bbc radio' -> None on the live skill (PlayChannel dead air, pre-existing, unrelated to this batch). REMAINING for this task: the vai-gated live deploy + model rebuild + wrapper battery (es-ES, fr-FR covered) + post-deploy suite; the pre-deploy A/A baseline pair immediately before that deploy.
 <!-- SECTION:NOTES:END -->
