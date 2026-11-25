@@ -217,3 +217,40 @@ python3 scripts/nlu_static/cli.py triage --fail-on systematic --out triage.md
 ```
 
 Like every tool on this page, the verdicts describe necessary conditions and recorded history; they do not predict how Amazon's trainer routes an utterance. The header also says which model mode was used: committed mode can only answer the committed-seed question, so re-run with a snapshot when none was given.
+
+## The `identity` subcommand: canonical model identity (JF-954.7)
+
+The `identity` subcommand prints one CANONICAL identity hash per locale: the sha256 of the committed `languageModel` serialized as canonical JSON (keys sorted, compact separators, UTF-8, no ASCII escaping). Two models that differ only in key order, file whitespace or wrapper shape hash equal; a changed sample, slot, slot type, type value or synonym changes the hash. Sample ORDER is part of the hash on purpose: a reorder is a model change and must show up. With `--snapshot` each locale also gets `effective_sha256`, the same canonical hash over the effective model: catalog-backed types replaced by the snapshot entries, entries sorted so the snapshot's own entry order never changes the hash, and a snapshot naming only STATIC types leaves the hash at the committed value. Unlike the token tools, identity needs no word tokens, so ja-JP is hashed like every other locale and there is no SKIP line here. Related but different: the ledger records the raw-bytes sha256 of the model FILE from the suite side (JF-954.5); the canonical hash is the formatting-independent identity to quote in tickets, notes and comparisons between refs.
+
+```
+python3 scripts/nlu_static/cli.py identity --locale es-ES
+python3 scripts/nlu_static/cli.py identity --all --format text
+python3 scripts/nlu_static/cli.py identity --locale es-ES --snapshot catalog-snapshot.json
+```
+
+## The `select` subcommand: change-driven fixture selection (JF-954.7)
+
+`select --base <git-ref>` answers the fast-loop question: which NLU fixture rows can a model change since that ref affect? Per locale it compares the model at the ref (read through `git show`) against the working tree, in four steps: hashes equal means the locale is UNCHANGED and contributes no rows; otherwise it computes the CHANGED INTENTS (intents added or removed, samples or slots differing, every intent declaring a slot whose TYPE changed values or synonyms, and every intent of the locale when the invocation name differs); unless `--no-neighbours`, it adds the NEIGHBOURS, meaning every intent edge-connected in either direction to a changed intent in the subsumption graph of the OLD model or of the NEW model; and it selects every fixture row of the locale whose `expected_intent` alternatives (the `A|B` form included) intersect the selected set. ja-JP has no sample graph (no word spaces, the shared skip convention), so a changed ja-JP locale selects ALL of its intents and the payload carries a note saying so. A locale whose model file does not exist at the base is a locale added after the base: every intent counts as changed.
+
+Safety rule: selection never silently drops coverage. When anything prevents a precise answer for a locale (the base model unreadable, a graph build error, hashes that differ with no attributable intent-level change such as a type value no intent uses), that locale falls back to ALL of its rows with `"status": "fallback_all"` and a reason. The output JSON is schema 1 with exactly `schema`, `base` (as given), `locales` and `totals` (`rows_selected` of `rows_total`), sorted and byte-identical across runs over the same inputs; `--format text` prints one summary line per locale plus the totals.
+
+```
+python3 scripts/nlu_static/cli.py select --base main --all --out /tmp/rows.json
+python3 scripts/nlu_static/cli.py select --base 5e870594~1 --locale it-IT --format text
+python3 scripts/nlu_static/cli.py select --base HEAD~1 --locale es-ES --no-neighbours
+```
+
+The it-IT line of the second example is the JF-945 opener seen through the tool: the one added sample marks PlayPodcastIntent changed, the graph neighbours (PlayByGenreIntent, PlaySongIntent, PlayVideoIntent) join through the old and new edges, and the selection covers the podcast rows plus those rivals' rows while every untouched locale stays unchanged.
+
+### The fast loop, and why the full suite is still the release gate
+
+The recipe:
+
+```
+python3 scripts/nlu_static/cli.py select --base main --all --out /tmp/rows.json
+NLU_ROW_FILTER=/tmp/rows.json ./scripts/run_nlu_tests.sh
+```
+
+`NLU_ROW_FILTER` points at a file produced by `select`; the suite then runs only the listed (locale, utterance) pairs. Items not listed are DESELECTED through pytest's own mechanism, so the summary shows the deselected count, and one line at collection states how many rows were kept and from which file. Matching compares utterances after the shared normalizer, so case, accent composition and whitespace fold away. E2E, reliability, smoke and every other non-NLU test is never touched; the checkpoint/resume flags compose with the filter (checkpoint-skipped items leave the list before the filter runs). A filter file that cannot be read or does not pass the schema check ABORTS the session with a clear error naming the file: silently running everything or silently running nothing would both be wrong. The pure decision function and the loader live in `scripts/nlu_static/selection.py` (`should_keep`, `load_row_filter`) and are unit-tested in `tests/scripts/`; the conftest hook only calls them.
+
+THE FULL SUITE REMAINS THE RELEASE GATE. Selection follows the model text, and the trainer does not: in the es-US lab ablation of 2026-11-23, removing five bare PlaySong carriers moved song requests that used UNTOUCHED carriers ("escucha", "quiero escuchar") to PlayArtistSongsIntent, a shift no static analysis could connect because the moved carriers' samples never changed and no edge pointed at them from the change. Run the filtered suite while iterating on templates; run the full suite before a release, before merging a model change to main, and whenever a catalog sync or a model rebuild has happened in the middle of any run.

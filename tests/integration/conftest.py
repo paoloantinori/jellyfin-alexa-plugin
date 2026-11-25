@@ -7,6 +7,7 @@ Provides:
 - --dry-run flag for fixture-only validation
 - E2E options: --jellyfin-url, --jellyfin-api-key, --jellyfin-user
 - Custom markers: nlu, locale, e2e
+- NLU_ROW_FILTER: run only the NLU rows a `nlu_static select` output lists (JF-954.7)
 """
 
 from __future__ import annotations
@@ -41,6 +42,10 @@ import yaml
 # JF-954.5: the results ledger. The bridge is a separate module (the
 # smapi_timeouts lesson) so test_nlu.py and this file share ONE holder.
 from nlu_static import ledger as nlu_ledger  # noqa: E402
+# JF-954.7: the change-driven row selection. The pure decision function and
+# the filter-file loader live in scripts/nlu_static/selection.py; the hook
+# below only calls them.
+from nlu_static import selection as nlu_selection  # noqa: E402
 import nlu_ledger_bridge  # noqa: E402
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
@@ -453,6 +458,58 @@ def pytest_collection_modifyitems(
         if " - " in test_id:
             locale_name = test_id.split(" - ")[0]
             item.add_marker(pytest.mark.locale(locale_name))
+
+    # JF-954.7: change-driven NLU row selection. When NLU_ROW_FILTER points
+    # at a file produced by `nlu_static select`, NLU test items whose
+    # (locale, utterance) is not listed are DESELECTED (pytest's own
+    # mechanism, so the summary shows the count) and one line states how
+    # many rows were kept and from which file. Unset means byte-for-byte
+    # the behavior above. A filter file that cannot be read or does not
+    # pass the schema check aborts the session: running everything or
+    # nothing silently would both be wrong. Non-NLU tests (E2E,
+    # reliability, smoke and anything else) are never touched. The
+    # checkpoint block above ran first, so --resume keeps working: its
+    # already-skipped items left `items` before this filter saw them.
+    filter_path = os.environ.get("NLU_ROW_FILTER")
+    if filter_path:
+        try:
+            row_filter = nlu_selection.load_row_filter(filter_path)
+        except (OSError, ValueError) as err:
+            pytest.exit(
+                f"error: NLU_ROW_FILTER {filter_path}: {err}",
+                returncode=2,
+            )
+        nlu_items = [item for item in items if _is_nlu_row_item(item)]
+        kept: list[pytest.Item] = []
+        dropped: list[pytest.Item] = []
+        for item in nlu_items:
+            case = item.callspec.params["nlu_fixture"]  # type: ignore[union-attr]
+            if nlu_selection.should_keep(
+                str(case.get("locale", "")), str(case.get("utterance", "")), row_filter
+            ):
+                kept.append(item)
+            else:
+                dropped.append(item)
+        if dropped:
+            config.hook.pytest_deselected(items=dropped)
+            dropped_ids = {id(item) for item in dropped}
+            items[:] = [item for item in items if id(item) not in dropped_ids]
+        print(
+            f"[nlu_row_filter] kept {len(kept)} of {len(nlu_items)} NLU rows "
+            f"from {filter_path} ({len(dropped)} deselected)"
+        )
+
+
+def _is_nlu_row_item(item: pytest.Item) -> bool:
+    """True for the parametrized NLU rows (the nlu_fixture family only).
+
+    The same family discriminator the ledger writer uses, so the filter and
+    the ledger can never disagree about what an NLU row is; e2e_fixture,
+    reliability_fixture and smoke_fixture items are different families and
+    are never filtered.
+    """
+    callspec = getattr(item, "callspec", None)
+    return callspec is not None and "nlu_fixture" in callspec.params
 
 
 def pytest_runtest_logreport(report: pytest.TestReport) -> None:
