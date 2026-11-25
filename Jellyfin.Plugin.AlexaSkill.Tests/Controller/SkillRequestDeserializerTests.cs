@@ -1,6 +1,7 @@
 #nullable enable
 
 using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using global::Alexa.NET.Request;
@@ -113,7 +114,10 @@ public class SkillRequestDeserializerTests : IDisposable
         var audioPlayerRequest = Assert.IsType<AudioPlayerRequest>(request!.Request);
         Assert.Equal(ErrorType.MediaServiceUnavailable, audioPlayerRequest.Error!.Type);
         Assert.Null(SkillRequestDeserializer.FindToleratedError(request));
-        Assert.Equal("MediaServiceUnavailable", UnknownWireTypeError.DescribeWireType(audioPlayerRequest.Error));
+        // The known-value branch renders the EnumMember wire form (the vocabulary
+        // Amazon's error tables use), not the member name, so log lines self-correlate
+        // with the docs (JF-930).
+        Assert.Equal("MEDIA_ERROR_SERVICE_UNAVAILABLE", UnknownWireTypeError.DescribeWireType(audioPlayerRequest.Error));
 
         var naive = JsonConvert.DeserializeObject<SkillRequest>(body);
         var naiveAudio = Assert.IsType<AudioPlayerRequest>(naive!.Request);
@@ -246,6 +250,77 @@ public class SkillRequestDeserializerTests : IDisposable
             TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory),
             CancellationToken.None);
         Assert.NotNull(response);
+    }
+
+    [Fact]
+    public async Task ExplicitNullErrorPayload_IsTolerated_AndExceptionHandlerCompletes()
+    {
+        // An explicit "error": null deserializes to a null Error (the JF-931
+        // converter's null branch). ExceptionHandler used to dereference Error.Type
+        // unguarded, turning the tolerated payload into a NullReferenceException; it
+        // must instead classify the InternalError bucket and let the shared renderer
+        // print UNKNOWN (JF-930, code-review round).
+        string body =
+            "{" +
+            "\"version\":\"1.0\"," +
+            "\"context\":{}," +
+            "\"request\":{" +
+              "\"type\":\"System.ExceptionEncountered\"," +
+              "\"requestId\":\"req-null-error\"," +
+              "\"error\":null" +
+            "}" +
+          "}";
+
+        var request = SkillRequestDeserializer.Deserialize(body);
+        var exceptionRequest = Assert.IsType<SystemExceptionRequest>(request!.Request);
+        Assert.Null(exceptionRequest.Error);
+
+        var handler = new ExceptionHandler(_sessionManagerMock.Object, _config, _loggerFactory);
+        Assert.True(handler.CanHandle(request.Request));
+        var response = await handler.HandleAsync(
+            request.Request,
+            TestHelpers.CreateTestContext($"jf930-null-{Guid.NewGuid():N}"),
+            TestHelpers.CreateTestUser(),
+            TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory),
+            CancellationToken.None);
+        Assert.NotNull(response);
+    }
+
+    [Fact]
+    public void DescribeWireType_EveryEnumMember_RendersTheWireForm_NotTheMemberName()
+    {
+        // Pins the JF-930 vocabulary contract: every ErrorType member of the pinned
+        // Alexa.NET carries an EnumMember wire name, so no known value ever falls to
+        // the member-name fallback in DescribeWireType. When a future library version
+        // ships an unattributed member, this test fails and forces a conscious
+        // decision instead of a silent vocabulary split on the log lines.
+        foreach (ErrorType member in Enum.GetValues<ErrorType>())
+        {
+            var error = new Error { Type = member };
+            Assert.True(
+                UnknownWireTypeError.DescribeWireType(error) != member.ToString(),
+                $"{member} has no EnumMember wire name; it would render as the member name on log lines, splitting the wire vocabulary");
+        }
+    }
+
+    [Fact]
+    public void WireNameRenderings_AreDistinctWithinEachEnum()
+    {
+        // The wire-name maps are last-writer-wins, so a future Alexa.NET version that
+        // gave two members the same EnumMember wire value would silently render the
+        // wrong member's name on log lines with no error anywhere. Distinct renderings
+        // across every member of each enum turn that collision into a red (JF-930
+        // review round; ground truth: 33 ErrorType members, 3 Reason members, every
+        // one attributed).
+        var errorRenderings = Enum.GetValues<ErrorType>()
+            .Select(member => UnknownWireTypeError.DescribeWireType(new Error { Type = member }))
+            .ToList();
+        Assert.Equal(errorRenderings.Count, errorRenderings.Distinct().Count());
+
+        var reasonRenderings = Enum.GetValues<Reason>()
+            .Select(reason => UnknownWireTypeReason.DescribeReason(new SessionEndedRequest { Reason = reason }))
+            .ToList();
+        Assert.Equal(reasonRenderings.Count, reasonRenderings.Distinct().Count());
     }
 
     /// <summary>
@@ -436,7 +511,10 @@ public class SkillRequestDeserializerTests : IDisposable
         var endedRequest = Assert.IsType<SessionEndedRequest>(request!.Request);
         Assert.Equal(Reason.Error, endedRequest.Reason);
         Assert.Null(SkillRequestDeserializer.FindToleratedReason(request));
-        Assert.Equal("Error", UnknownWireTypeReason.DescribeReason(endedRequest));
+        // The known-value branch renders the EnumMember wire form since the JF-930
+        // review round, the same vocabulary as the error half of the session-ended
+        // line.
+        Assert.Equal("ERROR", UnknownWireTypeReason.DescribeReason(endedRequest));
 
         var naive = JsonConvert.DeserializeObject<SkillRequest>(body);
         var naiveEnded = Assert.IsType<SessionEndedRequest>(naive!.Request);

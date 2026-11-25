@@ -4,6 +4,7 @@ using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Session;
 using Microsoft.Extensions.Logging;
@@ -12,8 +13,8 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 
 /// <summary>
 /// Handler for SystemExceptionRequest. Uses <see cref="ErrorClassifier"/>
-/// to map Alexa error types to structured categories with appropriate
-/// log levels and user-facing locale strings.
+/// to map Alexa error types to structured categories with
+/// category-appropriate log levels.
 /// </summary>
 public class ExceptionHandler : BaseHandler
 {
@@ -50,16 +51,38 @@ public class ExceptionHandler : BaseHandler
     public override Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
         SystemExceptionRequest exceptionRequest = (SystemExceptionRequest)request;
+        Error? error = exceptionRequest.Error;
 
-        ErrorCategory category = ErrorClassifier.ClassifyAlexaError(exceptionRequest.Error.Type.ToString());
-        LogLevel logLevel = ErrorCategoryInfo.LogLevel(category);
+        // JF-930: classify off the enum the deserializer produced; the pre-fix
+        // member-name-vs-wire-string history lives on ClassifyAlexaError. An explicit
+        // "error": null payload deserializes to a null Error (the JF-931 converter's
+        // null branch): the tolerance already treated it as a degenerate carrier, so
+        // it logs at Warning with the UNKNOWN rendering instead of the Critical a
+        // genuine INTERNAL_ERROR fault earns (an indistinguishable Critical for every
+        // degenerate payload would be pure alerting noise).
+        LogLevel logLevel;
+        object category;
+        if (error is null)
+        {
+            logLevel = LogLevel.Warning;
+            category = SkillRequestDeserializer.UnknownSentinel;
+        }
+        else
+        {
+            ErrorCategory classified = ErrorClassifier.ClassifyAlexaError(error.Type);
+            logLevel = ErrorCategoryInfo.LogLevel(classified);
+            category = classified;
+        }
 
+        // JF-930: the one shared Error formatter (the raw wire value beside the
+        // fallback bucket for a tolerated unknown, the Amazon wire form for known
+        // values).
         Logger.Log(
             logLevel,
             "Alexa error: {ErrorType} category={Category} - {ErrorMessage} [RequestId={RequestId}, DeviceId={DeviceId}]",
-            exceptionRequest.Error.Type,
+            UnknownWireTypeError.DescribeWireType(error),
             category,
-            exceptionRequest.Error.Message,
+            error?.Message ?? string.Empty,
             request.RequestId,
             context.System.Device?.DeviceID);
 

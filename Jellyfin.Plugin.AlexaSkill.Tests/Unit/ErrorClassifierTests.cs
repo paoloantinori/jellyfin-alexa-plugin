@@ -1,5 +1,6 @@
 using System;
 using System.Net.Http;
+using Alexa.NET.Request.Type;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Microsoft.Extensions.Logging;
 using Xunit;
@@ -72,26 +73,74 @@ public class ErrorClassifierTests
         Assert.Equal(ErrorCategory.SkillError, ErrorClassifier.Classify(ex));
     }
 
+    // The pre-JF-930 classifier compared Amazon wire strings but received the ErrorType
+    // enum member names its call site produced, so every arm was dead and every Alexa
+    // error classified SkillError through the discard. These theories switch on the
+    // enum members the deserializer actually produces; the mapping rationale and
+    // provenance live on ClassifyAlexaError's doc and arm comments.
+
     [Theory]
-    [InlineData("INTERNAL_ERROR", ErrorCategory.SkillError)]
-    [InlineData("DEVICE_NOT_CONNECTED", ErrorCategory.TransientBackend)]
-    [InlineData("ENDPOINT_TIMEOUT", ErrorCategory.Timeout)]
-    [InlineData("INVALID_REQUEST", ErrorCategory.UserError)]
-    [InlineData("UNKNOWN_TYPE", ErrorCategory.SkillError)]
-    [InlineData(null, ErrorCategory.SkillError)]
-    public void ClassifyAlexaError_MapsCorrectly(string? errorType, ErrorCategory expected)
+    [InlineData(ErrorType.DeviceCommunicationError)]
+    [InlineData(ErrorType.EndpointUnreachable)]
+    [InlineData(ErrorType.BridgeUnreachable)]
+    [InlineData(ErrorType.EndpointBusy)]
+    [InlineData(ErrorType.MediaServiceUnavailable)]
+    [InlineData(ErrorType.InternalServiceError)]
+    [InlineData(ErrorType.InternalServerError)]
+    [InlineData(ErrorType.InternalDeviceError)]
+    [InlineData(ErrorType.RateLimitExceeded)]
+    public void ClassifyAlexaError_TransientFamily_ReturnsTransientBackend(ErrorType errorType)
     {
-        Assert.Equal(expected, ErrorClassifier.ClassifyAlexaError(errorType));
+        // Every member here previously fell through the discard arm and logged
+        // Critical: they are the existing members of the transient classes the dead
+        // switch's TransientBackend intent covered.
+        Assert.Equal(ErrorCategory.TransientBackend, ErrorClassifier.ClassifyAlexaError(errorType));
+    }
+
+    [Theory]
+    [InlineData(ErrorType.InternalError)] // also the JF-931 tolerance bucket
+    [InlineData(ErrorType.InvalidResponse)] // skill produced a malformed response
+    [InlineData(ErrorType.InvalidDirective)]
+    [InlineData(ErrorType.InvalidMediaRequest)]
+    [InlineData(ErrorType.MediaErrorUnknown)]
+    [InlineData(ErrorType.HardwareMalfunction)]
+    [InlineData(ErrorType.InsufficientPermissions)]
+    public void ClassifyAlexaError_SkillErrorClass_ReturnsSkillError(ErrorType errorType)
+    {
+        // SkillError-class members: a fault in the skill's own request/response content,
+        // a condition with no better-fitting category, and the tolerated-unknown bucket
+        // (an UnknownWireTypeError arrives as InternalError, so unknowns classify
+        // SkillError by an arm that actually fires).
+        Assert.Equal(ErrorCategory.SkillError, ErrorClassifier.ClassifyAlexaError(errorType));
     }
 
     [Fact]
-    public void ErrorCategoryInfo_LocaleKey_ReturnsExpectedKeys()
+    public void ClassifyAlexaError_UndefinedEnumValue_ReturnsSkillError()
     {
-        Assert.Equal("ServerUnavailable", ErrorCategoryInfo.LocaleKey(ErrorCategory.TransientBackend));
-        Assert.Equal("ErrorPermanentBackend", ErrorCategoryInfo.LocaleKey(ErrorCategory.PermanentBackend));
-        Assert.Equal("ErrorUserError", ErrorCategoryInfo.LocaleKey(ErrorCategory.UserError));
-        Assert.Equal("ErrorSkillError", ErrorCategoryInfo.LocaleKey(ErrorCategory.SkillError));
-        Assert.Equal("ErrorTimeout", ErrorCategoryInfo.LocaleKey(ErrorCategory.Timeout));
+        // The SkillError discard stays total: a numeric value outside the pinned enum
+        // (only constructible in code, never on the wire, since an unknown wire value
+        // rides the JF-931 tolerance bucket to InternalError) still classifies
+        // SkillError.
+        ErrorType undefined = (ErrorType)999;
+        Assert.Equal(ErrorCategory.SkillError, ErrorClassifier.ClassifyAlexaError(undefined));
+    }
+
+    [Fact]
+    public void ClassifyAlexaError_NoEnumMember_ReachesTimeoutOrUserError()
+    {
+        // Pins the mapping's documented unreachability: ENDPOINT_TIMEOUT and
+        // INVALID_REQUEST, the dead switch's Timeout/UserError intents, have no
+        // ErrorType members in the pinned Alexa.NET 1.22.0, so no member maps there.
+        // When Amazon adds a timeout-shaped error.type and Alexa.NET grows the enum,
+        // this test fails and forces the new member's mapping to be decided
+        // deliberately instead of silently riding the SkillError discard.
+        foreach (ErrorType member in Enum.GetValues<ErrorType>())
+        {
+            ErrorCategory category = ErrorClassifier.ClassifyAlexaError(member);
+            Assert.True(
+                category != ErrorCategory.Timeout && category != ErrorCategory.UserError,
+                $"{member} classified {category}; a new Alexa error.type member must be mapped deliberately, not left to the discard");
+        }
     }
 
     [Fact]

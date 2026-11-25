@@ -82,10 +82,38 @@ public class StructuredLoggingTests : PluginTestBase
 
         var entry = Assert.Single(factory.LogEntries);
         Assert.Equal(LogLevel.Critical, entry.Level);
-        Assert.Contains("InternalError", entry.Message);
+        // JF-930: the shared formatter renders the Amazon wire form (the EnumMember
+        // value the error tables use), not the enum member name; the Critical level
+        // itself (INTERNAL_ERROR -> SkillError) is unchanged.
+        Assert.Contains("INTERNAL_ERROR", entry.Message);
         Assert.Contains(errorMessage, entry.Message);
         Assert.Contains("req-123", entry.Message);
         Assert.Contains("dev-abc", entry.Message);
+    }
+
+    [Fact]
+    public async Task ExceptionHandler_LogsWarningForNullErrorPayload()
+    {
+        // An explicit "error": null payload deserializes to a null Error (the JF-931
+        // converter's null branch): a degenerate carrier the tolerance already
+        // flagged, so it logs at Warning with the UNKNOWN rendering instead of the
+        // Critical a genuine INTERNAL_ERROR fault earns (JF-930 review round).
+        var factory = CreateCapturingLoggerFactory();
+        var handler = new ExceptionHandler(_sessionManagerMock.Object, _config, factory);
+
+        var request = new SystemExceptionRequest
+        {
+            Error = null,
+            RequestId = "req-null-error"
+        };
+        var context = CreateContext(deviceId: "dev-null-error");
+
+        await handler.HandleAsync(request, context, TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+
+        var entry = Assert.Single(factory.LogEntries);
+        Assert.Equal(LogLevel.Warning, entry.Level);
+        Assert.Contains("UNKNOWN", entry.Message);
+        Assert.Contains("req-null-error", entry.Message);
     }
 
     [Fact]
@@ -104,8 +132,9 @@ public class StructuredLoggingTests : PluginTestBase
         await handler.HandleAsync(request, context, TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
 
         var entry = Assert.Single(factory.LogEntries);
-        // Verify the formatted message contains the structured values
-        Assert.Contains("InvalidResponse", entry.Message);
+        // Verify the formatted message contains the structured values (the error.type
+        // in the Amazon wire form since JF-930)
+        Assert.Contains("INVALID_RESPONSE", entry.Message);
         Assert.Contains("bad response", entry.Message);
         Assert.Contains("req-456", entry.Message);
         Assert.Contains("dev-xyz", entry.Message);
@@ -186,7 +215,7 @@ public class StructuredLoggingTests : PluginTestBase
 
         var entry = Assert.Single(factory.LogEntries);
         Assert.Equal(LogLevel.Error, entry.Level);
-        Assert.Contains("MediaServiceUnavailable", entry.Message);
+        Assert.Contains("MEDIA_ERROR_SERVICE_UNAVAILABLE", entry.Message);
         Assert.Contains("identifier not found", entry.Message);
         Assert.Contains("pf-err-001", entry.Message);
         Assert.Contains("pf-err-device", entry.Message);
@@ -236,7 +265,7 @@ public class StructuredLoggingTests : PluginTestBase
 
         var entry = Assert.Single(factory.LogEntries);
         Assert.Equal(LogLevel.Information, entry.Level);
-        Assert.Contains("UserInitiated", entry.Message);
+        Assert.Contains("USER_INITIATED", entry.Message);
         Assert.Contains("se-req-001", entry.Message);
     }
 
@@ -257,7 +286,7 @@ public class StructuredLoggingTests : PluginTestBase
 
         var entry = Assert.Single(factory.LogEntries);
         Assert.Equal(LogLevel.Information, entry.Level);
-        Assert.Contains("ExceededMaxReprompts", entry.Message);
+        Assert.Contains("EXCEEDED_MAX_REPROMPTS", entry.Message);
         Assert.Contains("se-max-reprompts", entry.Message);
     }
 
@@ -283,8 +312,10 @@ public class StructuredLoggingTests : PluginTestBase
 
         var entry = Assert.Single(factory.LogEntries);
         Assert.Equal(LogLevel.Warning, entry.Level);
-        Assert.Contains("Error", entry.Message);
-        Assert.Contains("InternalError", entry.Message);
+        // The Reason renders its EnumMember wire form since the JF-930 review round,
+        // the same vocabulary as the error half of the line.
+        Assert.Contains("ERROR", entry.Message);
+        Assert.Contains("INTERNAL_ERROR", entry.Message);
         Assert.Contains("session blew up", entry.Message);
         Assert.Contains("se-err-001", entry.Message);
     }
@@ -308,8 +339,8 @@ public class StructuredLoggingTests : PluginTestBase
         var entry = Assert.Single(factory.LogEntries);
         Assert.Equal(LogLevel.Warning, entry.Level);
         // Verify all four structured values appear in the formatted message
-        Assert.Contains("Error", entry.Message);           // Reason
-        Assert.Contains("InvalidResponse", entry.Message);  // ErrorType
+        Assert.Contains("ERROR", entry.Message);           // Reason (wire form)
+        Assert.Contains("INVALID_RESPONSE", entry.Message);  // ErrorType
         Assert.Contains("invalid", entry.Message);          // ErrorMessage
         Assert.Contains("se-err-002", entry.Message);       // RequestId
     }
