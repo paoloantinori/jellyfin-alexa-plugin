@@ -208,7 +208,7 @@ Complete phrase list (352 phrases across 70 commands):
 **Play a video or movie**
 
 - `شغل الفيديو <عنوان الفيديو أو الفيلم>`
-- `شغل <عنوان الفيديو أو الفيلم>`
+- `شغل فيلم <عنوان الفيديو أو الفيلم>`
 - `شاهد <عنوان الفيديو أو الفيلم>`
 - `هل يمكنك تشغيل <عنوان الفيديو أو الفيلم>`
 - `أريد مشاهدة <عنوان الفيديو أو الفيلم>`
@@ -677,7 +677,7 @@ Placeholder legend:
 | `<woorden uit de songtitel>` | `{titleKeywords}` |
 | `<gebruikersnaam>` | `{username}` |
 
-Complete phrase list (417 phrases across 70 commands):
+Complete phrase list (416 phrases across 70 commands):
 
 #### Play music
 
@@ -1206,7 +1206,6 @@ Complete phrase list (417 phrases across 70 commands):
 - `verder luisteren`
 - `hervat waar ik was gebleven`
 - `wat was ik aan het kijken`
-- `doorgaan`
 - `verder gaan`
 
 **List what is in progress**
@@ -4495,7 +4494,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (774 phrases across 71 commands):
+Complete phrase list (776 phrases across 71 commands):
 
 #### Play music
 
@@ -5281,6 +5280,7 @@ Complete phrase list (774 phrases across 71 commands):
 - `who narrates this`
 - `what is the rating`
 - `how is this rated`
+- `what song is this`
 
 **Ask what the library has by an artist**
 
@@ -5417,6 +5417,7 @@ Complete phrase list (774 phrases across 71 commands):
 - `set speed <speed (normal, one and a half, double, faster)>`
 - `play at speed <speed (normal, one and a half, double, faster)>`
 - `go <speed (normal, one and a half, double, faster)>`
+- `normal speed`
 
 **Follow me (move playback here)**
 
@@ -7784,7 +7785,7 @@ Placeholder legend:
 | `<गाने के नाम के शब्द>` | `{titleKeywords}` |
 | `<उपयोगकर्ता का नाम>` | `{username}` |
 
-Complete phrase list (390 phrases across 70 commands):
+Complete phrase list (389 phrases across 70 commands):
 
 #### Play music
 
@@ -8292,7 +8293,6 @@ Complete phrase list (390 phrases across 70 commands):
 - `सुनना जारी रखो`
 - `जहाँ छोड़ा था वहाँ से फिर से शुरू करो`
 - `मैं क्या देख रहा था`
-- `जारी रखो`
 - `जारी`
 
 **List what is in progress**
@@ -9833,6 +9833,7 @@ Complete phrase list (1859 phrases across 76 commands):
 - `Metti il podcast <nome del podcast>`
 - `Ascolta l'ultimo episodio di <nome del podcast>`
 - `Di riprodurre il podcast <nome del podcast>`
+- `Di riprodurre il podcast`
 - `Di suonare il podcast <nome del podcast>`
 - `Di ascoltare il podcast <nome del podcast>`
 - `Di mettere il podcast <nome del podcast>`
@@ -10409,7 +10410,6 @@ Complete phrase list (1859 phrases across 76 commands):
 
 - `Cosa stavo guardando`
 - `Mostrami i video in corso`
-- `Riprendi a guardare`
 - `Cosa ho lasciato a metà`
 - `Cosa ho lasciato a meta`
 - `quali video non ho finito`
@@ -10560,7 +10560,7 @@ Placeholder legend:
 | `<曲名のキーワード>` | `{titleKeywords}` |
 | `<ユーザー名>` | `{username}` |
 
-Complete phrase list (348 phrases across 70 commands):
+Complete phrase list (347 phrases across 70 commands):
 
 #### Play music
 
@@ -10849,7 +10849,7 @@ Complete phrase list (348 phrases across 70 commands):
 
 **Add a song to a playlist**
 
-- `曲 <曲名>`
+- `曲 <曲名> を追加して`
 - `プレイリスト <プレイリスト名> に追加して`
 
 **Remove the current song from a playlist**
@@ -11030,7 +11030,6 @@ Complete phrase list (348 phrases across 70 commands):
 - `続きを聴いて`
 - `途中から再開して`
 - `何を見てたっけ`
-- `続き`
 
 **List what is in progress**
 
@@ -11832,7 +11831,7 @@ Placeholder legend:
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (484 phrases across 70 commands):
+Complete phrase list (483 phrases across 70 commands):
 
 #### Play music
 
@@ -11905,8 +11904,7 @@ Complete phrase list (484 phrases across 70 commands):
 **Play by genre**
 
 - `Reproduce música <género musical>`
-- `Reproduce <género musical>`
-- `Pon <género musical>`
+- `Pon música <género musical>`
 - `Quiero escuchar <género musical>`
 - `Reproduce canciones de <género musical>`
 
@@ -12567,7 +12565,7 @@ Placeholder legend:
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (483 phrases across 70 commands):
+Complete phrase list (482 phrases across 70 commands):
 
 #### Play music
 
@@ -12640,8 +12638,7 @@ Complete phrase list (483 phrases across 70 commands):
 **Play by genre**
 
 - `Reproduce música <género musical>`
-- `Reproduce <género musical>`
-- `Pon <género musical>`
+- `Pon música <género musical>`
 - `Quiero escuchar <género musical>`
 - `Reproduce canciones de <género musical>`
 
@@ -13301,7 +13298,7 @@ Placeholder legend:
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (473 phrases across 70 commands):
+Complete phrase list (472 phrases across 70 commands):
 
 #### Play music
 
@@ -13374,8 +13371,7 @@ Complete phrase list (473 phrases across 70 commands):
 **Play by genre**
 
 - `Reproduce música <género musical>`
-- `Reproduce <género musical>`
-- `Pon <género musical>`
+- `Pon música <género musical>`
 - `Quiero escuchar <género musical>`
 - `Reproduce canciones de <género musical>`
 

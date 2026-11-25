@@ -58,7 +58,7 @@ Invocation name: **"jellyfin player"**
 | Play Radio | `ابدأ الراديو` · `شغل محطة الراديو {station}` · `شغل موسيقى مشابهة` · `شغل أغانٍ مشابهة` · `ابدأ محطة راديو` |
 | Play Random | `شغل {media_type} عشوائي` · `شغل شيء عشوائي` · `شغل {media_type} عشوائي من {genre}` · `شغل {genre} عشوائي` · `اخلط {media_type}` · `شغل أغانٍ عشوائية` |
 | Play Song | `شغل {song}` · `شغل {song} لـ {musician}` · `شغل الأغنية {song}` · `شغل أغنية {song}` · `شغل الأغنية {song} لـ {musician}` · `شغل أغنية {song} لـ {musician}` |
-| Play Video | `شغل الفيديو {title}` · `شغل {title}` · `شاهد {title}` · `هل يمكنك تشغيل {title}` · `أريد مشاهدة {title}` · `شغل الفيلم {title}` |
+| Play Video | `شغل الفيديو {title}` · `شغل فيلم {title}` · `شاهد {title}` · `هل يمكنك تشغيل {title}` · `أريد مشاهدة {title}` · `شغل الفيلم {title}` |
 | Query Artist Library | `ما الأغاني لدينا لـ {musician}` · `ما {query_type} لدينا لـ {musician}` · `ما الألبومات لدينا لـ {musician}` · `ما الذي لدينا لـ {musician}` · `أعرض الأغاني لـ {musician}` · `أعرض الألبومات لـ {musician}` |
 | Query Recently Added | `ما الجديد` · `ما الذي أضيف مؤخراً` · `ما الجديد في مكتبتي` · `أرني ما أضيف مؤخراً` · `هل هناك شيء جديد` · `ما الذي تمت إضافته مؤخراً` |
 | Rate Item | `أعط هذا {star_rating} نجوم` · `أعط هذه الأغنية {star_rating} نجوم` · `قيّم هذا بـ {star_rating} نجوم` · `قيّم هذه الأغنية بـ {star_rating} نجوم` |
@@ -437,7 +437,7 @@ Invocation name: **"jellyfin player"**
 | Recommend | `recommend something` · `recommend {media_type}` · `recommend some music` · `recommend a movie` · `suggest something to watch` · `suggest some music` |
 | Remove Current From Playlist | `remove this song from the playlist {playlist}` · `remove this from the playlist {playlist}` · `take this song off the playlist {playlist}` |
 | Search Media | `Search for a movie {query}` · `Search for content {query}` · `Find a movie {query}` · `Find content {query}` · `Look for a movie {query}` · `Look for content {query}` |
-| Set Playback Speed | `at speed {speed}` · `speed {speed}` · `set the speed to {speed}` · `set speed {speed}` · `play at speed {speed}` · `go {speed}` |
+| Set Playback Speed | `at speed {speed}` · `normal speed` · `speed {speed}` · `set the speed to {speed}` · `set speed {speed}` · `play at speed {speed}` |
 | Set Reminder | `remind me in {reminder_duration}` · `remind me at {reminder_time}` · `set a reminder for {reminder_duration}` · `set a reminder for {reminder_time}` |
 | Show Lyrics | `show the lyrics` · `show lyrics` · `read the lyrics` · `display the lyrics` |
 | Show More | `show more` · `next page` · `more results` · `see more` · `more` · `what else` |
@@ -478,7 +478,7 @@ Invocation name: **"jellyfin player"**
 | Play Artist Songs | `Reproduce canciones de {musician}` · `Reproduce música de {musician}` · `Reproduce temas de {musician}` · `Reproduce {musician}` · `Escucha {musician}` · `Escucha canciones de {musician}` |
 | Play Book | `reproduce {book}` · `reproduce el libro {book}` · `escucha {book}` · `escucha el libro {book}` · `escucha el audiolibro {book}` |
 | Play By Decade | `Reproduce canciones de los {decade}` · `Reproduce {genre} de los {decade}` · `Reproduce temas de los {decade}` · `Reproduce éxitos de los {decade}` · `Reproduce música de los {decade}` · `Reproduce {decade} éxitos` |
-| Play By Genre | `Reproduce música {genre}` · `Reproduce {genre}` · `Pon {genre}` · `Quiero escuchar {genre}` · `Reproduce canciones de {genre}` |
+| Play By Genre | `Reproduce música {genre}` · `Pon música {genre}` · `Quiero escuchar {genre}` · `Reproduce canciones de {genre}` |
 | Play Channel | `Pon el canal {channel}` · `Pon la radio {channel}` |
 | Play Episode | `reproduce la temporada {season_number} episodio {episode_number} de {series_name}` · `reproduce {series_name} temporada {season_number} episodio {episode_number}` · `el episodio {episode_number} de la temporada {season_number} de {series_name}` · `reproduce el episodio {episode_number} de {series_name}` · `ver temporada {season_number} episodio {episode_number} de {series_name}` · `ver la temporada {season_number} episodio {episode_number} de {series_name}` |
 | Play Favorites | `Reproduce mis {media_type} favoritos` · `Reproduce mis favoritos` · `reproduce los favoritos de {username}` · `reproduce {media_type} favoritos de {username}` · `Reproduce mi {media_type} favorito` · `pon los favoritos de {username}` |
@@ -539,7 +539,7 @@ Invocation name: **"jellyfin player"**
 | Play Artist Songs | `Reproduce canciones de {musician}` · `Reproduce música de {musician}` · `Reproduce temas de {musician}` · `Reproduce {musician}` · `Escucha {musician}` · `Escucha canciones de {musician}` |
 | Play Book | `reproduce {book}` · `reproduce el libro {book}` · `escucha {book}` · `escucha el libro {book}` · `escucha el audiolibro {book}` |
 | Play By Decade | `Reproduce canciones de los {decade}` · `Reproduce {genre} de los {decade}` · `Reproduce temas de los {decade}` · `Reproduce éxitos de los {decade}` · `Reproduce música de los {decade}` · `Reproduce {decade} éxitos` |
-| Play By Genre | `Reproduce música {genre}` · `Reproduce {genre}` · `Pon {genre}` · `Quiero escuchar {genre}` · `Reproduce canciones de {genre}` |
+| Play By Genre | `Reproduce música {genre}` · `Pon música {genre}` · `Quiero escuchar {genre}` · `Reproduce canciones de {genre}` |
 | Play Channel | `Pon el canal {channel}` · `Pon la radio {channel}` |
 | Play Episode | `reproduce la temporada {season_number} episodio {episode_number} de {series_name}` · `reproduce {series_name} temporada {season_number} episodio {episode_number}` · `el episodio {episode_number} de la temporada {season_number} de {series_name}` · `reproduce el episodio {episode_number} de {series_name}` · `ver temporada {season_number} episodio {episode_number} de {series_name}` · `ver la temporada {season_number} episodio {episode_number} de {series_name}` |
 | Play Favorites | `Reproduce mis {media_type} favoritos` · `Reproduce mis favoritos` · `reproduce los favoritos de {username}` · `reproduce {media_type} favoritos de {username}` · `Reproduce mi {media_type} favorito` · `pon los favoritos de {username}` |
@@ -600,7 +600,7 @@ Invocation name: **"jellyfin player"**
 | Play Artist Songs | `Reproduce canciones de {musician}` · `Reproduce música de {musician}` · `Reproduce temas de {musician}` · `Reproduce {musician}` · `Escucha {musician}` · `Escucha canciones de {musician}` |
 | Play Book | `reproduce {book}` · `reproduce el libro {book}` · `escucha {book}` · `escucha el libro {book}` · `escucha el audiolibro {book}` |
 | Play By Decade | `Reproduce canciones de los {decade}` · `Reproduce {genre} de los {decade}` · `Reproduce temas de los {decade}` · `Reproduce éxitos de los {decade}` · `Reproduce música de los {decade}` · `Reproduce {decade} éxitos` |
-| Play By Genre | `Reproduce música {genre}` · `Reproduce {genre}` · `Pon {genre}` · `Quiero escuchar {genre}` · `Reproduce canciones de {genre}` |
+| Play By Genre | `Reproduce música {genre}` · `Pon música {genre}` · `Quiero escuchar {genre}` · `Reproduce canciones de {genre}` |
 | Play Channel | `Pon el canal {channel}` · `Pon la radio {channel}` |
 | Play Episode | `reproduce la temporada {season_number} episodio {episode_number} de {series_name}` · `reproduce {series_name} temporada {season_number} episodio {episode_number}` · `el episodio {episode_number} de la temporada {season_number} de {series_name}` · `reproduce el episodio {episode_number} de {series_name}` · `ver temporada {season_number} episodio {episode_number} de {series_name}` · `ver la temporada {season_number} episodio {episode_number} de {series_name}` |
 | Play Favorites | `Reproduce mis {media_type} favoritos` · `Reproduce mis favoritos` · `reproduce los favoritos de {username}` · `reproduce {media_type} favoritos de {username}` · `Reproduce mi {media_type} favorito` · `pon los favoritos de {username}` |
@@ -774,7 +774,7 @@ Invocation name: **"jellyfin player"**
 | Add To Queue | `{song} कतार में जोड़ो` · `{musician} का {song} कतार में जोड़ो` · `{song} कतार में डालो` · `{musician} का {song} कतार में डालो` |
 | Browse Library | `{browse_category}` · `शैलियाँ {filter} ब्राउज़ करो` · `{browse_category} ब्राउज़ करो` · `मुझे {browse_category} दिखाओ` · `{browse_category} की लिस्ट दो` · `मेरे पास कौन से {browse_category} हैं` |
 | Clear Queue | `कतार साफ़ करो` · `कतार खाली करो` · `कतार से सब हटाओ` |
-| Continue Watching | `देखना जारी रखो` · `सुनना जारी रखो` · `जहाँ छोड़ा था वहाँ से फिर से शुरू करो` · `मैं क्या देख रहा था` · `जारी रखो` · `जारी` |
+| Continue Watching | `देखना जारी रखो` · `सुनना जारी रखो` · `जहाँ छोड़ा था वहाँ से फिर से शुरू करो` · `मैं क्या देख रहा था` · `जारी` |
 | Create Playlist | `{playlist} नाम की प्लेलिस्ट बनाओ` · `नई प्लेलिस्ट {playlist} बनाओ` · `प्लेलिस्ट {playlist} बनाओ` |
 | Find Song | `गाना खोजो` · `{titleKeywords} नाम का गाना खोजो` · `मेरे गाना खोजने में मदद करो` · `गाना खोजना है` · `मैं गाना खोज रहा हूँ` · `मुझे गाना खोजना है` |
 | Find Song By Artist | `{musician} का गाना खोजो` · `{musician} का गाना खोजने में मदद करो` · `{musician} का गाना ढूंढो` · `मैं {musician} का गाना खोज रहा हूँ` · `मुझे {musician} का गाना खोजना है` · `मैं {musician} का गाना खोजना चाहता हूँ` |
@@ -841,7 +841,7 @@ Invocation name: **"mia collezione"**
 | Find Song By Artist | `cerca una canzone di {musician}` · `cerca una canzone dei {musician}` · `cerca una canzone degli {musician}` · `cerca una canzone delle {musician}` · `aiutami a trovare una canzone di {musician}` · `aiutami a trovare una canzone dei {musician}` |
 | Follow Me | `seguimi` · `seguirmi` · `seguir mi` · `continua ad ascoltare` · `riprendi da dove ero rimasto` · `riprendi da dove ero rimasta` |
 | Go To Chapter | `Vai al capitolo {chapter_number}` · `Vai al capitolo {direction}` · `Salta al capitolo {chapter_number}` · `Salta al capitolo {direction}` · `Capitolo {chapter_number}` · `Capitolo {direction}` |
-| In Progress Media List | `Cosa stavo guardando` · `Mostrami i video in corso` · `Riprendi a guardare` · `Cosa ho lasciato a metà` · `Cosa ho lasciato a meta` · `quali video non ho finito` |
+| In Progress Media List | `Cosa stavo guardando` · `Mostrami i video in corso` · `Cosa ho lasciato a metà` · `Cosa ho lasciato a meta` · `quali video non ho finito` · `cosa non ho finito di guardare` |
 | Learn My Voice | `Impara la mia voce` · `Riconosci la mia voce` · `Associa la mia voce` · `Collega la mia voce` · `Impara chi sono` · `Riconoscimi` |
 | List Queue | `cosa c'è nella coda` · `cosa c'è in coda` · `cosa c'è dopo` · `cosa suona dopo` · `mostra la coda` · `elenca la coda` |
 | Loop All Off | `Disattiva loop` · `Disattiva ripetizione` · `disattivare loop` · `disattivare ripetizione` · `Di disattivare loop` · `Di disattivare ripetizione` |
@@ -864,7 +864,7 @@ Invocation name: **"mia collezione"**
 | Play Next | `riproduci {song} dopo` · `riproduci {song} di {musician} dopo` · `suona {song} dopo` · `metti {song} dopo` · `suona {song} di {musician} dopo` · `voglio ascoltare {song} dopo` |
 | Play Next Episode | `Riproduci {episode_position} episodio di {series_name}` · `Continua a guardare {series_name}` · `Metti {episode_position} episodio di {series_name}` · `Guarda {episode_position} episodio di {series_name}` · `Guarda l'episodio {episode_position} di {series_name}` · `Continua a guardare la serie {series_name}` |
 | Play Playlist | `Riproduci playlist {playlist}` · `Suona playlist {playlist}` · `Metti playlist {playlist}` · `Pleia playlist {playlist}` · `Ascolta playlist {playlist}` · `Riproduci la playlist {playlist}` |
-| Play Podcast | `Riproduci il podcast {podcast_name}` · `Suona il podcast {podcast_name}` · `Ascolta il podcast {podcast_name}` · `Metti il podcast {podcast_name}` · `Ascolta l'ultimo episodio di {podcast_name}` · `Di riprodurre il podcast {podcast_name}` |
+| Play Podcast | `Riproduci il podcast {podcast_name}` · `Di riprodurre il podcast` · `Suona il podcast {podcast_name}` · `Ascolta il podcast {podcast_name}` · `Metti il podcast {podcast_name}` · `Ascolta l'ultimo episodio di {podcast_name}` |
 | Play Radio | `riproduci la radio` · `riproduci la stazione radio {station}` · `suona la radio` · `metti la radio` · `modalità radio` · `riproduci musica simile` |
 | Play Random | `Riproduci {media_type} casuali` · `Riproduci {media_type} a caso` · `Suona {media_type} casuali` · `Suona {media_type} a caso` · `Metti {media_type} casuali` · `Metti {media_type} a caso` |
 | Play Song | `Riproduci {song} di {musician}` · `riprodurre {song}` · `Riproduci {song} dei {musician}` · `Riproduci {song} degli {musician}` · `Riproduci {song} delle {musician}` · `Suona {song} di {musician}` |
@@ -898,11 +898,11 @@ Invocation name: **"jellyfin player"**
 | Intent | Utterances |
 |--------|------------|
 | Add Current To Playlist | `この曲をプレイリスト {playlist} に追加して` · `今の曲をプレイリスト {playlist} に追加して` |
-| Add Song To Playlist | `曲 {song_query}` · `プレイリスト {playlist_target} に追加して` |
+| Add Song To Playlist | `曲 {song_query} を追加して` · `プレイリスト {playlist_target} に追加して` |
 | Add To Queue | `{song} をキューに追加して` · `{musician} の {song} をキューに追加して` · `{song} をキューに入れて` · `{musician} の {song} をキューに入れて` |
 | Browse Library | `{browse_category}` · `ジャンル {filter} をブラウズして` · `{browse_category} をブラウズして` · `{browse_category} を見せて` · `{browse_category} のリスト` · `どんな {browse_category} がある` |
 | Clear Queue | `キューをクリアして` · `キューを空にして` · `キューから全部消して` |
-| Continue Watching | `続きを見て` · `続きを聴いて` · `途中から再開して` · `何を見てたっけ` · `続き` |
+| Continue Watching | `続きを見て` · `続きを聴いて` · `途中から再開して` · `何を見てたっけ` |
 | Create Playlist | `{playlist} というプレイリストを作って` · `新しいプレイリスト {playlist} を作成して` · `プレイリスト {playlist} を作って` |
 | Find Song | `曲を探して` · `{titleKeywords} という曲を探して` · `曲を探すのを手伝って` · `曲を検索して` · `曲を探しているの` · `曲を見つけたいの` |
 | Find Song By Artist | `{musician} の曲を探して` · `{musician} の曲を探すのを手伝って` · `{musician} の曲を検索して` · `{musician} の曲を探しているの` · `{musician} の曲を見つけたい` · `{musician} の曲を探してちょうだい` |
@@ -963,7 +963,7 @@ Invocation name: **"jellyfin player"**
 | Add To Queue | `voeg {song} toe aan mijn wachtrij` · `voeg {song} van {musician} toe aan mijn wachtrij` · `voeg {song} toe aan de wachtrij` · `voeg {song} van {musician} toe aan de wachtrij` · `wachtrij {song}` · `wachtrij {song} van {musician}` |
 | Browse Library | `{browse_category}` · `browse genres {filter}` · `alleen {browse_category}` · `ik wil {browse_category}` · `browse {browse_category}` · `laat {browse_category} zien` |
 | Clear Queue | `wis mijn wachtrij` · `wis de wachtrij` · `leeg mijn wachtrij` · `leeg de wachtrij` · `verwijder alles uit mijn wachtrij` |
-| Continue Watching | `verder kijken` · `verder luisteren` · `hervat waar ik was gebleven` · `wat was ik aan het kijken` · `doorgaan` · `verder gaan` |
+| Continue Watching | `verder kijken` · `verder luisteren` · `hervat waar ik was gebleven` · `wat was ik aan het kijken` · `verder gaan` |
 | Create Playlist | `Maak een afspeellijst genaamd {playlist}` · `Maak een nieuwe afspeellijst genaamd {playlist}` · `Maak een afspeellijst {playlist}` · `Nieuwe afspeellijst {playlist}` |
 | Find Song | `vind een nummer` · `vind een nummer genaamd {titleKeywords}` · `help me een nummer te vinden` · `zoek een nummer` · `ik zoek een nummer` · `ik moet een nummer vinden` |
 | Find Song By Artist | `vind een nummer van {musician}` · `help me een nummer te vinden van {musician}` · `zoek een nummer van {musician}` · `ik zoek een nummer van {musician}` · `ik moet een nummer van {musician} vinden` · `vind me een nummer van {musician}` |
