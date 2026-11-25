@@ -1,12 +1,18 @@
-"""Name-level catalog snapshot producer (JF-954 subtask 1).
+"""Catalog snapshot producers (JF-954 subtasks 1 and 8).
 
-Reads item NAMES from a Jellyfin server and builds a snapshot with producer
-``jellyfin-names`` under the ``"*"`` locale. This producer is NAME-LEVEL: it
-does NOT reproduce the plugin's phonetic synonyms, the 140-character slot
-value truncation or the 50000-value cap, so its output underestimates what
-catalog sync actually uploads. The authoritative producer is the plugin
-export (JF-954 subtask 8); the snapshot format documented in
-docs/nlu-static-analysis.md is the contract between the two.
+``build_snapshot`` reads item NAMES from a Jellyfin server and builds a
+snapshot with producer ``jellyfin-names`` under the ``"*"`` locale. That
+producer is NAME-LEVEL: it does NOT reproduce the plugin's phonetic
+synonyms, the 140-character slot value truncation or the 50000-value cap,
+so its output underestimates what catalog sync actually uploads.
+
+``build_snapshot_from_plugin`` is the AUTHORITATIVE producer (JF-954
+subtask 8): it fetches the snapshot the PLUGIN export endpoint builds with
+the same code the sync uploads (producer ``plugin``, per locale), so
+synonyms, seed merges, truncation and the value cap are reproduced exactly.
+
+The snapshot format documented in docs/nlu-static-analysis.md is the
+contract between the two.
 
 Authentication rides the ``Authorization: MediaBrowser Token="<key>"``
 header (verified working on Jellyfin 12 for /Items and /Artists), keeping
@@ -26,9 +32,11 @@ import urllib.parse
 import urllib.request
 from typing import Callable
 
-from nlu_static.effective_model import SNAPSHOT_GLOB_KEY, SNAPSHOT_SCHEMA
+from nlu_static.effective_model import SNAPSHOT_GLOB_KEY, SNAPSHOT_SCHEMA, validate_snapshot
 
 PRODUCER_NAME = "jellyfin-names"
+PLUGIN_PRODUCER_NAME = "plugin"
+PLUGIN_SNAPSHOT_PATH = "/Plugins/AlexaSkill/Diagnostics/CatalogSnapshot"
 
 # Jellyfin item type -> snapshot slot type name (the snapshot-format mapping).
 ITEM_TYPE_TO_SLOT_TYPE: dict[str, str] = {
@@ -93,6 +101,63 @@ def build_snapshot(
         "producer": PRODUCER_NAME,
         "locales": {SNAPSHOT_GLOB_KEY: table},
     }
+
+
+def build_snapshot_from_plugin(
+    base_url: str,
+    api_key: str,
+    user_id: str,
+    locale: str | None = None,
+    fetch_json: FetchJson | None = None,
+) -> dict:
+    """Fetch the AUTHORITATIVE snapshot from the plugin export endpoint.
+
+    This is JF-954 subtask 8's producer: the PLUGIN builds every payload with
+    the same code the catalog sync uploads, so the snapshot reproduces the
+    plugin's phonetic synonyms, the seed merges, the 140-character value
+    truncation, the de-duplication and the 50000-value cap exactly, per-user
+    library-filtered. The endpoint is
+    ``GET /Plugins/AlexaSkill/Diagnostics/CatalogSnapshot?userId=<guid>
+    [&locale=<locale>]`` and it is admin-gated (RequiresElevation) on the
+    plugin side; it performs no SMAPI call of its own.
+
+    The request rides the SAME injectable seam and the SAME
+    ``Authorization: MediaBrowser Token="<key>"`` header form as the
+    name-level producer, so the key never lands in a URL. The response must
+    carry producer ``plugin`` and must pass ``validate_snapshot``; anything
+    else raises ValueError, so a wrong endpoint or a name-level document can
+    never pass as the authoritative snapshot. Pass ``fetch_json`` to fake the
+    HTTP layer in tests.
+    """
+    fetch = fetch_json if fetch_json is not None else _http_get_json
+    query: dict[str, str] = {"userId": user_id}
+    if locale:
+        query["locale"] = locale
+    url = base_url.rstrip("/") + PLUGIN_SNAPSHOT_PATH + "?" + urllib.parse.urlencode(query)
+    payload = fetch(url, api_key)
+    if not isinstance(payload, dict):
+        raise ValueError(
+            "the plugin export returned a non-object body; check --url and the plugin version"
+        )
+    producer = payload.get("producer")
+    if producer != PLUGIN_PRODUCER_NAME:
+        raise ValueError(
+            f"the plugin export must carry producer {PLUGIN_PRODUCER_NAME!r}, got {producer!r}"
+        )
+    locales = payload.get("locales")
+    if isinstance(locales, dict) and not locales:
+        # The export is honest about nothing-to-upload (the C# side emits an
+        # empty table when the sync would process no locale or no type for
+        # this user), but the snapshot FORMAT refuses an empty table, so say
+        # exactly that instead of the generic schema error.
+        raise ValueError(
+            "the plugin export carries no locale entries: the sync would "
+            "upload nothing for this user (an empty library under the "
+            "CatalogSyncLocales roster, or a --locale the sync would not "
+            "process, ar-SA included)"
+        )
+    validate_snapshot(payload, context="plugin export")
+    return payload
 
 
 def resolve_connection(url: str | None, api_key: str | None) -> tuple[str, str]:

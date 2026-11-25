@@ -73,18 +73,15 @@ public abstract class PluginTestBase
     }
 
     /// <summary>
-    /// Clears <see cref="global::Jellyfin.Plugin.AlexaSkill.Controller.CatalogController"/>'s
-    /// private static stored-payload cache (it exposes no production
-    /// clear-all API), reached by reflection. Best-effort: a missing or
-    /// reshaped field is skipped here and fails loudly in the catalog
-    /// suites' own reflection lookups instead.
+    /// Clears the CatalogController private static stored-payload cache (it
+    /// exposes no production clear-all API), reached through the TestHelpers
+    /// reflection seam (JF-954.8: ONE owner of the field-name lookup). Best
+    /// effort: a missing or reshaped field is skipped here and fails loudly
+    /// in the catalog suites' own pin lookups instead.
     /// </summary>
     private static void ClearCatalogPayloadCache()
     {
-        var cacheField = typeof(global::Jellyfin.Plugin.AlexaSkill.Controller.CatalogController).GetField(
-            "CatalogCache",
-            BindingFlags.NonPublic | BindingFlags.Static);
-        if (cacheField?.GetValue(null) is System.Collections.IDictionary cache)
+        if (Unit.TestHelpers.TryGetCatalogPayloadCache() is System.Collections.IDictionary cache)
         {
             cache.Clear();
         }

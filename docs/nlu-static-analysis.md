@@ -4,7 +4,7 @@
 
 After a live suite reports red rows, the `triage` subcommand turns each red row of the recorded ledger session into one verdict (INFRA, UNSTABLE_BUILD, FIXTURE_VOCAB, KNOWN_FLAKY, CONTESTED, TOKEN_COLLISION, SYSTEMATIC_CANDIDATE, in that precedence), groups the rows into families and prints a report you can act on in minutes. The exact sequence after a red suite:
 
-1. Take a catalog snapshot so the vocabulary rule answers the LIVE question, not the committed-seed one: `python3 scripts/nlu_static/cli.py snapshot --out catalog-snapshot.json` (or the plugin export once JF-954.8 lands).
+1. Take a catalog snapshot so the vocabulary rule answers the LIVE question, not the committed-seed one: `python3 scripts/nlu_static/cli.py snapshot --from-plugin --user-id <guid> --out catalog-snapshot.json` (the authoritative producer; without `--from-plugin` the name-level item-names producer runs).
 2. Run triage against the latest complete session with that snapshot: `python3 scripts/nlu_static/cli.py triage --snapshot catalog-snapshot.json`. Without `--dir` it reads `tests/integration/results/` (or `NLU_LEDGER_DIR`); `--session latest` accepts an incomplete session and says so in the header.
 3. Read the "Look at these first" section: those are the SYSTEMATIC_CANDIDATE families, the rows no static rule explains, and start there. Then work down the remaining verdict sections in precedence order. `--fail-on systematic` exits 1 when any such row exists, so the command can gate a follow-up ticket. `--format json` gives the same data sorted for machine use.
 
@@ -46,16 +46,33 @@ A snapshot is a JSON file of schema 1: a producer name and a `locales` object ke
 
 `load_snapshot` validates the file before any tool uses it: an unknown or missing schema number, a non-list type entry, and an entry without a string `value` are each rejected with a `ValueError` naming the offending path. Values are stored exactly as given; normalization happens at comparison time inside the tools.
 
-### The `snapshot` subcommand and the name-level caveat
+### The `snapshot` subcommand: two producers
 
-The `snapshot` subcommand reads item names from a Jellyfin server and writes this format with producer `jellyfin-names` under the `"*"` locale: Series to SeriesName, MusicArtist to JellyfinArtist, MusicAlbum to AlbumName, Movie to MovieTitle, AudioBook to AudiobookTitle, Audio to SongTitle. Connection comes from `--url`/`--api-key` or the environment variables `JELLYFIN_URL` and `JELLYFIN_API_KEY`. Authentication rides the `Authorization: MediaBrowser Token="<key>"` header (verified working on Jellyfin 12 for /Items and /Artists), keeping the key out of URLs that server access logs or error objects might record; Jellyfin 12 also rejects the `X-Emby-Token` header and the lowercase `api_key` query with 401. The key is never printed or written, including in error messages. Item types with no names are omitted so a snapshot can never replace a type with an empty list.
+The `snapshot` subcommand has two producers for the same file format. Pick by the question you are asking.
+
+#### The name-level producer (default, `jellyfin-names`)
+
+Without `--from-plugin` the subcommand reads item names from a Jellyfin server and writes this format with producer `jellyfin-names` under the `"*"` locale: Series to SeriesName, MusicArtist to JellyfinArtist, MusicAlbum to AlbumName, Movie to MovieTitle, AudioBook to AudiobookTitle, Audio to SongTitle. Connection comes from `--url`/`--api-key` or the environment variables `JELLYFIN_URL` and `JELLYFIN_API_KEY`. Authentication rides the `Authorization: MediaBrowser Token="<key>"` header (verified working on Jellyfin 12 for /Items and /Artists), keeping the key out of URLs that server access logs or error objects might record; Jellyfin 12 also rejects the `X-Emby-Token` header and the lowercase `api_key` query with 401. The key is never printed or written, including in error messages. Item types with no names are omitted so a snapshot can never replace a type with an empty list.
 
 ```
 python3 scripts/nlu_static/cli.py snapshot --url http://jellyfin.local:8096 --api-key <key> --out catalog-snapshot.json
 JELLYFIN_URL=http://jellyfin.local:8096 JELLYFIN_API_KEY=<key> python3 scripts/nlu_static/cli.py snapshot --types Series MusicArtist
 ```
 
-CAVEAT: this producer is NAME-LEVEL. It does NOT reproduce the plugin's phonetic synonyms, does NOT apply the 140-character slot value truncation, and does NOT enforce the 50000-value cap, so its output understates what catalog sync actually uploads to Amazon. It can also OVERSTATE the live vocabulary in the other direction on a multi-user server: it queries admin-wide, while the plugin's authoritative sync is per-user library-filtered (LibraryFilter.ApplyLibraryFilter), SortName-ordered and capped, so names from libraries the synced user cannot access appear here but never reach Amazon. Use it for local static analysis where the raw names are what matter; the authoritative producer is the plugin export (JF-954 subtask 8, which adds `--from-plugin` to this same subcommand), and the format above is the contract between the two.
+CAVEAT: this producer is NAME-LEVEL. It does NOT reproduce the plugin's phonetic synonyms, does NOT apply the 140-character slot value truncation, and does NOT enforce the 50000-value cap, so its output understates what catalog sync actually uploads to Amazon. It can also OVERSTATE the live vocabulary in the other direction on a multi-user server: it queries admin-wide, while the plugin's authoritative sync is per-user library-filtered (LibraryFilter.ApplyLibraryFilter), SortName-ordered and capped, so names from libraries the synced user cannot access appear here but never reach Amazon. This producer is ENOUGH when the question reads only the canonical value field: whether a fixture's pinned canonical value exists in the library at all (the JF-954.3 vocabulary check in snapshot mode), the `tokens` CATALOG_VS_MODEL kind (a value equal to a trained literal), or any value-membership question where a synonym cannot change the answer. It is NOT enough the moment a synonym, the truncation or the value cap can change the verdict.
+
+#### The authoritative producer (`--from-plugin`, `plugin`)
+
+With `--from-plugin` the subcommand calls the plugin's own export endpoint and writes exactly what the plugin's catalog sync would upload, because the PLUGIN builds every payload with the same code the sync runs: the per-locale phonetic synonyms, the partial-name synonyms, the seed merges, the 140-character truncation, the same-name dedup, the value cap and the per-user library filtering are all the real ones, not a re-implementation. The response is a plain library read plus computation on the plugin side: it performs no SMAPI call, creates no catalog version and writes no configuration.
+
+```
+python3 scripts/nlu_static/cli.py snapshot --from-plugin --user-id <configured-plugin-user-guid> --url http://jellyfin.local:8096 --api-key <admin-key> --out catalog-snapshot.json
+python3 scripts/nlu_static/cli.py snapshot --from-plugin --user-id <guid> --locale es-ES --out snapshot-es-ES.json
+```
+
+The endpoint is `GET /Plugins/AlexaSkill/Diagnostics/CatalogSnapshot?userId=<guid>[&locale=<locale>]` on the Jellyfin server (admin-gated with the plugin's RequiresElevation policy, so the key must be an administrator's API key; `--user-id` is required and names a user configured in the plugin). A locale appears in the snapshot only when the sync would process it for that user (the CatalogSyncLocales roster, it-IT always, ar-SA never), and a slot type appears only when the sync would upload it for that user (non-empty library; the SongTitle catalog only when that user's song sync is enabled). Values and synonyms arrive in the upload order. Authentication and key safety are the same as the name-level producer: the key rides the Authorization MediaBrowser Token header, never a URL, and is never printed or written, including in error text. The producer function refuses a response whose producer is not `plugin` and validates every body through `load_snapshot`'s validator before writing.
+
+USE THE AUTHORITATIVE PRODUCER for anything involving synonyms or the cap: the fixture-vocab check over a pinned SYNONYM, the triage vocabulary rule on a row whose slot value competes through a synonym family, any question about whether a long title still matches after the 140-character truncation, anything sensitive to the 50000-value cut or to which locales/types the sync actually covers for that user. When in doubt, run the authoritative producer: it is a superset of the truth the name-level one approximates, and the tools treat both identically once the file is written.
 
 ## The `tokens` subcommand: token-ownership collision lint
 

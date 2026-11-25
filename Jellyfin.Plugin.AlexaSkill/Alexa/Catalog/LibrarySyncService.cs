@@ -261,15 +261,18 @@ public class LibrarySyncService
         // table-driven shapes.
         var typeLegs = new (CatalogType Type, BaseItemKind Kind, IReadOnlyList<BaseItem> Items, Func<string?> StoredCatalogId, Action<string> StoreCatalogId, Action<int> StoreCount, string Name, string Description, Func<IReadOnlyList<BaseItem>> FetchItems)[]
         {
-            (CatalogType.Artist, BaseItemKind.MusicArtist, Array.Empty<BaseItem>(), () => user.ArtistCatalogId, id => user.ArtistCatalogId = id, count => result.ArtistCount = count, "Jellyfin Artists", "Artist catalog synced from Jellyfin library", () => FetchLibraryItems(jellyfinUser, user, BaseItemKind.MusicArtist)),
-            (CatalogType.Album, BaseItemKind.MusicAlbum, Array.Empty<BaseItem>(), () => user.AlbumCatalogId, id => user.AlbumCatalogId = id, count => result.AlbumCount = count, "Jellyfin Albums", "Album catalog synced from Jellyfin library", () => FetchLibraryItems(jellyfinUser, user, BaseItemKind.MusicAlbum)),
-            (CatalogType.Series, BaseItemKind.Series, Array.Empty<BaseItem>(), () => user.SeriesCatalogId, id => user.SeriesCatalogId = id, count => result.SeriesCount = count, "Jellyfin Series", "Series catalog synced from Jellyfin library", () => FetchLibraryItems(jellyfinUser, user, BaseItemKind.Series)),
+            // JF-954.8: the Kind column and the generic rows' fetch kinds read
+            // CatalogTypeItemKind, so the type-to-kind relation has ONE owner
+            // shared with the snapshot export's fetch dispatch.
+            (CatalogType.Artist, CatalogTypeItemKind(CatalogType.Artist), Array.Empty<BaseItem>(), () => user.ArtistCatalogId, id => user.ArtistCatalogId = id, count => result.ArtistCount = count, "Jellyfin Artists", "Artist catalog synced from Jellyfin library", () => FetchLibraryItems(jellyfinUser, user, CatalogTypeItemKind(CatalogType.Artist))),
+            (CatalogType.Album, CatalogTypeItemKind(CatalogType.Album), Array.Empty<BaseItem>(), () => user.AlbumCatalogId, id => user.AlbumCatalogId = id, count => result.AlbumCount = count, "Jellyfin Albums", "Album catalog synced from Jellyfin library", () => FetchLibraryItems(jellyfinUser, user, CatalogTypeItemKind(CatalogType.Album))),
+            (CatalogType.Series, CatalogTypeItemKind(CatalogType.Series), Array.Empty<BaseItem>(), () => user.SeriesCatalogId, id => user.SeriesCatalogId = id, count => result.SeriesCount = count, "Jellyfin Series", "Series catalog synced from Jellyfin library", () => FetchLibraryItems(jellyfinUser, user, CatalogTypeItemKind(CatalogType.Series))),
             // JF-823: the audiobook leg, the one-row edit the JF-711 note above
             // described.
-            (CatalogType.Audiobook, BaseItemKind.AudioBook, Array.Empty<BaseItem>(), () => user.AudiobookCatalogId, id => user.AudiobookCatalogId = id, count => result.AudiobookCount = count, "Jellyfin Audiobooks", "Audiobook catalog synced from Jellyfin library", () => FetchLibraryItems(jellyfinUser, user, BaseItemKind.AudioBook)),
+            (CatalogType.Audiobook, CatalogTypeItemKind(CatalogType.Audiobook), Array.Empty<BaseItem>(), () => user.AudiobookCatalogId, id => user.AudiobookCatalogId = id, count => result.AudiobookCount = count, "Jellyfin Audiobooks", "Audiobook catalog synced from Jellyfin library", () => FetchLibraryItems(jellyfinUser, user, CatalogTypeItemKind(CatalogType.Audiobook))),
             // JF-874: the movie leg, feeding the catalog-backed MovieTitle slot
             // type (it-IT's PlayMovieIntent wrapper family). Same one-row shape.
-            (CatalogType.Movie, BaseItemKind.Movie, Array.Empty<BaseItem>(), () => user.MovieCatalogId, id => user.MovieCatalogId = id, count => result.MovieCount = count, "Jellyfin Movies", "Movie catalog synced from Jellyfin library", () => FetchLibraryItems(jellyfinUser, user, BaseItemKind.Movie)),
+            (CatalogType.Movie, CatalogTypeItemKind(CatalogType.Movie), Array.Empty<BaseItem>(), () => user.MovieCatalogId, id => user.MovieCatalogId = id, count => result.MovieCount = count, "Jellyfin Movies", "Movie catalog synced from Jellyfin library", () => FetchLibraryItems(jellyfinUser, user, CatalogTypeItemKind(CatalogType.Movie))),
             // JF-946: the song-title leg, feeding the catalog-backed SongTitle
             // slot type (the JF-940 PlayLibrarySong carrier). Its source never
             // rides the generic SortName fetch (alphabetical ordering would
@@ -281,17 +284,19 @@ public class LibrarySyncService
             // opt-in (privacy: the FULL tracklist goes to Amazon, including
             // private recordings); a disabled flag removes the row below, so
             // no Song catalog is created and none is wired into any locale.
-            (CatalogType.Song, BaseItemKind.Audio, Array.Empty<BaseItem>(), () => user.SongCatalogId, id => user.SongCatalogId = id, count => result.SongCount = count, "Jellyfin Songs", "Song title catalog synced from Jellyfin library", () => FetchAndPrepareSongTitles(jellyfinUser, user, result)),
+            (CatalogType.Song, CatalogTypeItemKind(CatalogType.Song), Array.Empty<BaseItem>(), () => user.SongCatalogId, id => user.SongCatalogId = id, count => result.SongCount = count, "Jellyfin Songs", "Song title catalog synced from Jellyfin library", () => FetchAndPrepareSongTitles(jellyfinUser, user, result)),
         };
 
         // JF-946: the song leg participates only when the user opted in. The
         // reduced table keeps every downstream consumer (the sourcing loop,
         // AllTypeLegsEmpty, the locale legs) honest: a library holding ONLY
         // songs with the flag off takes the emptiness skip like any other
-        // nothing-to-sync run.
+        // nothing-to-sync run. JF-954.8: the gate is the ONE named predicate
+        // (<see cref="IsCatalogTypeSyncedForUser"/>) so the snapshot export's
+        // roster gate cannot drift from this one.
         if (!user.CatalogSongSyncEnabled)
         {
-            typeLegs = typeLegs.Where(leg => leg.Type != CatalogType.Song).ToArray();
+            typeLegs = typeLegs.Where(leg => IsCatalogTypeSyncedForUser(leg.Type, user)).ToArray();
         }
 
         // JF-727: item sourcing derives from the same table, replacing the
@@ -1338,11 +1343,36 @@ public class LibrarySyncService
 
     /// <summary>
     /// Fetch library items of a given type, filtered by the user's allowed libraries.
+    /// JF-954.8: a thin pass-through to the shared query core
+    /// <see cref="FetchCatalogItems"/> at the sync's cap; the structural pin on
+    /// this method (exactly the wiring-table lambdas call it) stays on this
+    /// wrapper, while the query shape itself is single-sourced so the snapshot
+    /// export's fetches cannot drift on scope, filter, ordering or limit.
     /// </summary>
     private IReadOnlyList<BaseItem> FetchLibraryItems(
         Jellyfin.Database.Implementations.Entities.User jellyfinUser,
         Entities.User user,
         BaseItemKind itemKind)
+        => FetchCatalogItems(jellyfinUser, user, itemKind, EffectiveMaxCatalogValues);
+
+    /// <summary>
+    /// JF-954.8: the ONE catalog item query both fetch consumers share, the
+    /// sync's wiring-table lambdas (through <see cref="FetchLibraryItems"/>,
+    /// whose single-call-site pin stays on that wrapper) and the snapshot
+    /// export (<see cref="FetchTypeItems"/>), so scope, library filter,
+    /// ordering and limit cannot drift between what the sync uploads and what
+    /// the export describes. STRICT scope, no items-by-name bypass
+    /// (includeItemsByName: false): both feeds become (or describe) the
+    /// persistent SMAPI catalog upload, so a bypass would let excluded-library
+    /// artist names live on Amazon's side indefinitely, not just surface
+    /// transiently in a cold-window search (JF-457). Rationale for the
+    /// automatic bypass itself: LibraryFilter.ApplyItemsByNameBypass (JF-456).
+    /// </summary>
+    private IReadOnlyList<BaseItem> FetchCatalogItems(
+        Jellyfin.Database.Implementations.Entities.User jellyfinUser,
+        Entities.User user,
+        BaseItemKind itemKind,
+        int limit)
     {
         var query = new InternalItemsQuery
         {
@@ -1350,15 +1380,10 @@ public class LibrarySyncService
             Recursive = true,
             IncludeItemTypes = new[] { itemKind },
             DtoOptions = new DtoOptions(true),
-            Limit = EffectiveMaxCatalogValues,
+            Limit = limit,
             OrderBy = new[] { (ItemSortBy.SortName, SortOrder.Ascending) }
         };
 
-        // STRICT scope, no items-by-name bypass (includeItemsByName: false): this
-        // feed becomes the persistent SMAPI catalog upload, so the bypass would let
-        // excluded-library artist names live on Amazon's side indefinitely, not
-        // just surface transiently in a cold-window search (JF-457). Rationale for
-        // the automatic bypass itself: LibraryFilter.ApplyItemsByNameBypass (JF-456).
         LibraryFilter.ApplyLibraryFilter(query, user, _libraryManager, includeItemsByName: false);
 
         return _libraryManager.GetItemList(query);
@@ -1460,13 +1485,6 @@ public class LibrarySyncService
             return (null, 0);
         }
 
-        // Materialized once (JF-874 simplify finding): FromItems and the dedup
-        // debug line below both enumerate this, twice per leg per locale.
-        var itemTuples = items
-            .Select(i => (i.Id, i.Name))
-            .Where(t => !string.IsNullOrWhiteSpace(t.Name))
-            .ToList();
-
         // JF-825 (code-review F2): the pre-fix >= warning was the ONLY signal
         // that the fetch itself had silently capped a huge library, and the
         // honest drop warning below cannot fire for that state (nothing is
@@ -1488,55 +1506,15 @@ public class LibrarySyncService
                 user.Id);
         }
 
-        // JF-946: the song leg's synonym policy lives on SongTitlePreparation;
-        // every other type passes the raw generator, byte-identical to before.
-        // JF-951: the song synonyms are USER-CONTROLLED. Disabled (the default)
-        // keeps the shipped values-only policy byte-identical; enabled flows
-        // the user's choice into the locale's phonetic generator per leg. The
-        // effective-size consequence is the CatalogManager pre-flight guard's
-        // job, which reads these payloads' bytes.
-        Func<string, string, List<string>> synonymGenerator = catalogType == CatalogType.Song
-            ? (name, syncLocale) => SongTitlePreparation.SongSynonyms(name, syncLocale, user.CatalogSongSynonymsEnabled)
-            : PhoneticSynonymGenerator.GenerateSynonyms;
+        // JF-954.8: the ONE final-payload build (the same-name-deduped item
+        // tuples, the type's synonym generator, FromItems, the seed merge and
+        // the cap cut), shared verbatim with the snapshot export through
+        // BuildFinalCatalogPayload so the two consumers cannot diverge on the
+        // values, synonyms, truncation or cap the upload carries.
+        FinalCatalogPayload built = BuildFinalCatalogPayload(user, catalogType, items, locale);
+        CatalogPayload payload = built.Payload;
 
-        CatalogPayload payload = CatalogPayload.FromItems(catalogType, itemTuples, synonymGenerator, locale);
-
-        // The dedup signal (debug-logging policy): the per-type count the sync
-        // reports stays the FETCH count, so this is the only line that says how
-        // many same-named items collapsed into existing values (two editions of
-        // one book, the same title in two libraries).
-        int namedItemCount = itemTuples.Count;
-        if (payload.Values.Count < namedItemCount)
-        {
-            _logger.LogDebug(
-                "Catalog {Type} collapsed {DuplicateCount} same-named library items into existing values for user {UserId} (JF-825 dedup)",
-                catalogType,
-                namedItemCount - payload.Values.Count,
-                user.Id);
-        }
-
-        // JF-541 phase 2: merge the committed models' static seed values into the
-        // upload. The catalog supplier replaces the static type block at deploy
-        // time (CatalogManager.InjectCatalogReferences), so without this the seed
-        // titles absent from the library (Thriller, Queen, ...) vanish from the
-        // deployed model. Library entries win on collision; no-op for seed-less types.
-        int libraryValueCount = payload.Values.Count;
-        // JF-946 review: the SAME gated generator covers the seed-merge path, so a
-            // future Song seed arm cannot bypass the qualifying-word gate.
-            CatalogSeedEnrichment.MergeInto(payload, catalogType, synonymGenerator, locale, _logger);
-
-        // JF-825: the cap must bind the FINAL payload (library values + the
-        // appended static tail, after the FromItems same-name dedup), not
-        // just the fetch: the pre-fix code fetched with Limit=cap but
-        // appended the seeds AFTER the bounded fetch, so the payload sailed
-        // past the cap while the log asserted a truncation that never
-        // happened. The cut itself is CatalogPayload.TruncateTo's
-        // reserve-on-any-cut partition (JF-848/JF-879; that policy's
-        // canonical rationale lives there). The trade-off: a capped library
-        // sees fewer of its own values (up to staticAppendedCount of them).
-        int staticAppendedCount = payload.Values.Count - libraryValueCount;
-        var (droppedValues, droppedStaticCount) = payload.TruncateTo(EffectiveMaxCatalogValues, staticAppendedCount);
-        if (droppedValues.Count > 0)
+        if (built.Dropped.Count > 0)
         {
             // The warning fires exactly because entries were dropped and names
             // them (the debug-logging policy): the composition split comes
@@ -1551,10 +1529,10 @@ public class LibrarySyncService
                 catalogType,
                 EffectiveMaxCatalogValues,
                 user.Id,
-                droppedValues.Count,
-                droppedStaticCount,
-                droppedValues.Count - droppedStaticCount,
-                string.Join(", ", droppedValues.Take(DroppedNameSampleSize).Select(v => v.Name.Value)));
+                built.Dropped.Count,
+                built.DroppedStaticCount,
+                built.Dropped.Count - built.DroppedStaticCount,
+                string.Join(", ", built.Dropped.Take(DroppedNameSampleSize).Select(v => v.Name.Value)));
         }
 
         string catalogId;
@@ -1642,18 +1620,219 @@ public class LibrarySyncService
     }
 
     /// <summary>
-    /// Resolve which locales to sync based on the config string.
-    /// - "*": all active locales (from SMAPI manifest; the CONFIG default for
-    ///   CatalogSyncLocales is "*", with the JF-543 ar-SA exclusion applied by
-    ///   the caller).
-    /// - Empty: it-IT only.
-    /// - "de-DE,en-US,...": it-IT + the listed locales.
+    /// The ONE final-payload builder for (user, catalog type, locale), JF-954.8:
+    /// the exact sequence the SMAPI sync runs per type leg (the same-name-deduped
+    /// item tuples, the type's synonym generator, <see cref="CatalogPayload.FromItems"/>,
+    /// the <see cref="CatalogSeedEnrichment"/> seed merge, and the
+    /// <see cref="CatalogPayload.TruncateTo"/> cap cut), extracted verbatim from
+    /// <see cref="SyncCatalogForLocaleAsync"/> so the authoritative snapshot
+    /// export (<see cref="BuildCatalogSnapshot"/>) and the real sync cannot
+    /// diverge on the values, synonyms, truncation or cap the upload carries.
+    /// Pure library-read plus computation: no SMAPI call, no CatalogController
+    /// cache registration, no configuration write. The sync keeps its own
+    /// logging around the call: the fetch-saturation warning fires BEFORE it
+    /// (in the sync's leg, which is the only consumer that knows a fetch
+    /// saturated) and the truncation drop warning fires after it, reading the
+    /// returned record. The dedup debug line and the seed-append audit line
+    /// ride inside the build, exactly where they fired pre-extraction, so the
+    /// log sequence is unchanged for the sync.
     /// </summary>
-    internal async Task<IReadOnlyList<string>> ResolveSyncLocalesAsync(
-        string syncLocalesConfig,
-        string accessToken,
-        string skillId,
+    /// <param name="user">The plugin user; its song-synonym toggle feeds the song generator.</param>
+    /// <param name="catalogType">The catalog type being built.</param>
+    /// <param name="items">The type's fetched items (the sync's wiring-table sourcing; the export's FetchTypeItems).</param>
+    /// <param name="locale">The Alexa locale for the synonym generation.</param>
+    /// <returns>The final payload plus the drop record the sync's truncation warning reports.</returns>
+    internal FinalCatalogPayload BuildFinalCatalogPayload(
+        Entities.User user,
+        CatalogType catalogType,
+        IReadOnlyList<BaseItem> items,
+        string locale)
+    {
+        // Materialized once (JF-874 simplify finding): FromItems and the dedup
+        // debug line below both enumerate this, twice per leg per locale.
+        var itemTuples = items
+            .Select(i => (i.Id, i.Name))
+            .Where(t => !string.IsNullOrWhiteSpace(t.Name))
+            .ToList();
+
+        // JF-946: the song leg's synonym policy lives on SongTitlePreparation;
+        // every other type passes the raw generator, byte-identical to before.
+        // JF-951: the song synonyms are USER-CONTROLLED. Disabled (the default)
+        // keeps the shipped values-only policy byte-identical; enabled flows
+        // the user's choice into the locale's phonetic generator per leg. The
+        // effective-size consequence is the CatalogManager pre-flight guard's
+        // job, which reads these payloads' bytes.
+        Func<string, string, List<string>> synonymGenerator = catalogType == CatalogType.Song
+            ? (name, syncLocale) => SongTitlePreparation.SongSynonyms(name, syncLocale, user.CatalogSongSynonymsEnabled)
+            : PhoneticSynonymGenerator.GenerateSynonyms;
+
+        CatalogPayload payload = CatalogPayload.FromItems(catalogType, itemTuples, synonymGenerator, locale);
+
+        // The dedup signal (debug-logging policy): the per-type count the sync
+        // reports stays the FETCH count, so this is the only line that says how
+        // many same-named items collapsed into existing values (two editions of
+        // one book, the same title in two libraries).
+        if (payload.Values.Count < itemTuples.Count)
+        {
+            _logger.LogDebug(
+                "Catalog {Type} collapsed {DuplicateCount} same-named library items into existing values for user {UserId} (JF-825 dedup)",
+                catalogType,
+                itemTuples.Count - payload.Values.Count,
+                user.Id);
+        }
+
+        // JF-541 phase 2: merge the committed models' static seed values into the
+        // upload. The catalog supplier replaces the static type block at deploy
+        // time (CatalogManager.InjectCatalogReferences), so without this the seed
+        // titles absent from the library (Thriller, Queen, ...) vanish from the
+        // deployed model. Library entries win on collision; no-op for seed-less types.
+        int libraryValueCount = payload.Values.Count;
+        // JF-946 review: the SAME gated generator covers the seed-merge path, so a
+        // future Song seed arm cannot bypass the qualifying-word gate.
+        CatalogSeedEnrichment.MergeInto(payload, catalogType, synonymGenerator, locale, _logger);
+
+        // JF-825: the cap must bind the FINAL payload (library values + the
+        // appended static tail, after the FromItems same-name dedup), not
+        // just the fetch: the pre-fix code fetched with Limit=cap but
+        // appended the seeds AFTER the bounded fetch, so the payload sailed
+        // past the cap while the log asserted a truncation that never
+        // happened. The cut itself is CatalogPayload.TruncateTo's
+        // reserve-on-any-cut partition (JF-848/JF-879; that policy's
+        // canonical rationale lives there). The trade-off: a capped library
+        // sees fewer of its own values (up to staticAppendedCount of them).
+        int staticAppendedCount = payload.Values.Count - libraryValueCount;
+        var (droppedValues, droppedStaticCount) = payload.TruncateTo(EffectiveMaxCatalogValues, staticAppendedCount);
+
+        return new FinalCatalogPayload(payload, droppedValues, droppedStaticCount);
+    }
+
+    /// <summary>
+    /// JF-954.8: the authoritative catalog snapshot for one user, the per-locale
+    /// payloads the sync would upload, without uploading anything. Locale
+    /// resolution rides <see cref="ResolveSnapshotLocales"/> (the sync's parse,
+    /// no SMAPI call, the ar-SA exclusion applied), narrowed to the optional
+    /// <paramref name="localeFilter"/> when one was asked; a requested locale the
+    /// sync would not process (ar-SA, an unlisted locale under an explicit
+    /// roster) contributes nothing. The types ride the SAME roster the sync
+    /// uploads, <see cref="CatalogSlotTypes.CatalogSlotTypeNames"/>' keys (the
+    /// JF-711 one-row contract keeps that key set in lockstep with the sync's
+    /// wiring-table rows, and the dictionary's insertion order IS the table's
+    /// row order, i.e. the upload order); the per-user song gate is the SAME
+    /// predicate the sync's reduced-table filter applies
+    /// (<see cref="IsCatalogTypeSyncedForUser"/>). Items fetch
+    /// ONCE per type through the shared fetch (<see cref="FetchTypeItems"/>),
+    /// and a zero-item type contributes nothing exactly because the sync mints
+    /// nothing for one (SyncCatalogForLocaleAsync's early return). Every
+    /// (type, locale) payload comes from <see cref="BuildFinalCatalogPayload"/>,
+    /// the shared builder, so this export and the next real upload cannot
+    /// drift. NO SMAPI call, no catalog version, no CatalogController cache
+    /// registration, no configuration write: a pure library read plus
+    /// computation. Cancellation is honored at the roster, per-type and
+    /// per-locale boundaries through <paramref name="cancellationToken"/>.
+    /// </summary>
+    /// <param name="jellyfinUser">The Jellyfin user whose library scope feeds the fetches.</param>
+    /// <param name="user">The plugin user (song gate, song-synonym toggle, allowed libraries).</param>
+    /// <param name="localeFilter">Optional single locale to restrict the export to.</param>
+    /// <param name="cancellationToken">The request's cancellation token.</param>
+    /// <returns>The export: locale, then slot type name, then the uploaded entries in upload order.</returns>
+    internal CatalogSnapshotExport BuildCatalogSnapshot(
+        Jellyfin.Database.Implementations.Entities.User jellyfinUser,
+        Entities.User user,
+        string? localeFilter,
         CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        string syncLocalesConfig = Plugin.Instance?.Configuration?.CatalogSyncLocales ?? string.Empty;
+        IReadOnlyList<string> locales = ResolveSnapshotLocales(syncLocalesConfig);
+        if (!string.IsNullOrWhiteSpace(localeFilter))
+        {
+            locales = locales
+                .Where(l => string.Equals(l, localeFilter, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+        }
+
+        var table = new Dictionary<string, Dictionary<string, List<CatalogSnapshotEntry>>>(StringComparer.Ordinal);
+        foreach (CatalogType catalogType in CatalogSlotTypes.CatalogSlotTypeNames.Keys)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!IsCatalogTypeSyncedForUser(catalogType, user))
+            {
+                continue;
+            }
+
+            IReadOnlyList<BaseItem> items = FetchTypeItems(catalogType, jellyfinUser, user);
+            if (items.Count == 0)
+            {
+                continue;
+            }
+
+            string slotTypeName = CatalogSlotTypes.CatalogSlotTypeNames[catalogType];
+            foreach (string locale in locales)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                CatalogPayload payload = BuildFinalCatalogPayload(user, catalogType, items, locale).Payload;
+                var entries = payload.Values
+                    .Select(v => new CatalogSnapshotEntry(v.Name.Value, v.Name.Synonyms ?? new List<string>()))
+                    .ToList();
+                if (entries.Count == 0)
+                {
+                    continue;
+                }
+
+                if (!table.TryGetValue(locale, out Dictionary<string, List<CatalogSnapshotEntry>>? types))
+                {
+                    types = new Dictionary<string, List<CatalogSnapshotEntry>>(StringComparer.Ordinal);
+                    table[locale] = types;
+                }
+
+                types[slotTypeName] = entries;
+            }
+        }
+
+        return new CatalogSnapshotExport(table);
+    }
+
+    /// <summary>
+    /// JF-954.8: which locales the snapshot export covers, the sync's locale
+    /// resolution WITHOUT its one SMAPI call: the same parse (<see cref="ResolveLocaleList"/>:
+    /// it-IT always, the "*" roster, the explicit comma list) over a "*" roster
+    /// read from the EMBEDDED interaction models instead of the SMAPI manifest
+    /// (the embedded roster is the SMAPI-free analogue of the manifest's
+    /// declared locales), then the SAME ar-SA exclusion the sync applies
+    /// (<see cref="CatalogManager.IsCatalogWiringSupported"/>). The roster is
+    /// sorted Ordinal so the appended locales ride a deterministic order
+    /// (it-IT still leads).
+    /// </summary>
+    /// <param name="syncLocalesConfig">The CatalogSyncLocales configuration string.</param>
+    /// <returns>The locales the export processes, ar-SA excluded.</returns>
+    internal IReadOnlyList<string> ResolveSnapshotLocales(string syncLocalesConfig)
+    {
+        List<string> embeddedRoster = global::Jellyfin.Plugin.AlexaSkill.Util.GetLocalInteractionModels()
+            .Select(m => m.Item1)
+            .OrderBy(l => l, StringComparer.Ordinal)
+            .ToList();
+        return ResolveLocaleList(syncLocalesConfig, embeddedRoster)
+            .Where(CatalogManager.IsCatalogWiringSupported)
+            .ToList();
+    }
+
+    /// <summary>
+    /// The ONE locale-list parser behind both locale resolutions (JF-954.8):
+    /// it-IT always; "*" expands over <paramref name="starRoster"/>; an
+    /// explicit comma list appends its entries; everything deduped
+    /// case-insensitively with the first occurrence winning. The sync passes
+    /// the SMAPI manifest's locales (<see cref="GetActiveLocalesAsync"/>), the
+    /// snapshot export the embedded-model roster; the ar-SA exclusion stays
+    /// with the callers (the sync filters after resolving,
+    /// <see cref="ResolveSnapshotLocales"/> filters through
+    /// CatalogManager.IsCatalogWiringSupported), so the parser stays a pure
+    /// list production exactly like the pre-JF-954.8 sync path.
+    /// </summary>
+    /// <param name="syncLocalesConfig">The CatalogSyncLocales configuration string; null or whitespace resolves to it-IT alone.</param>
+    /// <param name="starRoster">The locales a "*" config expands to.</param>
+    /// <returns>The resolved list, it-IT first.</returns>
+    private static List<string> ResolveLocaleList(string? syncLocalesConfig, IEnumerable<string> starRoster)
     {
         var result = new List<string> { DefaultLocale }; // it-IT always included
 
@@ -1662,30 +1841,123 @@ public class LibrarySyncService
             return result;
         }
 
-        if (syncLocalesConfig.Trim() == "*")
-        {
-            var active = await GetActiveLocalesAsync(accessToken, skillId, cancellationToken).ConfigureAwait(false);
-            foreach (string locale in active)
-            {
-                if (!result.Contains(locale, StringComparer.OrdinalIgnoreCase))
-                {
-                    result.Add(locale);
-                }
-            }
+        IEnumerable<string> source = syncLocalesConfig.Trim() == "*"
+            ? starRoster
+            : syncLocalesConfig.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
-            return result;
-        }
-
-        // Explicit comma-separated list
-        foreach (string raw in syncLocalesConfig.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        foreach (string locale in source)
         {
-            if (!result.Contains(raw, StringComparer.OrdinalIgnoreCase))
+            if (!result.Contains(locale, StringComparer.OrdinalIgnoreCase))
             {
-                result.Add(raw);
+                result.Add(locale);
             }
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// JF-954.8: the snapshot export's item source, ONE fetch per catalog type
+    /// shared across locales (the sync's sourcing shape). The dispatch is an
+    /// EXHAUSTIVE switch, not a special-case ternary, so a future type with a
+    /// dedicated source (the Song precedent: play-count ordering,
+    /// uncapped-then-prepared) fails LOUDLY here at the first export instead
+    /// of silently riding the generic SortName fetch the sync does not use
+    /// for it. Song rides the SAME dedicated source the sync's wiring table
+    /// uses (<see cref="FetchAndPrepareSongTitles"/>, the preparation
+    /// pipeline included; its pre-cap total lands on a throwaway SyncResult
+    /// the export never reports); every other type rides the shared query
+    /// through <see cref="FetchCatalogItems"/> with the kind resolved by
+    /// <see cref="CatalogTypeItemKind"/>. NOTE: the sync's own fetches stay on
+    /// its wiring-table lambdas (the structural pin on FetchLibraryItems binds
+    /// exactly those five call sites); this dispatch is the export's only
+    /// fetch path and derives every kind from the same map.
+    /// </summary>
+    /// <param name="catalogType">The catalog type to source.</param>
+    /// <param name="jellyfinUser">The Jellyfin user whose library scope applies.</param>
+    /// <param name="user">The plugin user (allowed-library filtering).</param>
+    /// <returns>The type's items, in the same order the sync sources them.</returns>
+    private IReadOnlyList<BaseItem> FetchTypeItems(
+        CatalogType catalogType,
+        Jellyfin.Database.Implementations.Entities.User jellyfinUser,
+        Entities.User user)
+        => catalogType switch
+        {
+            CatalogType.Song => FetchAndPrepareSongTitles(jellyfinUser, user, new SyncResult()),
+            CatalogType.Artist or CatalogType.Album or CatalogType.Series
+                or CatalogType.Audiobook or CatalogType.Movie =>
+                FetchCatalogItems(jellyfinUser, user, CatalogTypeItemKind(catalogType), EffectiveMaxCatalogValues),
+            _ => throw new ArgumentOutOfRangeException(nameof(catalogType), catalogType, "no catalog item source for this type"),
+        };
+
+    /// <summary>
+    /// The ONE per-user type-in-sync-scope gate (JF-954.8): Song rides the
+    /// CatalogSongSyncEnabled opt-in (privacy: the FULL tracklist goes to
+    /// Amazon), every other type is synced unconditionally. The sync's
+    /// reduced-table filter and the snapshot export's roster gate both call
+    /// this predicate, so the two consumers cannot disagree on which types
+    /// are live for a user (the cannot-drift property this task exists to
+    /// keep; a duplicated gate drifted the moment one site moved).
+    /// </summary>
+    /// <param name="type">The catalog type.</param>
+    /// <param name="user">The plugin user whose opt-in applies.</param>
+    /// <returns>True when the sync would process the type for this user.</returns>
+    internal static bool IsCatalogTypeSyncedForUser(CatalogType type, Entities.User user) =>
+        type != CatalogType.Song || user.CatalogSongSyncEnabled;
+
+    /// <summary>
+    /// The ONE CatalogType to BaseItemKind item-kind map (JF-954.8): the
+    /// sync's wiring-table rows (Kind column and the generic rows' fetch
+    /// kinds) and the snapshot export's fetch dispatch both read it, so the
+    /// type-to-kind relation has one owner and a future synced type's kind
+    /// lookup fails LOUDLY here (ArgumentOutOfRangeException at the first
+    /// consumer) instead of silently disagreeing between the upload and the
+    /// export. The types roster itself derives from CatalogSlotTypeNames
+    /// (BuildCatalogSnapshot), which the JF-711 one-row contract keeps in
+    /// lockstep with the sync's wiring-table rows; a new type is the one-row
+    /// edit PLUS this map's arm, both in the same sitting.
+    /// </summary>
+    /// <param name="type">The catalog type.</param>
+    /// <returns>The library item kind the sync fetches for it.</returns>
+    internal static BaseItemKind CatalogTypeItemKind(CatalogType type) => type switch
+    {
+        CatalogType.Artist => BaseItemKind.MusicArtist,
+        CatalogType.Album => BaseItemKind.MusicAlbum,
+        CatalogType.Series => BaseItemKind.Series,
+        CatalogType.Audiobook => BaseItemKind.AudioBook,
+        CatalogType.Movie => BaseItemKind.Movie,
+        CatalogType.Song => BaseItemKind.Audio,
+        _ => throw new ArgumentOutOfRangeException(nameof(type), type, "no catalog item source for this type")
+    };
+
+    /// <summary>
+    /// Resolve which locales to sync based on the config string.
+    /// - "*": all active locales (from SMAPI manifest; the CONFIG default for
+    ///   CatalogSyncLocales is "*", with the JF-543 ar-SA exclusion applied by
+    ///   the caller).
+    /// - Empty: it-IT only.
+    /// - "de-DE,en-US,...": it-IT + the listed locales.
+    /// JF-954.8: the branch shape and the list production live in the shared
+    /// <see cref="ResolveLocaleList"/> parser (the snapshot export's
+    /// <see cref="ResolveSnapshotLocales"/> passes its SMAPI-free embedded
+    /// roster to the same parser); this method keeps only the SMAPI manifest
+    /// read a "*" config needs.
+    /// </summary>
+    internal async Task<IReadOnlyList<string>> ResolveSyncLocalesAsync(
+        string syncLocalesConfig,
+        string accessToken,
+        string skillId,
+        CancellationToken cancellationToken)
+    {
+        // The star test is null-safe so <see cref="ResolveLocaleList"/> stays
+        // the ONE owner of the empty-config guard and the it-IT seed: a null
+        // or empty config never matches "*", so no SMAPI call happens either
+        // way and the parser returns it-IT alone.
+        IEnumerable<string> starRoster = string.Equals(syncLocalesConfig?.Trim(), "*", StringComparison.Ordinal)
+            ? await GetActiveLocalesAsync(accessToken, skillId, cancellationToken).ConfigureAwait(false)
+            : Enumerable.Empty<string>();
+
+        return ResolveLocaleList(syncLocalesConfig, starRoster);
     }
 
     /// <summary>
@@ -1732,3 +2004,18 @@ public class LibrarySyncService
         }
     }
 }
+
+/// <summary>
+/// The shared final-payload build's result (JF-954.8): the payload plus the
+/// drop record the sync's truncation warning reports. The library/static
+/// composition split is the cut's own (TruncateTo returns it); this record
+/// only carries what <see cref="CatalogPayload.TruncateTo"/> gave back, so
+/// the warning's arithmetic reads exactly as it did before the extraction.
+/// </summary>
+/// <param name="Payload">The final catalog payload (library values, then the appended static tail, truncated to the cap).</param>
+/// <param name="Dropped">The dropped entries in drop order; empty when the payload fit.</param>
+/// <param name="DroppedStaticCount">How many of the dropped entries were static seed entries.</param>
+internal sealed record FinalCatalogPayload(
+    CatalogPayload Payload,
+    IReadOnlyList<CatalogValue> Dropped,
+    int DroppedStaticCount);
