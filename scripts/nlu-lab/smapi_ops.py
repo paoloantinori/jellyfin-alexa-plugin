@@ -314,13 +314,16 @@ def run_battery_rows(profile_fn, rows, delay: float | None = None) -> list[dict]
             continue
         try:
             parsed = SmapiClient.parse_profile_nlu_result(response)
-        except SmapiError:
+        except SmapiError as exc:
             status = RowStatus.NO_SELECTION
             selected = None
             slots: dict = {}
-            # The parser raises before returning, so the no-selection row
-            # is the one branch that needs the direct extraction.
-            hyps = considered_hypotheses(response)
+            # ONE extraction per row on this branch too: the parser
+            # attached its computed list to the exception; the direct
+            # call stays only as the fallback for foreign SmapiErrors.
+            hyps = getattr(exc, "considered", None)
+            if hyps is None:
+                hyps = considered_hypotheses(response)
         else:
             status = RowStatus.OK
             selected = parsed["intent"]

@@ -135,8 +135,10 @@ def _parse_json_output(raw: str) -> dict[str, Any]:
 def _slot_resolutions(slot: Any) -> list[dict]:
     """The per-authority ER records of one considered-slot object.
 
-    A list of {authority, code, canonical?} dicts, canonical present only
-    on ER_SUCCESS_MATCH (values[0].value.name). Anything unexpected
+    A list of {authority, code, canonical?, matches?} dicts: canonical is the
+    first matched value (the JF-659 contract), matches the FULL list when
+    an authority matched more than one (the JF-690 multi-value class).
+    Anything unexpected
     (missing resolutions, non-dict authority, empty values) degrades to
     what is verifiably there; this helper never raises.
     """
@@ -154,11 +156,20 @@ def _slot_resolutions(slot: Any) -> list[dict]:
         code = status.get("code") if isinstance(status, dict) else None
         rec: dict = {"authority": auth.get("authority"), "code": code}
         if code == "ER_SUCCESS_MATCH":
-            values = auth.get("values")
-            if isinstance(values, list) and values and isinstance(values[0], dict):
-                v = values[0].get("value")
-                if isinstance(v, dict) and v.get("name") is not None:
-                    rec["canonical"] = v.get("name")
+            names = []
+            for v in (auth.get("values") or []):
+                if isinstance(v, dict) and isinstance(v.get("value"), dict):
+                    name = v["value"].get("name")
+                    if name is not None:
+                        names.append(name)
+            if names:
+                # canonical mirrors the JF-659 C# contract (Values[0]);
+                # matches carries EVERY matched value so the multi-value
+                # ER class (JF-690/JF-885: 'pink' -> P!nk + Pink Floyd)
+                # stays visible in the capture, not just rank #1.
+                rec["canonical"] = names[0]
+                if len(names) > 1:
+                    rec["matches"] = names
         records.append(rec)
     return records
 
@@ -620,20 +631,26 @@ class SmapiClient:
         selected = response.get("selectedIntent")
         considered = considered_hypotheses(response)
         if not selected:
+            # The computed list rides the exception so the caller reads one
+            # extraction per row on this branch too (no second walk).
             if considered:
                 names = [h.get("intent") or "?" for h in considered]
-                raise SmapiError(
-                    f"No selectedIntent; considered: {names}"
-                )
-            raise SmapiError("No selectedIntent or consideredIntents in response")
+                err = SmapiError(f"No selectedIntent; considered: {names}")
+            else:
+                err = SmapiError("No selectedIntent or consideredIntents in response")
+            err.considered = considered  # noqa: B010 - attribute contract
+            raise err
 
         intent_name = selected.get("name", "")
         slots: dict[str, dict[str, Any]] = {}
-        for slot_name, slot_data in selected.get("slots", {}).items():
-            slots[slot_name] = {
-                "name": slot_name,
-                "value": slot_data.get("value", ""),
-            }
+        selected_slots = selected.get("slots")
+        if isinstance(selected_slots, dict):
+            for slot_name, slot_data in selected_slots.items():
+                slots[slot_name] = {
+                    "name": slot_name,
+                    "value": (slot_data.get("value", "")
+                              if isinstance(slot_data, dict) else ""),
+                }
 
         return {
             "intent": intent_name,

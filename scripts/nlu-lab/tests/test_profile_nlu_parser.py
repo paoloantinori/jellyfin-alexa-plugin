@@ -1,8 +1,8 @@
 """Unit tests for SmapiClient.parse_profile_nlu_result's considered capture
 (JF-968): fixture-based, no SMAPI, no live Jellyfin. The suite parser must
-return the full consideredIntents hypotheses through the ONE lab extractor
-(smapi_ops.considered_hypotheses), not grow a second parser; the lazy import
-inside smapi_client is what these tests exercise end to end.
+return the full consideredIntents hypotheses through the ONE extractor
+(smapi_client.considered_hypotheses at module level; smapi_ops re-exports
+it on its existing import), not grow a second parser.
 
 Placed here (not tests/integration/) because that directory's conftest has
 an autouse jellyfin_client fixture every test must satisfy; these tests are

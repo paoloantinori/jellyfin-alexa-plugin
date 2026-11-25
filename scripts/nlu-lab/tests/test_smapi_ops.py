@@ -483,3 +483,28 @@ def test_battery_rows_ok_path_carries_considered_hypotheses():
         {"intent": "PlayAlbumIntent", "slots": {}, "er": {}},
     ]
 
+
+
+def test_considered_hypotheses_multi_value_match_keeps_the_tail():
+    """JF-690/JF-885 class: an authority matching MORE than one value keeps
+    every name (matches), not just rank #1 (canonical)."""
+    response = {
+        "selectedIntent": None,
+        "consideredIntents": [{
+            "name": "PlayArtistSongsIntent",
+            "slots": {"musician": {
+                "value": "pink",
+                "resolutions": {"resolutionsPerAuthority": [{
+                    "authority": "amzn1.er-authority..JellyfinArtist",
+                    "status": {"code": "ER_SUCCESS_MATCH"},
+                    "values": [
+                        {"value": {"name": "P!nk"}},
+                        {"value": {"name": "Pink Floyd"}},
+                    ],
+                }]},
+            }},
+        }],
+    }
+    (rec,) = smapi_ops.considered_hypotheses(response)[0]["er"]["musician"]
+    assert rec["canonical"] == "P!nk"          # JF-659 contract: Values[0]
+    assert rec["matches"] == ["P!nk", "Pink Floyd"]  # the full arbitration set
