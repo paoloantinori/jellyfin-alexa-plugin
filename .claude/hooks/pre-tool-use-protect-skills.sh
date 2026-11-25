@@ -14,10 +14,12 @@ CMD=$(echo "$INPUT" | python3 -c "import sys,json; d=json.load(sys.stdin); print
 
 # Block any SMAPI delete-skill command
 if echo "$CMD" | grep -qi "delete-skill"; then
-    echo "BLOCKED: SMAPI delete-skill is permanently blocked by project hook."
-    echo "Skill deletion is IRREVERSIBLE. Ask the user for explicit permission first."
-    echo "If approved, the user can run the command manually in their terminal."
-    exit 2  # non-zero exit blocks the tool call
+    # stderr, not stdout: on exit 2 the harness feeds stderr back to the model
+    # as the denial reason (stdout is not shown to it)
+    echo "BLOCKED: SMAPI delete-skill is permanently blocked by project hook." >&2
+    echo "Skill deletion is IRREVERSIBLE. Ask the user for explicit permission first." >&2
+    echo "If approved, the user can run the command manually in their terminal." >&2
+    exit 2  # exit 2 blocks the tool call
 fi
 
 # Allow all other commands
