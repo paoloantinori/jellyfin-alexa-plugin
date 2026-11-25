@@ -45,12 +45,14 @@ public class PlaySongGenericMusicWordFallbackTests : PluginTestBase
             _fx.LoggerFactory);
     }
 
-    private static IntentRequest CreateIntentWithBothSlots(string song, string musician)
+    private static IntentRequest CreateIntentWithBothSlots(string song, string? musician)
     {
         var intent = new Intent { Name = IntentNames.PlaySong };
         intent.Slots = new Dictionary<string, Slot>
         {
             ["song"] = new Slot { Name = "song", Value = song },
+            // null musician VALUE pins the absent-slot shape (the slot read
+            // and every consumer branch gate on IsNullOrWhiteSpace)
             ["musician"] = new Slot { Name = "musician", Value = musician }
         };
         return new IntentRequest { Intent = intent, Locale = "it-IT", RequestId = "test-req" };

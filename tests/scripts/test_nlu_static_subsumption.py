@@ -581,44 +581,52 @@ def test_graph_diff_git_empty_against_head(capsys):
     assert captured.out == ""
 
 
-def test_graph_diff_git_real_ref_detects_a_model_change():
-    # The parent of the newest es-ES model commit (the JF-958 genre-carrier
-    # qualification) removes real PlayByGenreIntent edges against today's tree.
-    log = subprocess.run(
-        [
-            "git",
-            "log",
-            "--format=%H",
-            "-1",
-            "--",
-            "Jellyfin.Plugin.AlexaSkill/Alexa/InteractionModel/model_es-ES.json",
-        ],
-        capture_output=True,
-        text=True,
-        check=True,
-        cwd=REPO,
+def test_graph_diff_git_detects_a_removed_type(capsys, monkeypatch):
+    # HERMETIC rewrite (CI round, 2026-11-25): the original test excavated
+    # the newest es-ES model commit from repo history and diffed against
+    # it; GitHub Actions checkouts are shallow (depth 1), the parent ref
+    # does not exist there, and the reviewer-round stderr-note skip path
+    # produced an empty stdout the assertion could not match. The diff-git
+    # COMMAND path is still exercised end to end; only the base source is
+    # now synthetic: git_show_model returns the committed model minus the
+    # PlayByGenreIntent type block, so the removed edges must appear.
+    import copy
+    import json as _json
+
+    from nlu_static import selection as _selection
+
+    model_path = (
+        REPO / "Jellyfin.Plugin.AlexaSkill" / "Alexa" / "InteractionModel"
+        / f"model_{ES_ES}.json"
     )
-    newest = log.stdout.strip()
-    assert newest
-    proc = subprocess.run(
-        [
-            sys.executable,
-            str(SCRIPTS_DIR / "nlu_static" / "cli.py"),
-            "graph",
-            "diff-git",
-            "--base",
-            f"{newest}~1",
-            "--locale",
-            ES_ES,
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
-        cwd=REPO,
-    )
-    assert proc.returncode == 0
-    assert "== es-ES ==" in proc.stdout
-    assert "removed PlayByGenreIntent" in proc.stdout
+    committed = _json.loads(model_path.read_text(encoding="utf-8"))
+    old_doc = copy.deepcopy(committed)
+    lang = old_doc.get("languageModel", old_doc)
+    # The synthetic OLD carries the naked genre carrier on PlayByGenreIntent
+    # (the pre-JF-958 shape): the edges it swallows exist in the old graph
+    # and are absent from the committed new graph, so the diff must report
+    # removed edges FROM PlayByGenreIntent.
+    for intent in lang.get("intents", []):
+        if intent.get("name") == "PlayByGenreIntent":
+            intent.setdefault("samples", []).append("Reproduce {genre}")
+            break
+    else:
+        pytest.fail("PlayByGenreIntent not found in the committed es-ES model")
+
+    def fake_git_show(_base, _locale, _repo_root=None):
+        # git_show_model's contract returns the UNWRAPPED languageModel
+        # dict (build_effective_model's raw_model does not unwrap again);
+        # returning the full document would build an empty old graph.
+        return old_doc["languageModel"]
+
+    # cli's wrapper resolves selection.git_show_model at CALL time, so the
+    # module-level patch flows through the delegate.
+    monkeypatch.setattr(_selection, "git_show_model", fake_git_show)
+    rc = nlu_cli.main(["graph", "diff-git", "--base", "SYNTHETIC", "--locale", ES_ES])
+    captured = capsys.readouterr()
+    assert rc == 0
+    assert "== es-ES ==" in captured.out
+    assert "removed PlayByGenreIntent" in captured.out
 
 
 def test_graph_diff_git_fail_on_new_stays_zero_against_head(capsys):
