@@ -46,6 +46,11 @@ from nlu_static import ledger as nlu_ledger  # noqa: E402
 # the filter-file loader live in scripts/nlu_static/selection.py; the hook
 # below only calls them.
 from nlu_static import selection as nlu_selection  # noqa: E402
+# JF-912: the ONE interaction-model JSON reader. The fixture invocation_name
+# header is now an optional override whose default comes from the committed
+# model, so the fixture loader reads it through the same loader every other
+# model consumer uses (never a second unwrap copy).
+from nlu_static.effective_model import load_locale_model as _load_locale_model  # noqa: E402
 import nlu_ledger_bridge  # noqa: E402
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
@@ -105,11 +110,59 @@ def smapi_delay() -> float:
 # Fixture loader helper
 # ---------------------------------------------------------------------------
 
+# JF-912: model-derived invocation names, cached once per locale per pytest
+# session (not per row: every fixture family re-derives per file, and each
+# locale model is read at most once from disk). Keyed by locale only; the
+# production path (models_dir=None, the committed models) is the only one
+# cached, so tests pointing the loader at a tmp model dir always re-read.
+_MODEL_INVOCATION_NAME_CACHE: dict[str, str] = {}
+
+
+def _model_invocation_name(locale: str, models_dir: str | Path | None = None) -> str:
+    """The locale's committed model invocationName, cached per session (JF-912).
+
+    The default source for the one-shot composer's invocation name: the
+    generator-owned machine-readable field of ``model_<locale>.json``, read
+    through nlu_static's ``load_locale_model`` (the ONE reader, never a
+    second unwrap copy). ``models_dir`` is for tests reading synthetic model
+    dirs; the None (production) path caches per locale, an explicit dir
+    bypasses the cache in both directions.
+
+    Raises RuntimeError when the model cannot be read or carries no usable
+    invocationName: a fixture that needs the default (no override header)
+    must fail loudly at collection, never silently compose with an empty
+    invocation (the JF-912 contract).
+    """
+    if models_dir is None:
+        cached = _MODEL_INVOCATION_NAME_CACHE.get(locale)
+        if cached is not None:
+            return cached
+    try:
+        model = _load_locale_model(locale, models_dir)
+    except (OSError, ValueError) as err:
+        raise RuntimeError(
+            f"JF-912: a fixture without an invocation_name header needs "
+            f"model_{locale}.json's invocationName, but the model could not "
+            f"be read ({err}); the fixture fails loudly instead of silently "
+            f"composing one-shots without an invocation"
+        ) from err
+    name = model.get("invocationName")
+    if not isinstance(name, str) or not name.strip():
+        raise RuntimeError(
+            f"JF-912: model_{locale}.json carries no usable invocationName; "
+            f"a fixture without an invocation_name header cannot be loaded, "
+            f"because there is no name to compose one-shots with"
+        )
+    if models_dir is None:
+        _MODEL_INVOCATION_NAME_CACHE[locale] = name
+    return name
+
 
 def load_locale_fixtures(
     fixture_dir: Path,
     prefix: str = "",
     exclude_prefixes: tuple[str, ...] = ("e2e_",),
+    models_dir: str | Path | None = None,
 ) -> list[dict[str, Any]]:
     """Discover and parse YAML fixture files under *fixture_dir*.
 
@@ -118,12 +171,23 @@ def load_locale_fixtures(
         exclude_prefixes: Skip files starting with any of these prefixes
             (tuple, because the e2e family now has three sub-families:
             one-shot ``e2e_``, ``e2e_reliability_``, ``e2e_smoke_``).
+        models_dir: Where to read model_<locale>.json for the default
+            invocation name (JF-912); None means the committed models.
+            Tests point this at a synthetic dir; production never does.
 
-    Each YAML file has a top-level ``locale``, ``invocation_name``, and
-    a ``tests`` list.  This function flattens the structure so each
-    individual test case carries its locale and invocation name.  An
-    optional top-level ``open_utterance`` (smoke fixtures) is carried
-    onto each case the same way.
+    Each YAML file has a top-level ``locale`` and a ``tests`` list.  This
+    function flattens the structure so each individual test case carries
+    its locale and invocation name.  An optional top-level
+    ``open_utterance`` (smoke fixtures) is carried onto each case the
+    same way.
+
+    The ``invocation_name`` header is an OPTIONAL per-fixture override
+    (JF-912): when present it wins (and the parity lint polices it against
+    the model), when absent or empty the case falls back to the committed
+    model's invocationName via _model_invocation_name, which fails loudly
+    when that model is unreadable.  A stale header therefore cannot
+    silently mis-invoke composed one-shots, and dropping the header
+    retires the per-fixture copy entirely.
     """
     fixtures: list[dict[str, Any]] = []
     if not fixture_dir.is_dir():
@@ -143,7 +207,13 @@ def load_locale_fixtures(
             continue
 
         locale = data.get("locale", "unknown")
-        invocation_name = data.get("invocation_name", "")
+        invocation_name = data.get("invocation_name")
+        if not isinstance(invocation_name, str) or not invocation_name:
+            # JF-912: absent or empty header falls back to the model. A
+            # headerless fixture whose locale has no committed model raises
+            # here, at collection, instead of composing silent empty
+            # invocations at run time.
+            invocation_name = _model_invocation_name(str(locale), models_dir)
         open_utterance = data.get("open_utterance", "")
         test_cases = data.get("tests", [])
 

@@ -725,17 +725,21 @@ def lint_fixture_carriers(all_models: dict[str, dict], fixtures_dir: Path = FIXT
 
 
 def lint_fixture_invocation_names(all_models: dict[str, dict], fixtures_dir: Path = FIXTURES_DIR) -> list[str] | None:
-    """WARNING lint: NLU fixture invocation_name headers drifting from the models.
+    """WARNING lint: PRESENT fixture invocation_name overrides drifting from the models.
 
-    The fixtures' invocation_name header feeds the simulate one-shot composer
-    (SmapiClient prefixes the locale's invocation pattern with it), so a stale
-    header false-reds every composed-wrapper row under any simulate run. The
-    drift class is real: JF-558 renamed the locales' invocation names on
-    2026-09-13 and the NLU fixture headers lagged a month (caught 2026-10-20,
-    the JF-877 es/nl lane). The models carry invocationName as a
-    machine-readable field, so the equality is exact, not heuristic. Custom
-    per-user invocation names are runtime config and never appear in either
-    place, so a mismatch is always drift.
+    Since JF-912 the fixture's invocation_name header is an optional
+    per-fixture override: absent or empty falls back to the committed
+    model's invocationName, which the simulate one-shot composer reads
+    through conftest's loader, so a headerless fixture can never drift.
+    What the lint still polices is the override: a PRESENT header that
+    differs from the model means someone intentionally diverged (or the
+    override went stale), and the composer would prefix composed one-shots
+    with the wrong name. The drift class is real: JF-558 renamed the
+    locales' invocation names on 2026-09-13 and the NLU fixture headers
+    lagged a month (caught 2026-10-20, the JF-877 es/nl lane). The models
+    carry invocationName as a machine-readable field, so the equality is
+    exact, not heuristic. Custom per-user invocation names are runtime
+    config and never appear in either place, so a mismatch is always drift.
     """
     warnings: list[str] = []
     if not fixtures_dir.is_dir():
@@ -747,8 +751,7 @@ def lint_fixture_invocation_names(all_models: dict[str, dict], fixtures_dir: Pat
         print("  SKIP: PyYAML not installed, fixture lint not run")
         return None
 
-    def _check(fixture_path: Path, locale: str, model_name: str | None,
-               required: bool) -> None:
+    def _check(fixture_path: Path, locale: str, model_name: str | None) -> None:
         if not fixture_path.is_file():
             return
         try:
@@ -758,33 +761,28 @@ def lint_fixture_invocation_names(all_models: dict[str, dict], fixtures_dir: Pat
         if not isinstance(data, dict):
             return
         header = data.get("invocation_name")
-        # Drift by DELETION must warn too (review round 3 F7): the composer
-        # silently degrades when the header vanishes, so absence is not a
-        # clean skip where the fixture family carries the field by convention.
+        # Absent or empty is the SUPPORTED default since JF-912 (the composer
+        # derives the name from the model): no header, nothing to police. The
+        # former deletion warning (review round 3 F7) died with the
+        # three-copy invariant this override model retires.
         if not isinstance(header, str) or not header:
-            if required:
-                warnings.append(
-                    f"  [{locale}] {fixture_path.name}: invocation_name header "
-                    f"is missing or empty (the simulate composer needs it)"
-                )
             return
         if isinstance(model_name, str) and header != model_name:
             warnings.append(
                 f"  [{locale}] {fixture_path.name}: invocation_name '{header}' "
-                f"!= model invocationName '{model_name}' (stale header; the "
+                f"!= model invocationName '{model_name}' (stale override; the "
                 f"simulate composer would prefix composed one-shots with the "
-                f"wrong name)"
+                f"wrong name; drop the header to follow the model)"
             )
 
     for locale, lm in sorted(all_models.items()):
         model_name = lm.get("invocationName")
-        # The NLU fixture: the header is part of the schema (all 17 carry it).
-        _check(fixtures_dir / f"{locale}.yaml", locale, model_name, required=True)
+        # The NLU fixture.
+        _check(fixtures_dir / f"{locale}.yaml", locale, model_name)
         # Every e2e-family fixture for the locale (e2e_, e2e_smoke_,
-        # e2e_reliability_): the header feeds the same composer (review round
-        # 3 F4; all 20 carry it today).
+        # e2e_reliability_): any of them may override for the composer.
         for fixture_path in sorted(fixtures_dir.glob(f"e2e_*{locale}.yaml")):
-            _check(fixture_path, locale, model_name, required=True)
+            _check(fixture_path, locale, model_name)
 
     return warnings
 
@@ -1659,13 +1657,14 @@ def main() -> int:
             all_warnings,
         )
 
-    # Phase 3b: fixture invocation_name parity (JF-877 drift check; exact, not
-    # heuristic, but warning-class to match the fixture-lint contract)
+    # Phase 3b: fixture invocation_name override parity (JF-877 drift check;
+    # JF-912 narrowed it to the override case: absent headers are the
+    # supported model-derived default, present headers must still match)
     if all_models:
         run_warning_phase(
             "Fixture invocation_name parity",
             lambda: lint_fixture_invocation_names(all_models),
-            "Every fixture invocation_name matches its model's invocationName",
+            "Every PRESENT fixture invocation_name override matches its model's invocationName",
             all_warnings,
         )
 
