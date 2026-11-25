@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Runtime.Serialization;
 using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Newtonsoft.Json;
@@ -149,6 +151,13 @@ public static class SkillRequestDeserializer
             ? token.Value<string>() ?? string.Empty
             : token.ToString(Formatting.None);
     }
+
+    /// <summary>
+    /// The rendering both triage renderers use for an absent Error payload or request
+    /// (JF-931/JF-957), one constant so the grep-parity contract cannot drift between
+    /// the error and reason sides.
+    /// </summary>
+    internal const string UnknownSentinel = "UNKNOWN";
 
     /// <summary>
     /// The shared triage rendering for a tolerated unknown slot value (JF-931/JF-957):
@@ -513,7 +522,7 @@ public sealed class UnknownWireTypeReason
     {
         if (sessionEnded is null)
         {
-            return "UNKNOWN";
+            return SkillRequestDeserializer.UnknownSentinel;
         }
 
         return SkillRequestDeserializer.ToleratedReasons.TryGetValue(sessionEnded, out UnknownWireTypeReason? tolerated)
@@ -546,9 +555,46 @@ public sealed class UnknownWireTypeError : Error
     public string RawWireType { get; }
 
     /// <summary>
-    /// Render the error.type value for a log line: the raw wire value with the fallback
-    /// member in parentheses for tolerated unknowns, the enum member name for known
-    /// values, and UNKNOWN for an absent payload.
+    /// The ErrorType member to EnumMember wire-name map backing the known-value branch
+    /// of <see cref="DescribeWireType"/> (JF-930), built once by reflection over the
+    /// pinned Alexa.NET enum, so a future library version that adds members or renames
+    /// wire values needs no change here. Every member of 1.22.0 carries an EnumMember
+    /// SCREAMING_SNAKE wire name (reflection-verified); a member without one, should a
+    /// future version ever ship it, falls back to the member name in
+    /// <see cref="DescribeWireType"/>.
+    /// </summary>
+    private static readonly Dictionary<ErrorType, string> WireNamesByMember = BuildWireNamesByMember();
+
+    /// <summary>
+    /// Build the <see cref="WireNamesByMember"/> map from the enum's EnumMember
+    /// attributes.
+    /// </summary>
+    /// <returns>The member to wire-name map.</returns>
+    private static Dictionary<ErrorType, string> BuildWireNamesByMember()
+    {
+        Dictionary<ErrorType, string> map = new();
+        foreach (FieldInfo field in typeof(ErrorType).GetFields(BindingFlags.Public | BindingFlags.Static))
+        {
+            string? wireName = field.GetCustomAttribute<EnumMemberAttribute>()?.Value;
+            if (!string.IsNullOrEmpty(wireName))
+            {
+                // GetFields(Public | Static) on an enum returns only its literal fields,
+                // so the value is always a boxed member.
+                map[(ErrorType)field.GetValue(null)!] = wireName;
+            }
+        }
+
+        return map;
+    }
+
+    /// <summary>
+    /// The ONE triage rendering for an error.type value on any Error-bearing log line
+    /// (JF-930; ExceptionHandler, PlaybackFailedEventHandler, and
+    /// SessionEndedRequestHandler all pass their payload through this helper): the raw
+    /// wire value with the fallback member in parentheses for tolerated unknowns, the
+    /// Amazon EnumMember wire form (the SCREAMING_SNAKE vocabulary Amazon's error
+    /// tables use, so the lines self-correlate with the docs) for known values, and
+    /// UNKNOWN for an absent payload.
     /// </summary>
     /// <param name="error">The Error payload of the request.</param>
     /// <returns>The triage-friendly error.type rendering.</returns>
@@ -556,9 +602,9 @@ public sealed class UnknownWireTypeError : Error
     {
         return error switch
         {
-            null => "UNKNOWN",
+            null => SkillRequestDeserializer.UnknownSentinel,
             UnknownWireTypeError unknown => SkillRequestDeserializer.DescribeToleratedValue(unknown.RawWireType, unknown.Type),
-            _ => error.Type.ToString()
+            _ => WireNamesByMember.TryGetValue(error.Type, out string? wireName) ? wireName : error.Type.ToString()
         };
     }
 }

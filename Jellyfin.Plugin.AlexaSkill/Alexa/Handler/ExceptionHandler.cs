@@ -4,6 +4,7 @@ using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Session;
 using Microsoft.Extensions.Logging;
@@ -51,15 +52,23 @@ public class ExceptionHandler : BaseHandler
     {
         SystemExceptionRequest exceptionRequest = (SystemExceptionRequest)request;
 
-        ErrorCategory category = ErrorClassifier.ClassifyAlexaError(exceptionRequest.Error.Type.ToString());
+        // JF-930: classify off the enum the deserializer produced; the pre-fix
+        // member-name-vs-wire-string history lives on ClassifyAlexaError. An explicit
+        // "error": null payload deserializes to a null Error (the JF-931 converter's
+        // null branch), so the classify call rides the InternalError bucket instead of
+        // dereferencing null, and the shared renderer below prints UNKNOWN.
+        ErrorCategory category = ErrorClassifier.ClassifyAlexaError(exceptionRequest.Error?.Type ?? ErrorType.InternalError);
         LogLevel logLevel = ErrorCategoryInfo.LogLevel(category);
 
+        // JF-930: the one shared Error formatter (the raw wire value beside the
+        // fallback bucket for a tolerated unknown, the Amazon wire form for known
+        // values).
         Logger.Log(
             logLevel,
             "Alexa error: {ErrorType} category={Category} - {ErrorMessage} [RequestId={RequestId}, DeviceId={DeviceId}]",
-            exceptionRequest.Error.Type,
+            UnknownWireTypeError.DescribeWireType(exceptionRequest.Error),
             category,
-            exceptionRequest.Error.Message,
+            exceptionRequest.Error?.Message ?? string.Empty,
             request.RequestId,
             context.System.Device?.DeviceID);
 

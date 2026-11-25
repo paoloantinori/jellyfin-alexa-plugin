@@ -20,8 +20,6 @@ using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Audio;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
-using Microsoft.Extensions.Logging;
-using Moq;
 using Xunit;
 using static Jellyfin.Plugin.AlexaSkill.Tests.Unit.TestHelpers;
 

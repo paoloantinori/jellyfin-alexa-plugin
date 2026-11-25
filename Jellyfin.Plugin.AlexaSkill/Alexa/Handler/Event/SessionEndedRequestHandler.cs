@@ -48,9 +48,9 @@ public class SessionEndedRequestHandler : BaseHandler
         // survives in these lines instead of only the Error bucket. The Error.Type arg
         // gets the same treatment through DescribeWireType: a session ended with an
         // unknown error.type (JF-931) would otherwise print InternalError here while
-        // the PlaybackFailed sibling line renders the raw value. This is the JF-930
-        // shared-formatter fold arriving early for THIS line; the remaining
-        // ExceptionHandler adoption stays JF-930's.
+        // the PlaybackFailed sibling line renders the raw value. Since JF-930 this is
+        // the one shared Error formatter, and its known-value branch renders the
+        // Amazon wire form.
         if (sessionEnded.Error != null)
         {
             Logger.LogWarning(
