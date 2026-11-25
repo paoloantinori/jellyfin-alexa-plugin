@@ -28,6 +28,7 @@ import models
 import smapi_ops
 import webapp
 from lab_config import LabConfig, LabConfigError
+from nlu_static import catalog_canary
 from runs import RowResult, RunLoadError, RunRecord, load_run, save_run
 from smapi_client import SmapiError
 from validate_interaction_models import validate_single_model
@@ -80,6 +81,27 @@ def _discover_live_skill_id() -> str | None:
 def _slug(label: str) -> str:
     s = re.sub(r"[^a-z0-9]+", "-", label.lower()).strip("-")
     return s or "run"
+
+
+def _catalog_block(locale: str, skill_id: str) -> dict:
+    """The JF-971 catalog canary block for one --live run endcap.
+
+    The ONE helper (nlu_static.catalog_canary) drives both endcaps: probes
+    ride the SMAPI_DELAY pacing like battery rows, and every disabled,
+    no-snapshot or fault shape collapses into an explicit not_run block
+    with a reason (never a silent skip). Non-live paths never call this:
+    the lab skill has no catalog wiring to check.
+    """
+    def _profile(utterance: str) -> dict:
+        return smapi_ops.profile_row(skill_id, locale, utterance)
+
+    return catalog_canary.environment_block(locale, _profile)
+
+
+def _print_catalog_endcap(phase: str, block: dict) -> None:
+    """The one canary endcap line: status plus the not_run reason when set."""
+    print(f"catalog canary ({phase}): {block.get('status')}"
+          + (f" ({block.get('reason')})" if block.get("reason") else ""))
 
 
 def _resolve_model(args) -> tuple[dict, str]:
@@ -256,6 +278,15 @@ def cmd_run(args, *, lab_dir: Path | None = None,
     try:
         if getattr(args, "live", False):
             print(f"live: profiling the REAL skill {run.skill_id} (read-only, catalog wiring active)")
+            # JF-971: the ER canary brackets the battery, start and end, so
+            # the run file records the catalog state the rows ran under
+            # (the 2026-11-25 catalog deletion was invisible to sha+eTag).
+            # The end block lands after the shared battery block below, i.e.
+            # after this run's LAST battery pass; the live branch's own
+            # battery pass plus that shared pass is the PRE-EXISTING JF-944
+            # fall-through, untouched here (row semantics are out of scope).
+            run.catalog_start = _catalog_block(args.locale, run.skill_id)
+            _print_catalog_endcap("start", run.catalog_start)
             row_dicts = smapi_ops.run_battery_rows(profile_fn, rows)
             run.results = [_to_row_result(r, d, raws) for r, d in zip(rows, row_dicts)]
             run.status = STATUS_OK
@@ -313,6 +344,12 @@ def cmd_run(args, *, lab_dir: Path | None = None,
         row_dicts = smapi_ops.run_battery_rows(profile_fn, rows)
         run.results = [_to_row_result(r, d, raws) for r, d in zip(rows, row_dicts)]
         run.status = STATUS_OK
+        # JF-971: the --live canary's end block, after this run's LAST
+        # battery pass (the live branch above falls through here). Non-live
+        # runs carry no catalog blocks: the lab skill has no catalog wiring.
+        if getattr(args, "live", False):
+            run.catalog_end = _catalog_block(args.locale, run.skill_id)
+            _print_catalog_endcap("end", run.catalog_end)
         # JF-941: bracket the battery. If the build eTag changed between the
         # pre-battery capture and now, a concurrent redeploy mixed two models
         # in this run: mark it tainted so the compare gate can refuse it.

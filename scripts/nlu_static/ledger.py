@@ -26,11 +26,17 @@ represents nothing). ``flips_total`` counts adjacent representatives whose
 ``actual_intent`` differs; ``flips_same_model`` counts the same pairs
 restricted to those where the committed ``model_sha256`` is equal AND the
 locale's live identities are present, equal and stable within both
-sessions, so a flip counted there happened with no template or live-model
-change. ``last_outcome`` and ``last_actual_intent`` come from the last
-non-error row (errors are environmental and never read as a verdict).
-Output is deterministic for a given set of ledger files: sorted keys,
-sorted rows, no timestamps beyond the ones the files themselves carry.
+sessions AND the catalog canary state (JF-971) is present, ok and equal in
+both sessions, so a flip counted there happened with no template, live-model
+or CATALOG change. Flip pairs that are same-model by sha and identity but
+whose catalog state is not proven-equal are counted separately as
+``flips_catalog_excluded``, so the 2026-11-25 catalog-deletion class (equal
+sha and eTag, dead catalogs) is visible as an exclusion count instead of
+polluting ``flips_same_model``. ``last_outcome`` and ``last_actual_intent``
+come from the last non-error row (errors are environmental and never read
+as a verdict). Output is deterministic for a given set of ledger files:
+sorted keys, sorted rows, no timestamps beyond the ones the files
+themselves carry.
 """
 
 from __future__ import annotations
@@ -44,6 +50,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
+from . import catalog_canary
 from .effective_model import DEFAULT_MODELS_DIR
 from .normalize import normalize_text
 
@@ -171,6 +178,7 @@ class LedgerWriter:
         model_sha256_fn: Callable[[str], str | None] | None = None,
         pid: int | None = None,
         opener: Callable[[Path], object] | None = None,
+        catalog_reader: Callable[[str], dict | None] | None = None,
     ):
         self.out_dir = Path(out_dir)
         self._clock = clock or (lambda: datetime.now(timezone.utc))
@@ -178,6 +186,9 @@ class LedgerWriter:
         # None means the suite runs without an identity source: identities
         # stay null and no SMAPI call is ever made.
         self._identity_reader = identity_reader
+        # JF-971: None means no canary source is wired; the records then
+        # carry the EXPLICIT unwired-reason block, never a silent absence.
+        self._catalog_reader = catalog_reader
         self._model_sha256_fn = model_sha256_fn or _default_model_sha256
         self._pid = os.getpid() if pid is None else pid
         self._opener = opener or _default_opener
@@ -249,6 +260,20 @@ class LedgerWriter:
             return None
         return self._try(False, lambda: self._identity_reader(locale), None)
 
+    def _try_catalog(self, locale: str) -> dict:
+        """The catalog state block for one locale; NEVER a silent absence.
+
+        An unwired reader and a reader fault both become explicit not_run
+        blocks (JF-971 AC 4): a silent skip would read as a passed canary
+        in the history and a stats pair would silently count.
+        """
+        if self._catalog_reader is None:
+            return catalog_canary.not_run_block(catalog_canary.REASON_UNWIRED_READER)
+        block = self._try(False, lambda: self._catalog_reader(locale), None)
+        if isinstance(block, dict):
+            return block
+        return catalog_canary.not_run_block(catalog_canary.REASON_READER_FAILED)
+
     # -- session lifecycle -------------------------------------------------
 
     def start_session(self, skill_id: str | None = None) -> None:
@@ -287,6 +312,7 @@ class LedgerWriter:
             return
         sha = self._try(False, lambda: self._model_sha256_fn(locale), None)
         identity = self._try_identity(locale)
+        catalog = self._try_catalog(locale)
 
         def action() -> None:
             self._emit({
@@ -294,6 +320,7 @@ class LedgerWriter:
                 "locale": locale,
                 "model_sha256": sha,
                 "live_identity_start": identity,
+                "catalog_state_start": catalog,
             })
             self._locales.append(locale)
 
@@ -383,9 +410,11 @@ class LedgerWriter:
         if not self._started or self._finished:
             return
         identity_end: dict[str, str | None] = {}
+        catalog_end: dict[str, dict] = {}
         if not self._disabled:
             for locale in sorted(self._locales):
                 identity_end[locale] = self._try_identity(locale)
+                catalog_end[locale] = self._try_catalog(locale)
 
         def close_out() -> None:
             # The orphan cleanup and the disabled keep-rows close must run on
@@ -410,6 +439,7 @@ class LedgerWriter:
                 "ended": iso,
                 "rows": self._row_count,
                 "live_identity_end": identity_end,
+                "catalog_state_end": catalog_end,
             })
             self._finished = True
             self._close_handle_quietly()
@@ -500,6 +530,9 @@ def load_sessions(results_dir) -> list[dict]:
                 entry = _locale_entry(session, loc)
                 entry["model_sha256"] = record.get("model_sha256")
                 entry["live_identity_start"] = record.get("live_identity_start")
+                # JF-971: pre-canary files carry no block; the default None
+                # is the documented UNKNOWN the stats exclude on.
+                entry["catalog_state_start"] = record.get("catalog_state_start")
             elif rtype == "row":
                 # JF-968: pre-field files carry no considered key; the read
                 # side owns the documented default so consumers may index it.
@@ -522,6 +555,11 @@ def load_sessions(results_dir) -> list[dict]:
                     for loc, identity in ends.items():
                         entry = _locale_entry(session, str(loc))
                         entry["live_identity_end"] = identity
+                blocks = record.get("catalog_state_end")
+                if isinstance(blocks, dict):
+                    for loc, block in blocks.items():
+                        entry = _locale_entry(session, str(loc))
+                        entry["catalog_state_end"] = block
         sessions.append(session)
     sessions.sort(key=lambda s: (s["started"], s["session_id"]))
     return sessions
@@ -530,7 +568,13 @@ def load_sessions(results_dir) -> list[dict]:
 def _locale_entry(session: dict, locale: str) -> dict:
     return session["locales"].setdefault(
         locale,
-        {"model_sha256": None, "live_identity_start": None, "live_identity_end": None},
+        {
+            "model_sha256": None,
+            "live_identity_start": None,
+            "live_identity_end": None,
+            "catalog_state_start": None,
+            "catalog_state_end": None,
+        },
     )
 
 
@@ -621,14 +665,21 @@ def _row_stats(key: tuple[str, str], entries: list[tuple[dict, dict]]) -> dict:
             representatives.append((session, row))
     flips_total = 0
     flips_same_model = 0
+    flips_catalog_excluded = 0
     for index in range(1, len(representatives)):
         s_prev, r_prev = representatives[index - 1]
         s_next, r_next = representatives[index]
         if r_prev.get("actual_intent") == r_next.get("actual_intent"):
             continue
         flips_total += 1
-        if _pair_same_model(s_prev, s_next, loc):
-            flips_same_model += 1
+        # One proven-sha-and-identity evaluation, then the catalog test
+        # decides which counter (if any) the flip lands in: same-model,
+        # catalog-only exclusion (the 2026-11-25 class), or neither.
+        if _pair_proven_sha_identity(s_prev, s_next, loc):
+            if _pair_catalog_equal(s_prev, s_next, loc):
+                flips_same_model += 1
+            else:
+                flips_catalog_excluded += 1
     # last_outcome and last_actual_intent come from the last NON-error row:
     # a session-ending SMAPI outage is environmental noise, not the row's
     # routing verdict; null when every recorded row for the key is an error.
@@ -649,6 +700,7 @@ def _row_stats(key: tuple[str, str], entries: list[tuple[dict, dict]]) -> dict:
         "actual_intents": actual_intents,
         "flips_total": flips_total,
         "flips_same_model": flips_same_model,
+        "flips_catalog_excluded": flips_catalog_excluded,
         "last_outcome": last_outcome,
         "last_actual_intent": last_actual_intent,
         "first_session": entries[0][0]["session_id"],
@@ -656,17 +708,15 @@ def _row_stats(key: tuple[str, str], entries: list[tuple[dict, dict]]) -> dict:
     }
 
 
-def _pair_same_model(session_prev: dict, session_next: dict, locale: str) -> bool:
-    """True when the flip pair provably ran the SAME model for the locale.
+def _pair_proven_sha_identity(session_prev: dict, session_next: dict, locale: str) -> bool:
+    """True when the flip pair provably ran the same committed bytes under
+    the same live model: the sha and identity gate BOTH flip counters share.
 
-    Both the committed model bytes (model_sha256) and the LIVE model must be
+    The committed model bytes (model_sha256) and the LIVE model must be
     equal: the 2026-10-19 catalog-displacement class changed the live model
-    without touching the committed json, so the committed sha alone would
-    misattribute those flips to trainer nondeterminism. Each session's live
-    identity counts only when it is present AND stable (start equals end): a
-    session with a rebuild during the run did not run one model, so the pair
-    is unproven. Anything unproven is False: the flip stays in flips_total
-    and stays out of flips_same_model.
+    without touching the committed json. Each session's live identity counts
+    only when present AND stable (start equals end); anything unproven is
+    False and the flip stays in flips_total alone.
     """
     sha_prev = _locale_sha(session_prev, locale)
     sha_next = _locale_sha(session_next, locale)
@@ -678,6 +728,23 @@ def _pair_same_model(session_prev: dict, session_next: dict, locale: str) -> boo
         identity_prev is not None
         and identity_next is not None
         and identity_prev == identity_next
+    )
+
+
+def _pair_catalog_equal(session_prev: dict, session_next: dict, locale: str) -> bool:
+    """True when both sessions carry a proven, clean, equal catalog state.
+
+    The catalog leg of the same-model decision in _row_stats; each side's
+    state is None unless it is present at both endcaps, ok, equal within
+    the session and free of failed and unknown probes
+    (catalog_canary.entry_stable_canonical, the Gate 2 contract).
+    """
+    catalog_prev = _stable_catalog(session_prev, locale)
+    catalog_next = _stable_catalog(session_next, locale)
+    return (
+        catalog_prev is not None
+        and catalog_next is not None
+        and catalog_prev == catalog_next
     )
 
 
@@ -697,16 +764,46 @@ def _stable_identity(session: dict, locale: str) -> str | None:
     return start
 
 
+def _stable_catalog(session: dict, locale: str) -> str | None:
+    """The session's ONE catalog canary state for the locale, or None.
+
+    Delegates to catalog_canary.entry_stable_canonical (the ONE state
+    comparison): None when either block is missing, not_run, or the state
+    changed during the session, exactly like _stable_identity treats a
+    mid-session rebuild.
+    """
+    entry = session["locales"].get(locale)
+    if not entry:
+        return None
+    return catalog_canary.entry_stable_canonical(entry)
+
+
+def _block_status(block) -> str | None:
+    """A block's status string, or None for anything that is not a block."""
+    return block.get("status") if isinstance(block, dict) else None
+
+
 def session_payload(session: dict, locale_filter: str | None = None) -> dict:
     locales: dict[str, dict] = {}
     for loc, entry in sorted(session["locales"].items()):
         if locale_filter is not None and loc != locale_filter:
             continue
+        start_status = _block_status(entry.get("catalog_state_start"))
+        end_status = _block_status(entry.get("catalog_state_end"))
         enriched = {
             "model_sha256": entry.get("model_sha256"),
             "live_identity_start": entry.get("live_identity_start"),
             "live_identity_end": entry.get("live_identity_end"),
             "rebuilt_during_run": rebuilt_during_run(entry),
+            # JF-971: the catalog canary summary. stable is the ONE
+            # comparable-state test the flip pair rule uses; None statuses
+            # mean the session carried no block (pre-JF-971 file or a locale
+            # the canary never covered).
+            "catalog": {
+                "start": start_status,
+                "end": end_status,
+                "stable": _stable_catalog(session, loc) is not None,
+            },
         }
         locales[loc] = enriched
     return {
@@ -764,9 +861,12 @@ def render_stats_text(stats: dict) -> str:
     for session in sessions:
         lines.append(_session_line(session, prefix="session "))
         for loc, entry in sorted(session["locales"].items()):
+            catalog = entry["catalog"]
             lines.append(
                 f"  {loc}: model={entry['model_sha256'] or '-'} "
-                f"rebuilt_during_run={_flag(entry['rebuilt_during_run'])}"
+                f"rebuilt_during_run={_flag(entry['rebuilt_during_run'])} "
+                f"catalog={catalog['start'] or '-'}/{catalog['end'] or '-'} "
+                f"catalog_stable={_flag(catalog['stable'])}"
             )
     lines.append(f"row keys: {len(stats['rows'])}")
     for row in stats["rows"]:
@@ -774,7 +874,8 @@ def render_stats_text(stats: dict) -> str:
         lines.append(
             f"  runs={row['runs']} passes={row['passes']} fails={row['fails']} "
             f"errors={row['errors']} flips_total={row['flips_total']} "
-            f"flips_same_model={row['flips_same_model']}"
+            f"flips_same_model={row['flips_same_model']} "
+            f"flips_catalog_excluded={row['flips_catalog_excluded']}"
         )
         intents = ", ".join(row["actual_intents"]) if row["actual_intents"] else "-"
         lines.append(f"  actual_intents: {intents}")

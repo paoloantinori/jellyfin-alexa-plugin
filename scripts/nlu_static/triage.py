@@ -2,41 +2,51 @@
 
 After a live suite session recorded in the ledger (JF-954.5), this module
 classifies every red row (outcome ``fail`` or ``error``) with a FIXED
-precedence of seven verdicts, groups the rows into families, and renders a
+precedence of eight verdicts, groups the rows into families, and renders a
 markdown or JSON report. The verdicts are necessary conditions and
 recorded history, never routing predictions.
 
-The seven verdicts, in the exact precedence (first match wins):
+The eight verdicts, in the exact precedence (first match wins):
 
 1. ``INFRA``: outcome is ``error``; the probe failed, nothing can be said
    about routing.
 2. ``UNSTABLE_BUILD``: the locale's live model identity changed during the
    session (``rebuilt_during_run``), so the row must be re-probed.
-3. ``FIXTURE_VOCAB``: the fixture-vocabulary check (JF-954.3) reports
+3. ``CATALOG_STATE`` (JF-971): the row's expected intents consume a
+   catalog-backed slot type and the session's ER canary either FAILED for
+   one of those types (the value was probed and ER did not match) or
+   CHANGED between session start and end. Per the nlu-debug-protocol Gate
+   2 reading rule, the canary is asymmetric: a failed canary proves the
+   catalogs are not usable, so the session's catalog-slotted reds are not
+   model evidence; a passed canary proves liveness for THAT value only,
+   and it never fires this rule. An unknown state (canary not run) never
+   fires either.
+4. ``FIXTURE_VOCAB``: the fixture-vocabulary check (JF-954.3) reports
    ``ABSENT`` or ``FIXTURE_SLOT_UNKNOWN`` for one of the row's pinned
    slots. Per the JF-954.3 precision: in committed mode a plain ``ABSENT``
    on a CATALOG type means only "not in the committed seed", so it does
    NOT fire; ``ABSENT`` fires there only on STATIC types, and always in
    snapshot mode. ``ABSENT_IN_LIBRARY_SEED_ONLY`` never fires the rule.
-4. ``KNOWN_FLAKY``: prior sessions show at least ``--flaky-min-flips``
+5. ``KNOWN_FLAKY``: prior sessions show at least ``--flaky-min-flips``
    same-model flips for the row key within the history window. A row with
    fewer than two prior runs is never KNOWN_FLAKY (``history:
    insufficient``).
-5. ``CONTESTED``: the matcher (JF-954.4) classifies the row CONTESTED or
+6. ``CONTESTED``: the matcher (JF-954.4) classifies the row CONTESTED or
    NO_SAMPLE_MATCH and the row's ``actual_intent`` is one of the rivals.
-6. ``TOKEN_COLLISION``: a ``CARRIER_VS_VALUE`` finding (JF-954.2) exists
+7. ``TOKEN_COLLISION``: a ``CARRIER_VS_VALUE`` finding (JF-954.2) exists
    in the locale whose carrying intent is one of the row's expected
    intents, the row's ``actual_intent`` uses the colliding type, and the
    colliding entry occurs in the utterance.
-7. ``SYSTEMATIC_CANDIDATE``: none of the above; the rows a human must
+8. ``SYSTEMATIC_CANDIDATE``: none of the above; the rows a human must
    look at first.
 
-ja-JP rows skip rules 5 and 6 (no whitespace tokenization) with an
+ja-JP rows skip rules 6 and 7 (no whitespace tokenization) with an
 explicit note in their detail; they can still receive every other verdict.
 
 Every row carries its raw signals regardless of verdict (``vocab_status``,
 ``match_classification``, ``rivals``, ``flips_same_model``,
-``history_runs``, ``rebuilt_during_run``, ``failure_kind``), so a reader
+``history_runs``, ``rebuilt_during_run``, ``failure_kind``,
+``catalog_types``, ``catalog_changed``, ``catalog_failed``), so a reader
 can see why a lower rule never got a chance. The precedence lives as ONE
 ordered list of (verdict, predicate) pairs in ``_first_verdict``; do not
 scatter it across modules.
@@ -47,11 +57,12 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 
-from nlu_static import fixture_vocab, ledger, matcher, token_collisions
+from nlu_static import catalog_canary, fixture_vocab, ledger, matcher, token_collisions
 from nlu_static.effective_model import (
     DEFAULT_MODELS_DIR,
     EffectiveModel,
     build_effective_model,
+    is_catalog_type,
     load_locale_model,
 )
 from nlu_static.normalize import (
@@ -65,6 +76,7 @@ TRIAGE_SCHEMA = 1
 
 V_INFRA = "INFRA"
 V_UNSTABLE_BUILD = "UNSTABLE_BUILD"
+V_CATALOG_STATE = "CATALOG_STATE"
 V_FIXTURE_VOCAB = "FIXTURE_VOCAB"
 V_KNOWN_FLAKY = "KNOWN_FLAKY"
 V_CONTESTED = "CONTESTED"
@@ -74,6 +86,7 @@ V_SYSTEMATIC = "SYSTEMATIC_CANDIDATE"
 VERDICT_ORDER: tuple[str, ...] = (
     V_INFRA,
     V_UNSTABLE_BUILD,
+    V_CATALOG_STATE,
     V_FIXTURE_VOCAB,
     V_KNOWN_FLAKY,
     V_CONTESTED,
@@ -268,6 +281,16 @@ def worst_vocab_status(vocab_slots: list[dict]) -> str | None:
     return worst
 
 
+def expected_intents_of(raw_expected: str) -> set[str]:
+    """The expected intent names of a row, split on the ``|`` alternatives.
+
+    ONE definition: the _RowState property and the catalog-type scan read
+    the same splitter, so the two rules can never disagree about what a
+    row expects.
+    """
+    return {name.strip() for name in (raw_expected or "").split("|") if name.strip()}
+
+
 def _severity(status: str) -> int:
     try:
         return _VOCAB_SEVERITY.index(status)
@@ -318,6 +341,25 @@ def triage_row(row: dict, ctx: TriageContext) -> dict:
 
     vocab_slots = ctx.vocab_slots(locale, utterance, expected_intent, expected_slots)
 
+    # JF-971: the session's catalog canary signals. The types come from the
+    # expected intents' DECLARED slot types (the effective model), the
+    # failure and change signals from the chosen session's blocks; unknown
+    # (no blocks, not_run) reads as no signal, never as passed.
+    catalog_types = sorted(
+        {
+            slot_type
+            for intent_name in expected_intents_of(expected_intent)
+            for slot_type in lctx.slot_types_by_intent.get(intent_name, set())
+            if is_catalog_type(slot_type)
+        }
+    )
+    catalog_changed = catalog_canary.entry_state_changed(locale_entry)
+    catalog_failed = [
+        {"type": type_name, **failure}
+        for type_name in catalog_types
+        for failure in catalog_canary.entry_type_failures(locale_entry, type_name)
+    ]
+
     signals = {
         "locale": locale,
         "utterance": utterance,
@@ -334,6 +376,9 @@ def triage_row(row: dict, ctx: TriageContext) -> dict:
         "flips_same_model": flips_same_model,
         "history_runs": history_runs,
         "rebuilt_during_run": rebuilt,
+        "catalog_types": catalog_types,
+        "catalog_changed": catalog_changed,
+        "catalog_failed": catalog_failed,
     }
 
     state = _RowState(
@@ -364,8 +409,7 @@ class _RowState:
 
     @property
     def expected_intents(self) -> set[str]:
-        raw = self.signals["expected_intent"]
-        return {name.strip() for name in raw.split("|") if name.strip()}
+        return expected_intents_of(self.signals["expected_intent"])
 
 
 def _first_verdict(state: _RowState) -> tuple[str, list[str]]:
@@ -373,6 +417,7 @@ def _first_verdict(state: _RowState) -> tuple[str, list[str]]:
     rules = (
         (V_INFRA, _pred_infra),
         (V_UNSTABLE_BUILD, _pred_unstable_build),
+        (V_CATALOG_STATE, _pred_catalog_state),
         (V_FIXTURE_VOCAB, _pred_fixture_vocab),
         (V_KNOWN_FLAKY, _pred_known_flaky),
         (V_CONTESTED, _pred_contested),
@@ -395,6 +440,29 @@ def _pred_infra(state: _RowState) -> tuple[bool, list[str]]:
 def _pred_unstable_build(state: _RowState) -> tuple[bool, list[str]]:
     fired = state.signals["rebuilt_during_run"] is True
     return fired, ["the locale's live model changed during the session"] if fired else []
+
+
+def _pred_catalog_state(state: _RowState) -> tuple[bool, list[str]]:
+    """JF-971: a failed or changed canary disqualifies the session's catalog reds.
+
+    Fires when one of the row's catalog types was PROBED and did not
+    resolve (start or end), or when the session's catalog state changed
+    between start and end (the row ran under more than one catalog state).
+    An unknown state (blocks missing, not_run, probe errored) never fires:
+    unknown is not evidence in either direction.
+    """
+    failed = state.signals["catalog_failed"]
+    changed = state.signals["catalog_changed"]
+    if not failed and changed is not True:
+        return False, []
+    details = [
+        f"catalog canary: '{entry['type']}' unresolved "
+        f"(value {entry['value']!r}, {entry['phase']})"
+        for entry in failed
+    ]
+    if changed is True:
+        details.append("catalog canary: state changed between session start and end")
+    return True, details
 
 
 def _pred_fixture_vocab(state: _RowState) -> tuple[bool, list[str]]:

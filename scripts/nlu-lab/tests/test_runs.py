@@ -114,3 +114,31 @@ def test_old_run_file_without_considered_hypotheses_loads(tmp_path):
     back = load_run(p)
     assert back.results[0].considered_hypotheses == []
     assert back.results[0].considered_intents == ["PlaySongIntent"]
+
+
+def test_catalog_blocks_roundtrip(tmp_path):
+    """JF-971: the ER canary blocks ride the run file like build_etag."""
+    start = {"status": "ok", "reason": None,
+             "types": {"SongTitle": {"value": "x", "resolved": True}}}
+    end = {"status": "not_run", "reason": "no catalog snapshot (set NLU_CANARY_SNAPSHOT)",
+           "types": {}}
+    run = RunRecord(id="cat", timestamp="t", locale="it-IT", label="x",
+                    model_source="m", model_sha256="0" * 64, skill_id="s",
+                    status="ok", intent_roster=[], results=[],
+                    catalog_start=start, catalog_end=end)
+    back = load_run(save_run(tmp_path, run))
+    assert back.catalog_start == start
+    assert back.catalog_end == end
+    saved = json.loads((tmp_path / "cat.json").read_text())
+    assert saved["catalog_start"] == start and saved["catalog_end"] == end
+
+
+def test_old_run_file_without_catalog_blocks_loads(tmp_path):
+    # a pre-JF-971 run file: no catalog keys anywhere
+    old = {"id": "old", "timestamp": "t", "locale": "it-IT", "label": "l",
+           "model_source": "m", "model_sha256": "0" * 64, "skill_id": "s",
+           "status": "ok", "results": []}
+    p = tmp_path / "old.json"
+    p.write_text(json.dumps(old), encoding="utf-8")
+    back = load_run(p)
+    assert back.catalog_start is None and back.catalog_end is None

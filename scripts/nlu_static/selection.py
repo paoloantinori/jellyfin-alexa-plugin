@@ -41,7 +41,7 @@ from nlu_static import graph as nlu_graph
 from nlu_static.effective_model import (
     EffectiveModel,
     _parse_snapshot_entries,
-    _resolve_locale_table,
+    resolve_locale_table,
     build_effective_model,
     is_catalog_type,
     load_locale_model,
@@ -92,7 +92,7 @@ def snapshot_replaced_model(raw: dict, snapshot: dict, locale: str) -> dict:
     entry parsing must stay ONE definition each.
     """
     validate_snapshot(snapshot)
-    table = _resolve_locale_table(snapshot, locale)
+    table = resolve_locale_table(snapshot, locale)
     effective = copy.deepcopy(raw)
     if table is None:
         return effective

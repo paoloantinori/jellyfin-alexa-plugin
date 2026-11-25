@@ -34,6 +34,9 @@ ES_EPISODE_UTTERANCE = "reproduce breaking bad temporada uno episodio tres"
 
 
 def _writer(out_dir: Path, pid: int, minute: int, identity="etag-A", sha="sha-A"):
+    # JF-971: the default sessions carry a stable ok canary block, because
+    # same-model flip history now requires the catalog proof; the
+    # catalog-state tests override the reader with failed/changed blocks.
     return nlu_ledger.LedgerWriter(
         out_dir=out_dir,
         clock=lambda: FIXED_MOMENT.replace(minute=minute),
@@ -41,7 +44,26 @@ def _writer(out_dir: Path, pid: int, minute: int, identity="etag-A", sha="sha-A"
         identity_reader=lambda locale: identity,
         model_sha256_fn=lambda locale: sha,
         pid=pid,
+        catalog_reader=lambda locale: dict(_STABLE_CATALOG_BLOCK),
     )
+
+
+_STABLE_CATALOG_BLOCK = {
+    "status": "ok",
+    "reason": None,
+    "types": {
+        "SeriesName": {
+            "value": "breaking bad",
+            "intent": "PlayEpisodeIntent",
+            "slot": "series_name",
+            "utterance": "continua con breaking bad",
+            "resolved": True,
+            "code": "ER_SUCCESS_MATCH",
+            "authority": "AMAZON.SeriesName",
+            "error": None,
+        },
+    },
+}
 
 
 def _row(writer, locale, utterance, expected, actual, outcome, slots=None, kind="intent"):
