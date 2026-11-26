@@ -8,7 +8,7 @@ status: Done
 assignee:
   - orchestrator
 created_date: '2026-11-25 15:13'
-updated_date: '2026-11-26 18:35'
+updated_date: '2026-11-26 19:46'
 labels:
   - catalog
   - reliability
@@ -46,6 +46,8 @@ ORCHESTRATOR /simplify ROUND (4 parallel angle reviews post-merge, 2026-11-26):
 APPLIED: (1) sync-eligibility predicates unified on LibrarySyncService: HasSyncCredentials consumed by the task loop + service entry gates, CanSyncUser (credentials + vendor) as the reporting aggregate the endpoint consumes; closes the code-review-round honesty hole where the hand copy omitted the vendor term (a token+skill-but-no-vendor user was promised recreation while every pass skips them). The task loop deliberately does NOT absorb the vendor term: a vendor-less user must still reach the 12h skip branch where the JF-966 liveness piggyback lives. (2) OtherUsersWithStoredIds folded into CatalogRecoveryOutcome (engine-owned multi-user honesty); controller-side Configuration.Users scan deleted; HasStoredCatalogIds doc'd engine-internal. (3) Server message neutralized (no config-page-button phrasing in API text; the UI explanation stays in config.html). (4) Test scaffolding: liveness suite CreateUser/SeedLedger widened internal (the AttachSmapi precedent), recovery + controller test files delegate; CreateUserWithNoIds factory replaces the two six-null spellings; Payload<T>/AssertSuccess helpers replace six deserialize incantations + three status-assert copies. (5) config.html single-button flex wrapper dropped (margin on the button, the testConnectionButton convention). (6) Joined nulled-ids string hoisted (one join feeds audit + log); log line carries the other-users count. (7) Doc comments name the deliberate sweep-shell divergence between RecreateStoredCatalogs and WriteLedgerCaveat on both sides.
 
 SKIPPED (reasons): FindAll double-alloc on the probe skip path (efficiency angle) - the simplification angle's counter-analysis holds (the filtered-list early exit is load-bearing, folding needs a flag, not simpler; one list per 12h pass is noise); dead-caveat single-pass count fold - the sweep gate precedes the loop by construction, two cheap passes over <=17 rows on a click path; confirm() to modal - the task spec mandates confirm(); pre-existing third carry copy in LibrarySyncService + JObject.Parse conventions - outside this diff.
+
+DEPLOY VERIFICATION (2026-11-26 20:45, live on minix): Release net10.0 built 0 warnings with the button re-embedded (fresh-DLL delete first); config backed up pre-deploy (1 user) and survived; ACTIVE dll byte-identical to the build (md5 c10af0eb... at build, staging, and in-container); loaded-assembly line 20:45:16; the SERVED config page (cache-busted) carries recreateCatalogsButton; endpoint guards live (missing userId -> 400, unknown user -> 404 JSON); startup clean, no Alexa errors, JF-966 liveness quiet. The happy path was DELIBERATELY not fired (catalogs are healthy; a real recovery would null them and cost hours of ER re-propagation) - it is pinned by the 21 unit tests.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
