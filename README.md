@@ -29,7 +29,7 @@ Play music, videos, playlists, search your library, manage favorites, and more â
 
 <br/>
 
-_Now at version 1.1: works on both Jellyfin 10.11 and Jellyfin 12. Back up your configuration before major updates._
+_Now at version 1.1.2: works on both Jellyfin 10.11 and Jellyfin 12. Back up your configuration before major updates._
 
 </div>
 
@@ -100,7 +100,7 @@ This plugin is developed with heavy AI assistance and human ownership: a coding 
 
 That is a deliberate choice for this project. The surface a change can break is unusually wide: 17 locale interaction models, two Jellyfin release lines (10.11 and 12), Amazon catalog-backed slot types that gate intent selection, and real-device speech recognition that hears Italian-accented English titles in ways no simulator reproduces. That matrix is too vast to validate the way a narrower domain could be.
 
-What keeps it honest is the verification bar: every change passes the automated test suite (6100+ tests across both target frameworks) and independent review gates, and behavior changes are verified against a real Echo device and the live Jellyfin server before release. The evidence behind the fixes, device logs, probe transcripts, and design decisions with their rationale, is public in the commit history and the task records. When the platform's documented behavior and the device disagree, the device wins, and the finding is recorded.
+What keeps it honest is the verification bar: every change passes the automated test suite (6300+ tests across both target frameworks) and independent review gates, and behavior changes are verified against a real Echo device and the live Jellyfin server before release. The evidence behind the fixes, device logs, probe transcripts, and design decisions with their rationale, is public in the commit history and the task records. When the platform's documented behavior and the device disagree, the device wins, and the finding is recorded.
 
 ### Migrating from the discontinued Plex Alexa skill?
 
@@ -360,7 +360,7 @@ The final step links your Jellyfin account to the Alexa skill:
 
 ### What the committed models contain (and what they don't)
 
-The interaction model JSONs in this repo are the STATIC base: intents, sample utterances, and built-in slot types. They intentionally contain **no catalog data**. Your library's artist and album names are injected at RUNTIME by the plugin: a scheduled catalog sync (`CatalogSyncService`) uploads your library to SMAPI catalog slot types as dynamic values, with locale-specific phonetic synonyms (so an Italian speaker saying "sol coffin" still matches *Soul Coughing*). Two consequences worth knowing. First, the interaction-model state a real user has on Amazon cannot be reconstructed from this repo alone: the committed models plus your library ARE the deployed model. Second, if artist or album one-shot routing regresses, check the catalog sync status in the plugin config page before touching the JSONs. This architecture is deliberate; see the "Replacing catalog-backed custom slot types" anti-pattern in `CLAUDE.md` before swapping custom types for built-ins.
+The interaction model JSONs in this repo are the STATIC base: intents, sample utterances, and built-in slot types. They intentionally contain **no catalog data**. Your library's artist and album names are injected at RUNTIME by the plugin: a scheduled catalog sync (`CatalogSyncService`) uploads your library to SMAPI catalog slot types as dynamic values, with locale-specific phonetic synonyms (so an Italian speaker saying "sol coffin" still matches *Soul Coughing*). Two consequences worth knowing. First, the interaction-model state a real user has on Amazon cannot be reconstructed from this repo alone: the committed models plus your library ARE the deployed model. Second, if artist or album one-shot routing regresses, check the catalog sync status in the plugin config page before touching the JSONs: the plugin monitors its Amazon-side catalogs on its own and surfaces a loud, named error on that page the moment any of them goes missing, so "everything looks healthy but selection is dead" now announces itself. This architecture is deliberate; see the "Replacing catalog-backed custom slot types" anti-pattern in `CLAUDE.md` before swapping custom types for built-ins.
 
 ### Automated NLU Tests
 
