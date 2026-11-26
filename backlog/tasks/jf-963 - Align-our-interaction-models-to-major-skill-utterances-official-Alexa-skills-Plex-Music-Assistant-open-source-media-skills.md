@@ -6,7 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-11-25 14:21'
-updated_date: '2026-11-25 22:05'
+updated_date: '2026-11-26 09:15'
 labels:
   - nlu
   - research
@@ -39,6 +39,8 @@ Maintainer directive (2026-11-25): align our interaction models to the utterance
 
 <!-- SECTION:NOTES:BEGIN -->
 FOLLOW-UPS from the JF-965 review round (2026-11-25 sera, filed same-turn per discipline): (1) SIBLING LOCALES: the batch-1 eleven rows landed in en-US/es-ES/fr-FR/de-DE only; the same-language siblings (en-GB/en-AU/en-CA/en-IN, es-MX/es-US, fr-CA) carry the identical base carrier families and keep the gap - each trains its own model, so en-US rows do not generalize cross-locale. The next batch must START with a carriers delta per sibling locale (the JF-970 tool makes this a minutes-long check) before any row lands. (2) DE CONTRACTION FAMILY: the new de carrier-noun row pins only the uncontracted 'von dem Kunstler' form; spoken German contracts to 'vom Kunstler', which is in neither model, fixtures, nor the lab battery. Candidates for the next batch: 'Spiele Musik vom Kunstler {musician}', 'Spiele Lieder vom Kunstler {musician}' (same carriers-check + lab discipline first; the corpus research doc's askplex de grid is the source to re-read for the exact measured forms).
+
+TWIN RULE for the sibling batch (from the JF-965 wrapper round, 2026-11-26): every carrier row landed for a sibling locale must land WITH its one-shot wrapper twin in the same change (fr-CA 'De ...' infinitives, es-MX/es-US 'que + subjunctive', en-GB/AU/CA/IN 'to + infinitive'), or the sibling keeps dead-air one-shot compositions the base rows cannot fix (each locale trains its own model). Known residual from JF-965: the en RECORD-noun one-shot twin is uncovered by design (loses arbitration to PlayByGenre 'listen to {genre}', stable 2/2 on the lab; revisit only with a probe-backed wording). LAB LIMITATION for all future batches: invocation-headed one-shot phrases CANNOT be tested on the nlu-lab skill (foreign invocation name reads Fallback there); verify bare tails on the lab and headed forms on the live skill post-deploy.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
