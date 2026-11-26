@@ -106,6 +106,25 @@ tests:
     expected_slots:
       musician: {}
 
+  # JF-965 wrapper twins (JF-551 es subjunctive convention): the one-shot
+  # composition (pide a mi coleccion que ...) fell to AMAZON.FallbackIntent on
+  # the live skill without these que-subjunctive rows (profile-nlu evidence
+  # 2026-11-26).
+  - utterance: "pide a mi colección que reproduzca canciones del artista queen"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+
+  - utterance: "pide a mi colección que reproduzca canciones del cantante queen"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+
+  - utterance: "pide a mi colección que reproduzca canciones del grupo queen"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+
   # -------------------------------------------------------------------------
   # 7. PlayLastAddedIntent (media_type, time_period)
   # -------------------------------------------------------------------------

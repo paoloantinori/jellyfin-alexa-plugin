@@ -475,7 +475,7 @@ Invocation name: **"jellyfin player"**
 | Mark Favorite | `Me gusta` · `Me gusta el vídeo` · `Me gusta la canción` · `Me gusta la música` · `Añade el vídeo a mis favoritos` · `Añade la canción a mis favoritos` |
 | Media Info | `Cuál es el {media_info_type}` · `Qué está sonando` · `Cuál es la {media_info_type}` · `Dime el {media_info_type}` · `Dime la {media_info_type}` · `Qué {media_info_type} es` |
 | Play Album | `Reproduce el álbum {album}` · `Reproduce el álbum {album} de {musician}` · `un álbum de {musician}` · `Reproduce álbum {album}` · `Escucha el álbum {album}` · `Escucha el álbum {album} de {musician}` |
-| Play Artist Songs | `Reproduce canciones de {musician}` · `Reproduce canciones del artista {musician}` · `Reproduce canciones del cantante {musician}` · `Reproduce canciones del grupo {musician}` · `Reproduce música de {musician}` · `Reproduce temas de {musician}` |
+| Play Artist Songs | `Reproduce canciones de {musician}` · `Reproduce canciones del artista {musician}` · `Reproduce canciones del cantante {musician}` · `Reproduce canciones del grupo {musician}` · `que reproduzca canciones del artista {musician}` · `que reproduzca canciones del cantante {musician}` |
 | Play Book | `reproduce {book}` · `reproduce el libro {book}` · `escucha {book}` · `escucha el libro {book}` · `escucha el audiolibro {book}` |
 | Play By Decade | `Reproduce canciones de los {decade}` · `Reproduce {genre} de los {decade}` · `Reproduce temas de los {decade}` · `Reproduce éxitos de los {decade}` · `Reproduce música de los {decade}` · `Reproduce {decade} éxitos` |
 | Play By Genre | `Reproduce música {genre}` · `Pon música {genre}` · `Quiero escuchar {genre}` · `Reproduce canciones de {genre}` |

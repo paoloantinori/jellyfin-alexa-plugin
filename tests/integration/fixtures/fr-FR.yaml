@@ -189,6 +189,19 @@ tests:
     expected_slots:
       musician: {}
 
+  # JF-965 wrapper twins: the one-shot composition (demande a mon serveur de
+  # ...) fell to AMAZON.FallbackIntent / AddToQueueIntent on the live skill
+  # without these infinitive rows (profile-nlu evidence 2026-11-26).
+  - utterance: "demande à mon serveur de jouer des chansons de queen"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+
+  - utterance: "demande à mon serveur de jouer de la musique de queen"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+
   # -------------------------------------------------------------------------
   # 9. PlayLastAddedIntent (media_type)
   # -------------------------------------------------------------------------

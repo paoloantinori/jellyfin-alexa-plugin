@@ -98,6 +98,18 @@ tests:
     expected_slots:
       album: {}
 
+  # JF-965 wrapper twins: the one-shot forms fell to AMAZON.FallbackIntent on
+  # the live skill without these to-infinitive rows (profile-nlu evidence
+  # 2026-11-26). The RECORD twin is deliberately absent: on the lab model
+  # "to start the record {album}" loses arbitration to PlayByGenreIntent's
+  # "listen to {genre}" family (stable 2/2 probes, genre=the album name), and
+  # a one-shot playing a genre is worse than dead air; the imperative record
+  # row above still works.
+  - utterance: "ask jellyfin player to start the album thriller"
+    expected_intent: PlayAlbumIntent
+    expected_slots:
+      album: {}
+
   # -------------------------------------------------------------------------
   # 5. PlayVideoIntent (title)
   # -------------------------------------------------------------------------
