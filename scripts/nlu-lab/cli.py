@@ -392,8 +392,19 @@ def cmd_run(args, *, lab_dir: Path | None = None,
 
     save_run(runs_dir, run)
     if run.status == STATUS_OK:
-        print(f"run ok: {len(run.results)} rows, "
-              f"expectation failures: {run.expectation_failure_count} -> {run_path}")
+        # JF-975: a partial-ERROR run stays ok (the healthy rows still judge
+        # the model) but must not read as clean: the summary gains the error
+        # count and ONE stderr line carries the first row's diagnostics (the
+        # full texts live in the run file). The all-ERROR shape already fails
+        # loudly above.
+        error_rows = [r for r in run.results if r.status is RowStatus.ERROR]
+        summary = (f"run ok: {len(run.results)} rows, "
+                   f"expectation failures: {run.expectation_failure_count}")
+        if error_rows:
+            summary += f", {len(error_rows)} error rows"
+            print(f"first error row ({error_rows[0].utterance}): "
+                  f"{error_rows[0].error or 'no text captured'}", file=sys.stderr)
+        print(f"{summary} -> {run_path}")
         return 0
     if run.status == "tainted":
         print(f"run TAINTED: {run.error}; results saved but untrustworthy -> {run_path}",

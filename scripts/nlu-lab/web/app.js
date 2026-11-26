@@ -119,6 +119,7 @@ function sideCell(side, which, kind) {
   if (side.status === "error") {
     td.classList.add("err");
     td.textContent = S.state.strings.error;
+    if (side.error) td.title = side.error;  // native tooltip: the why on the badge
     return td;
   }
   td.textContent = shortIntent(side.selected_intent) || "-";
@@ -213,6 +214,12 @@ function renderDetail(st) {
      (side.considered_intents || []).map(shortIntent).join(" · ")
        || st.strings.detail_none],
   ];
+  // Each erroring side's failure text (the ask CLI's stderr rides the run
+  // file's row error); rendered like the other lines, so it wraps anywhere
+  // and is inserted as text, never HTML.
+  for (const [label, s] of [[st.strings.before, row.old], [st.strings.after, row.new]]) {
+    if (s && s.error) lines.push([label + " · " + st.strings.detail_error, s.error]);
+  }
   body.textContent = "";
   for (const [key, value] of lines) {
     const p = document.createElement("p");

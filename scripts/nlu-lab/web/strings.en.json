@@ -17,5 +17,6 @@
   "detail_expected": "expected",
   "detail_slots": "slots",
   "detail_considered": "considered",
+  "detail_error": "error",
   "detail_none": "none"
 }
