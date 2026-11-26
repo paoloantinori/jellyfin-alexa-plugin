@@ -4,9 +4,10 @@ title: >-
   Album-shuffle as content-scoped play: 'shuffle the album {album}' on
   ShufflePlayIntent + BuildAlbumShufflePlayResponseAsync (the JF-965 twelfth
   row)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-11-25 18:22'
+updated_date: '2026-11-26 19:48'
 labels:
   - nlu
   - alignment
@@ -44,3 +45,25 @@ DELIVERABLE: template row(s) + slot + handler branch + builder method + unit tes
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+GATE-5 CARD (orchestrator, written 2026-11-26 BEFORE implementation and any lab round):
+
+Question: does the 'shuffle the album {album}' row land on ShufflePlayIntent with honest content-scoped semantics, and does its en wrapper twin ('to shuffle the album {album}') survive arbitration?
+
+H1 (row + twin route): lab round routes 'shuffle the album {album}' and its bare twin 'to shuffle the album {album}' to ShufflePlayIntent with the album slot filled; no sibling intent steals either (PlayAlbum/PlayByGenre/PlaySong are the steal candidates).
+
+H2 (twin loses arbitration): the base row routes but the twin is stolen (like JF-965's 'to start the record'); then the twin is DROPPED, documented here, and only the base row ships.
+
+H3 (base row stolen): the base row itself loses arbitration; the whole routing choice is re-examined before any deploy.
+
+Arms: control = current en-US model battery (before the row); treatment = same + the new row(s). Sentinels: PlayAlbum carriers ('play the album {album}'), PlayByGenre ('listen to {genre}'), existing ShufflePlay playlist rows.
+
+Decision map: H1 -> ship both rows, fixtures pin BARE TAILS only; H2 -> ship base only + document; H3 -> no ship, revisit. The lab round runs on the LAB skill (sample-content hypothesis); NO live deploy without the maintainer's explicit go (the JF-965 rule).
+
+OPEN DECISION RESOLVED by orchestrator: the multi-match album shape REUSES PlayAlbum's disambiguation machinery (HandleFuzzyMiss path) rather than shipping single-match-only; consistency over a silent not-found for ambiguous names, and the machinery is shared.
+
+PROTOCOL SPLIT: the worker implements code/templates/fixtures/static validation only; the lab round, wrapper-twin probes, and any live verification are the orchestrator's (this card governs them).
+<!-- SECTION:NOTES:END -->
