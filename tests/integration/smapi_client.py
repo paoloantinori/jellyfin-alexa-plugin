@@ -596,12 +596,20 @@ class SmapiClient:
                     confidence = intent_info.get("confidence", {}).get("score", 0.0)
 
             slots: dict[str, dict[str, Any]] = {}
-            for slot_name, slot_data in primary.get("slots", {}).items():
-                slots[slot_name] = {
-                    "name": slot_name,
-                    "value": slot_data.get("value", ""),
-                    "resolutions": slot_data.get("resolutions", []),
-                }
+            # JF-936: null and non-dict shapes degrade instead of crashing
+            # (a "slots": null intent kept its name but raised
+            # None.items(), aborting the caller): an unusable slots value
+            # reads as no slots, a non-dict slot entry as an empty value.
+            primary_slots = primary.get("slots")
+            if isinstance(primary_slots, dict):
+                for slot_name, slot_data in primary_slots.items():
+                    slots[slot_name] = {
+                        "name": slot_name,
+                        "value": (slot_data.get("value", "")
+                                  if isinstance(slot_data, dict) else ""),
+                        "resolutions": (slot_data.get("resolutions", [])
+                                        if isinstance(slot_data, dict) else []),
+                    }
 
             return {
                 "intent": intent,
@@ -609,7 +617,7 @@ class SmapiClient:
                 "confidence": confidence,
                 "raw": response,
             }
-        except (KeyError, IndexError, TypeError) as exc:
+        except (KeyError, IndexError, TypeError, AttributeError) as exc:
             raise SmapiError(
                 f"Unexpected SMAPI response structure: {exc}"
             ) from exc
@@ -630,7 +638,11 @@ class SmapiClient:
         """
         selected = response.get("selectedIntent")
         considered = considered_hypotheses(response)
-        if not selected:
+        # JF-936: a truthy NON-dict selectedIntent (malformed response) is an
+        # unusable selection, not a crash: it rides the same no-selection
+        # SmapiError so one bad response costs the battery runner one row
+        # instead of an AttributeError aborting the whole run.
+        if not isinstance(selected, dict) or not selected:
             # The computed list rides the exception so the caller reads one
             # extraction per row on this branch too (no second walk).
             if considered:

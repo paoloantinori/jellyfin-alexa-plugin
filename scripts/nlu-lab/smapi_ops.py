@@ -273,7 +273,10 @@ def run_battery_rows(profile_fn, rows, delay: float | None = None) -> list[dict]
     dict (profile_row partial-applied). rows are battery.BatteryRow objects
     (anything with .utterance works); the result preserves input order, one
     dict per row: {utterance, selected_intent, slots, considered_intents,
-    considered_hypotheses, status} with status from runs.RowStatus. Every pair of consecutive
+    considered_hypotheses, status, error} with status from runs.RowStatus.
+    error is None on every non-ERROR row; on an ERROR row it keeps the
+    failure text (the LAST profile exception's message, which embeds the ask
+    CLI's stderr, or the parser-failure diagnostics). Every pair of consecutive
     profile calls (retries included) is spaced by `delay` (None =
     SMAPI_DELAY env, repo default 1.5). A row whose profile call raises or
     returns a non-dict is retried exactly once (the JF-406 single-500
@@ -282,7 +285,10 @@ def run_battery_rows(profile_fn, rows, delay: float | None = None) -> list[dict]
     aborts the run. A response without selectedIntent maps to NO_SELECTION:
     SmapiClient.parse_profile_nlu_result raises SmapiError on that shape and
     the thin catch converts it, keeping slots/considered parsing in the one
-    repo-owned place.
+    repo-owned place. JF-936 belt and braces: a parser failure that is NOT
+    SmapiError (an unknown malformed shape the parser does not harden
+    against) also maps to ONE ERROR row carrying the diagnostics, never an
+    exception aborting the battery.
     """
     if delay is None:
         delay = default_delay()
@@ -291,6 +297,7 @@ def run_battery_rows(profile_fn, rows, delay: float | None = None) -> list[dict]
     for row in rows:
         utterance = row.utterance
         response = _MISSING
+        row_error: str | None = None
         for _attempt in (1, 2):
             if first_call:
                 first_call = False
@@ -298,7 +305,11 @@ def run_battery_rows(profile_fn, rows, delay: float | None = None) -> list[dict]
                 time.sleep(delay)
             try:
                 candidate = profile_fn(utterance)
-            except Exception:  # noqa: BLE001 - one JF-406 retry, then ERROR row
+            except Exception as exc:  # noqa: BLE001 - one JF-406 retry, then ERROR row
+                # The failure text survives (JF-936): it embeds the ask
+                # CLI's stderr, e.g. an expired-auth message. The last
+                # attempt's text wins; a recovered row never carries it.
+                row_error = f"{type(exc).__name__}: {exc}"
                 continue
             # Assign only a dict, never the bad value: the sentinel must stay
             # _MISSING for every failed attempt shape (raise, None, non-dict)
@@ -306,11 +317,12 @@ def run_battery_rows(profile_fn, rows, delay: float | None = None) -> list[dict]
             if isinstance(candidate, dict):
                 response = candidate
                 break
+            row_error = f"non-dict profile response: {type(candidate).__name__}"
         if response is _MISSING:
             out.append({"utterance": utterance, "selected_intent": None,
                         "slots": {}, "considered_intents": [],
                         "considered_hypotheses": [],
-                        "status": RowStatus.ERROR})
+                        "status": RowStatus.ERROR, "error": row_error})
             continue
         try:
             parsed = SmapiClient.parse_profile_nlu_result(response)
@@ -324,6 +336,13 @@ def run_battery_rows(profile_fn, rows, delay: float | None = None) -> list[dict]
             hyps = getattr(exc, "considered", None)
             if hyps is None:
                 hyps = considered_hypotheses(response)
+        except Exception as exc:  # noqa: BLE001 - JF-936: unknown parser shape costs ONE row, never the run
+            out.append({"utterance": utterance, "selected_intent": None,
+                        "slots": {}, "considered_intents": [],
+                        "considered_hypotheses": [],
+                        "status": RowStatus.ERROR,
+                        "error": f"parser {type(exc).__name__}: {exc}"})
+            continue
         else:
             status = RowStatus.OK
             selected = parsed["intent"]
@@ -335,5 +354,5 @@ def run_battery_rows(profile_fn, rows, delay: float | None = None) -> list[dict]
                     "slots": slots,
                     "considered_intents": [h["intent"] for h in hyps],
                     "considered_hypotheses": hyps,
-                    "status": status})
+                    "status": status, "error": None})
     return out

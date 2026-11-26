@@ -72,3 +72,43 @@ def test_parse_confident_selection_empty_considered():
     result = SmapiClient.parse_profile_nlu_result(response)
     assert result["intent"] == "FindSongIntent"
     assert result["considered"] == []
+
+
+# --- JF-936: null-shape hardening (one malformed response, one row) ---
+
+def test_parse_null_selected_intent_slots_degrades_to_empty():
+    """A selectedIntent with "slots": null keeps its intent with empty slots
+    instead of crashing the caller's battery."""
+    result = SmapiClient.parse_profile_nlu_result(
+        {"selectedIntent": {"name": "PlaySongIntent", "slots": None}})
+    assert result["intent"] == "PlaySongIntent"
+    assert result["slots"] == {}
+
+
+def test_parse_non_dict_selected_intent_is_no_selection_error():
+    """A truthy NON-dict selectedIntent raised AttributeError (aborting the
+    lab battery); it now rides the parser's one failure contract, the
+    no-selection SmapiError with its considered evidence."""
+    with pytest.raises(SmapiError, match="No selectedIntent; considered"):
+        SmapiClient.parse_profile_nlu_result(
+            {"selectedIntent": "PlaySongIntent",
+             "consideredIntents": [{"name": "FallbackIntent"}]})
+
+
+def test_parse_nlu_result_null_slots_degrades_to_empty():
+    """The simulate parser's None.items() pin: a considered intent whose
+    slots key is null kept its name but raised AttributeError, which escaped
+    the (KeyError, IndexError, TypeError) catch as a raw traceback."""
+    response = {"result": {"alexaExecutionInfo": {
+        "consideredIntents": [{"name": "PlaySongIntent", "slots": None}]}}}
+    result = SmapiClient.parse_nlu_result(response)
+    assert result["intent"] == "PlaySongIntent"
+    assert result["slots"] == {}
+
+
+def test_parse_nlu_result_non_dict_intent_converts_to_smapi_error():
+    """AttributeError joined the unexpected-structure catch: a non-dict
+    considered intent now refuses as SmapiError instead of tracing."""
+    response = {"result": {"alexaExecutionInfo": {"consideredIntents": ["junk"]}}}
+    with pytest.raises(SmapiError, match="Unexpected SMAPI response structure"):
+        SmapiClient.parse_nlu_result(response)

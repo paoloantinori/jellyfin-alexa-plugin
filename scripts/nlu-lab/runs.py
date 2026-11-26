@@ -43,6 +43,14 @@ class RowResult:
     # considered_hypotheses shape: intent name, slot values, ER summaries).
     # Defaults to [] so run files written before the field keep loading.
     considered_hypotheses: list[dict] = field(default_factory=list)
+    # JF-936: the failure text of an ERROR row (the ask CLI's stderr rides
+    # the profile exception's message; a parser failure carries its
+    # diagnostics). None on non-error rows and in run files written before
+    # the field. The ERROR status is reused, not split: diff_against and
+    # expectation_failure_count already exclude ERROR rows from judgment,
+    # and a new status value would make new files unreadable by older
+    # loaders (load_run's RowStatus(value) rejects unknown values).
+    error: str | None = None
 
     @property
     def expectation_alternatives(self) -> list[str] | None:
@@ -147,6 +155,7 @@ def _row_to_dict(r: RowResult) -> dict:
         "considered_intents": r.considered_intents,
         "raw": r.raw,
         "considered_hypotheses": r.considered_hypotheses,
+        "error": r.error,
     }
 
 
@@ -197,6 +206,7 @@ def load_run(path: Path) -> RunRecord:
                 considered_intents=r.get("considered_intents") or [],
                 raw=r.get("raw") or {},
                 considered_hypotheses=r.get("considered_hypotheses") or [],
+                error=r.get("error"),
             )
             for r in data.get("results", [])
         ]
