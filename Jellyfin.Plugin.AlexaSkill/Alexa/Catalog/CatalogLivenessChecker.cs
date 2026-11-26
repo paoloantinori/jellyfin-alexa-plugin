@@ -39,6 +39,13 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Catalog;
 /// a fact; unknown is silence.
 /// </para>
 /// <para>
+/// JF-967 adds the admin recovery arm (<see cref="RecreateStoredCatalogs"/>):
+/// the one-click recreate for the same incident class, driven from the
+/// configuration page's endpoint. It shares this class's stored-catalog map
+/// and ledger-writer conventions but is NOT gated on any probe verdict (the
+/// admin's click is the verdict) and never calls SMAPI itself.
+/// </para>
+/// <para>
 /// Ledger scope note: the locale ledger is plugin-global and locale-keyed, not
 /// user-keyed (the observation family handles multi-user via ObservedSkillId,
 /// but sync-authored rows carry null). With more than one linked user the
@@ -58,6 +65,14 @@ public class CatalogLivenessChecker
     /// healthy check has nothing durable to say.</summary>
     internal const string CatalogLivenessLedgerSource = "CatalogLivenessCheck";
 
+    /// <summary>Ledger Source label for rows the admin recovery authored
+    /// (JF-967), same convention as <see cref="CatalogLivenessLedgerSource"/>.
+    /// The audit row's visibility horizon is the recovery window: the next
+    /// catalog sync's PUT row overwrites it wholesale, and the capture's
+    /// preserve does not recognize a bit-less recovery row (the recovery has
+    /// nothing durable to say once the sync it forced has run).</summary>
+    internal const string CatalogRecoveryLedgerSource = "CatalogRecovery";
+
     private readonly ILogger<CatalogLivenessChecker> _logger;
 
     public CatalogLivenessChecker(ILogger<CatalogLivenessChecker> logger)
@@ -68,43 +83,59 @@ public class CatalogLivenessChecker
     /// <summary>A stored catalog id and the user record field it came from.</summary>
     /// <param name="Type">The catalog type; rendered via ToString() into logs
     /// and the ledger Error, so the display vocabulary stays the enum's.</param>
-    /// <param name="CatalogId">The stored SMAPI catalog id; null is filtered
-    /// at construction (a catalog that was never created is not dead).</param>
-    /// <param name="Clear">Clears the user field (the auto-heal action).</param>
+    /// <param name="CatalogId">The stored SMAPI catalog id, read ONCE at map
+    /// construction. Null means the field was unset: the PROBE pass skips such
+    /// rows (a catalog that was never created is not dead), while the recovery
+    /// clears them anyway so a whitespace-garbage id cannot survive a
+    /// recreate.</param>
+    /// <param name="Clear">Clears the user field (the auto-heal and the
+    /// recovery action).</param>
     internal readonly record struct StoredCatalog(CatalogType Type, string? CatalogId, Action Clear);
 
     /// <summary>
-    /// The six stored catalog ids of one user, in the enum's canonical order.
-    /// Null fields are skipped: a catalog that was never created is not dead,
-    /// so a user with no stored ids at all costs ZERO SMAPI calls (and no
-    /// Clear closure is allocated for an unset field). Completeness is pinned
+    /// The six stored catalog rows of one user, in the enum's canonical order.
+    /// ONE shared map since JF-967: the probe pass below and the admin
+    /// recovery (<see cref="RecreateStoredCatalogs"/>) both derive their view
+    /// from THIS table, so the six-property roster exists exactly once outside
+    /// the sync's wiring table (a second hand copy is the JF-711/JF-727
+    /// "missed one" class). The map is UNCONDITIONAL: every row is returned
+    /// even when its id is null, because the recovery must clear all six
+    /// fields unconditionally (a stored id that is somehow whitespace garbage
+    /// gets nulled too). The null filter this map used to apply inline lives
+    /// at the PROBE call site in <see cref="CheckUserAsync"/> instead, so a
+    /// user with no stored ids at all still costs ZERO SMAPI calls. Each
+    /// property is read exactly once, here (the accessor pin allows the
+    /// checker at most one getter call per property), and the Clear closures
+    /// remain this method's own display-class shape. Completeness is pinned
     /// by StoredCatalogs_CoversEveryStoredCatalogIdProperty (tests): a new
     /// User *CatalogId property without a row here fails that test instead of
     /// compiling silent (the JF-711/JF-727 one-row-edit doctrine's lighter
-    /// half; the field map itself stays the sync table's).
+    /// half; the field map itself stays the sync table's). Internal since
+    /// JF-967 so the recovery shares the map.
     /// </summary>
-    private static List<StoredCatalog> StoredCatalogs(Entities.User user)
+    internal static List<StoredCatalog> StoredCatalogs(Entities.User user)
     {
-        List<StoredCatalog> stored = new(6);
-        AddIfSet(stored, CatalogType.Artist, user.ArtistCatalogId, () => user.ArtistCatalogId = null);
-        AddIfSet(stored, CatalogType.Album, user.AlbumCatalogId, () => user.AlbumCatalogId = null);
-        AddIfSet(stored, CatalogType.Series, user.SeriesCatalogId, () => user.SeriesCatalogId = null);
-        AddIfSet(stored, CatalogType.Audiobook, user.AudiobookCatalogId, () => user.AudiobookCatalogId = null);
-        AddIfSet(stored, CatalogType.Movie, user.MovieCatalogId, () => user.MovieCatalogId = null);
-        AddIfSet(stored, CatalogType.Song, user.SongCatalogId, () => user.SongCatalogId = null);
+        List<StoredCatalog> stored = new(6)
+        {
+            new(CatalogType.Artist, user.ArtistCatalogId, () => user.ArtistCatalogId = null),
+            new(CatalogType.Album, user.AlbumCatalogId, () => user.AlbumCatalogId = null),
+            new(CatalogType.Series, user.SeriesCatalogId, () => user.SeriesCatalogId = null),
+            new(CatalogType.Audiobook, user.AudiobookCatalogId, () => user.AudiobookCatalogId = null),
+            new(CatalogType.Movie, user.MovieCatalogId, () => user.MovieCatalogId = null),
+            new(CatalogType.Song, user.SongCatalogId, () => user.SongCatalogId = null),
+        };
+
         return stored;
     }
 
-    /// <summary>Adds the row when the id is set. Takes the ALREADY-READ value
-    /// (the accessor pin allows the checker at most one GETTER call per
-    /// property, so the guard and the stored value share one read).</summary>
-    private static void AddIfSet(List<StoredCatalog> stored, CatalogType type, string? catalogId, Action clear)
-    {
-        if (!string.IsNullOrWhiteSpace(catalogId))
-        {
-            stored.Add(new(type, catalogId, clear));
-        }
-    }
+    /// <summary>Whether the user has ANY stored catalog id set (non-null,
+    /// whitespace garbage included, since the recovery clears those too).
+    /// Routed through the shared map so the accessor reads stay inside
+    /// <see cref="StoredCatalogs"/> (the IL pin's one-reader rule); consumed
+    /// by the recovery endpoint's other-users report (JF-967 code
+    /// review).</summary>
+    internal static bool HasStoredCatalogIds(Entities.User user)
+        => StoredCatalogs(user).Any(r => r.CatalogId != null);
 
     /// <summary>One probe's verdict. Dead requires a clean 404; everything else
     /// that fails is Unknown (never treated as dead).</summary>
@@ -133,14 +164,24 @@ public class CatalogLivenessChecker
     /// <param name="cancellationToken">Cancellation token.</param>
     public async Task CheckUserAsync(Entities.User user, CancellationToken cancellationToken)
     {
-        List<StoredCatalog> stored = StoredCatalogs(user);
-        if (stored.Count == 0)
+        // The credential gate sits ABOVE the map construction (JF-967 review):
+        // a user with no SMAPI credentials leaves this method before any row
+        // or closure is allocated, preserving the pre-JF-967 zero-allocation
+        // shape of the skip path's most common early exit.
+        SmapiManagement? smapi = user.SmapiManagement;
+        if (smapi == null)
         {
             return;
         }
 
-        SmapiManagement? smapi = user.SmapiManagement;
-        if (smapi == null)
+        // JF-967: the shared map is unconditional (the recovery arm clears
+        // every field, garbage included); the PROBE pass keeps the null filter
+        // here, the map's pre-JF-967 inline shape, because a catalog that was
+        // never created is not dead and an ids-free user must cost zero SMAPI
+        // calls.
+        List<StoredCatalog> stored = StoredCatalogs(user)
+            .FindAll(c => !string.IsNullOrWhiteSpace(c.CatalogId));
+        if (stored.Count == 0)
         {
             return;
         }
@@ -280,6 +321,180 @@ public class CatalogLivenessChecker
             user.Id);
     }
 
+    /// <summary>The outcome of one admin catalog recovery (JF-967), projected
+    /// into the endpoint's JSON response and the recovery log line.</summary>
+    /// <param name="NulledIds">The OLD stored catalog ids that were nulled, as
+    /// "Type=id" entries in the map's order; empty when none were set.</param>
+    /// <param name="CaveatRowsCleared">How many locale-ledger rows carried the
+    /// CatalogIdsDead caveat before the sweep stripped it.</param>
+    /// <param name="LastCatalogSyncCleared">Whether LastCatalogSync was
+    /// non-null and got cleared (the force-next-sync null).</param>
+    internal sealed record CatalogRecoveryOutcome(
+        IReadOnlyList<string> NulledIds,
+        int CaveatRowsCleared,
+        bool LastCatalogSyncCleared)
+    {
+        /// <summary>Whether the call changed anything at all: the idempotent
+        /// no-op (no stored ids, no timestamp, no caveat anywhere) reports
+        /// this false and persists nothing.</summary>
+        public bool AnythingCleared => NulledIds.Count > 0 || CaveatRowsCleared > 0 || LastCatalogSyncCleared;
+    }
+
+    /// <summary>
+    /// The admin recovery action (JF-967, the 2026-11-25 catalog-deletion
+    /// incident's one-click path): nulls ALL SIX stored catalog ids
+    /// unconditionally through the shared map (a whitespace-garbage id is
+    /// nulled too; the probe pass's null filter is deliberately NOT applied
+    /// here), clears LastCatalogSync (the documented force-next-sync null,
+    /// the same write the auto-heal arm makes), writes the recovery audit
+    /// into every locale-ledger row, strips the CatalogIdsDead caveat those
+    /// rows carry (the recreate invalidates the dead finding, mirroring the
+    /// all-alive clear), and persists the user mutations and the ledger sweep
+    /// through ONE locked save. Idempotent and honest: a user with no stored
+    /// ids, no last-sync timestamp and no caveat anywhere reports
+    /// nothing-cleared and persists nothing. No SMAPI call happens here, so
+    /// the recovery works even while Amazon-side state is broken; the CALLER
+    /// owns triggering the sync (the endpoint queues CatalogSyncTask through
+    /// ITaskManager, the dashboard's run-now mechanism).
+    /// </summary>
+    /// <param name="user">The plugin user whose stored catalog ids to clear.</param>
+    /// <returns>The recovery outcome for the response and the log.</returns>
+    internal CatalogRecoveryOutcome RecreateStoredCatalogs(Entities.User user)
+    {
+        List<StoredCatalog> rows = StoredCatalogs(user);
+        List<string> nulled = new(6);
+        foreach (StoredCatalog row in rows)
+        {
+            if (row.CatalogId != null)
+            {
+                nulled.Add($"{row.Type}={row.CatalogId}");
+            }
+
+            // Unconditional by design (the difference from the probe pass):
+            // a null field's clear is a harmless no-op write, while SKIPPING
+            // here would let a whitespace-garbage id survive the recovery.
+            row.Clear();
+        }
+
+        bool lastSyncCleared = user.LastCatalogSync != null;
+        user.LastCatalogSync = null;
+
+        int caveatRowsCleared = 0;
+        try
+        {
+            var config = Plugin.Instance?.Configuration;
+            if (config != null)
+            {
+                IReadOnlyList<LocaleModelStatusEntry> snapshot = config.GetLocaleModelStatusSnapshot();
+                bool anyDeadCaveat = snapshot.Any(e => e.Caveat.HasFlag(CatalogLedgerCaveats.CatalogIdsDead));
+
+                // Sweep only when something changed: the idempotent second
+                // click (nothing set, nothing carried) rewrites no row.
+                if (nulled.Count > 0 || lastSyncCleared || anyDeadCaveat)
+                {
+                    string auditText = BuildRecoveryAuditText(nulled, lastSyncCleared);
+                    foreach (LocaleModelStatusEntry entry in snapshot)
+                    {
+                        bool hadDeadCaveat = entry.Caveat.HasFlag(CatalogLedgerCaveats.CatalogIdsDead);
+                        LocaleModelStatus? updated = config.UpdateLocaleModelStatus(
+                            entry.Locale,
+                            previous => RecoveryCompose(previous, auditText));
+                        if (updated != null && hadDeadCaveat)
+                        {
+                            caveatRowsCleared++;
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            // Non-fatal for the ledger half (the writer-family convention),
+            // but the persist below still runs for the user mutations: an
+            // audit row can be re-derived from the log, a dangling dead id
+            // cannot.
+            _logger.LogWarning(ex,
+                "Failed to write the catalog recovery audit rows for user {UserId} (non-fatal; the nulled ids still persist) (JF-967)",
+                user.Id);
+        }
+
+        var outcome = new CatalogRecoveryOutcome(nulled, caveatRowsCleared, lastSyncCleared);
+
+        // ONE persist gated on the OUTCOME's own anything-changed predicate
+        // (the WriteLedgerCaveat single-save convention): RecoveryCompose
+        // never declines, so a sweep that ran because of the dead caveat
+        // alone left caveatRowsCleared > 0, and the user-mutation terms cover
+        // every other sweep reason; skipped only when nothing changed at all.
+        if (outcome.AnythingCleared)
+        {
+            Plugin.Instance?.Configuration?.PersistUnderLedgerLock();
+
+            _logger.LogWarning(
+                "Catalog recovery (JF-967): nulled {Count} stored catalog id(s) for user {UserId} ({Ids}); LastCatalogSync {LastSyncClause}; stripped the CatalogIdsDead caveat from {CaveatRows} locale ledger row(s). The next catalog sync recreates the catalogs (the caller owns triggering it).",
+                nulled.Count,
+                user.Id,
+                string.Join(", ", nulled),
+                lastSyncCleared ? "cleared (force next sync)" : "was already null",
+                caveatRowsCleared);
+        }
+        else
+        {
+            _logger.LogInformation(
+                "Catalog recovery (JF-967) was a no-op for user {UserId}: no stored catalog ids, no last-sync timestamp, no dead-catalog caveat",
+                user.Id);
+        }
+
+        return outcome;
+    }
+
+    /// <summary>The audit row's free text, honest in every combination of the
+    /// three facts it can carry: the OLD ids that were nulled, the
+    /// LastCatalogSync clear, and what happens next.</summary>
+    private static string BuildRecoveryAuditText(List<string> nulled, bool lastSyncCleared)
+    {
+        var parts = new List<string>(3);
+        if (nulled.Count > 0)
+        {
+            parts.Add($"nulled stored catalog ids: {string.Join(", ", nulled)}");
+        }
+
+        if (lastSyncCleared)
+        {
+            parts.Add("cleared LastCatalogSync to force the next sync");
+        }
+
+        parts.Add("the next catalog sync recreates the catalogs");
+        return "catalog recovery (JF-967): " + string.Join("; ", parts);
+    }
+
+    /// <summary>The recovery's row compose: strips the CatalogIdsDead bit the
+    /// recreate invalidates (the clear arm's strip, applied inside an
+    /// audit-writing row), keeps every other caveat bit with its payload (the
+    /// bit-iff-payload rule), carries a FOREIGN diagnostic attributed exactly
+    /// like <see cref="DeadCompose"/> does (the shared
+    /// <see cref="CarryForeignDiagnostic"/>), clamps Status through
+    /// <see cref="LibrarySyncService.PreservedOrSkippedStatus"/> (no PUT
+    /// happened), and stamps this writer's Source. Every existing row is
+    /// rewritten (the recovery affects the whole ledger's catalog state), so
+    /// unlike <see cref="ClearCompose"/> there is no decline arm.</summary>
+    private static LocaleModelStatus RecoveryCompose(LocaleModelStatus? previous, string auditText)
+    {
+        CatalogLedgerCaveats caveat = (previous?.Caveat ?? CatalogLedgerCaveats.None) & ~CatalogLedgerCaveats.CatalogIdsDead;
+
+        string? carried = CarryForeignDiagnostic(previous);
+
+        return new LocaleModelStatus
+        {
+            Status = LibrarySyncService.PreservedOrSkippedStatus(previous?.Status),
+            LastUpdated = DateTime.UtcNow,
+            Error = carried == null ? auditText : auditText + "; " + carried,
+            Caveat = caveat,
+            FrozenCatalogTypes = caveat.HasFlag(CatalogLedgerCaveats.FrozenCatalogs) ? previous?.FrozenCatalogTypes : null,
+            Source = CatalogRecoveryLedgerSource,
+            ObservedSkillId = previous?.ObservedSkillId,
+        };
+    }
+
     /// <summary>
     /// The ledger writer: on a dead finding, stamps the CatalogIdsDead caveat
     /// onto EVERY existing locale row (the JF-951 no-PUT writer's wholesale
@@ -349,10 +564,32 @@ public class CatalogLivenessChecker
         }
     }
 
+    /// <summary>The JF-709/JF-721 foreign-diagnostic carry, ONE shared block
+    /// for the checker's caveat-writing composes (JF-967 collapsed the
+    /// RecoveryCompose/DeadCompose verbatim duplicates): a previous row with
+    /// a FREE-TEXT diagnostic that is NOT one of this subsystem's own shapes
+    /// (<see cref="LibrarySyncService.IsOwnShapeLedgerCaveat"/>) contributes
+    /// that diagnostic ATTRIBUTED (migrated once if it is still a pre-JF-721
+    /// composed text), so a foreign diagnostic (a canary mismatch, SMAPI build
+    /// errors) never silently vanishes under the rewrite; own-shape rows
+    /// replace wholesale and carry nothing.</summary>
+    private static string? CarryForeignDiagnostic(LocaleModelStatus? previous)
+    {
+        if (previous?.Error is { Length: > 0 } foreignError
+            && !LibrarySyncService.IsOwnShapeLedgerCaveat(previous.Caveat))
+        {
+            return LibrarySyncService.MigrateLegacyLedgerError(foreignError).Error is { Length: > 0 } migrated
+                ? LibrarySyncService.CarriedDiagnosticLedgerPrefix + migrated
+                : null;
+        }
+
+        return null;
+    }
+
     /// <summary>The dead-write row: wholesale replace per the JF-951 no-PUT
     /// writer's precedent, WITH that writer's carry doctrine (JF-709 rework
-    /// F1): a previous row that is NOT one of the subsystem's own shapes
-    /// (<see cref="LibrarySyncService.IsOwnShapeLedgerCaveat"/>) carries its
+    /// F1, via the shared <see cref="CarryForeignDiagnostic"/>): a previous
+    /// row that is NOT one of the subsystem's own shapes carries its
     /// diagnostic ATTRIBUTED beside the dead-ids text, migrated once if it is
     /// still a pre-JF-721 composed text, so a foreign diagnostic (a canary
     /// mismatch, SMAPI build errors) never silently vanishes under the
@@ -366,14 +603,7 @@ public class CatalogLivenessChecker
         string deadText = $"catalog liveness: 404 on stored catalog id(s): {deadList}; "
             + "slot-type selection for these catalogs is dead until the catalogs re-sync (JF-966)";
 
-        string? carried = null;
-        if (previous?.Error is { Length: > 0 } foreignError
-            && !LibrarySyncService.IsOwnShapeLedgerCaveat(previous.Caveat))
-        {
-            carried = LibrarySyncService.MigrateLegacyLedgerError(foreignError).Error is { Length: > 0 } migrated
-                ? LibrarySyncService.CarriedDiagnosticLedgerPrefix + migrated
-                : null;
-        }
+        string? carried = CarryForeignDiagnostic(previous);
 
         return new LocaleModelStatus
         {
