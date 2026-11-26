@@ -43,6 +43,10 @@ DEFAULT_SKILL_NAME = "jellyfin nlu lab"
 DEFAULT_INVOCATION = "jellyfin nlu laboratorio"
 
 STATUS_RUNNING = "running"
+# The one no-text fallback for first-ERROR-row diagnostics (JF-936 all-ERROR
+# gate + JF-975 partial-ERROR summary line share it; the JF-975 simplify
+# round collapsed the duplicated literal).
+_NO_ERROR_TEXT = "no text captured"
 STATUS_OK = "ok"
 STATUS_FAILED = "failed"
 STATUS_INTERRUPTED = "interrupted"
@@ -374,7 +378,7 @@ def cmd_run(args, *, lab_dir: Path | None = None,
             run.status = STATUS_FAILED
             run.error = (f"all {len(run.results)} rows errored (systemic failure, "
                          f"e.g. expired ask auth); first row error: "
-                         f"{run.results[0].error or 'no text captured'}")
+                         f"{run.results[0].error or _NO_ERROR_TEXT}")
             print(f"WARNING: {run.error}", file=sys.stderr)
     except KeyboardInterrupt:
         run.status = STATUS_INTERRUPTED
@@ -401,9 +405,9 @@ def cmd_run(args, *, lab_dir: Path | None = None,
         summary = (f"run ok: {len(run.results)} rows, "
                    f"expectation failures: {run.expectation_failure_count}")
         if error_rows:
-            summary += f", {len(error_rows)} error rows"
+            summary += f", error rows: {len(error_rows)}"
             print(f"first error row ({error_rows[0].utterance}): "
-                  f"{error_rows[0].error or 'no text captured'}", file=sys.stderr)
+                  f"{error_rows[0].error or _NO_ERROR_TEXT}", file=sys.stderr)
         print(f"{summary} -> {run_path}")
         return 0
     if run.status == "tainted":

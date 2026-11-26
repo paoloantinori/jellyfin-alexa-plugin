@@ -194,3 +194,33 @@ def test_old_run_file_without_row_error_loads_and_compares(tmp_path):
     assert diff["same-row"].kind == "same"      # new-side field absent on the old side
     assert diff["err-old"].kind == "error"      # ERROR either way, text or no text
     assert new_run.expectation_failure_count == 0
+
+
+def test_diff_error_rows_carry_the_failure_text(tmp_path):
+    """JF-975 (code review): the compare output's fourth surface. An error
+    diff carries the ERROR side's diagnostics (new side preferred, old side
+    as fallback when only the old row errored); every other kind carries
+    None."""
+    def _run(results, rid):
+        return RunRecord(id=rid, timestamp="t", locale="it-IT", label=rid,
+                         model_source="m", model_sha256="0" * 64, skill_id="s",
+                         status="ok", intent_roster=[], results=results)
+
+    old_run = _run([
+        make_row(utterance="gone-error", status=RowStatus.ERROR, selected_intent=None,
+                 expected_intent=None, error="old-side failure text"),
+        make_row(utterance="healthy")], "old")
+    new_run = _run([
+        # absent in old, ERROR in new: the new side's text
+        make_row(utterance="fresh-error", status=RowStatus.ERROR, selected_intent=None,
+                 expected_intent=None, error="ask smapi exited 1: Token has expired"),
+        # present and ERROR on BOTH sides: new side's text wins
+        make_row(utterance="gone-error", status=RowStatus.ERROR, selected_intent=None,
+                 expected_intent=None, error="still failing differently"),
+        make_row(utterance="healthy")], "new")
+
+    diff = {d.utterance: d for d in new_run.diff_against(old_run)}
+    assert diff["fresh-error"].error == "ask smapi exited 1: Token has expired"
+    assert diff["gone-error"].error == "still failing differently"  # new side preferred
+    assert diff["healthy"].kind == "same"
+    assert diff["healthy"].error is None

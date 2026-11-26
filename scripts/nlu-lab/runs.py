@@ -71,6 +71,10 @@ class RowDiff:
     utterance: str
     source: str
     kind: str  # one of DIFF_KINDS
+    # The failure text when kind == "error" (the ERROR side's diagnostics,
+    # JF-975: the compare output must say WHY, not just that). None on every
+    # other kind.
+    error: str | None = None
 
 
 @dataclass
@@ -119,9 +123,17 @@ class RunRecord:
         for (utterance, source), new in new_rows.items():
             prev = old_rows.get((utterance, source))
             if prev is None:
-                kind = "error" if new.status is RowStatus.ERROR else "absent_new"
+                if new.status is RowStatus.ERROR:
+                    diffs.append(RowDiff(utterance=utterance, source=source,
+                                         kind="error", error=new.error))
+                    continue
+                kind = "absent_new"
             elif RowStatus.ERROR in (prev.status, new.status):
-                kind = "error"
+                # The ERROR side carries the diagnostics; prefer the new side
+                # (the run under judgment), fall back to the old.
+                diffs.append(RowDiff(utterance=utterance, source=source, kind="error",
+                                     error=new.error if new.status is RowStatus.ERROR else prev.error))
+                continue
             elif prev.selected_intent == new.selected_intent:
                 kind = "same"
             elif new.expectation_alternatives is None:

@@ -90,6 +90,10 @@ function buildSelect(select, st, selectedId) {
       option.disabled = true;
     } else if (run.expectation_failures) {
       suffix = " · ✗" + run.expectation_failures;
+    } else if (run.error_rows) {
+      // JF-975 review: a partial-ERROR run must not read as clean in the
+      // picker (ERROR rows are excluded from expectation counts by design).
+      suffix = " · ⚠" + run.error_rows;
     }
     option.value = run.id;
     option.textContent = run.label + ts + suffix;
@@ -218,7 +222,7 @@ function renderDetail(st) {
   // file's row error); rendered like the other lines, so it wraps anywhere
   // and is inserted as text, never HTML.
   for (const [label, s] of [[st.strings.before, row.old], [st.strings.after, row.new]]) {
-    if (s && s.error) lines.push([label + " · " + st.strings.detail_error, s.error]);
+    if (s && s.status === "error" && s.error) lines.push([label + " · " + st.strings.detail_error, s.error]);
   }
   body.textContent = "";
   for (const [key, value] of lines) {

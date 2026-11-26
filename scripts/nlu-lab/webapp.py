@@ -18,7 +18,7 @@ from pathlib import Path
 import _paths
 _paths.bootstrap()
 
-from runs import RunLoadError, RunRecord, load_run
+from runs import RowStatus, RunLoadError, RunRecord, load_run
 
 WEB_DIR = Path(__file__).resolve().parent / "web"
 DEFAULT_PORT = 8765
@@ -83,6 +83,7 @@ def _scan_runs(runs_dir: Path, locale: str) -> tuple[list[dict], dict[str, RunRe
         entries.append({"id": run.id, "label": run.label, "timestamp": run.timestamp,
                         "locale": run.locale, "status": run.status, "corrupt": False,
                         "expectation_failures": run.expectation_failure_count,
+                        "error_rows": sum(1 for r in run.results if r.status is RowStatus.ERROR),
                         "error": run.error})
         records[run.id] = run
     entries.sort(key=lambda e: (e["timestamp"] or "", e["id"]), reverse=True)

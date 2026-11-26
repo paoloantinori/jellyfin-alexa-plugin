@@ -438,7 +438,7 @@ def test_partial_profile_failure_stays_ok_run(tmp_path, monkeypatch, capsys):
     assert "run ok" in captured.out
     # JF-975: the summary must not read as clean: the error count rides the
     # run-ok line and ONE stderr line carries the first row's diagnostics
-    assert ", 1 error rows" in captured.out
+    assert "error rows: 1" in captured.out
     assert "first error row" in captured.err
     assert FX_ROW_B["utterance"] in captured.err
     assert "Token has expired" in captured.err
