@@ -19,6 +19,7 @@ public class CatalogSyncTask : IScheduledTask
     private readonly ILogger<CatalogSyncTask> _logger;
     private readonly LibrarySyncService _syncService;
     private readonly IUserManager _userManager;
+    private readonly CatalogLivenessChecker _livenessChecker;
 
     // StartupTrigger fires on every plugin load; skip users synced within this window
     // so frequent restarts don't trigger redundant SMAPI catalog work.
@@ -27,11 +28,13 @@ public class CatalogSyncTask : IScheduledTask
     public CatalogSyncTask(
         ILogger<CatalogSyncTask> logger,
         LibrarySyncService syncService,
-        IUserManager userManager)
+        IUserManager userManager,
+        CatalogLivenessChecker livenessChecker)
     {
         _logger = logger;
         _syncService = syncService;
         _userManager = userManager;
+        _livenessChecker = livenessChecker;
     }
 
     /// <inheritdoc />
@@ -93,6 +96,33 @@ public class CatalogSyncTask : IScheduledTask
                     "Skipping user {UserId}: catalog synced {Hours:F1}h ago (< 12h)",
                     user.Id,
                     sinceSync.TotalHours);
+
+                // JF-966 piggyback: the skip path costs zero SMAPI calls today, so a
+                // user whose catalogs were deleted Amazon-side (the 2026-11-25
+                // incident) surfaced NOTHING until the gate elapsed. Get-catalog each
+                // stored id here: at most six reads per skipped user, only for users
+                // WITH credentials (the credential gate above already ran), zero for
+                // a user with no stored ids. A clean 404 is a LOUD error plus a
+                // durable ledger caveat; a probe failure is UNKNOWN and touches
+                // nothing (see CatalogLivenessChecker).
+                try
+                {
+                    await _livenessChecker.CheckUserAsync(user, cancellationToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    // Shutdown raced the piggyback: a deliberate cancel is not a
+                    // liveness failure, so it propagates exactly like the sync
+                    // path's own ThrowIfCancellationRequested does.
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex,
+                        "Catalog liveness check failed for user {UserId} (non-fatal; the next scheduled pass re-checks) (JF-966)",
+                        user.Id);
+                }
+
                 processed++;
                 progress.Report((double)processed / totalUsers);
                 continue;

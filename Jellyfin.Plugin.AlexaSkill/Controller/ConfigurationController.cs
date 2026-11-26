@@ -661,6 +661,10 @@ public class ConfigurationController : ControllerBase
         if (req.TryGetValue("CustomModelEnabled", out var customEnabledToken) && customEnabledToken.Type == JTokenType.Boolean)
         { config.CustomModelEnabled = customEnabledToken.Value<bool>(); updated = true; }
 
+        // JF-966: the catalog liveness check's auto-heal arm (default off).
+        if (req.TryGetValue("CatalogAutoHealDeadIds", out var autoHealToken) && autoHealToken.Type == JTokenType.Boolean)
+        { config.CatalogAutoHealDeadIds = autoHealToken.Value<bool>(); updated = true; }
+
         if (req.TryGetValue("CustomModelUrl", out var customUrlToken) && customUrlToken.Type == JTokenType.String)
         {
             config.CustomModelUrl = customUrlToken.Value<string>();

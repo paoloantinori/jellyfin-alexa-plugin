@@ -234,7 +234,8 @@ public class ScheduledTaskTests : PluginTestBase
         var task = new CatalogSyncTask(
             LoggerFactory.Create(b => { }).CreateLogger<CatalogSyncTask>(),
             syncService: null!,
-            userManager: null!);
+            userManager: null!,
+            livenessChecker: null!);
 
         Assert.Equal("Sync Alexa Skill Catalogs", task.Name);
         Assert.Equal("AlexaSkillCatalogSync", task.Key);
@@ -251,7 +252,8 @@ public class ScheduledTaskTests : PluginTestBase
         var task = new CatalogSyncTask(
             LoggerFactory.Create(b => { }).CreateLogger<CatalogSyncTask>(),
             syncService: null!,
-            userManager: null!);
+            userManager: null!,
+            livenessChecker: null!);
 
         var triggerTypes = task.GetDefaultTriggers().Select(t => t.Type).ToList();
         Assert.Contains(TaskTriggerInfoType.StartupTrigger, triggerTypes);
