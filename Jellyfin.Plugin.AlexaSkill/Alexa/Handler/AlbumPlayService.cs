@@ -1469,7 +1469,7 @@ public sealed class AlbumPlayService
     {
         _logger.LogDebug("BuildAlbumShufflePlayResponseAsync: entered, locale={Locale}", locale);
 
-        _logger.LogDebug("Play album shuffled: {0}", albumName);
+        _logger.LogDebug("ShuffleAlbum: resolving album '{AlbumName}'", albumName);
 
         // The playlist arm's entry wiring verbatim: kana flag BEFORE the shared
         // romanization (the JF-652/JF-660/JF-663 shape; the romanization erases the
@@ -1652,8 +1652,12 @@ public sealed class AlbumPlayService
         // and a successful one stores exactly the order the launch built from.
         string deviceId = context.System.Device.DeviceID;
         Playback.PendingShuffledQueue? pendingShuffle = queueManager?.DeriveShuffledQueue(fullIdList, rng);
+        // The first shuffled item is already materialized in allTracks (the
+        // derive-commit tail's in-hand lookup, JF-974 simplify round): no
+        // GetItemById round trip for an item this method holds.
+        Guid firstShuffledId = pendingShuffle != null ? Guid.Parse(pendingShuffle.FirstItemId) : allTracks[0].Id;
         BaseItem? firstItem = pendingShuffle != null
-            ? libraryManager.GetItemById(Guid.Parse(pendingShuffle.FirstItemId))
+            ? allTracks.FirstOrDefault(t => t.Id == firstShuffledId)
             : allTracks[0];
 
         if (firstItem == null)
@@ -1668,10 +1672,22 @@ public sealed class AlbumPlayService
             item_id, album.Name, pendingShuffle != null ? fullIdList.Count : allTracks.Count);
         // JF-974 HARD CONSTRAINT: no collectionParentId/collectionStartTicks (the
         // JF-625 seek-mode concat is a source-order timeline; a shuffled album is
-        // not), so this launch is per-track AudioPlayer with the queue driving
-        // advance even in seek mode.
+        // not), so the launch is always the per-item stream shape. KNOWN
+        // LIMITATION (code-review round, the playlist shuffle arm's own class):
+        // on a seek-mode device (native controls on) BuildAudioPlayerResponse
+        // delegates to the VideoApp stream, which emits NO playback events, so
+        // the committed shuffled queue does not auto-advance there (one track
+        // then stop); the queue drives advance only on the AudioPlayer path,
+        // like the playlist shuffle.
         SkillResponse response = _launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, _launch.GetStreamUrl(item_id, user), item_id, firstItem, user, context);
 
+        // LOAD-BEARING pre-seed (code-review round: an earlier simplify pass
+        // removed it as redundant and was wrong): the mirror's preserve loop
+        // appends every item already in session.NowPlayingQueue that is not in
+        // the new device queue ("the playable queue never shrinks"), so the
+        // pre-seed REPLACES the session queue with the album's own tracks and
+        // leaves the mirror nothing stale to append. Without it, the previous
+        // play session's queue survives behind the shuffled album.
         session.NowPlayingQueue = allTracks.Select(t => new QueueItem { Id = t.Id }).ToList();
         session.FullNowPlayingItem = firstItem;
 
@@ -1685,17 +1701,13 @@ public sealed class AlbumPlayService
             // Mirror the shuffled DeviceQueue order back into the session queue.
             ProgressReporter.MirrorQueueToSession(shuffledQueue, session);
         }
-        else
-        {
-            queueManager?.SetQueue(deviceId, fullIdList, 0);
-        }
 
         // Continuation lifecycle (JF-927): this launch replaces the device queue
-        // wholesale in BOTH arms, so any stored continuation for this user/device is
-        // stale the moment the replacement lands. Remove it UNCONDITIONALLY and NEVER
-        // re-seed: the committed shuffled queue is the FULL shuffled order, already
-        // complete, and a seeded continuation would append the source-order tail
-        // after it.
+        // wholesale in the production arm, so any stored continuation for this
+        // user/device is stale the moment the replacement lands. Remove it
+        // UNCONDITIONALLY and NEVER re-seed: the committed shuffled queue is the
+        // FULL shuffled order, already complete, and a seeded continuation would
+        // append the source-order tail after it.
         QueueContinuationStore.Remove(session.UserId, context.System.Device.DeviceID);
 
         return response;

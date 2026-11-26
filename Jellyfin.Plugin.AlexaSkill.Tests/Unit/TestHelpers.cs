@@ -1554,6 +1554,51 @@ internal static class TestHelpers
     }
 
     /// <summary>
+    /// JF-974: the ONE album fixture owner (the SetupPlaylist hoist precedent:
+    /// the second copy was the hoist point). A real <see cref="MusicAlbum"/>
+    /// with N direct-child <see cref="Audio"/> tracks (ParentId set): GetItemById
+    /// answers the byId map (album included), GetItemList serves the MusicAlbum
+    /// kind and the Audio kind (the unpaged track fetch and the JF-338 AlbumIds
+    /// retry share the Audio matcher), and GetUserById answers the test user.
+    /// duplicateFirstTrack appends a DUPLICATE of track 0 to the Audio rows (the
+    /// JF-927 first-occurrence dedupe pin's shape). Was 2 private copies
+    /// (AlbumPlayServiceAlbumShuffleTests and ShufflePlayIntentHandlerTests):
+    /// the second copy was the hoist point.
+    /// </summary>
+    internal static (MusicAlbum Album, List<Audio> Tracks) SetupAlbum(
+        Mock<ILibraryManager> libraryManagerMock,
+        Mock<IUserManager> userManagerMock,
+        string name = "thriller",
+        int trackCount = 5,
+        bool duplicateFirstTrack = false)
+    {
+        var album = new MusicAlbum { Name = name, Id = Guid.NewGuid(), Tags = Array.Empty<string>() };
+        var tracks = Enumerable.Range(0, trackCount)
+            .Select(i => new Audio { Id = Guid.NewGuid(), Name = $"{name} track {i}", ParentId = album.Id, Tags = Array.Empty<string>() })
+            .ToList();
+
+        var byId = tracks.ToDictionary(t => t.Id, t => (BaseItem)t);
+        byId[album.Id] = album;
+        libraryManagerMock.Setup(l => l.GetItemById(It.IsAny<Guid>()))
+            .Returns((Guid id) => byId.TryGetValue(id, out BaseItem? item) ? item : null!);
+        libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(
+                q => q.IncludeItemTypes != null && q.IncludeItemTypes.Length > 0 && q.IncludeItemTypes.Contains(BaseItemKind.MusicAlbum))))
+            .Returns(new List<BaseItem> { album });
+        var trackRows = tracks.Cast<BaseItem>().ToList();
+        if (duplicateFirstTrack)
+        {
+            trackRows.Add(tracks[0]);
+        }
+
+        libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(
+                q => q.IncludeItemTypes != null && q.IncludeItemTypes.Length > 0 && q.IncludeItemTypes.Contains(BaseItemKind.Audio))))
+            .Returns(trackRows);
+        userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
+            .Returns(CreateJellyfinUser());
+        return (album, tracks);
+    }
+
+    /// <summary>
     /// JF-808: the ONE resolvable-playlist fixture owner (the
     /// StubBaseItemStatics mock-parameter shape). A real <see cref="Playlist"/>
     /// whose LinkedChildren carry the track ids and resolve through the stubbed

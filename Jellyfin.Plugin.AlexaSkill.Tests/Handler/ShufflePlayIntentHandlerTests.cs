@@ -94,30 +94,12 @@ public class ShufflePlayIntentHandlerTests : PluginTestBase
     }
 
     /// <summary>
-    /// The JF-974 album fixture: the MusicAlbum query answers one album, the Audio
-    /// query its tracks, GetItemById resolves both (the shuffle tail resolves the
-    /// snapshot's first item).
+    /// The shared album fixture (hoisted to TestHelpers in the JF-974 simplify
+    /// round; the second copy was the hoist point); the fixture's own contract
+    /// lives on the TestHelpers helper.
     /// </summary>
     private (MusicAlbum Album, List<Audio> Tracks) SetupAlbum(string name = "thriller", int trackCount = 5)
-    {
-        var album = new MusicAlbum { Name = name, Id = Guid.NewGuid(), Tags = Array.Empty<string>() };
-        var tracks = Enumerable.Range(0, trackCount)
-            .Select(i => new Audio { Id = Guid.NewGuid(), Name = $"{name} track {i}", ParentId = album.Id, Tags = Array.Empty<string>() })
-            .ToList();
-        var byId = tracks.ToDictionary(t => t.Id, t => (BaseItem)t);
-        byId[album.Id] = album;
-        _libraryManagerMock.Setup(l => l.GetItemById(It.IsAny<Guid>()))
-            .Returns((Guid id) => byId.TryGetValue(id, out BaseItem? item) ? item : null!);
-        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(
-                q => q.IncludeItemTypes != null && q.IncludeItemTypes.Length > 0 && q.IncludeItemTypes.Contains(BaseItemKind.MusicAlbum))))
-            .Returns(new List<BaseItem> { album });
-        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(
-                q => q.IncludeItemTypes != null && q.IncludeItemTypes.Length > 0 && q.IncludeItemTypes.Contains(BaseItemKind.Audio))))
-            .Returns(tracks.Cast<BaseItem>().ToList());
-        _userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
-            .Returns(TestHelpers.CreateJellyfinUser());
-        return (album, tracks);
-    }
+        => TestHelpers.SetupAlbum(_libraryManagerMock, _userManagerMock, name, trackCount);
 
     [Fact]
     public void CanHandle_ShufflePlayIntent_ReturnsTrue()

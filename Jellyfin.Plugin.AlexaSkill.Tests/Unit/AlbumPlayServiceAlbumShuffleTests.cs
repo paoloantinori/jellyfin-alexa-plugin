@@ -90,39 +90,58 @@ public class AlbumPlayServiceAlbumShuffleTests : PluginTestBase
     }
 
     /// <summary>
-    /// The album fixture (the SetupPlaylist shape adapted to the album surfaces): the
-    /// MusicAlbum query answers the album, the Audio query answers the tracks, and
-    /// GetItemById resolves both (the derive tail resolves the snapshot's first item).
-    /// <paramref name="duplicateFirstTrack"/> appends the first track's row twice (a
-    /// duplicated library row) for the dedupe pin.
+    /// The shared album fixture (hoisted to TestHelpers in the JF-974 simplify
+    /// round): the duplicate-row leg pins the JF-927 dedupe; the fixture's own
+    /// contract lives on the TestHelpers helper.
     /// </summary>
     private (MusicAlbum Album, List<Audio> Tracks) SetupAlbum(string name = "thriller", int trackCount = 5, bool duplicateFirstTrack = false)
+        => TestHelpers.SetupAlbum(_libraryManagerMock, _userManagerMock, name, trackCount, duplicateFirstTrack);
+
+    /// <summary>THE PRE-SEED PIN (JF-974 code review round): the
+    /// session-queue pre-seed before MirrorQueueToSession is LOAD-BEARING.
+    /// The mirror's preserve loop appends every item already in
+    /// session.NowPlayingQueue that is not in the new device queue ("the
+    /// playable queue never shrinks"), so the pre-seed must REPLACE the stale
+    /// queue with the album's own tracks; an earlier simplify pass removed it
+    /// as redundant and the previous play session's tracks would have
+    /// survived behind the shuffled album.</summary>
+    [Fact]
+    public async Task AlbumShuffle_PreSeed_ReplacesTheStaleSessionQueue_NotAppendsToIt()
     {
-        var album = new MusicAlbum { Name = name, Id = Guid.NewGuid(), Tags = Array.Empty<string>() };
-        var tracks = Enumerable.Range(0, trackCount)
-            .Select(i => new Audio { Id = Guid.NewGuid(), Name = $"{name} track {i}", ParentId = album.Id, Tags = Array.Empty<string>() })
-            .ToList();
+        using var statics = StubBaseItemStatics();
+        var (_, tracks) = SetupAlbum();
+        var config = WorkingConfig();
+        AlbumPlayService svc = CreateService(config);
 
-        var byId = tracks.ToDictionary(t => t.Id, t => (BaseItem)t);
-        byId[album.Id] = album;
-        _libraryManagerMock.Setup(l => l.GetItemById(It.IsAny<Guid>()))
-            .Returns((Guid id) => byId.TryGetValue(id, out BaseItem? item) ? item : null!);
-        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(
-                q => q.IncludeItemTypes != null && q.IncludeItemTypes.Length > 0 && q.IncludeItemTypes.Contains(BaseItemKind.MusicAlbum))))
-            .Returns(new List<BaseItem> { album });
-        // The unpaged track fetch (and the JF-338 AlbumIds retry share the Audio kind).
-        var trackRows = tracks.Cast<BaseItem>().ToList();
-        if (duplicateFirstTrack)
-        {
-            trackRows.Add(tracks[0]);
-        }
+        var session = TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
+        var context = TestHelpers.CreateTestContext("album-shuffle-preseed");
+        using var queueManager = TestHelpers.CreateDeviceQueueManager("album-shuffle-preseed");
+        TestHelpers.EnsurePluginInstance(config, _loggerFactory, c => { }, "album-shuffle-preseed");
+        using var queueSwap = TestHelpers.SwapPluginQueueManager(queueManager);
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(
-                q => q.IncludeItemTypes != null && q.IncludeItemTypes.Length > 0 && q.IncludeItemTypes.Contains(BaseItemKind.Audio))))
-            .Returns(trackRows);
-        _userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
-            .Returns(TestHelpers.CreateJellyfinUser());
-        return (album, tracks);
+        // The stale prior play: a track from ANOTHER album still sitting in the
+        // session queue when the shuffle launch runs.
+        var stale = new Audio { Id = Guid.NewGuid(), Name = "stale prior track", Tags = Array.Empty<string>() };
+        session.NowPlayingQueue = new List<MediaBrowser.Model.Session.QueueItem> { new() { Id = stale.Id } };
+
+        await svc.BuildAlbumShufflePlayResponseAsync(
+            _libraryManagerMock.Object,
+            _userManagerMock.Object,
+            queueManager,
+            "thriller",
+            context,
+            TestHelpers.CreateTestUser(jellyfinToken: "tok"),
+            session,
+            "en-US",
+            new Random(7),
+            kanaOrigin: false,
+            CancellationToken.None);
+
+        // The mirrored session queue is EXACTLY the shuffled album: the stale
+        // track must not survive behind it.
+        var albumIds = tracks.Select(t => t.Id).ToHashSet();
+        Assert.Equal(albumIds.Count, session.NowPlayingQueue.Count);
+        Assert.All(session.NowPlayingQueue, item => Assert.Contains(item.Id, albumIds));
     }
 
     // ------------------------------------------------------------------

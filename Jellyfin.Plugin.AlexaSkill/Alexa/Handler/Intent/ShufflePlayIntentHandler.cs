@@ -84,11 +84,12 @@ public class ShufflePlayIntentHandler : BaseHandler
         // with the mic open (this caller's intent; the shared builder serves both
         // PlayPlaylistIntent and ShufflePlayIntent, so the elicit must name the
         // invoking one), and a captured cancel word ends the flow. The BOTH-empty
-        // elicit stays the PLAYLIST one (the task card's ROUTING contract): an
-        // album-slot ElicitSlot would need the ShufflePlay album slot inside the
-        // model dialog AND the cross-locale ElicitSlots lockstep table, while the
-        // album wording itself is en-US-only (JF-963), so the answer slot must be
-        // one every locale's ShufflePlayIntent declares.
+        // elicit stays the PLAYLIST one (the task card's ROUTING contract): the
+        // model dialog and the cross-locale ElicitSlots table DO carry the album
+        // slot since this change (slot parity is forced cross-locale), but the
+        // album WORDING is en-US-only (JF-963), so an album-slot elicit would
+        // prompt for a slot the other 16 locales never route; the playlist
+        // prompt is the one every locale's ShufflePlayIntent can answer.
         if (BuildCancelDuringOpenElicit(intentRequest, locale, "ShufflePlay") is { } elicitCancel)
         {
             return Task.FromResult(elicitCancel);
