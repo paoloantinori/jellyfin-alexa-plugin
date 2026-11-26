@@ -331,6 +331,12 @@ internal static class DisambiguationHelper
     /// widening the movie gate to the AskMultipleArtists full-state shape
     /// would be a new 17-locale prompt family, deliberately not taken (the
     /// live evidence is a two-movie household).
+    /// JF-974 re-weigh (the album-shuffle twin of the playlist arm's
+    /// AlbumPlayService site): NotFound-gated like its sibling (only the
+    /// FuzzyMissOutcome.NotFound leg reaches the ask) and pre-truncating with
+    /// its own Take(3), so it joins the established pre-truncating
+    /// NotFound-gated class and the cap stays a backstop there; the verdict
+    /// is unchanged.
     /// That caller census is ENFORCED by AskFirstMatchCallerCensusTests (the
     /// WarmingGateCoverageTests pattern): a new AskFirstMatch caller fails
     /// that test's roster until the census is re-weighed here. The two

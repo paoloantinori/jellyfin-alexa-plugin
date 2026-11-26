@@ -1420,6 +1420,288 @@ public sealed class AlbumPlayService
     }
 
     /// <summary>
+    /// JF-974: album-shuffle as content-scoped play ('shuffle the album {album}' on
+    /// ShufflePlayIntent). A SIBLING of <see cref="BuildPlaylistPlayResponseAsync"/>'s
+    /// shuffle arm, not a shuffle parameter on <see cref="BuildAlbumPlayResponseAsync"/>:
+    /// the ordered album flow is a resume machine (progressive pages, JF-796/JF-804 deep
+    /// resume, JF-625 seek-mode concat) and shuffle semantics are FRESH play that must
+    /// bypass all of it. Resolution mirrors the surfaces this service already owns: the
+    /// album resolves through the ONE query shape (<see cref="BuildAlbumQuery"/>, the
+    /// JF-345 contract PlayAlbum's title path runs) with the SearchItemsFuzzyAsync
+    /// fallback the playlist path uses (kana-barred, the JF-663/JF-777 acceptance-bar
+    /// idiom) and the playlist arm's multi-match machinery (the HandleFuzzyMiss
+    /// decision block through the composition delegate, then the AskFirstMatch prompt)
+    /// on the ALBUM media type; the tracks come from the unpaged scoped album query
+    /// (the JF-338 ParentId-then-AlbumIds retry) so the shuffle derives from the FULL
+    /// track list. The derive-commit tail is the playlist arm's tail verbatim (JF-927
+    /// full-list derive deduped first-occurrence, JF-713 derive-then-commit around the
+    /// launch build, MirrorQueueToSession, unconditional QueueContinuationStore.Remove,
+    /// never a seeded continuation).
+    /// HARD CONSTRAINT: the launch passes NO collectionParentId/collectionStartTicks.
+    /// The JF-625 seek-mode concat those feed is a source-order whole-album timeline; a
+    /// shuffled album is not a coherent concat timeline, so this arm always plays
+    /// per-track AudioPlayer with the device queue driving advance.
+    /// </summary>
+    /// <param name="libraryManager">Library manager for querying albums and tracks.</param>
+    /// <param name="userManager">User manager for resolving the Jellyfin user.</param>
+    /// <param name="queueManager">Optional per-device queue manager for the shuffle derive/commit (the playlist arm's null shape: without one there is no device queue to shuffle onto, so the album plays ordered from the full track list).</param>
+    /// <param name="albumName">The album name to search for. MUST be non-empty: the caller owns the empty-slot elicit (JF-550, it must name the invoking intent and this builder serves ShufflePlayIntent only).</param>
+    /// <param name="context">The Alexa context.</param>
+    /// <param name="user">The plugin user.</param>
+    /// <param name="session">The Jellyfin session.</param>
+    /// <param name="locale">The locale for response strings.</param>
+    /// <param name="rng">Optional injectable random source for deterministic shuffle (tests); null uses the derive call's own default.</param>
+    /// <param name="kanaOrigin">JF-661/JF-663 threading: the flag captured on the caller's PRE-romanization slot value; null self-computes from <paramref name="albumName"/> before this method's own romanization.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A skill response with an AudioPlayer directive, or a localized error tell.</returns>
+    public async Task<SkillResponse> BuildAlbumShufflePlayResponseAsync(
+        ILibraryManager libraryManager,
+        IUserManager userManager,
+        Playback.DeviceQueueManager? queueManager,
+        string albumName,
+        Context context,
+        Entities.User user,
+        SessionInfo session,
+        string locale,
+        Random? rng,
+        bool? kanaOrigin,
+        CancellationToken cancellationToken)
+    {
+        _logger.LogDebug("BuildAlbumShufflePlayResponseAsync: entered, locale={Locale}", locale);
+
+        _logger.LogDebug("Play album shuffled: {0}", albumName);
+
+        // The playlist arm's entry wiring verbatim: kana flag BEFORE the shared
+        // romanization (the JF-652/JF-660/JF-663 shape; the romanization erases the
+        // script evidence the bar keys on), spokenName carrying the pre-romanization
+        // value past the reassignment for the kana-miss log lines.
+        bool kana = kanaOrigin ?? Util.ArtistSearch.IsKanaOriginQuery(null, albumName);
+        string spokenName = albumName;
+        albumName = Util.KatakanaRomanizer.Romanize(albumName);
+
+        var (jellyfinUser, userError) = BaseHandler.ResolveJellyfinUser(userManager, session.UserId, locale);
+        if (userError != null)
+        {
+            return userError;
+        }
+
+        // The ONE album query shape (JF-345): the same RetryAsync-wrapped title query
+        // PlayAlbum's title path and the song-to-album cascade run.
+        _logger.LogDebug("ShuffleAlbum: querying Jellyfin with searchTerm='{AlbumName}', types=MusicAlbum", albumName);
+        IReadOnlyList<BaseItem> albums = await RetryAsync(
+            () => libraryManager.GetItemList(BuildAlbumQuery(libraryManager, jellyfinUser, user, albumName, artistIds: null)),
+            "GetAlbumsShuffle",
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+        _logger.LogDebug("ShuffleAlbum: Jellyfin returned {ResultCount} albums", albums.Count);
+
+        BaseItem? albumMatch = null;
+        if (albums.Count == 0)
+        {
+            // The playlist path's fuzzy-fallback shape: SearchItemsFuzzyAsync with the
+            // kana bar as the acceptance predicate of the JF-776 B1 refuse-and-continue
+            // walk (a refused suffixed sibling never shadows the exact album behind
+            // it; a refused library lands the honest miss below). The query codes
+            // encode ONCE and only when the bar is armed (the encode-once idiom).
+            Func<BaseItem, bool>? albumBar = null;
+            if (kana)
+            {
+                var queryCodes = DoubleMetaphone.Encode(albumName);
+                albumBar = a => PassesKanaOriginAlbumAcceptance(queryCodes, albumName.Length, a);
+            }
+
+            var fuzzy = await _search.SearchItemsFuzzyAsync(
+                albumName, jellyfinUser, user, libraryManager, new[] { BaseItemKind.MusicAlbum },
+                cancellationToken, "ShuffleAlbumFuzzyFallback", locale: locale, acceptanceBar: albumBar).ConfigureAwait(false);
+            if (kana && fuzzy == null)
+            {
+                _logger.LogDebug(
+                    "ShuffleAlbum: kana fuzzy fallback found no album (refused by the bar, below threshold, or no candidates) for spoken='{SpokenName}' romanized='{Query}'",
+                    spokenName, albumName);
+            }
+
+            if (fuzzy != null)
+            {
+                albums = new List<BaseItem> { fuzzy.Value.Item };
+            }
+            else
+            {
+                return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundAlbumByName", locale, albumName));
+            }
+        }
+
+        if (albums.Count > 1)
+        {
+            // The playlist arm's multi-match machinery on the ALBUM media type
+            // (PlayAlbum's disambiguation surfaces: the HandleFuzzyMiss decision
+            // block through the composition delegate, whose Confirm leg asks the
+            // yes/no prompt and whose NotFound leg falls into AskFirstMatch below).
+            _logger.LogDebug("ShuffleAlbum: {Count} albums matched, running disambiguation", albums.Count);
+            // The kana bar composes over every acceptance point in this branch (the
+            // playlist arm's narrowing: the server-narrowed candidate list is reduced
+            // once to the collision-passing albums, so no plain-fuzzy acceptance can
+            // pick a non-colliding bait; an emptied set is the honest not-found).
+            IReadOnlyList<BaseItem> fuzzyCandidates = albums;
+            if (kana)
+            {
+                var queryCodes = DoubleMetaphone.Encode(albumName);
+                fuzzyCandidates = albums.Where(a => PassesKanaOriginAlbumAcceptance(queryCodes, albumName.Length, a)).ToList();
+                if (fuzzyCandidates.Count == 0)
+                {
+                    string refused = albums.Count <= 5
+                        ? string.Join(", ", albums.Select(a => a.Name))
+                        : $"{albums.Count} albums";
+                    _logger.LogInformation(
+                        "ShuffleAlbum: kana bar armed={Kana} refused every server candidate for spoken='{SpokenName}' romanized='{Query}': {Refused} matched with no length-banded Double Metaphone collision, treating as a miss (JF-663)",
+                        kana, spokenName, albumName, refused);
+                    return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundAlbumByName", locale, albumName));
+                }
+            }
+
+            // The JF-776 matched-reading pair: both candidate legs score through the
+            // romaji reading (ScoringName) with speech keeping the display name.
+            BaseItem? topMatch = _search.FuzzyMatch(albumName, fuzzyCandidates, p => KeywordMatcher.ScoringName(p.Name), user);
+            // JF-526: the site-level pre-check returns before HandleFuzzyMiss, so the
+            // short-query full-coverage gate must be applied here too; a gated miss
+            // falls into HandleFuzzyMiss below, whose Confirm mode asks the yes/no
+            // "did you mean" prompt.
+            if (topMatch != null && KeywordMatcher.HasFullKeywordCoverage(KeywordMatcher.Tokenize(albumName, locale), topMatch.Name, locale))
+            {
+                albumMatch = topMatch;
+            }
+            else
+            {
+                var (missOutcome, missResponse) = await _handleFuzzyMiss(
+                    albumName,
+                    fuzzyCandidates,
+                    p => KeywordMatcher.ScoringName(p.Name),
+                    best => new List<(Guid, string)> { (best.Id, best.Name) },
+                    DisambiguationHelper.MediaTypeAlbum,
+                    locale,
+                    best =>
+                    {
+                        albumMatch = best;
+                        return Task.FromResult<SkillResponse>(null!);
+                    },
+                    user: user,
+                    speechSelector: p => p.Name).ConfigureAwait(false);
+
+                if (missOutcome != BaseHandler.FuzzyMissOutcome.NotFound)
+                {
+                    if (missResponse != null)
+                    {
+                        return missResponse;
+                    }
+                }
+                else
+                {
+                    var matches = fuzzyCandidates.Take(3).Select(p => (p.Id, p.Name, (string?)_launch.GetImageUrl(p.Id.ToString("N"), user))).ToList();
+                    return DisambiguationHelper.AskFirstMatch(matches, DisambiguationHelper.MediaTypeAlbum, locale, context);
+                }
+            }
+        }
+        else
+        {
+            albumMatch = albums[0];
+        }
+
+        BaseItem album = albumMatch!;
+        _logger.LogDebug("ShuffleAlbum: matched album='{AlbumName}' (id={AlbumId})", album.Name, album.Id);
+
+        // The unpaged scoped FULL track list (the YesIntent MusicAlbum confirm's
+        // JF-767 Finding A shape) with the JF-338 retry the page path uses: for
+        // split / multi-disc / malformed-folder albums the folder-based ParentId
+        // query returns 0 while the tracks exist (the Album tag still links them),
+        // so query by album membership instead.
+        _logger.LogDebug("ShuffleAlbum: resolving tracks for album='{AlbumName}'", album.Name);
+        IReadOnlyList<BaseItem> allTracks = await RetryAsync(
+            () => libraryManager.GetItemList(QueueContinuationFetcher.BuildScopedAlbumTracksQueryUnpaged(
+                jellyfinUser, user, libraryManager, _logger, album.Id, byAlbumIds: false)),
+            "GetAlbumTracksShuffle",
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+        if (allTracks.Count == 0)
+        {
+            _logger.LogDebug("ShuffleAlbum: folder-based track query returned 0, retrying by AlbumIds for '{Name}'", album.Name);
+            allTracks = await RetryAsync(
+                () => libraryManager.GetItemList(QueueContinuationFetcher.BuildScopedAlbumTracksQueryUnpaged(
+                    jellyfinUser, user, libraryManager, _logger, album.Id, byAlbumIds: true)),
+                "GetAlbumTracksShuffleByAlbumIds",
+                cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
+
+        _logger.LogDebug("ShuffleAlbum: resolved {TrackCount} tracks for album='{AlbumName}'", allTracks.Count, album.Name);
+
+        if (allTracks.Count == 0)
+        {
+            return ResponseBuilder.Tell(ResponseStrings.Get("NoSongsInAlbum", locale, album.Name));
+        }
+
+        // The playlist arm's derive-commit tail. JF-927 (issue #44): the shuffle
+        // snapshot derives from the FULL track list (an album always fits the
+        // unpaged fetch, so there is no window to escape, but the shape stays the
+        // playlist arm's), DEDUPED first-occurrence: the queue advance resolves the
+        // current item by FIRST-match index (SessionQueue.IndexOfQueueItem), so a
+        // duplicate id would cycle the inter-duplicate segment forever.
+        var seenIds = new HashSet<Guid>();
+        List<string> fullIdList = allTracks
+            .Where(t => seenIds.Add(t.Id))
+            .Select(t => t.Id.ToString())
+            .ToList();
+
+        // JF-699 item 5 + JF-713: derive BEFORE the launch build and commit the SAME
+        // snapshot after it, so a refused launch leaves the device queue untouched
+        // and a successful one stores exactly the order the launch built from.
+        string deviceId = context.System.Device.DeviceID;
+        Playback.PendingShuffledQueue? pendingShuffle = queueManager?.DeriveShuffledQueue(fullIdList, rng);
+        BaseItem? firstItem = pendingShuffle != null
+            ? libraryManager.GetItemById(Guid.Parse(pendingShuffle.FirstItemId))
+            : allTracks[0];
+
+        if (firstItem == null)
+        {
+            return ResponseBuilder.Tell(ResponseStrings.Get("MediaNotFound", locale));
+        }
+
+        string item_id = firstItem.Id.ToString();
+
+        _logger.LogDebug(
+            "ShuffleAlbum: returning AudioPlayer, itemId={ItemId}, album='{AlbumName}', queueSize={QueueSize}",
+            item_id, album.Name, pendingShuffle != null ? fullIdList.Count : allTracks.Count);
+        // JF-974 HARD CONSTRAINT: no collectionParentId/collectionStartTicks (the
+        // JF-625 seek-mode concat is a source-order timeline; a shuffled album is
+        // not), so this launch is per-track AudioPlayer with the queue driving
+        // advance even in seek mode.
+        SkillResponse response = _launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, _launch.GetStreamUrl(item_id, user), item_id, firstItem, user, context);
+
+        session.NowPlayingQueue = allTracks.Select(t => new QueueItem { Id = t.Id }).ToList();
+        session.FullNowPlayingItem = firstItem;
+
+        if (pendingShuffle != null)
+        {
+            // JF-713: commit the SAME snapshot the launch built from (queueManager is
+            // non-null whenever the snapshot exists: it is only derived under its
+            // null-conditional access). The JF-712 derive-to-commit race note on the
+            // playlist arm's commit applies verbatim to this twin window.
+            Playback.DeviceQueue shuffledQueue = queueManager!.CommitShuffledQueue(deviceId, pendingShuffle);
+            // Mirror the shuffled DeviceQueue order back into the session queue.
+            ProgressReporter.MirrorQueueToSession(shuffledQueue, session);
+        }
+        else
+        {
+            queueManager?.SetQueue(deviceId, fullIdList, 0);
+        }
+
+        // Continuation lifecycle (JF-927): this launch replaces the device queue
+        // wholesale in BOTH arms, so any stored continuation for this user/device is
+        // stale the moment the replacement lands. Remove it UNCONDITIONALLY and NEVER
+        // re-seed: the committed shuffled queue is the FULL shuffled order, already
+        // complete, and a seeded continuation would append the source-order tail
+        // after it.
+        QueueContinuationStore.Remove(session.UserId, context.System.Device.DeviceID);
+
+        return response;
+    }
+
+    /// <summary>
     /// Live read of the global music flag (global-only: no per-user override exists).
     /// Moved here with the album cascade, its only caller (JF-315 batch 8 deleted
     /// the BaseHandler original the same turn): the expression is identical to the

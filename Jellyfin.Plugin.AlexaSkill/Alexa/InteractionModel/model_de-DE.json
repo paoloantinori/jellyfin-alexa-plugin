@@ -1128,6 +1128,10 @@
           {
             "name": "playlist",
             "type": "AMAZON.SearchQuery"
+          },
+          {
+            "name": "album",
+            "type": "AMAZON.MusicRecording"
           }
         ]
       },
@@ -2019,6 +2023,12 @@
           {
             "name": "playlist",
             "type": "AMAZON.SearchQuery",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          },
+          {
+            "name": "album",
+            "type": "AMAZON.MusicRecording",
             "confirmationRequired": false,
             "elicitationRequired": false
           }

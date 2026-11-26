@@ -442,7 +442,7 @@ Invocation name: **"jellyfin player"**
 | Show Lyrics | `show the lyrics` · `show lyrics` · `read the lyrics` · `display the lyrics` |
 | Show More | `show more` · `next page` · `more results` · `see more` · `more` · `what else` |
 | Show Photo Album | `show my photos` · `show my {photoAlbum} photos` · `show me my photos` · `show photos of {photoAlbum}` · `show photos from {photoAlbum}` · `show me photos of {photoAlbum}` |
-| Shuffle Play | `shuffle the playlist {playlist}` · `play the playlist {playlist} in shuffle mode` · `play the playlist {playlist} on shuffle` · `play {playlist} shuffled` |
+| Shuffle Play | `shuffle the playlist {playlist}` · `shuffle the album {album}` · `play the playlist {playlist} in shuffle mode` · `play the playlist {playlist} on shuffle` · `play {playlist} shuffled` · `to shuffle the album {album}` |
 | Skip Forward Back | `skip {seek_direction} {seek_amount} {seek_unit}` · `skip {seek_direction}` · `skip {seek_amount} {seek_unit}` · `go {seek_direction} {seek_amount} {seek_unit}` · `jump {seek_direction} {seek_amount} {seek_unit}` · `fast forward {seek_amount} {seek_unit}` |
 | Sleep Timer | `stop playing in {sleep_duration}` · `set a sleep timer for {sleep_duration}` · `sleep timer {sleep_duration}` · `stop after {sleep_duration}` · `turn off in {sleep_duration}` · `set sleep timer {sleep_duration}` |
 | Turn Radio Off | `turn off radio mode` · `disable radio mode` · `radio mode off` · `turn off radio` · `disable radio` · `stop radio mode` |

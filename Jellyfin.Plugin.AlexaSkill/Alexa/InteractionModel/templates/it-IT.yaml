@@ -390,6 +390,8 @@ explicit_intents:
     slots:
       - name: playlist
         type: AMAZON.SearchQuery
+      - name: album
+        type: AlbumName
   GoToChapterIntent:
     samples:
       - Vai al capitolo {chapter_number}
@@ -1845,6 +1847,10 @@ dialog:
       slots:
         - name: playlist
           type: AMAZON.SearchQuery
+          confirmationRequired: false
+          elicitationRequired: false
+        - name: album
+          type: AlbumName
           confirmationRequired: false
           elicitationRequired: false
     - name: PlayVideoIntent

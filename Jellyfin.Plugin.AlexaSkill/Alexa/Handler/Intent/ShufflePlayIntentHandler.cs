@@ -14,9 +14,13 @@ using Microsoft.Extensions.Logging;
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 
 /// <summary>
-/// Handler for ShufflePlayIntent — start a playlist already shuffled (first track random).
-/// Shares the playlist-play flow with <see cref="PlayPlaylistIntentHandler"/> via
-/// <see cref="AlbumPlayService.BuildPlaylistPlayResponseAsync"/> (shuffle enabled).
+/// Handler for ShufflePlayIntent: start a playlist or album already shuffled (first
+/// track random). The playlist slot shares the playlist-play flow with
+/// <see cref="PlayPlaylistIntentHandler"/> via
+/// <see cref="AlbumPlayService.BuildPlaylistPlayResponseAsync"/> (shuffle enabled); the
+/// album slot (JF-974, the en-US 'shuffle the album {album}' row) routes to
+/// <see cref="AlbumPlayService.BuildAlbumShufflePlayResponseAsync"/>, the album sibling
+/// of that flow's shuffle arm.
 /// </summary>
 public class ShufflePlayIntentHandler : BaseHandler
 {
@@ -58,30 +62,39 @@ public class ShufflePlayIntentHandler : BaseHandler
     }
 
     /// <summary>
-    /// Play a playlist by its name, shuffled. Delegates the shared playlist-play flow to
-    /// <see cref="AlbumPlayService.BuildPlaylistPlayResponseAsync"/> with shuffle enabled.
+    /// Play a playlist or album by its name, shuffled. The album slot (JF-974) delegates
+    /// to <see cref="AlbumPlayService.BuildAlbumShufflePlayResponseAsync"/>; the playlist
+    /// slot delegates to the shared playlist-play flow
+    /// (<see cref="AlbumPlayService.BuildPlaylistPlayResponseAsync"/> with shuffle
+    /// enabled).
     /// </summary>
     /// <param name="request">The skill request which should be handled.</param>
     /// <param name="context">The context of the skill intent request.</param>
     /// <param name="user">The user instance.</param>
     /// <param name="session">The session instance.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>Play directive of the shuffled playlist.</returns>
+    /// <returns>Play directive of the shuffled playlist or album.</returns>
     public override Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
         string locale = GetLocale(request);
         IntentRequest intentRequest = (IntentRequest)request;
         (_, string? playlistName) = ReadPlaylistSlot(intentRequest, IntentNames.Slots.Playlist, locale);
+        string? albumName = GetSlotValue(intentRequest, IntentNames.Slots.Album);
         // JF-550 (dead-mic sweep; JF-549 class): the empty-playlist prompt elicits
         // with the mic open (this caller's intent; the shared builder serves both
         // PlayPlaylistIntent and ShufflePlayIntent, so the elicit must name the
-        // invoking one), and a captured cancel word ends the flow.
+        // invoking one), and a captured cancel word ends the flow. The BOTH-empty
+        // elicit stays the PLAYLIST one (the task card's ROUTING contract): an
+        // album-slot ElicitSlot would need the ShufflePlay album slot inside the
+        // model dialog AND the cross-locale ElicitSlots lockstep table, while the
+        // album wording itself is en-US-only (JF-963), so the answer slot must be
+        // one every locale's ShufflePlayIntent declares.
         if (BuildCancelDuringOpenElicit(intentRequest, locale, "ShufflePlay") is { } elicitCancel)
         {
             return Task.FromResult(elicitCancel);
         }
 
-        if (string.IsNullOrWhiteSpace(playlistName))
+        if (string.IsNullOrWhiteSpace(playlistName) && string.IsNullOrWhiteSpace(albumName))
         {
             return Task.FromResult(BuildDialogElicitResponse("DidNotCatchPlaylistName", locale, "playlist", IntentNames.ShufflePlay, Util.ElicitSlots.For(IntentNames.ShufflePlay)));
         }
@@ -91,7 +104,31 @@ public class ShufflePlayIntentHandler : BaseHandler
         // the shuffle flag differs), so it shares the gate and the placement
         // (after the empty-slot elicit and the cancel hatch, before the first
         // cold query; see that handler's comment for the index-choice record).
+        // The JF-974 album branch rides the same gate: its album SearchTerm
+        // query and fuzzy fallback hit the same cold database.
         GuardIndexReady(_artistIndex);
+
+        // JF-974: the album branch. The music gate is the PlayAlbum contract
+        // (IfMediaTypeDisabled, AFTER the empty-slot prompt and BEFORE the first
+        // query, the CLAUDE.md placement rule; this branch is a music-only path,
+        // while the playlist branch below stays cross-type ungated per JF-806).
+        if (!string.IsNullOrWhiteSpace(albumName))
+        {
+            SkillResponse? musicDisabled = IfMediaTypeDisabled(c => c.MusicEnabled, request);
+            if (musicDisabled != null)
+            {
+                return Task.FromResult(musicDisabled);
+            }
+
+            // JF-661: the kana-origin flag on the PRE-romanization album slot
+            // value, the playlist branch's pinning convention (the builder
+            // romanizes; the flag must survive it).
+            bool albumKanaOrigin = Util.ArtistSearch.IsKanaOriginQuery(null, albumName);
+            return AlbumPlay.BuildAlbumShufflePlayResponseAsync(
+                _libraryManager, _userManager, _queueManager,
+                albumName, context, user, session, locale,
+                rng: null, albumKanaOrigin, cancellationToken);
+        }
 
         // JF-663: the kana-origin flag is captured on the post-strip,
         // pre-romanization name, the string the builder matches: kana in the
