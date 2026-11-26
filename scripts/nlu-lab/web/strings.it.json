@@ -17,5 +17,6 @@
   "detail_expected": "atteso",
   "detail_slots": "slot",
   "detail_considered": "considerati",
+  "detail_error": "errore",
   "detail_none": "nessuno"
 }

@@ -146,8 +146,11 @@ def _resolve_pair(runs_dir: Path, entries: list[dict],
 def _side(row) -> dict | None:
     if row is None:
         return None
+    # error rides along (None on non-error rows and pre-JF-936 run files) so
+    # the diff UI can surface WHY a row errored, not just that it did.
     return {"selected_intent": row.selected_intent, "status": row.status.value,
-            "slots": row.slots, "considered_intents": row.considered_intents}
+            "slots": row.slots, "considered_intents": row.considered_intents,
+            "error": row.error}
 
 
 def build_page_state(runs_dir: Path, locale: str, run_a: str | None = None,

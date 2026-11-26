@@ -25,11 +25,11 @@ WEB_DIR = Path(webapp.__file__).resolve().parent / "web"
 
 
 def _row(utterance, selected, expected="PlaySongIntent", source="fixture",
-         status=RowStatus.OK, slots=None, considered=None):
+         status=RowStatus.OK, slots=None, considered=None, error=None):
     return RowResult(utterance=utterance, source=source, status=status,
                      expected_intent=expected, selected_intent=selected,
                      slots=slots or {}, considered_intents=considered or [],
-                     raw={})
+                     raw={}, error=error)
 
 
 def _save_run(runs_dir, run_id, results, *, locale="it-IT", label=None,
@@ -143,6 +143,28 @@ def test_state_refusals_unknown_corrupt_and_cross_locale(tmp_path):
         webapp.build_page_state(runs_dir, "it-IT", run_a="broken", run_b="it")
     with pytest.raises(webapp.StateRefused):
         webapp.build_page_state(runs_dir, "  ")
+
+
+def test_matrix_sides_carry_row_error_text(tmp_path):
+    """JF-975: the side projection must not drop RowResult.error: the diff UI
+    surfaces WHY a row errored (the ask CLI's stderr rides it); None on
+    healthy rows."""
+    runs_dir = tmp_path / "runs"
+    _save_run(runs_dir, "stock", [
+        _row("boom", "PlaySongIntent"),
+        _row("fine", "PlaySongIntent"),
+    ], timestamp="2026-11-19T09:00:00")
+    _save_run(runs_dir, "fix", [
+        _row("boom", None, status=RowStatus.ERROR, expected=None,
+             error="ask smapi profile-nlu exited 1: Token has expired (boom)"),
+        _row("fine", "PlaySongIntent"),
+    ], timestamp="2026-11-20T10:00:00")
+    state = webapp.build_page_state(runs_dir, "it-IT", run_a="stock", run_b="fix")
+    by_key = {(r["utterance"], r["source"]): r for r in state["matrix"]}
+    assert by_key[("boom", "fixture")]["new"]["error"] == \
+        "ask smapi profile-nlu exited 1: Token has expired (boom)"
+    assert by_key[("boom", "fixture")]["old"]["error"] is None
+    assert by_key[("fine", "fixture")]["new"]["error"] is None
 
 
 # --- the strings loader ---
@@ -282,8 +304,30 @@ _JS_DRIVER = """
 })();
 """
 
+_JS_ERROR_DRIVER = """
+(async () => {
+  await refresh();
+  const out = {};
+  const row = S.state.matrix.find((r) => r.new && r.new.status === "error");
+  if (row) {
+    S.selected = row;
+    renderDetail(S.state);
+    out.detailHidden = document.getElementById("detail").hidden;
+    out.detailText = _collect(document.getElementById("detail-body"));
+    // the error badge's tooltip: each matrix row is [utterance, old, new]
+    for (const tr of document.getElementById("matrix-body").children) {
+      const utt = tr.children[0] && tr.children[0].children[0]
+        ? tr.children[0].children[0].textContent : "";
+      if (utt === row.utterance) out.newBadgeTitle = tr.children[2].title || null;
+    }
+  }
+  console.log(JSON.stringify(out));
+})();
+"""
 
-def _run_app_js(tmp_path, state, stored_lang=None, nav_lang="it-IT"):
+
+def _run_app_js(tmp_path, state, stored_lang=None, nav_lang="it-IT",
+                driver=_JS_DRIVER):
     """Run the real web/app.js under node (minimal DOM stub; the composed page
     state is served through the fetch stub) and return the driver's JSON: the
     lang param app.js sent and the rendered detail text. Skipped when no node
@@ -294,7 +338,7 @@ def _run_app_js(tmp_path, state, stored_lang=None, nav_lang="it-IT"):
     script = tmp_path / "app_js_harness.js"
     script.write_text(
         _JS_PRELUDE + "\n" + (WEB_DIR / "app.js").read_text(encoding="utf-8")
-        + "\n" + _JS_DRIVER, encoding="utf-8")
+        + "\n" + driver, encoding="utf-8")
     env = {**os.environ,
            "LAB_STATE_JSON": json.dumps(state, ensure_ascii=False),
            "LAB_STORED_LANG": stored_lang or "",
@@ -319,6 +363,25 @@ def test_app_js_detail_renders_slot_value_not_object(tmp_path):
     assert out["detailHidden"] is False
     assert "song: nuvole bianche" in out["detailText"]
     assert "[object Object]" not in out["detailText"]
+
+
+def test_app_js_renders_error_text_on_badge_and_detail(tmp_path):
+    """JF-975: an error row's failure text (the ask CLI's stderr) reaches the
+    human surfaces: a native tooltip on the error badge and a full detail
+    line, inserted as text (createTextNode), never HTML."""
+    err_text = "ask smapi profile-nlu exited 1: Token has expired (boom)"
+    runs_dir = tmp_path / "runs"
+    _save_run(runs_dir, "r1", [_row("boom", "PlaySongIntent")],
+              timestamp="2026-11-19T09:00:00")
+    _save_run(runs_dir, "r2", [_row("boom", None, status=RowStatus.ERROR,
+                                    expected=None, error=err_text)],
+              timestamp="2026-11-20T09:00:00")
+    state = webapp.build_page_state(runs_dir, "it-IT", run_a="r1", run_b="r2")
+    out = _run_app_js(tmp_path, state, driver=_JS_ERROR_DRIVER)
+    assert out["detailHidden"] is False
+    assert "errore" in out["detailText"]        # the localized detail_error label
+    assert err_text in out["detailText"]        # the full text, once on the new side
+    assert out["newBadgeTitle"] == err_text     # the badge tooltip
 
 
 @pytest.mark.parametrize("stored,nav,expected", [

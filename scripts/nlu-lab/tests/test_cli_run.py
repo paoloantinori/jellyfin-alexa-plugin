@@ -173,6 +173,8 @@ def test_run_happy_path_end_to_end(tmp_path, monkeypatch, capsys):
     assert run.expectation_failure_count == 1  # FX_ROW_B expects LoopAllOffIntent
     captured = capsys.readouterr()
     assert "expectation failures: 1" in captured.out
+    assert "error rows" not in captured.out    # all-OK: no error-rows clause (JF-975)
+    assert "first error row" not in captured.err
     assert "warning" in captured.err.lower()  # ZeroSamplesIntent warned, did not block
 
 
@@ -432,7 +434,14 @@ def test_partial_profile_failure_stays_ok_run(tmp_path, monkeypatch, capsys):
     assert run.status == "ok"
     assert [r.status.value for r in run.results] == ["ok", "error"]
     assert "Token has expired" in run.results[1].error
-    assert "run ok" in capsys.readouterr().out
+    captured = capsys.readouterr()
+    assert "run ok" in captured.out
+    # JF-975: the summary must not read as clean: the error count rides the
+    # run-ok line and ONE stderr line carries the first row's diagnostics
+    assert ", 1 error rows" in captured.out
+    assert "first error row" in captured.err
+    assert FX_ROW_B["utterance"] in captured.err
+    assert "Token has expired" in captured.err
 
 
 def test_persistent_profile_failure_yields_error_rows_with_text(tmp_path, monkeypatch, capsys):
