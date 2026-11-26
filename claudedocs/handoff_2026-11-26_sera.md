@@ -2,20 +2,28 @@
 
 Read this first on resume, then `git log --oneline -8` and `backlog.task_list` for the live state. Everything decided here is settled; do not re-litigate.
 
-## Where we are
+## Where we are (updated end-of-run: FIVE tasks closed)
 
-The /pa:backlog-orchestrator run closed THREE tasks through the full discipline (worker in worktree, merge, /simplify 4-agent round, code-review high, findings applied, push; CI green on every code push):
+The /pa:backlog-orchestrator run closed FIVE tasks through the full discipline (worker in worktree, merge, /simplify, code-review high, findings applied, push; CI green on every code push):
 
-- JF-964 CLOSED (no code): recorded live verdict run 20261126-175416-jf964-en-conjunction-r2. en-US is HEALTHY (H2): zero Fallback on the non-famous carrier/naked/verb battery; the JF-961 conjunction disease is NOT live in en-US under the current wiring (artist + audiobook catalog-wired; the live PlaySong song slot is FREE-TEXT, raw shows only AlexaEntities ER_SUCCESS_NO_MATCH). en-US alignment rows may proceed with the standard graph-diff sequence only. 3 fixture expectation failures observed in the same run (coldplay-artist row -> PlaySong carrier-flip class; What-am-I-watching -> MediaInfo; play-dinner-music -> PlayNext): fixture hygiene for the regular triage path, NOT conjunction evidence.
-- JF-967 DONE (merge 80af6f14 + gate round 00d0f403): POST /alexaskill/api/catalog/recreate + Recreate Catalogs config-page button + incident runbook claudedocs/incident_2026-11-25_catalog-deletion.md. Key verified facts baked into comments: Jellyfin's TaskManager.QueueScheduledTask<T> LOGS-AND-RETURNS (no throw) on unregistered tasks, hence the registration pre-check through IScheduledTaskWorker.ScheduledTask; the endpoint nulls six ids through the ONE shared StoredCatalogs map (now internal+unconditional, probe filter at CheckUserAsync call site), CanSyncUser/HasSyncCredentials on LibrarySyncService are the ONE predicate family; CarryForeignDiagnostic moved to LibrarySyncService with recovery-Source own-shape (consecutive recoveries replace wholesale, no nesting). RESIDUAL: not deployed to minix yet (the button flow verified via embedded markup + 6403 unit tests only; a deploy + on-page exercise is the natural follow-up).
-- JF-936 DONE (worker 47330c5b + gate round 4a6a8d77): nlu-lab battery resilience. MalformedResponseError (NOT a SmapiError subclass; the runner overloads SmapiError as NO_SELECTION) maps response-shape problems to MARKED ERROR rows; per-row error diagnostics through RowResult.error (backward-compatible run JSON, all 80 old run files load); ALL-ERROR runs now fail rc 1 naming the first row's diagnostics, partial-ERROR stays ok (both boundaries pinned). 689 python tests green.
+- JF-964 CLOSED (no code): en-US HEALTHY (H2), no conjunction disease; en alignment unblocked. Run 20261126-175416-jf964-en-conjunction-r2.
+- JF-967 DONE + DEPLOYED LIVE to minix (20:45, verified: served button, guards 400/404, active-dll md5 match, tokens survived; happy path deliberately unfired). POST /alexaskill/api/catalog/recreate + config-page button + runbook.
+- JF-936 DONE: nlu-lab battery resilience (MalformedResponseError -> marked ERROR rows; RowResult.error; all-ERROR fails rc 1).
+- JF-975 DONE: the diagnostics surfaced on ALL FIVE human surfaces (webapp projection, badge tooltip, detail line, run-ok summary + first-error stderr, compare output via RowDiff.error, run-picker warning badge).
+- JF-974 DONE through the full Gate-5 lab round (H1 CONFIRMED: control/treatment/A-A runs 20261126-220103/221255/222439; both rows PlayAlbum->ShufflePlay with album filled; twin survives; zero-noise A/A; two pre-existing fixture failures resolved as side effects). BuildAlbumShufflePlayResponseAsync + handler branch + en-US samples + all-17-locale album slot. 6417/6417 both TFMs.
+- JF-976 FILED (low): hoist the four album-disambiguation copies into one helper.
 
-NEW TASK FILED: JF-975 (low) - surface the ERROR-row diagnostics on the human surfaces (webapp _side projection, app.js badge/detail, run-ok summary count). Filed same-turn per the landing rule from JF-936's altitude review.
+PUSH-GATE RITUAL LEARNED: the deploy-gate hook keys on the EXACT command string (30-min window). A compound command with anything appended is a NEW command and blocks again; replay the identical string after stating the gate answer in the record.
+
+PROCESS LESSON (memory reviewer-equivalence-claims-need-artifact-read): a /simplify finding claiming "equivalent, safe to remove" still needs the named code opened before applying; JF-974's removed session pre-seed regressed the mirror's preserve loop and the code-review round caught it (now pinned by a regression test).
+
+## Awaiting the maintainer
+
+- JF-974's LIVE model deploy (DLL deploy + custom-model/rebuild en-US) + e2e simulate rows + on-device verification: needs the explicit vai (the standing JF-965 rule). The lab round is done; only the live step remains.
 
 ## Queue (not started, next up)
 
-- JF-975 (low, small): the surfacing task above; natural quick win.
-- JF-974 (medium): album-shuffle as content-scoped play (the JF-965 twelfth row) - involves interaction-model changes in en + handler work; the nlu-debug-protocol and nlu-verify skills govern.
+- JF-976 (low): the disambiguation hoist (its own change + gate round).
 - JF-972 (low): consolidate the five synthetic-model test builders into tests/scripts/conftest.py.
 - JF-973 (low): the --live deploy fall-through double-run (the reason full live batteries take ~40 min; see memory nlu-lab-live-full-battery-runtime).
 - Older device-test checklist items (JF-405 HIGH, JF-595 HIGH) predate the incident era; reassess before working them.
