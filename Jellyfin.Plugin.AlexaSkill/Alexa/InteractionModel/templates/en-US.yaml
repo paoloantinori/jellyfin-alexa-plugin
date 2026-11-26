@@ -897,9 +897,17 @@ intents:
   - play the playlist {playlist} in shuffle mode
   - play the playlist {playlist} on shuffle
   - play {playlist} shuffled
+  # JF-974: album-shuffle as content-scoped play (en-US wording only per
+  # JF-963; the slot itself ships in every locale so the dialog/ElicitSlots
+  # parity contract holds). The twin row lands in the same change (anti-pattern
+  # 12); if the lab round shows it losing arbitration it gets dropped then.
+  - shuffle the album {album}
+  - to shuffle the album {album}
   slots:
   - name: playlist
     type: AMAZON.SearchQuery
+  - name: album
+    type: AMAZON.MusicRecording
 - name: ShowPhotoAlbumIntent
   samples:
   - show my photos
@@ -1337,6 +1345,10 @@ dialog:
     slots:
     - name: playlist
       type: AMAZON.SearchQuery
+      confirmationRequired: false
+      elicitationRequired: false
+    - name: album
+      type: AMAZON.MusicRecording
       confirmationRequired: false
       elicitationRequired: false
   - name: PlayRadioIntent

@@ -279,6 +279,10 @@
           {
             "name": "playlist",
             "type": "AMAZON.SearchQuery"
+          },
+          {
+            "name": "album",
+            "type": "AlbumName"
           }
         ]
       },
@@ -3772,6 +3776,12 @@
           {
             "name": "playlist",
             "type": "AMAZON.SearchQuery",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          },
+          {
+            "name": "album",
+            "type": "AlbumName",
             "confirmationRequired": false,
             "elicitationRequired": false
           }

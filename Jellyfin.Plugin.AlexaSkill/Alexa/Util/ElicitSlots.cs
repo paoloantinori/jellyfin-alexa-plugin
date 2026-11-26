@@ -38,7 +38,7 @@ public static class ElicitSlots
         [IntentNames.RateItem] = new[] { IntentNames.Slots.StarRating },
         [IntentNames.SetReminder] = new[] { "reminder_duration", "reminder_time" },
         [IntentNames.SetPlaybackSpeed] = new[] { IntentNames.Slots.Speed },
-        [IntentNames.ShufflePlay] = new[] { IntentNames.Slots.Playlist },
+        [IntentNames.ShufflePlay] = new[] { IntentNames.Slots.Playlist, IntentNames.Slots.Album },
         [IntentNames.SleepTimer] = new[] { "sleep_duration" },
     };
 

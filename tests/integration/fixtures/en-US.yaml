@@ -911,6 +911,24 @@ tests:
     expected_slots:
       playlist: {}
 
+  # JF-974: album-shuffle as content-scoped play. The album value reuses the
+  # PlayAlbum family's fixture album ("thriller", the rows above in section 4)
+  # so slot-type vocabulary matches (anti-pattern #8; the en-US album slot is
+  # free-text AMAZON.MusicRecording, the same type PlayAlbumIntent uses). BARE
+  # TAILS only (the profile-nlu Gate-3 rule): the headed one-shot ("ask jellyfin
+  # player to shuffle the album thriller") is verified on device/simulate, never
+  # pinned here. The twin row's arbitration verdict comes from the lab round; a
+  # losing twin gets dropped there (anti-pattern #12).
+  - utterance: "shuffle the album thriller"
+    expected_intent: ShufflePlayIntent
+    expected_slots:
+      album: {}
+
+  - utterance: "to shuffle the album thriller"
+    expected_intent: ShufflePlayIntent
+    expected_slots:
+      album: {}
+
   # Regression sentinel — plain play must stay PlayPlaylistIntent (not stolen by ShufflePlayIntent)
   - utterance: "play the playlist road trip"
     expected_intent: PlayPlaylistIntent

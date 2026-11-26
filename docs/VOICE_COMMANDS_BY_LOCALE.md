@@ -4494,7 +4494,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (779 phrases across 71 commands):
+Complete phrase list (781 phrases across 71 commands):
 
 #### Play music
 
@@ -4836,6 +4836,8 @@ Complete phrase list (779 phrases across 71 commands):
 - `play the playlist <playlist name> in shuffle mode`
 - `play the playlist <playlist name> on shuffle`
 - `play <playlist name> shuffled`
+- `shuffle the album <album title>`
+- `to shuffle the album <album title>`
 
 **Play something random**
 
