@@ -81,6 +81,8 @@ public class Registrator : IPluginServiceRegistrator
         // Catalog sync services
         serviceCollection.AddSingleton<CatalogManager>();
         serviceCollection.AddSingleton<LibrarySyncService>();
+        // JF-966: the catalog liveness check the sync task's skip path piggybacks on.
+        serviceCollection.AddSingleton<CatalogLivenessChecker>();
 
         // Dynamic entity resolution
         serviceCollection.AddSingleton<DynamicEntityBuilder>();

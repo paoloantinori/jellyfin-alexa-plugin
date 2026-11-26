@@ -38,6 +38,24 @@ public class SmapiManagement : ManagementApi
     }
 
     /// <summary>
+    /// Initializes a new instance of the <see cref="SmapiManagement"/> class
+    /// against a caller-supplied message handler (JF-966 test seam): the WHOLE
+    /// ManagementApi Refit surface (typed clients included) rides that handler,
+    /// so the SDK-call composition is testable without SMAPI. Production code
+    /// never calls this; the public ctor keeps the real transport. The
+    /// ManagementApi base exposes this handler ctor exactly for such fakes.
+    /// </summary>
+    /// <param name="smapiDeviceToken">The smapi device token.</param>
+    /// <param name="loggerFactory">The logger factory.</param>
+    /// <param name="httpHandler">The message handler every Refit client uses.</param>
+    internal SmapiManagement(DeviceToken smapiDeviceToken, ILoggerFactory loggerFactory, HttpMessageHandler httpHandler)
+        : base(smapiDeviceToken.AccessToken, httpHandler)
+    {
+        _logger = loggerFactory.CreateLogger<SmapiManagement>();
+        _accessToken = smapiDeviceToken.AccessToken;
+    }
+
+    /// <summary>
     /// Gets the SMAPI vendor ID for the authenticated developer account.
     /// </summary>
     /// <returns>The vendor ID string.</returns>

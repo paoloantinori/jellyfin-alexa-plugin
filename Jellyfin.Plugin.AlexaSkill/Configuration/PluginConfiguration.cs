@@ -344,6 +344,19 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool CustomModelEnabled { get; set; }
 
     /// <summary>
+    /// Gets or sets whether the catalog liveness check (JF-966) AUTO-HEALS the
+    /// dead catalog ids it finds: nulls each stored id that answered a clean 404
+    /// and clears that user's LastCatalogSync, so the next scheduled catalog-sync
+    /// pass recreates the catalogs and re-PUTs the locale models. DEFAULT FALSE:
+    /// the check only reports loudly (error log + CatalogIdsDead ledger caveat)
+    /// and the stored ids survive, because a false "dead" must never be able to
+    /// wipe ids on its own (probe failures are UNKNOWN, not dead, but the flag is
+    /// the second guard: the maintainer turns healing on deliberately). No sync
+    /// is triggered inline; the state stays broken until the next scheduled pass.
+    /// </summary>
+    public bool CatalogAutoHealDeadIds { get; set; }
+
+    /// <summary>
     /// Gets or sets whether interaction models are media-profiled at rebuild time
     /// (JF-960, first slice). When ON, every model build counts the media families
     /// (video, music, audiobook, podcast, live TV) reachable by the UNION of the
@@ -923,6 +936,21 @@ public enum CatalogLedgerCaveats
     /// the combination changes; carried like the other durable bits by the
     /// startup capture's preserve.</summary>
     OversizeSkipped = 8,
+
+    /// <summary>Durable catalog state (JF-966): the catalog liveness check
+    /// (CatalogSyncTask's skip-path piggyback) get-catalog'd a stored catalog id
+    /// and got a CLEAN 404: the catalog is gone on Amazon's side while the
+    /// plugin's own surfaces report healthy (the 2026-11-25 deletion incident's
+    /// exact shape). Voice selection for the slot types wired to that catalog is
+    /// dead until the catalogs re-sync; the row's Error names the dead ids. A
+    /// probe that failed some OTHER way is UNKNOWN and sets nothing (only a
+    /// clean 404 marks dead). Durable: survives clean startup captures like the
+    /// other catalog-state bits. Heals when the next sync re-creates the
+    /// catalogs and PUTs the locale models (a fresh wholesale row), when the
+    /// CatalogAutoHealDeadIds flag's next scheduled pass re-creates them, or
+    /// when a later liveness pass finds every stored id alive again (the
+    /// check's own clear arm strips the bit).</summary>
+    CatalogIdsDead = 16,
 }
 
 /// <summary>
@@ -1041,6 +1069,13 @@ public record LocaleModelStatus
             if (Caveat.HasFlag(CatalogLedgerCaveats.OversizeSkipped))
             {
                 parts.Add("model PUT skipped: effective size over the safety threshold (previous good model kept)");
+            }
+
+            if (Caveat.HasFlag(CatalogLedgerCaveats.CatalogIdsDead))
+            {
+                // JF-966: the dead ids themselves ride the row's Error; the
+                // clause names the state and the user-visible consequence.
+                parts.Add("stored catalog ids DEAD on Amazon (404): slot-type selection broken until catalogs re-sync");
             }
 
             // Every Caveat != None shape contributes a part (the frozen arm

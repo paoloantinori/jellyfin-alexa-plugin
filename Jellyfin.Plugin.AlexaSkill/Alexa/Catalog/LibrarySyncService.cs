@@ -1012,9 +1012,12 @@ public class LibrarySyncService
     /// world) would freeze a momentary state into a permanent row, and UNVERIFIED
     /// (the catalog-sync PUT path's outcome-not-confirmed observation,
     /// CatalogManager) describes a superseded run whose reason still trails in
-    /// Error when the prior row carried one.
+    /// Error when the prior row carried one. Internal since JF-966: the catalog
+    /// liveness check's no-PUT ledger writer clamps the same way (a settled
+    /// SUCCEEDED must not lose its ModelsDeployed weight just because the
+    /// catalogs the model points at died Amazon-side).
     /// </summary>
-    private static string PreservedOrSkippedStatus(string? previousStatus) =>
+    internal static string PreservedOrSkippedStatus(string? previousStatus) =>
         string.Equals(previousStatus, "SUCCEEDED", StringComparison.OrdinalIgnoreCase)
         || string.Equals(previousStatus, "FAILED", StringComparison.OrdinalIgnoreCase)
         || string.Equals(previousStatus, "TIMEOUT", StringComparison.OrdinalIgnoreCase)
@@ -1031,16 +1034,23 @@ public class LibrarySyncService
     /// that bit onto its own rows (Source "Embedded"): a caveat-blind check
     /// would carry the preserved diagnostic forward forever while the skip-gated
     /// sync stays skipped (the JF-710 coordination-note hazard, field form).
-    /// Accepted consequence (the JF-709 review's standing decision, kept): a
-    /// foreign diagnostic riding a frozen row (a JF-705 canary after a freeze)
-    /// is replaced rather than carried here; its durable home is the capture
-    /// preserve. ObservedBuildErrors deliberately does NOT match: that Error is
-    /// SMAPI's own text from the previous observation, foreign to this writer
-    /// (and carried like any other foreign diagnostic).
+    /// CatalogIdsDead joins the same rule (JF-966): the liveness check's Error
+    /// is durable CATALOG state of this subsystem, the capture preserves it
+    /// onto Source-"Embedded" rows exactly like FrozenCatalogs, and a frozen
+    /// leg rewriting the row wholesale must not carry the dead-catalog text as
+    /// "previous run:" foreign diagnostics that outlive the state they
+    /// described (the checker's own clear arm could never strip a carried
+    /// copy). Accepted consequence (the JF-709 review's standing decision,
+    /// kept): a foreign diagnostic riding a frozen row (a JF-705 canary after
+    /// a freeze) is replaced rather than carried here; its durable home is the
+    /// capture preserve. ObservedBuildErrors deliberately does NOT match: that
+    /// Error is SMAPI's own text from the previous observation, foreign to
+    /// this writer (and carried like any other foreign diagnostic).
     /// </summary>
-    private static bool IsOwnShapeLedgerCaveat(Configuration.CatalogLedgerCaveats caveat) =>
+    internal static bool IsOwnShapeLedgerCaveat(Configuration.CatalogLedgerCaveats caveat) =>
         caveat.HasFlag(Configuration.CatalogLedgerCaveats.FrozenCatalogs)
-        || caveat.HasFlag(Configuration.CatalogLedgerCaveats.NoCatalogPut);
+        || caveat.HasFlag(Configuration.CatalogLedgerCaveats.NoCatalogPut)
+        || caveat.HasFlag(Configuration.CatalogLedgerCaveats.CatalogIdsDead);
 
     /// <summary>
     /// The display attribution the no-PUT writer prefixes onto the previous

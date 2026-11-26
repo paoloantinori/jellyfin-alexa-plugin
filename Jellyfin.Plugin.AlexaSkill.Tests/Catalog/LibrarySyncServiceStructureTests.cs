@@ -439,17 +439,28 @@ public class LibrarySyncServiceStructureTests
         int lambdaCalls = callSites.Where(s => IsWiringTableLambda(s.Method)).Sum(s => s.Count);
         int predicateCalls = callSites.Where(s => IsCatalogSuppressionPredicate(s.Method)).Sum(s => s.Count);
         int teardownCalls = callSites.Where(s => IsSongCatalogTeardownReader(s.Method)).Sum(s => s.Count);
+        // JF-966: the catalog liveness check reads every stored id once (the
+        // StoredCatalogs reader) and, under the auto-heal flag, writes null
+        // through its per-field Clear closures. Getters and setters each get
+        // an at-most-one allowance, and the closure prefix is asserted present
+        // via the reader's reflection lookup below so a rename lapses loudly.
+        int livenessGetterCalls = callSites.Where(s => IsLivenessStoredCatalogsReader(s.Method)).Sum(s => s.Count);
+        int livenessSetterCalls = callSites.Where(s => IsLivenessHealClosure(s.Method)).Sum(s => s.Count);
 
         // Loud rename tripwire (JF-826 code-review F5): a renamed predicate would
         // otherwise just reduce every getter's predicateCalls to 0 and the pin
-        // would keep passing with the documented reader gone unguarded.
+        // would keep passing with the documented reader gone unguarded. The
+        // JF-966 liveness reader gets the same tripwire.
         Assert.NotNull(CatalogSuppressionPredicate);
+        Assert.NotNull(LivenessStoredCatalogsReader);
 
         Assert.True(
             lambdaCalls == 1
             && predicateCalls <= (isGetter ? 1 : 0)
             && teardownCalls <= (teardownAllowed ? 1 : 0)
-            && totalCalls == lambdaCalls + predicateCalls + teardownCalls,
+            && livenessGetterCalls <= (isGetter ? 1 : 0)
+            && livenessSetterCalls <= (isGetter ? 0 : 1)
+            && totalCalls == lambdaCalls + predicateCalls + teardownCalls + livenessGetterCalls + livenessSetterCalls,
             $"{accessor.Name} must be called from exactly one place: the JF-706 wiring-table lambda in LibrarySyncService.SyncUserLibraryAsync"
             + (isGetter
                 ? ", plus (getters only, at most once) the JF-826 runtime reader DynamicEntityBuilder.ResolveCatalogWiredTypeNames"
@@ -457,7 +468,8 @@ public class LibrarySyncServiceStructureTests
             + (teardownAllowed
                 ? ", plus (at most once) the JF-949 opt-out teardown LibrarySyncService.TearDownSongCatalogAsync (read + null write)"
                 : string.Empty)
-            + $". Found {totalCalls} call instructions ({lambdaCalls} lambda, {predicateCalls} predicate, {teardownCalls} teardown). "
+            + ", plus (at most once, getters and setters each) the JF-966 catalog liveness check: the StoredCatalogs reader (getters) and the auto-heal Clear closures (setters)"
+            + $". Found {totalCalls} call instructions ({lambdaCalls} lambda, {predicateCalls} predicate, {teardownCalls} teardown, {livenessGetterCalls} liveness-getter, {livenessSetterCalls} liveness-setter). "
             + $"Call sites found: [{DescribeCallSites(callSites)}]");
     }
 
@@ -492,6 +504,37 @@ public class LibrarySyncServiceStructureTests
         && IlCallScanner.TopLevelType(method.DeclaringType) == typeof(LibrarySyncService)
         && method.Name == "MoveNext"
         && method.DeclaringType.Name.StartsWith("<TearDownSongCatalogAsync>", StringComparison.Ordinal);
+
+    /// <summary>
+    /// The JF-966 sanctioned stored-id getter reader: the catalog liveness
+    /// check's StoredCatalogs (it lists each stored id once for the probe
+    /// pass; a null id is skipped, which is what makes an ids-free user cost
+    /// zero SMAPI calls). Resolved by REFLECTION to the exact MethodBase and
+    /// asserted present in the accessor pin (the JF-826 tripwire pattern), so
+    /// a rename fails loudly instead of silently vacating the getter
+    /// allowance. The method is a plain static (no async state machine), so
+    /// the accessor call sits in the method body itself.
+    /// </summary>
+    private static readonly MethodBase? LivenessStoredCatalogsReader =
+        typeof(CatalogLivenessChecker)
+            .GetMethod("StoredCatalogs", BindingFlags.NonPublic | BindingFlags.Static);
+
+    private static bool IsLivenessStoredCatalogsReader(MethodBase method) =>
+        LivenessStoredCatalogsReader != null && method == LivenessStoredCatalogsReader;
+
+    /// <summary>
+    /// The JF-966 sanctioned setter write: the auto-heal's per-field Clear
+    /// lambdas (the null-write that lets the next scheduled sync recreate the
+    /// dead catalog). A shape check like the JF-949 reader's: Roslyn compiles
+    /// each Clear closure to a display-class method named
+    /// "&lt;StoredCatalogs&gt;b__N" nested under CatalogLivenessChecker, so a
+    /// rename of StoredCatalogs changes BOTH this prefix and the reflection
+    /// tripwire above, and the pin goes loud either way.
+    /// </summary>
+    private static bool IsLivenessHealClosure(MethodBase method) =>
+        method.DeclaringType != null
+        && IlCallScanner.TopLevelType(method.DeclaringType) == typeof(CatalogLivenessChecker)
+        && method.Name.StartsWith("<StoredCatalogs>b__", StringComparison.Ordinal);
 
     /// <summary>
     /// A wiring-table row lambda: Roslyn compiles each row's accessors to a

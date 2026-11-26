@@ -341,6 +341,11 @@
                                 <div class="fieldDescription checkboxFieldDescription">Replace the built-in voice command model with a custom one from a URL. Use this to add or change the phrases Alexa recognizes for a locale.</div>
                             </div>
 
+                            <div class="checkboxContainer checkboxContainer-withDescription">
+                                <label><input type="checkbox" is="emby-checkbox" id="CatalogAutoHealDeadIds" /> <span>Auto-Heal Dead Catalogs (JF-966)</span></label>
+                                <div class="fieldDescription checkboxFieldDescription">If a stored catalog id is found missing on Amazon (404), null it and reset that user's last-sync timestamp so the next scheduled sync recreates it. Off by default: the liveness check always reports loudly in the locale status panel, healing only happens when this is on.</div>
+                            </div>
+
                             <div class="inputContainer">
                                 <label class="inputLabel inputLabelUnfocused" for="CustomModelUrl">Model URL</label>
                                 <input id="CustomModelUrl" name="CustomModelUrl" type="text" is="emby-input" placeholder="https://example.com/model_en-US.json" />
@@ -595,6 +600,9 @@
                     document.querySelector("#CustomModelEnabled").checked = config.CustomModelEnabled === true;
                     document.querySelector("#CustomModelUrl").value = config.CustomModelUrl || "";
                     document.querySelector("#CustomModelLocale").value = config.CustomModelLocale || DEFAULT_LOCALE;
+
+                    // JF-966: catalog liveness auto-heal (default off server-side too).
+                    document.querySelector("#CatalogAutoHealDeadIds").checked = config.CatalogAutoHealDeadIds === true;
 
                     Dashboard.hideLoadingMsg();
                 });
@@ -1606,6 +1614,9 @@
                     config.CustomModelUrl = document.querySelector("#CustomModelUrl").value.trim();
                     config.CustomModelLocale = document.querySelector("#CustomModelLocale").value;
 
+                    // JF-966: catalog liveness auto-heal (default off).
+                    config.CatalogAutoHealDeadIds = document.querySelector("#CatalogAutoHealDeadIds").checked;
+
                     // Mood overrides (JF-355) — parse "mood: genre1, genre2" lines into the array
                     var moodLines = (document.querySelector("#MoodGenreOverrides").value || "").split("\n");
                     config.MoodGenreOverrides = moodLines.map(function (line) {
@@ -1661,6 +1672,7 @@
                         CustomModelEnabled: config.CustomModelEnabled,
                         CustomModelUrl: config.CustomModelUrl,
                         CustomModelLocale: config.CustomModelLocale,
+                        CatalogAutoHealDeadIds: config.CatalogAutoHealDeadIds,
                         MoodGenreOverrides: config.MoodGenreOverrides,
                         DefaultSearchResponseMode: config.DefaultSearchResponseMode,
                         DefaultPostPlayBehavior: config.DefaultPostPlayBehavior,
