@@ -189,15 +189,17 @@ tests:
     expected_slots:
       musician: {}
 
-  # JF-965 wrapper twins: the one-shot composition (demande a mon serveur de
-  # ...) fell to AMAZON.FallbackIntent / AddToQueueIntent on the live skill
-  # without these infinitive rows (profile-nlu evidence 2026-11-26).
-  - utterance: "demande à mon serveur de jouer des chansons de queen"
+  # JF-965 wrapper twins, pinned as BARE TAILS (Fable's Gate-3 rule,
+  # 2026-11-26): the one-shot composition's head is outside profile-nlu's
+  # domain (the fr pair split on carrier alone: musique routed, chansons
+  # Fallback), so the suite pins the tail the model must match and the
+  # headed form is verified on device.
+  - utterance: "de jouer des chansons de queen"
     expected_intent: PlayArtistSongsIntent
     expected_slots:
       musician: {}
 
-  - utterance: "demande à mon serveur de jouer de la musique de queen"
+  - utterance: "de jouer de la musique de queen"
     expected_intent: PlayArtistSongsIntent
     expected_slots:
       musician: {}

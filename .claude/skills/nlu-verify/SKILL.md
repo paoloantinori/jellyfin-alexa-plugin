@@ -57,17 +57,20 @@ Model-side prose rules do not catch these; only probing the SAVED model does.
    **Simulate-outage fallback** (measured 2026-11-26): the battery has a
    simulate half that goes down environment-wide; when it does, verify the
    one-shot forms with recorded profile-nlu probes instead, and read them by
-   these rules. The BARE TAIL (the infinitive/subjunctive row itself, no
-   invocation head) is the profile-nlu-verifiable form: it routes or the
-   trainer never picked the row up. The HEADED composition is NOT reliably
-   readable in profile-nlu: head absorption is match-strength dependent, so a
-   weak single-slot tail reads Fallback even when trained and working
-   on-device (measured identically across fr/en/es while multi-slot episode
-   tails absorbed their heads). Never re-add rows or reword a twin because a
-   headed probe read Fallback; confirm headed forms on a real device.
-   The nlu-lab skill CANNOT test headed forms at all (its invocation name
-   differs, so every headed phrase reads Fallback there regardless of the
-   model).
+   the domain rules in nlu-debug-protocol Gate 3 (Fable's refutation round,
+   runs `fable-headed-fixture-rows-*` and `fable-lab-headed-control-*`):
+   profile-nlu has NO invocation layer, so the BARE TAIL (the
+   infinitive/subjunctive row itself, no invocation head) is the
+   profile-nlu-verifiable form: it routes or the trainer never picked the
+   row up. A HEADED phrase is outside the instrument's domain: whether the
+   trainer generalizes over the head tokens is decided row by row (the fr
+   twins split on carrier alone; headed skip rows routed even on the lab
+   skill with a foreign invocation name), so a headed Fallback is not
+   evidence of a model gap and a headed pass is not evidence the one-shot
+   works. Never re-add rows or reword a twin because a headed probe read
+   Fallback; confirm headed forms with simulate-skill plus a profile-nlu
+   control, and finally on a real device. Fixtures pin tails, never headed
+   forms.
 
 5. **New phrases**: when a new wrapper gap is found, ADD it to
    `BATTERY` in `scripts/nlu_wrapper_battery.py` AND as a fixture row in

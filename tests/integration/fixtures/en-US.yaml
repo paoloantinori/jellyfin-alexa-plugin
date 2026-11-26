@@ -104,8 +104,10 @@ tests:
   # "to start the record {album}" loses arbitration to PlayByGenreIntent's
   # "listen to {genre}" family (stable 2/2 probes, genre=the album name), and
   # a one-shot playing a genre is worse than dead air; the imperative record
-  # row above still works.
-  - utterance: "ask jellyfin player to start the album thriller"
+  # row above still works. The pin is the BARE TAIL (Fable's Gate-3 rule,
+  # 2026-11-26): headed forms are outside profile-nlu's domain and flip with
+  # no model change; the headed one-shot is verified on device.
+  - utterance: "to start the album thriller"
     expected_intent: PlayAlbumIntent
     expected_slots:
       album: {}
