@@ -15,6 +15,15 @@ class SmapiError(Exception):
     """Raised when an ASK CLI invocation fails."""
 
 
+class MalformedResponseError(Exception):
+    """A response whose SHAPE is unusable (a truthy non-dict selectedIntent
+    and similar). Deliberately NOT a SmapiError subclass: the battery runner
+    overloads SmapiError from parse_profile_nlu_result as NO_SELECTION
+    (judged against expectations), so a malformed shape must stay
+    distinguishable and map to an ERROR row instead (JF-936 code review:
+    an unmarked degrade reads as an NLU-selection regression in triage)."""
+
+
 class SmapiRateLimitError(SmapiError):
     """Raised when SMAPI returns a rate-limit or throttling error."""
 
@@ -603,12 +612,13 @@ class SmapiClient:
             primary_slots = primary.get("slots")
             if isinstance(primary_slots, dict):
                 for slot_name, slot_data in primary_slots.items():
+                    # One normalization per entry (JF-936 simplify round):
+                    # an unusable slot entry reads as empty for BOTH fields.
+                    entry = slot_data if isinstance(slot_data, dict) else {}
                     slots[slot_name] = {
                         "name": slot_name,
-                        "value": (slot_data.get("value", "")
-                                  if isinstance(slot_data, dict) else ""),
-                        "resolutions": (slot_data.get("resolutions", [])
-                                        if isinstance(slot_data, dict) else []),
+                        "value": entry.get("value", ""),
+                        "resolutions": entry.get("resolutions", []),
                     }
 
             return {
@@ -638,11 +648,15 @@ class SmapiClient:
         """
         selected = response.get("selectedIntent")
         considered = considered_hypotheses(response)
-        # JF-936: a truthy NON-dict selectedIntent (malformed response) is an
-        # unusable selection, not a crash: it rides the same no-selection
-        # SmapiError so one bad response costs the battery runner one row
-        # instead of an AttributeError aborting the whole run.
+        # JF-936 code review: a truthy NON-dict selectedIntent (malformed
+        # response) is neither a crash nor a no-selection verdict: it raises
+        # the distinct MalformedResponseError so the battery runner maps it
+        # to a MARKED ERROR row instead of an unmarked NO_SELECTION (an
+        # unmarked degrade reads as an NLU-selection regression in triage).
         if not isinstance(selected, dict) or not selected:
+            if selected:
+                raise MalformedResponseError(
+                    f"selectedIntent present but not a dict: {type(selected).__name__}")
             # The computed list rides the exception so the caller reads one
             # extraction per row on this branch too (no second walk).
             if considered:
@@ -658,10 +672,13 @@ class SmapiClient:
         selected_slots = selected.get("slots")
         if isinstance(selected_slots, dict):
             for slot_name, slot_data in selected_slots.items():
+                # One normalization per entry (the parse_nlu_result
+                # spelling, JF-936 simplify round): an unusable slot entry
+                # reads as empty; keep the two parsers' spelling identical.
+                entry = slot_data if isinstance(slot_data, dict) else {}
                 slots[slot_name] = {
                     "name": slot_name,
-                    "value": (slot_data.get("value", "")
-                              if isinstance(slot_data, dict) else ""),
+                    "value": entry.get("value", ""),
                 }
 
         return {

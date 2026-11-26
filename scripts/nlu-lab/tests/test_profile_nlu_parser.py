@@ -12,7 +12,7 @@ import _paths
 _paths.bootstrap()
 
 import pytest
-from smapi_client import SmapiClient, SmapiError
+from smapi_client import MalformedResponseError, SmapiClient, SmapiError
 
 
 def _fixture_response():
@@ -85,11 +85,13 @@ def test_parse_null_selected_intent_slots_degrades_to_empty():
     assert result["slots"] == {}
 
 
-def test_parse_non_dict_selected_intent_is_no_selection_error():
+def test_parse_non_dict_selected_intent_is_malformed_error():
     """A truthy NON-dict selectedIntent raised AttributeError (aborting the
-    lab battery); it now rides the parser's one failure contract, the
-    no-selection SmapiError with its considered evidence."""
-    with pytest.raises(SmapiError, match="No selectedIntent; considered"):
+    lab battery); it now raises the DISTINCT MalformedResponseError (not a
+    SmapiError: the battery runner overloads that as NO_SELECTION, and an
+    unmarked degrade would read as an NLU-selection regression in triage)
+    so the runner maps it to a marked ERROR row."""
+    with pytest.raises(MalformedResponseError, match="not a dict: str"):
         SmapiClient.parse_profile_nlu_result(
             {"selectedIntent": "PlaySongIntent",
              "consideredIntents": [{"name": "FallbackIntent"}]})

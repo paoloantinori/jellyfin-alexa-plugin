@@ -20,7 +20,7 @@ from pathlib import Path
 
 from nlu_wrapper_battery import _run_ask
 from runs import RowStatus
-from smapi_client import SmapiClient, SmapiError, considered_hypotheses
+from smapi_client import MalformedResponseError, SmapiClient, SmapiError, considered_hypotheses
 
 BUILD_SUCCEEDED = "SUCCEEDED"
 BUILD_FAILED = "FAILED"
@@ -265,6 +265,18 @@ def profile_row(skill_id: str, locale: str, utterance: str) -> dict:
                       "--utterance", utterance])
 
 
+def _error_row(utterance: str, error: str) -> dict:
+    """The ONE ERROR-row schema (JF-936 simplify round): every failure arm
+    of run_battery_rows (the exhausted JF-406 retry, the unknown parser
+    shape, the malformed-response shape) emits this shape, so the next
+    schema field is one edit, not three. error is str by contract: an ERROR
+    row without diagnostics is the original JF-936 complaint."""
+    return {"utterance": utterance, "selected_intent": None,
+            "slots": {}, "considered_intents": [],
+            "considered_hypotheses": [],
+            "status": RowStatus.ERROR, "error": error}
+
+
 def run_battery_rows(profile_fn, rows, delay: float | None = None) -> list[dict]:
     """Run the battery rows through profile_fn with SMAPI pacing and the
     JF-406 single-transient retry.
@@ -319,13 +331,19 @@ def run_battery_rows(profile_fn, rows, delay: float | None = None) -> list[dict]
                 break
             row_error = f"non-dict profile response: {type(candidate).__name__}"
         if response is _MISSING:
-            out.append({"utterance": utterance, "selected_intent": None,
-                        "slots": {}, "considered_intents": [],
-                        "considered_hypotheses": [],
-                        "status": RowStatus.ERROR, "error": row_error})
+            # Unreachable with row_error unset (both attempts failed, each
+            # sets it), but the fallback keeps the str contract total.
+            out.append(_error_row(utterance, row_error or "failure text not captured"))
             continue
         try:
             parsed = SmapiClient.parse_profile_nlu_result(response)
+        except MalformedResponseError as exc:
+            # JF-936 code review: a malformed response shape is a MARKED
+            # ERROR row (excluded from judgment), never an unmarked
+            # NO_SELECTION (which expectations would judge and triage would
+            # misread as an NLU-selection regression).
+            out.append(_error_row(utterance, f"malformed response: {exc}"))
+            continue
         except SmapiError as exc:
             status = RowStatus.NO_SELECTION
             selected = None
@@ -337,11 +355,7 @@ def run_battery_rows(profile_fn, rows, delay: float | None = None) -> list[dict]
             if hyps is None:
                 hyps = considered_hypotheses(response)
         except Exception as exc:  # noqa: BLE001 - JF-936: unknown parser shape costs ONE row, never the run
-            out.append({"utterance": utterance, "selected_intent": None,
-                        "slots": {}, "considered_intents": [],
-                        "considered_hypotheses": [],
-                        "status": RowStatus.ERROR,
-                        "error": f"parser {type(exc).__name__}: {exc}"})
+            out.append(_error_row(utterance, f"parser {type(exc).__name__}: {exc}"))
             continue
         else:
             status = RowStatus.OK

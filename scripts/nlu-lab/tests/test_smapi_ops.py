@@ -529,11 +529,13 @@ def test_battery_rows_null_slots_response_maps_to_row_not_abort():
     assert out[1]["selected_intent"] == "PlaySongIntent"
 
 
-def test_battery_rows_non_dict_selected_intent_is_a_no_selection_row():
-    """JF-936 parser hardening: a truthy NON-dict selectedIntent raised
-    AttributeError inside the parser and aborted the whole battery (a failed
-    run with results=[]); it now rides the no-selection SmapiError as ONE
-    row with its considered evidence."""
+def test_battery_rows_non_dict_selected_intent_is_a_marked_error_row():
+    """JF-936 parser hardening (code-review round): a truthy NON-dict
+    selectedIntent raised AttributeError inside the parser and aborted the
+    whole battery; it now maps to ONE MARKED ERROR row (the distinct
+    MalformedResponseError contract) instead of an unmarked NO_SELECTION
+    row, so a response-shape problem can never read as an NLU-selection
+    verdict."""
     def fake(utterance):
         if utterance == "weird":
             return {"selectedIntent": "PlaySongIntent",
@@ -541,9 +543,10 @@ def test_battery_rows_non_dict_selected_intent_is_a_no_selection_row():
         return _ok_response(utterance)
 
     out = run_battery_rows(fake, _rows("weird", "good"), 0)
-    assert out[0]["status"] is RowStatus.NO_SELECTION
+    assert out[0]["status"] is RowStatus.ERROR
     assert out[0]["selected_intent"] is None
-    assert out[0]["considered_intents"] == ["FallbackIntent"]
+    assert "malformed response" in out[0]["error"]
+    assert "not a dict" in out[0]["error"]
     assert out[1]["status"] is RowStatus.OK
 
 

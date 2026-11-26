@@ -29,7 +29,7 @@ import smapi_ops
 import webapp
 from lab_config import LabConfig, LabConfigError
 from nlu_static import catalog_canary
-from runs import RowResult, RunLoadError, RunRecord, load_run, save_run
+from runs import RowResult, RowStatus, RunLoadError, RunRecord, load_run, save_run
 from smapi_client import SmapiError
 from validate_interaction_models import validate_single_model
 from validate_versions import get_props_version
@@ -288,7 +288,7 @@ def cmd_run(args, *, lab_dir: Path | None = None,
             run.catalog_start = _catalog_block(args.locale, run.skill_id)
             _print_catalog_endcap("start", run.catalog_start)
             row_dicts = smapi_ops.run_battery_rows(profile_fn, rows)
-            run.results = [_to_row_result(r, d, raws) for r, d in zip(rows, row_dicts)]
+            run.results = [_to_row_result(r, d, raws) for r, d in zip(rows, row_dicts, strict=True)]
             run.status = STATUS_OK
         elif args.skip_deploy:
             print(f"skip-deploy: profiling the ALREADY-deployed model (sha {run.model_sha256[:12]}) "
@@ -342,7 +342,7 @@ def cmd_run(args, *, lab_dir: Path | None = None,
                 pass  # degraded identity: the sha guard still applies
         print(f"profiling {len(rows)} battery rows")
         row_dicts = smapi_ops.run_battery_rows(profile_fn, rows)
-        run.results = [_to_row_result(r, d, raws) for r, d in zip(rows, row_dicts)]
+        run.results = [_to_row_result(r, d, raws) for r, d in zip(rows, row_dicts, strict=True)]
         run.status = STATUS_OK
         # JF-971: the --live canary's end block, after this run's LAST
         # battery pass (the live branch above falls through here). Non-live
@@ -363,6 +363,19 @@ def cmd_run(args, *, lab_dir: Path | None = None,
                     print(f"WARNING: {run.error}", file=sys.stderr)
             except smapi_ops.SmapiError:
                 pass  # degraded bracket: the sha guard still applies
+        # JF-936 code review: a run where EVERY row errored is a systemic
+        # failure (expired ask auth, a broken CLI), not a verdict about the
+        # model; before the row-level resilience landed, this class aborted
+        # loudly, and nothing may silently reclaim that quiet. Partial-ERROR
+        # runs stay ok (the healthy rows still judge the model); the
+        # all-ERROR shape fails the run with the first row's diagnostics.
+        if run.status == STATUS_OK and run.results and all(
+                r.status == RowStatus.ERROR for r in run.results):
+            run.status = STATUS_FAILED
+            run.error = (f"all {len(run.results)} rows errored (systemic failure, "
+                         f"e.g. expired ask auth); first row error: "
+                         f"{run.results[0].error or 'no text captured'}")
+            print(f"WARNING: {run.error}", file=sys.stderr)
     except KeyboardInterrupt:
         run.status = STATUS_INTERRUPTED
         done = [r for r in rows if r.utterance in raws]
@@ -371,7 +384,7 @@ def cmd_run(args, *, lab_dir: Path | None = None,
             # dict-lookup profile_fn, delay 0): the partial rows get the exact same
             # parse/status logic as the live path, with no second network call.
             replay = smapi_ops.run_battery_rows(lambda u: raws[u], done, delay=0.0)
-            run.results = [_to_row_result(r, d, raws) for r, d in zip(done, replay)]
+            run.results = [_to_row_result(r, d, raws) for r, d in zip(done, replay, strict=True)]
         run.error = f"interrupted after {len(run.results)} of {len(rows)} rows"
     except Exception as exc:  # noqa: BLE001 - any live-phase failure becomes a failed run
         run.status = STATUS_FAILED
@@ -405,7 +418,7 @@ def _to_row_result(row, row_dict: dict, raws: dict) -> RowResult:
         considered_intents=row_dict["considered_intents"],
         raw=raws.get(row.utterance) or {},
         considered_hypotheses=row_dict["considered_hypotheses"],
-        error=row_dict.get("error"),
+        error=row_dict["error"],
     )
 
 

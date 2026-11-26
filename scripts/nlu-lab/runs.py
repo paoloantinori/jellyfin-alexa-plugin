@@ -54,14 +54,7 @@ class RowResult:
 
     @property
     def expectation_alternatives(self) -> list[str] | None:
-        """
-    Slot-shape note: `slots` keeps Alexa's per-slot objects ({name: {name,
-    value}}) verbatim (compare fixtures depend on that shape), while
-    `considered_hypotheses` flattens slots to {name: value} as the
-    distilled evidence shape; the ledger bridge flattens selected slots a
-    third way. Renderers must use the accessor matching the field they
-    read; the divergence is deliberate (verbatim vs distilled).
-expected_intent split on '|'; None when the row carries no usable expectation."""
+        """expected_intent split on '|'; None when the row carries no usable expectation."""
         if self.expected_intent is None or not self.expected_intent.strip():
             return None
         alts = [p for p in (part.strip() for part in self.expected_intent.split("|")) if p]
