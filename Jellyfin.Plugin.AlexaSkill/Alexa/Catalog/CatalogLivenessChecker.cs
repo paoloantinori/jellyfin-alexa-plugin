@@ -131,9 +131,10 @@ public class CatalogLivenessChecker
     /// <summary>Whether the user has ANY stored catalog id set (non-null,
     /// whitespace garbage included, since the recovery clears those too).
     /// Routed through the shared map so the accessor reads stay inside
-    /// <see cref="StoredCatalogs"/> (the IL pin's one-reader rule); consumed
-    /// by the recovery endpoint's other-users report (JF-967 code
-    /// review).</summary>
+    /// <see cref="StoredCatalogs"/> (the IL pin's one-reader rule);
+    /// ENGINE-INTERNAL since the JF-967 simplify round: the multi-user count
+    /// it served moved into <see cref="CatalogRecoveryOutcome"/>, so callers
+    /// consume the outcome, not this query.</summary>
     internal static bool HasStoredCatalogIds(Entities.User user)
         => StoredCatalogs(user).Any(r => r.CatalogId != null);
 
@@ -329,10 +330,16 @@ public class CatalogLivenessChecker
     /// CatalogIdsDead caveat before the sweep stripped it.</param>
     /// <param name="LastCatalogSyncCleared">Whether LastCatalogSync was
     /// non-null and got cleared (the force-next-sync null).</param>
+    /// <param name="OtherUsersWithStoredIds">How many OTHER configured users
+    /// still carry stored catalog ids: the ledger caveat strip is global while
+    /// one call heals ONE user, so the multi-user honesty is part of the
+    /// outcome the engine owns, not a controller-side re-derivation (JF-967
+    /// simplify round).</param>
     internal sealed record CatalogRecoveryOutcome(
         IReadOnlyList<string> NulledIds,
         int CaveatRowsCleared,
-        bool LastCatalogSyncCleared)
+        bool LastCatalogSyncCleared,
+        int OtherUsersWithStoredIds)
     {
         /// <summary>Whether the call changed anything at all: the idempotent
         /// no-op (no stored ids, no timestamp, no caveat anywhere) reports
@@ -349,13 +356,20 @@ public class CatalogLivenessChecker
     /// the same write the auto-heal arm makes), writes the recovery audit
     /// into every locale-ledger row, strips the CatalogIdsDead caveat those
     /// rows carry (the recreate invalidates the dead finding, mirroring the
-    /// all-alive clear), and persists the user mutations and the ledger sweep
-    /// through ONE locked save. Idempotent and honest: a user with no stored
-    /// ids, no last-sync timestamp and no caveat anywhere reports
-    /// nothing-cleared and persists nothing. No SMAPI call happens here, so
-    /// the recovery works even while Amazon-side state is broken; the CALLER
-    /// owns triggering the sync (the endpoint queues CatalogSyncTask through
-    /// ITaskManager, the dashboard's run-now mechanism).
+    /// all-alive clear), counts the OTHER configured users still carrying
+    /// stored ids (the multi-user honesty, engine-owned), and persists the
+    /// user mutations and the ledger sweep through ONE locked save.
+    /// Idempotent and honest: a user with no stored ids, no last-sync
+    /// timestamp and no caveat anywhere reports nothing-cleared and persists
+    /// nothing. No SMAPI call happens here, so the recovery works even while
+    /// Amazon-side state is broken; the CALLER owns triggering the sync (the
+    /// endpoint queues CatalogSyncTask through ITaskManager, the dashboard's
+    /// run-now mechanism). DELIBERATE structural divergence (JF-967 simplify
+    /// round): the snapshot-gate-sweep-catch-persist shell below parallels
+    /// <see cref="WriteLedgerCaveat"/>'s instead of sharing a helper,
+    /// because this persist is interleaved with the pre-sweep user mutations
+    /// and gated on the outcome's own predicate; folding the two would
+    /// convolute two tested shapes.
     /// </summary>
     /// <param name="user">The plugin user whose stored catalog ids to clear.</param>
     /// <returns>The recovery outcome for the response and the log.</returns>
@@ -379,6 +393,21 @@ public class CatalogLivenessChecker
         bool lastSyncCleared = user.LastCatalogSync != null;
         user.LastCatalogSync = null;
 
+        // One join feeds both the audit text and the log line (JF-967
+        // simplify round; the two used to build it independently).
+        string joinedNulled = string.Join(", ", nulled);
+
+        // The durable audit must not promise a recreate a skipped user will
+        // never get (JF-967 code review round 2): the same reporting
+        // aggregate the endpoint answers with decides the audit's tail.
+        bool userSyncable = LibrarySyncService.CanSyncUser(user);
+
+        // The multi-user honesty, owned here so every caller of the recovery
+        // reports the same fact (the ledger strip is global; one call heals
+        // one user).
+        int otherUsersWithStoredIds = Plugin.Instance?.Configuration?.Users
+            .Count(u => !ReferenceEquals(u, user) && HasStoredCatalogIds(u)) ?? 0;
+
         int caveatRowsCleared = 0;
         try
         {
@@ -392,7 +421,7 @@ public class CatalogLivenessChecker
                 // click (nothing set, nothing carried) rewrites no row.
                 if (nulled.Count > 0 || lastSyncCleared || anyDeadCaveat)
                 {
-                    string auditText = BuildRecoveryAuditText(nulled, lastSyncCleared);
+                    string auditText = BuildRecoveryAuditText(joinedNulled, nulled.Count, lastSyncCleared, userSyncable);
                     foreach (LocaleModelStatusEntry entry in snapshot)
                     {
                         bool hadDeadCaveat = entry.Caveat.HasFlag(CatalogLedgerCaveats.CatalogIdsDead);
@@ -418,7 +447,7 @@ public class CatalogLivenessChecker
                 user.Id);
         }
 
-        var outcome = new CatalogRecoveryOutcome(nulled, caveatRowsCleared, lastSyncCleared);
+        var outcome = new CatalogRecoveryOutcome(nulled, caveatRowsCleared, lastSyncCleared, otherUsersWithStoredIds);
 
         // ONE persist gated on the OUTCOME's own anything-changed predicate
         // (the WriteLedgerCaveat single-save convention): RecoveryCompose
@@ -427,15 +456,37 @@ public class CatalogLivenessChecker
         // every other sweep reason; skipped only when nothing changed at all.
         if (outcome.AnythingCleared)
         {
-            Plugin.Instance?.Configuration?.PersistUnderLedgerLock();
+            try
+            {
+                Plugin.Instance?.Configuration?.PersistUnderLedgerLock();
+            }
+            catch (Exception persistEx)
+            {
+                // The user-field mutations and the ledger sweep are already
+                // applied IN MEMORY, so this failure leaves memory ahead of
+                // disk: surface it loudly and rethrow a mapped error instead
+                // of letting it raw-500 out of the engine (JF-967 code review
+                // round 2; the writer family's non-fatal-save convention
+                // covers LEDGER-only writes, this one carries the recovery's
+                // whole durable effect). A retry in the same process lifetime
+                // reports nothing-cleared because memory already changed;
+                // the message says so.
+                _logger.LogError(persistEx,
+                    "Catalog recovery (JF-967) for user {UserId} mutated the in-memory configuration but the locked persist FAILED; the on-disk configuration may still carry the old catalog ids",
+                    user.Id);
+                throw new InvalidOperationException(
+                    "The catalog recovery ran but could not persist the configuration (the in-memory state has the catalog ids cleared; the on-disk configuration may not). Check the server log and disk, then retry after a restart if the ids reappear.",
+                    persistEx);
+            }
 
             _logger.LogWarning(
-                "Catalog recovery (JF-967): nulled {Count} stored catalog id(s) for user {UserId} ({Ids}); LastCatalogSync {LastSyncClause}; stripped the CatalogIdsDead caveat from {CaveatRows} locale ledger row(s). The next catalog sync recreates the catalogs (the caller owns triggering it).",
+                "Catalog recovery (JF-967): nulled {Count} stored catalog id(s) for user {UserId} ({Ids}); LastCatalogSync {LastSyncClause}; stripped the CatalogIdsDead caveat from {CaveatRows} locale ledger row(s); {OtherUsers} other configured user(s) still carry stored ids. The next catalog sync recreates the catalogs (the caller owns triggering it).",
                 nulled.Count,
                 user.Id,
-                string.Join(", ", nulled),
+                joinedNulled,
                 lastSyncCleared ? "cleared (force next sync)" : "was already null",
-                caveatRowsCleared);
+                caveatRowsCleared,
+                otherUsersWithStoredIds);
         }
         else
         {
@@ -448,14 +499,17 @@ public class CatalogLivenessChecker
     }
 
     /// <summary>The audit row's free text, honest in every combination of the
-    /// three facts it can carry: the OLD ids that were nulled, the
-    /// LastCatalogSync clear, and what happens next.</summary>
-    private static string BuildRecoveryAuditText(List<string> nulled, bool lastSyncCleared)
+    /// facts it can carry: the OLD ids that were nulled (pre-joined by the
+    /// caller, which needs the same string for its log line), the
+    /// LastCatalogSync clear, and what happens next (conditioned on the
+    /// reporting aggregate: a user the sync skips is told so, not promised a
+    /// recreate; JF-967 code review round 2).</summary>
+    private static string BuildRecoveryAuditText(string joinedNulled, int nulledCount, bool lastSyncCleared, bool userSyncable)
     {
         var parts = new List<string>(3);
-        if (nulled.Count > 0)
+        if (nulledCount > 0)
         {
-            parts.Add($"nulled stored catalog ids: {string.Join(", ", nulled)}");
+            parts.Add($"nulled stored catalog ids: {joinedNulled}");
         }
 
         if (lastSyncCleared)
@@ -463,7 +517,9 @@ public class CatalogLivenessChecker
             parts.Add("cleared LastCatalogSync to force the next sync");
         }
 
-        parts.Add("the next catalog sync recreates the catalogs");
+        parts.Add(userSyncable
+            ? "the next catalog sync recreates the catalogs"
+            : "catalog syncs currently skip this user (no SMAPI credentials, skill id or vendor id); the first sync after Alexa authorization recreates the catalogs");
         return "catalog recovery (JF-967): " + string.Join("; ", parts);
     }
 
@@ -472,7 +528,7 @@ public class CatalogLivenessChecker
     /// audit-writing row), keeps every other caveat bit with its payload (the
     /// bit-iff-payload rule), carries a FOREIGN diagnostic attributed exactly
     /// like <see cref="DeadCompose"/> does (the shared
-    /// <see cref="CarryForeignDiagnostic"/>), clamps Status through
+    /// <see cref="LibrarySyncService.CarryForeignDiagnostic"/>), clamps Status through
     /// <see cref="LibrarySyncService.PreservedOrSkippedStatus"/> (no PUT
     /// happened), and stamps this writer's Source. Every existing row is
     /// rewritten (the recovery affects the whole ledger's catalog state), so
@@ -481,7 +537,7 @@ public class CatalogLivenessChecker
     {
         CatalogLedgerCaveats caveat = (previous?.Caveat ?? CatalogLedgerCaveats.None) & ~CatalogLedgerCaveats.CatalogIdsDead;
 
-        string? carried = CarryForeignDiagnostic(previous);
+        string? carried = LibrarySyncService.CarryForeignDiagnostic(previous);
 
         return new LocaleModelStatus
         {
@@ -500,7 +556,11 @@ public class CatalogLivenessChecker
     /// onto EVERY existing locale row (the JF-951 no-PUT writer's wholesale
     /// replace: Status keeps its settled value via
     /// <see cref="LibrarySyncService.PreservedOrSkippedStatus"/>, Error carries
-    /// the dead ids, Source names this check). On an all-alive pass, clears the
+    /// the dead ids, Source names this check). Its snapshot-gate-sweep-catch-
+    /// persist shell deliberately PARALLELS <see cref="RecreateStoredCatalogs"/>'s
+    /// instead of sharing a helper (the recovery's persist interleaves with
+    /// pre-sweep user mutations and its own outcome gate; JF-967 simplify
+    /// round). On an all-alive pass, clears the
     /// bit from rows that carry it (and only those rows: the compose declines
     /// everything else, so a healthy ledger's clear pass costs one snapshot
     /// read and zero row writes). Unknown findings never reach this method.
@@ -564,31 +624,9 @@ public class CatalogLivenessChecker
         }
     }
 
-    /// <summary>The JF-709/JF-721 foreign-diagnostic carry, ONE shared block
-    /// for the checker's caveat-writing composes (JF-967 collapsed the
-    /// RecoveryCompose/DeadCompose verbatim duplicates): a previous row with
-    /// a FREE-TEXT diagnostic that is NOT one of this subsystem's own shapes
-    /// (<see cref="LibrarySyncService.IsOwnShapeLedgerCaveat"/>) contributes
-    /// that diagnostic ATTRIBUTED (migrated once if it is still a pre-JF-721
-    /// composed text), so a foreign diagnostic (a canary mismatch, SMAPI build
-    /// errors) never silently vanishes under the rewrite; own-shape rows
-    /// replace wholesale and carry nothing.</summary>
-    private static string? CarryForeignDiagnostic(LocaleModelStatus? previous)
-    {
-        if (previous?.Error is { Length: > 0 } foreignError
-            && !LibrarySyncService.IsOwnShapeLedgerCaveat(previous.Caveat))
-        {
-            return LibrarySyncService.MigrateLegacyLedgerError(foreignError).Error is { Length: > 0 } migrated
-                ? LibrarySyncService.CarriedDiagnosticLedgerPrefix + migrated
-                : null;
-        }
-
-        return null;
-    }
-
     /// <summary>The dead-write row: wholesale replace per the JF-951 no-PUT
     /// writer's precedent, WITH that writer's carry doctrine (JF-709 rework
-    /// F1, via the shared <see cref="CarryForeignDiagnostic"/>): a previous
+    /// F1, via the shared <see cref="LibrarySyncService.CarryForeignDiagnostic"/>): a previous
     /// row that is NOT one of the subsystem's own shapes carries its
     /// diagnostic ATTRIBUTED beside the dead-ids text, migrated once if it is
     /// still a pre-JF-721 composed text, so a foreign diagnostic (a canary
@@ -603,7 +641,7 @@ public class CatalogLivenessChecker
         string deadText = $"catalog liveness: 404 on stored catalog id(s): {deadList}; "
             + "slot-type selection for these catalogs is dead until the catalogs re-sync (JF-966)";
 
-        string? carried = CarryForeignDiagnostic(previous);
+        string? carried = LibrarySyncService.CarryForeignDiagnostic(previous);
 
         return new LocaleModelStatus
         {

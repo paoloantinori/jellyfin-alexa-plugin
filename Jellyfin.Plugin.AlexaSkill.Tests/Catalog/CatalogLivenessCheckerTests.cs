@@ -60,7 +60,11 @@ public class CatalogLivenessCheckerTests : PluginTestBase, IDisposable
     private CatalogLivenessChecker CreateChecker() =>
         new(_loggerFactory.CreateLogger<CatalogLivenessChecker>());
 
-    private static Entities.User CreateUser(
+    /// <summary>Internal: the recovery suite (JF-967) shares this user
+    /// factory, passing its own id values; the body (the six-field
+    /// assignment block plus the -1h LastCatalogSync policy) must not grow a
+    /// second copy.</summary>
+    internal static Entities.User CreateUser(
         string? artist = ArtistId,
         string? album = AlbumId,
         string? series = SeriesId,
@@ -90,7 +94,11 @@ public class CatalogLivenessCheckerTests : PluginTestBase, IDisposable
             handler));
     }
 
-    private void SeedLedger(string locale, string status, CatalogLedgerCaveats caveat = CatalogLedgerCaveats.None, string? error = null, string? source = null)
+    /// <summary>Internal: the recovery suite (JF-967) shares this ledger
+    /// seeder; this signature is the richer one (status and source are
+    /// parameters), so callers wanting the recovery defaults pass them
+    /// explicitly.</summary>
+    internal static void SeedLedger(string locale, string status, CatalogLedgerCaveats caveat = CatalogLedgerCaveats.None, string? error = null, string? source = null)
     {
         Plugin.Instance!.Configuration.SetLocaleModelStatus(locale, new LocaleModelStatus
         {

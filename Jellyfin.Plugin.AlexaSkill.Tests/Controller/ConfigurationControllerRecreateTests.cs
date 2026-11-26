@@ -5,6 +5,7 @@ using Jellyfin.Plugin.AlexaSkill.Alexa.ModelDeployment;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Controller;
 using Jellyfin.Plugin.AlexaSkill.EntryPoints;
+using Jellyfin.Plugin.AlexaSkill.Tests.Catalog;
 using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
@@ -55,6 +56,25 @@ public class ConfigurationControllerRecreateTests : PluginTestBase, IDisposable
             Mock.Of<IInteractionModelRedeployer>(),
             new CatalogLivenessChecker(_loggerFactory.CreateLogger<CatalogLivenessChecker>()),
             _taskManagerMock.Object);
+
+        // The registration pre-check (JF-967 code review round 2) reads the
+        // registered-task enumerable BEFORE queueing, through the worker's
+        // inner ScheduledTask (the same resolution Jellyfin's own
+        // QueueScheduledTask<T> performs): an unconfigured mock answers null,
+        // which the controller reads as not-registered and never queues. The
+        // default shape wraps a REAL CatalogSyncTask instance (cheap ctor
+        // mocks); per-test overrides replace it.
+        _taskManagerMock
+            .Setup(m => m.ScheduledTasks)
+            .Returns(new[]
+            {
+                Mock.Of<MediaBrowser.Model.Tasks.IScheduledTaskWorker>(w =>
+                    w.ScheduledTask == new CatalogSyncTask(
+                        _loggerFactory.CreateLogger<CatalogSyncTask>(),
+                        null!,
+                        null!,
+                        null!))
+            });
     }
 
     public void Dispose()
@@ -66,20 +86,33 @@ public class ConfigurationControllerRecreateTests : PluginTestBase, IDisposable
 
     private static Entities.User AddUserWithCatalogIds()
     {
-        Entities.User user = TestHelpers.CreateSyncUser();
-        user.ArtistCatalogId = "amzn1.ask.catalog.recreate-artist";
-        user.AlbumCatalogId = "amzn1.ask.catalog.recreate-album";
-        user.SeriesCatalogId = "amzn1.ask.catalog.recreate-series";
-        user.AudiobookCatalogId = "amzn1.ask.catalog.recreate-audiobook";
-        user.MovieCatalogId = "amzn1.ask.catalog.recreate-movie";
-        user.SongCatalogId = "amzn1.ask.catalog.recreate-song";
-        user.LastCatalogSync = DateTime.UtcNow.AddHours(-1);
+        // The construction policy (six fields + the -1h timestamp) lives in
+        // the shared liveness-suite factory; only this suite's id VALUES are
+        // local (JF-967 simplify round).
+        Entities.User user = CatalogLivenessCheckerTests.CreateUser(
+            artist: "amzn1.ask.catalog.recreate-artist",
+            album: "amzn1.ask.catalog.recreate-album",
+            series: "amzn1.ask.catalog.recreate-series",
+            audiobook: "amzn1.ask.catalog.recreate-audiobook",
+            movie: "amzn1.ask.catalog.recreate-movie",
+            song: "amzn1.ask.catalog.recreate-song");
         Plugin.Instance!.Configuration.AddUser(user);
         return user;
     }
 
     private static string Body(Guid userId) =>
         JsonConvert.SerializeObject(new { userId = userId.ToString() });
+
+    /// <summary>Round-trips a JsonResult's payload into an anonymous shape:
+    /// the family's deserialize incantation as ONE copy (JF-967 simplify
+    /// round).</summary>
+    private static T Payload<T>(JsonResult json, T shape)
+        => JsonConvert.DeserializeAnonymousType(JsonConvert.SerializeObject(json.Value), shape)!;
+
+    /// <summary>A success JsonResult carries no explicit StatusCode (MVC
+    /// renders it as HTTP 200); the error paths set theirs explicitly.</summary>
+    private static void AssertSuccess(JsonResult json)
+        => Assert.True(json.StatusCode is null or 200, $"expected a success status, got {json.StatusCode}");
 
     /// <summary>THE HAPPY PATH: the resolved user's six ids are nulled, the
     /// task manager queue receives CatalogSyncTask exactly once, one persist
@@ -100,9 +133,7 @@ public class ConfigurationControllerRecreateTests : PluginTestBase, IDisposable
         ActionResult result = _controller.RecreateCatalogs(Body(user.Id));
 
         var json = Assert.IsType<JsonResult>(result);
-        // A success JsonResult carries no explicit StatusCode (MVC renders it
-        // as HTTP 200); the error paths below set theirs explicitly.
-        Assert.True(json.StatusCode is null or 200, $"expected a success status, got {json.StatusCode}");
+        AssertSuccess(json);
         Assert.Null(user.ArtistCatalogId);
         Assert.Null(user.SongCatalogId);
         Assert.Null(user.LastCatalogSync);
@@ -111,9 +142,7 @@ public class ConfigurationControllerRecreateTests : PluginTestBase, IDisposable
             savesBefore + 1,
             TestHelpers.ConfigSerializerMock.Invocations.Count);
 
-        var payload = JsonConvert.DeserializeAnonymousType(
-            JsonConvert.SerializeObject(json.Value),
-            new
+        var payload = Payload(json, new
             {
                 success = false,
                 nulledCatalogIds = new string[0],
@@ -153,9 +182,7 @@ public class ConfigurationControllerRecreateTests : PluginTestBase, IDisposable
         ActionResult result = _controller.RecreateCatalogs(Body(user.Id));
 
         var json = Assert.IsType<JsonResult>(result);
-        var payload = JsonConvert.DeserializeAnonymousType(
-            JsonConvert.SerializeObject(json.Value),
-            new { success = false, userSyncable = true, syncQueued = false, message = string.Empty });
+        var payload = Payload(json, new { success = false, userSyncable = true, syncQueued = false, message = string.Empty });
         Assert.True(payload!.success);
         Assert.False(payload.userSyncable);
         Assert.True(payload.syncQueued);
@@ -179,12 +206,60 @@ public class ConfigurationControllerRecreateTests : PluginTestBase, IDisposable
         ActionResult result = _controller.RecreateCatalogs(Body(first.Id));
 
         var json = Assert.IsType<JsonResult>(result);
-        var payload = JsonConvert.DeserializeAnonymousType(
-            JsonConvert.SerializeObject(json.Value),
-            new { otherUsersWithStoredIds = 0, message = string.Empty });
+        var payload = Payload(json, new { otherUsersWithStoredIds = 0, message = string.Empty });
         Assert.Equal(1, payload!.otherUsersWithStoredIds);
         Assert.Contains("other configured user", payload.message, StringComparison.Ordinal);
         Assert.Equal("amzn1.ask.catalog.recreate-other-artist", other.ArtistCatalogId);
+    }
+
+    /// <summary>The registration pre-check arm (code review round 2): when
+    /// CatalogSyncTask is NOT registered (mid-startup, registration failure),
+    /// Jellyfin's queue call would log-and-return without throwing, so the
+    /// endpoint must detect it via the registered-task enumerable and report
+    /// the fallback instead of a false syncQueued=true.</summary>
+    [Fact]
+    public void RecreateCatalogs_TaskNotRegistered_ReportsFallback_NeverQueues()
+    {
+        Entities.User user = AddUserWithCatalogIds();
+        _taskManagerMock
+            .Setup(m => m.ScheduledTasks)
+            .Returns(Array.Empty<MediaBrowser.Model.Tasks.IScheduledTaskWorker>());
+
+        ActionResult result = _controller.RecreateCatalogs(Body(user.Id));
+
+        var json = Assert.IsType<JsonResult>(result);
+        AssertSuccess(json);
+        var payload = Payload(json, new { syncQueued = true, message = string.Empty });
+        Assert.False(payload!.syncQueued);
+        Assert.Contains("could NOT be queued", payload.message, StringComparison.Ordinal);
+        _taskManagerMock.Verify(m => m.QueueScheduledTask<CatalogSyncTask>(), Times.Never);
+        Assert.Null(user.ArtistCatalogId);
+    }
+
+    /// <summary>The engine's mapped persist failure (code review round 2): a
+    /// locked-save exception surfaces as a JSON 500 carrying the engine's
+    /// guidance (in-memory mutated, disk possibly stale), not a raw error.
+    /// Uses the JF-724 PersistInterceptorForTest seam.</summary>
+    [Fact]
+    public void RecreateCatalogs_PersistFailure_ReturnsJson500WithGuidance()
+    {
+        Entities.User user = AddUserWithCatalogIds();
+        Plugin.Instance!.Configuration.PersistInterceptorForTest = () =>
+            throw new System.IO.IOException("disk full (simulated)");
+        try
+        {
+            ActionResult result = _controller.RecreateCatalogs(Body(user.Id));
+
+            var json = Assert.IsType<JsonResult>(result);
+            Assert.Equal(500, json.StatusCode);
+            var payload = Payload(json, new { error = string.Empty });
+            Assert.Contains("could not persist", payload!.error, StringComparison.Ordinal);
+            _taskManagerMock.Verify(m => m.QueueScheduledTask<CatalogSyncTask>(), Times.Never);
+        }
+        finally
+        {
+            Plugin.Instance!.Configuration.PersistInterceptorForTest = null;
+        }
     }
 
     /// <summary>Missing userId is the family's 400 error JSON.</summary>
@@ -218,9 +293,7 @@ public class ConfigurationControllerRecreateTests : PluginTestBase, IDisposable
 
         var json = Assert.IsType<JsonResult>(result);
         Assert.Equal(404, json.StatusCode);
-        var payload = JsonConvert.DeserializeAnonymousType(
-            JsonConvert.SerializeObject(json.Value),
-            new { error = string.Empty });
+        var payload = Payload(json, new { error = string.Empty });
         Assert.Contains("Could not find user", payload!.error, StringComparison.Ordinal);
         _taskManagerMock.Verify(m => m.QueueScheduledTask<CatalogSyncTask>(), Times.Never);
     }
@@ -238,12 +311,8 @@ public class ConfigurationControllerRecreateTests : PluginTestBase, IDisposable
         ActionResult result = _controller.RecreateCatalogs(Body(user.Id));
 
         var json = Assert.IsType<JsonResult>(result);
-        // A success JsonResult carries no explicit StatusCode (MVC renders it
-        // as HTTP 200); the error paths below set theirs explicitly.
-        Assert.True(json.StatusCode is null or 200, $"expected a success status, got {json.StatusCode}");
-        var payload = JsonConvert.DeserializeAnonymousType(
-            JsonConvert.SerializeObject(json.Value),
-            new { nothingCleared = false, syncQueued = false, message = string.Empty });
+        AssertSuccess(json);
+        var payload = Payload(json, new { nothingCleared = false, syncQueued = false, message = string.Empty });
         Assert.True(payload!.nothingCleared);
         Assert.True(payload.syncQueued);
         Assert.Contains("Nothing to clear", payload.message, StringComparison.Ordinal);
@@ -268,14 +337,10 @@ public class ConfigurationControllerRecreateTests : PluginTestBase, IDisposable
         ActionResult result = _controller.RecreateCatalogs(Body(user.Id));
 
         var json = Assert.IsType<JsonResult>(result);
-        // A success JsonResult carries no explicit StatusCode (MVC renders it
-        // as HTTP 200); the error paths below set theirs explicitly.
-        Assert.True(json.StatusCode is null or 200, $"expected a success status, got {json.StatusCode}");
+        AssertSuccess(json);
         Assert.Null(user.ArtistCatalogId);
         Assert.Null(user.LastCatalogSync);
-        var payload = JsonConvert.DeserializeAnonymousType(
-            JsonConvert.SerializeObject(json.Value),
-            new { success = false, syncQueued = true, message = string.Empty });
+        var payload = Payload(json, new { success = false, syncQueued = true, message = string.Empty });
         Assert.True(payload!.success);
         Assert.False(payload.syncQueued);
         Assert.Contains("could NOT be queued", payload.message, StringComparison.Ordinal);

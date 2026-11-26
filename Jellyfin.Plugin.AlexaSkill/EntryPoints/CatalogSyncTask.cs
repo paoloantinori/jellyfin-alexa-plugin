@@ -75,7 +75,7 @@ public class CatalogSyncTask : IScheduledTask
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if (user.SmapiDeviceToken == null || user.UserSkill?.SkillId == null)
+            if (!LibrarySyncService.HasSyncCredentials(user))
             {
                 _logger.LogDebug("Skipping user {UserId}: no SMAPI credentials or skill", user.Id);
                 processed++;

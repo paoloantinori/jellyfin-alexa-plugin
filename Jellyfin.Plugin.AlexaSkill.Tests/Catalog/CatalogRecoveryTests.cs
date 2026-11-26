@@ -51,6 +51,10 @@ public class CatalogRecoveryTests : PluginTestBase, IDisposable
     private CatalogLivenessChecker CreateChecker() =>
         new(_loggerFactory.CreateLogger<CatalogLivenessChecker>());
 
+    /// <summary>Thin wrapper over the shared liveness-suite factory (JF-967
+    /// simplify round): this suite's id VALUES differ (they appear in the
+    /// audit assertions), the construction policy must not grow a second
+    /// copy.</summary>
     private static Entities.User CreateUser(
         string? artist = ArtistId,
         string? album = AlbumId,
@@ -58,29 +62,23 @@ public class CatalogRecoveryTests : PluginTestBase, IDisposable
         string? audiobook = AudiobookId,
         string? movie = MovieId,
         string? song = SongId)
+        => CatalogLivenessCheckerTests.CreateUser(artist, album, series, audiobook, movie, song);
+
+    /// <summary>The idempotent no-op shape: no stored ids AND no last-sync
+    /// timestamp, without spelling six nulls at every call site (JF-967
+    /// simplify round).</summary>
+    private static Entities.User CreateUserWithNoIds()
     {
-        Entities.User user = TestHelpers.CreateSyncUser();
-        user.ArtistCatalogId = artist;
-        user.AlbumCatalogId = album;
-        user.SeriesCatalogId = series;
-        user.AudiobookCatalogId = audiobook;
-        user.MovieCatalogId = movie;
-        user.SongCatalogId = song;
-        user.LastCatalogSync = DateTime.UtcNow.AddHours(-1);
+        Entities.User user = CatalogLivenessCheckerTests.CreateUser(
+            artist: null, album: null, series: null, audiobook: null, movie: null, song: null);
+        user.LastCatalogSync = null;
         return user;
     }
 
+    /// <summary>The recovery suite's ledger default (a settled SUCCEEDED
+    /// row), delegating to the shared seeder (JF-967 simplify round).</summary>
     private static void SeedLedger(string locale, CatalogLedgerCaveats caveat = CatalogLedgerCaveats.None, string? error = null, string source = LibrarySyncService.CatalogSyncLedgerSource)
-    {
-        Plugin.Instance!.Configuration.SetLocaleModelStatus(locale, new LocaleModelStatus
-        {
-            Status = "SUCCEEDED",
-            LastUpdated = DateTime.UtcNow.AddHours(-2),
-            Error = error,
-            Caveat = caveat,
-            Source = source
-        });
-    }
+        => CatalogLivenessCheckerTests.SeedLedger(locale, "SUCCEEDED", caveat, error, source);
 
     /// <summary>THE HAPPY PATH: all six ids are nulled, LastCatalogSync is
     /// cleared, every ledger row carries the audit (recovery Source, the OLD
@@ -202,8 +200,7 @@ public class CatalogRecoveryTests : PluginTestBase, IDisposable
     public void NoStoredIdsNoCaveat_NoOp_PersistsNothing()
     {
         SeedLedger("it-IT");
-        var user = CreateUser(artist: null, album: null, series: null, audiobook: null, movie: null, song: null);
-        user.LastCatalogSync = null;
+        var user = CreateUserWithNoIds();
         int savesBefore = TestHelpers.ConfigSerializerMock!.Invocations.Count;
 
         CatalogLivenessChecker.CatalogRecoveryOutcome outcome = CreateChecker().RecreateStoredCatalogs(user);
@@ -248,8 +245,7 @@ public class CatalogRecoveryTests : PluginTestBase, IDisposable
     public void CaveatOnly_SweepsAndPersists()
     {
         SeedLedger("it-IT", CatalogLedgerCaveats.CatalogIdsDead, error: "catalog liveness: 404 on stored catalog id(s): x", source: CatalogLivenessChecker.CatalogLivenessLedgerSource);
-        var user = CreateUser(artist: null, album: null, series: null, audiobook: null, movie: null, song: null);
-        user.LastCatalogSync = null;
+        var user = CreateUserWithNoIds();
         int savesBefore = TestHelpers.ConfigSerializerMock!.Invocations.Count;
 
         CatalogLivenessChecker.CatalogRecoveryOutcome outcome = CreateChecker().RecreateStoredCatalogs(user);
@@ -261,5 +257,45 @@ public class CatalogRecoveryTests : PluginTestBase, IDisposable
         Assert.Equal(
             savesBefore + 1,
             TestHelpers.ConfigSerializerMock.Invocations.Count);
+    }
+
+    /// <summary>Code review round 2: a previous recovery's audit row is
+    /// OWN-SHAPE (bit-less but Source-stamped), so a consecutive recovery
+    /// (the multi-user household shape: user B before any sync runs)
+    /// replaces it wholesale instead of nesting an attributed "previous
+    /// run:" copy of user A's audit into every locale row.</summary>
+    [Fact]
+    public void ConsecutiveRecovery_ReplacesPriorAuditRow_NoNesting()
+    {
+        SeedLedger(
+            "it-IT",
+            error: "catalog recovery (JF-967): nulled stored catalog ids: Artist=amzn1.ask.catalog.prior-user; the next catalog sync recreates the catalogs",
+            source: CatalogLivenessChecker.CatalogRecoveryLedgerSource);
+        var user = CreateUser();
+
+        CreateChecker().RecreateStoredCatalogs(user);
+
+        var entry = Plugin.Instance!.Configuration.GetLocaleModelStatusSnapshot().Single(e => e.Locale == "it-IT");
+        Assert.DoesNotContain(LibrarySyncService.CarriedDiagnosticLedgerPrefix, entry.Error, StringComparison.Ordinal);
+        Assert.DoesNotContain("prior-user", entry.Error, StringComparison.Ordinal);
+        Assert.Equal(CatalogLivenessChecker.CatalogRecoveryLedgerSource, entry.Source);
+    }
+
+    /// <summary>Code review round 2: the durable audit must not promise a
+    /// recreate a skipped user will never get; a user the sync pipeline
+    /// skips (here: no vendor id) gets the skip clause in the ledger row,
+    /// mirroring the endpoint's one-shot honesty.</summary>
+    [Fact]
+    public void UnsyncableUser_AuditTextCarriesSkipClause_NotRecreatePromise()
+    {
+        SeedLedger("it-IT");
+        var user = CreateUser();
+        user.VendorId = string.Empty;
+
+        CreateChecker().RecreateStoredCatalogs(user);
+
+        var entry = Plugin.Instance!.Configuration.GetLocaleModelStatusSnapshot().Single(e => e.Locale == "it-IT");
+        Assert.Contains("skip this user", entry.Error, StringComparison.Ordinal);
+        Assert.DoesNotContain("the next catalog sync recreates the catalogs", entry.Error, StringComparison.Ordinal);
     }
 }

@@ -405,11 +405,9 @@
                                 <div class="fieldDescription">Comma-separated locale codes to include in catalog sync in addition to it-IT (always synced). Adds phonetic synonyms for non-English names so Alexa recognizes accented speech. Default * syncs every active locale except ar-SA (whose Amazon-side model build rejects catalog data); an explicit list adds those locales on top of it-IT, and an empty value syncs it-IT only. Each locale adds roughly one to two minutes to the sync run.</div>
                             </div>
 
-                            <div style="display:flex;gap:0.5em;margin-bottom:0.6em;">
-                                <button id="recreateCatalogsButton" is="emby-button" type="button" class="raised button-alt emby-button" title="Null the stored Amazon catalog ids and force a catalog sync so the catalogs are recreated from the library (recovery for catalogs deleted on Amazon's side)">
-                                    <span>Recreate Catalogs</span>
-                                </button>
-                            </div>
+                            <button id="recreateCatalogsButton" is="emby-button" type="button" class="raised button-alt emby-button" style="margin-bottom:0.6em;" title="Null the stored Amazon catalog ids and force a catalog sync so the catalogs are recreated from the library (recovery for catalogs deleted on Amazon's side)">
+                                <span>Recreate Catalogs</span>
+                            </button>
                             <div class="fieldDescription" style="color:#888;margin-bottom:1em;">"Recreate Catalogs" is the recovery action for catalogs deleted on Amazon's side (the signature: a whole slot family stops matching in every locale at once). It nulls the stored catalog ids of the first configured user, forces the next catalog sync, and records the recovery in the locale status above. After a recreate, large catalogs can take hours before entity resolution picks every value back up; wait before escalating.</div>
                     </details>
 

@@ -1091,8 +1091,18 @@ public class ConfigurationController : ControllerBase
             return error!;
         }
 
-        CatalogLivenessChecker.CatalogRecoveryOutcome outcome =
-            _livenessChecker.RecreateStoredCatalogs(pluginUser!);
+        CatalogLivenessChecker.CatalogRecoveryOutcome outcome;
+        try
+        {
+            outcome = _livenessChecker.RecreateStoredCatalogs(pluginUser!);
+        }
+        catch (InvalidOperationException ex)
+        {
+            // The engine's mapped persist failure (JF-967 code review round 2):
+            // the recovery mutated memory but could not save; report it as a
+            // JSON 500 with the engine's guidance instead of a raw error page.
+            return new JsonResult(new { error = ex.Message }) { StatusCode = 500 };
+        }
 
         // ITaskManager decision (JF-967): MediaBrowser.Model.Tasks.ITaskManager
         // ships in the Jellyfin.Model package both Condition'd references carry
@@ -1103,60 +1113,75 @@ public class ConfigurationController : ControllerBase
         // from here. QueueScheduledTask, NOT QueueIfNotRunning: the click must
         // GUARANTEE a pass AFTER the ids were nulled, so a sync already in
         // flight does not swallow the recovery; the queued pass runs when the
-        // in-flight one completes. A queue failure (task not yet registered,
-        // e.g. mid-startup) degrades to the documented next-scheduled-pass
-        // fallback, the auto-heal arm's contract, and is reported as such.
+        // in-flight one completes (enqueue-while-running confirmed against the
+        // v10.11.8 source). DEGRADATION DETECTION (code review round 2): the
+        // unregistered-task path in Jellyfin's TaskManager LOGS an error and
+        // returns WITHOUT throwing, so a catch alone cannot see it; the
+        // registered-task enumerable is the checkable surface, checked BEFORE
+        // the queue call, and both the not-registered shape and a genuine
+        // throw land in the same reported next-scheduled-pass fallback.
         bool syncQueued = false;
-        try
+        bool taskRegistered = _taskManager.ScheduledTasks?.Any(t => t.ScheduledTask is CatalogSyncTask) == true;
+        if (taskRegistered)
         {
-            _taskManager.QueueScheduledTask<CatalogSyncTask>();
-            syncQueued = true;
+            try
+            {
+                _taskManager.QueueScheduledTask<CatalogSyncTask>();
+                syncQueued = true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex,
+                    "Failed to queue the catalog sync task after the catalog recovery for user {UserId} (JF-967); the next scheduled pass (startup trigger or weekly interval) recreates the catalogs instead",
+                    pluginUser!.Id);
+            }
         }
-        catch (Exception ex)
+        else
         {
-            _logger.LogWarning(ex,
-                "Failed to queue the catalog sync task after the catalog recovery for user {UserId} (JF-967); the next scheduled pass (startup trigger or weekly interval) recreates the catalogs instead",
+            _logger.LogWarning(
+                "CatalogSyncTask is not registered with Jellyfin's task manager (mid-startup or a registration failure); the catalog recovery for user {UserId} was NOT queued and the next scheduled pass (a restart's startup trigger or the weekly interval) recreates the catalogs instead (JF-967)",
                 pluginUser!.Id);
         }
 
         // JF-967 code review: the queued sync only helps a user the task will
-        // not skip. CatalogSyncTask gates every user on SMAPI credentials and
-        // a skill id BEFORE the 12h window our LastCatalogSync clear re-opens,
-        // so reporting "the next pass recreates the catalogs" for a
-        // credential-less user would be a permanently green dashboard over a
-        // broken one (the liveness piggyback sits behind the same gate and
-        // cannot re-flag it).
-        bool userSyncable = pluginUser!.SmapiDeviceToken != null
-            && !string.IsNullOrEmpty(pluginUser.UserSkill?.SkillId);
+        // not skip. The REPORTING aggregate lives on the sync engine
+        // (LibrarySyncService.CanSyncUser, the JF-967 simplify round): it
+        // unions every per-user skip the pipeline applies (credentials at the
+        // task loop and service entry, the vendor-id gate after entry), so
+        // this honesty report cannot drift from the gates it reports about
+        // (the hand copy omitted the vendor term).
+        bool userSyncable = LibrarySyncService.CanSyncUser(pluginUser!);
         if (!userSyncable)
         {
             _logger.LogWarning(
-                "Catalog recovery for user {UserId}: the user has no SMAPI device token or skill id, so every catalog sync pass skips them; the nulled ids stay cleared and the first sync after Alexa authorization recreates the catalogs (JF-967)",
-                pluginUser.Id);
+                "Catalog recovery for user {UserId}: the user lacks SMAPI credentials, a skill id or a vendor id, so every catalog sync pass skips them; the nulled ids stay cleared and the first sync after Alexa authorization recreates the catalogs (JF-967)",
+                pluginUser!.Id);
         }
 
         // JF-967 code review: the ledger caveat strip is global while this
         // endpoint heals ONE user, so a multi-user household must be told the
         // other linked users still carry their (possibly dead) stored ids.
-        // The id reads go through the checker's shared map: the stored-id
-        // accessors are IL-pinned to the map's single reader.
-        int otherUsersWithStoredIds = Plugin.Instance!.Configuration.Users
-            .Count(u => !ReferenceEquals(u, pluginUser) && CatalogLivenessChecker.HasStoredCatalogIds(u));
+        // The count is ENGINE-OWNED (part of the recovery outcome) since the
+        // simplify round, so every caller of the recovery reports the same
+        // fact instead of each re-scanning Configuration.Users.
+        int otherUsersWithStoredIds = outcome.OtherUsersWithStoredIds;
         if (otherUsersWithStoredIds > 0)
         {
             _logger.LogWarning(
                 "Catalog recovery for user {UserId}: {OtherCount} other configured user(s) still carry stored catalog ids; the config-page button targets the first configured user only, so repeat the recovery for them (the endpoint accepts their userId) (JF-967)",
-                pluginUser.Id,
+                pluginUser!.Id,
                 otherUsersWithStoredIds);
         }
 
+        // The queue state is reported in every arm (code review round 2): the
+        // unsyncable arm no longer asserts a queue that may not have happened.
         string syncClause = !userSyncable
-            ? "the catalog sync task was queued but will SKIP this user until Alexa authorization is completed (no SMAPI credentials or skill yet); the first sync after linking recreates the catalogs"
+            ? "every catalog sync pass will SKIP this user until Alexa authorization is completed (no SMAPI credentials, skill id or vendor id); the first sync after linking recreates the catalogs"
             : syncQueued
                 ? "the catalog sync task was queued and its next pass recreates the catalogs"
                 : "the catalog sync task could NOT be queued; the next scheduled pass (a restart's startup trigger or the weekly interval) recreates the catalogs instead";
         string othersClause = otherUsersWithStoredIds > 0
-            ? $" Note: {otherUsersWithStoredIds} other configured user(s) still carry stored catalog ids (this button targets the first configured user); repeat the recovery for them via the API with their userId."
+            ? $" Note: {otherUsersWithStoredIds} other configured user(s) still carry stored catalog ids; repeat the recovery with their userId."
             : string.Empty;
         var changes = new List<string>(3);
         if (outcome.NulledIds.Count > 0)

@@ -136,6 +136,73 @@ public class LibrarySyncService
         => legs.All(leg => leg.Items.Count == 0);
 
     /// <summary>
+    /// The per-user credential gate the sync pipeline applies at TWO flow
+    /// points (the task loop's skip and this service's entry skip), split out
+    /// as the ONE expression so neither gate nor the reporting aggregate
+    /// (<see cref="CanSyncUser"/>) can drift from the others (JF-967 simplify
+    /// round; the copies had already diverged on the whitespace edge).
+    /// </summary>
+    /// <param name="user">The user to test.</param>
+    /// <returns>True when the user carries an SMAPI device token and a skill
+    /// id (the two terms both pipeline gates check).</returns>
+    internal static bool HasSyncCredentials(Entities.User user)
+        => user.SmapiDeviceToken != null && user.UserSkill?.SkillId != null;
+
+    /// <summary>
+    /// Whether the sync pipeline will actually PROCESS this user: the shared
+    /// credential gate above PLUS the vendor-id gate this service applies
+    /// after entry. This is the REPORTING aggregate (JF-967): the recovery
+    /// endpoint answers "will the sync I just queued touch this user?" with
+    /// it instead of re-deriving a partial copy (the hand copy omitted the
+    /// vendor term, promising recreation for a user every pass skips). The
+    /// pipeline's own gates stay at their flow points on purpose: their skip
+    /// branches differ (the task loop's debug skip vs this service's warn
+    /// returns) and a vendor-less user must still reach the task's 12h skip
+    /// branch, where the JF-966 liveness piggyback lives.
+    /// </summary>
+    /// <param name="user">The user to test.</param>
+    /// <returns>True when a queued or scheduled catalog sync will process
+    /// this user.</returns>
+    internal static bool CanSyncUser(Entities.User user)
+        => HasSyncCredentials(user) && !string.IsNullOrEmpty(user.VendorId);
+
+    /// <summary>
+    /// The JF-709/JF-721 foreign-diagnostic carry, ONE shared block for every
+    /// caveat/audit-writing compose in the catalog subsystem (the checker's
+    /// two composes and this service's frozen-leg writer; consolidated in the
+    /// JF-967 code-review round after a third verbatim copy surfaced): a
+    /// previous row with a FREE-TEXT diagnostic that is NOT one of this
+    /// subsystem's own shapes contributes that diagnostic ATTRIBUTED (migrated
+    /// once if it is still a pre-JF-721 composed text), so a foreign
+    /// diagnostic (a canary mismatch, SMAPI build errors) never silently
+    /// vanishes under a rewrite. Own-shape is decided by caveat bit OR by
+    /// writer Source: a previous recovery's audit row is bit-less by
+    /// construction, so <see cref="CatalogLivenessChecker.CatalogRecoveryLedgerSource"/>
+    /// rows are own-shape too (consecutive recoveries replace wholesale
+    /// instead of nesting attributed copies of the prior audit).
+    /// </summary>
+    /// <param name="previous">The row about to be rewritten.</param>
+    /// <returns>The attributed diagnostic to append, or null when the
+    /// previous row is own-shape (or empty).</returns>
+    internal static string? CarryForeignDiagnostic(Configuration.LocaleModelStatus? previous)
+    {
+        if (previous?.Source == CatalogLivenessChecker.CatalogRecoveryLedgerSource)
+        {
+            return null;
+        }
+
+        if (previous?.Error is { Length: > 0 } foreignError
+            && !IsOwnShapeLedgerCaveat(previous.Caveat))
+        {
+            return MigrateLegacyLedgerError(foreignError).Error is { Length: > 0 } migrated
+                ? CarriedDiagnosticLedgerPrefix + migrated
+                : null;
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// Sync a user's library to SMAPI catalogs.
     /// Creates catalogs if they don't exist, updates them if they do.
     /// </summary>
@@ -150,7 +217,7 @@ public class LibrarySyncService
     {
         var result = new SyncResult();
 
-        if (user.SmapiDeviceToken == null || user.UserSkill?.SkillId == null)
+        if (!HasSyncCredentials(user))
         {
             _logger.LogWarning("Skipping catalog sync for user {UserId}: no SMAPI token or skill ID", user.Id);
             return result;
@@ -183,7 +250,7 @@ public class LibrarySyncService
         // Determine which locales to sync (with the token the pre-sync gate left us).
         string syncLocalesConfig = Plugin.Instance?.Configuration?.CatalogSyncLocales ?? string.Empty;
         IReadOnlyList<string> resolvedLocales = await ResolveSyncLocalesAsync(
-            syncLocalesConfig, user.SmapiDeviceToken.AccessToken, skillId, cancellationToken).ConfigureAwait(false);
+            syncLocalesConfig, user.SmapiDeviceToken!.AccessToken, skillId, cancellationToken).ConfigureAwait(false);
 
         // JF-543: locales whose Amazon-side full build cannot host catalog-backed slot
         // types (evidence in CatalogManager.CatalogWiringUnsupportedLocales). Skipping
@@ -975,21 +1042,12 @@ public class LibrarySyncService
         // non-fatal guard around the whole update is WriteLedgerEntry's.
         WriteLedgerEntry(locale, previous =>
         {
-            string? carriedError = null;
-            if (previous?.Error is { Length: > 0 } previousError
-                && !IsOwnShapeLedgerCaveat(previous.Caveat))
-            {
-                // Gate-marker rework F1: a pre-JF-721 composed previous Error
-                // migrates once here too; this carry is the path that would
-                // otherwise bake the stale clause/tail text onto a caveat-carrying
-                // row (the clause this run writes its own fields for). Gate-marker
-                // rework F3: the carried diagnostic is ATTRIBUTED in the free text
-                // so the admin can tell a prior-run failure from the current run's
-                // state; the prefix is display-only, nothing parses it.
-                carriedError = MigrateLegacyLedgerError(previousError).Error is { Length: > 0 } foreign
-                    ? CarriedDiagnosticLedgerPrefix + foreign
-                    : null;
-            }
+            // The shared carry (JF-709 rework F1 migration + F3 attribution,
+            // one owner since the JF-967 code-review round): a foreign
+            // diagnostic is attributed in the free text so the admin can tell
+            // a prior-run failure from the current run's state; the prefix is
+            // display-only, nothing parses it.
+            string? carriedError = CarryForeignDiagnostic(previous);
 
             return new Configuration.LocaleModelStatus
             {
