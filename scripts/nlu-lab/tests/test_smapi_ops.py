@@ -508,3 +508,105 @@ def test_considered_hypotheses_multi_value_match_keeps_the_tail():
     (rec,) = smapi_ops.considered_hypotheses(response)[0]["er"]["musician"]
     assert rec["canonical"] == "P!nk"          # JF-659 contract: Values[0]
     assert rec["matches"] == ["P!nk", "Pink Floyd"]  # the full arbitration set
+
+
+# --- JF-936: one malformed response costs ONE row, never the battery ---
+
+def test_battery_rows_null_slots_response_maps_to_row_not_abort():
+    """JF-936 test (1): a null-slots selectedIntent (the pinned malformed
+    shape) parses to an OK row with empty slots; the battery continues and
+    the following row is still probed."""
+    def fake(utterance):
+        if utterance == "nullish":
+            return {"selectedIntent": {"name": "PlaySongIntent", "slots": None}}
+        return _ok_response(utterance)
+
+    out = run_battery_rows(fake, _rows("nullish", "good"), 0)
+    assert out[0]["status"] is RowStatus.OK
+    assert out[0]["selected_intent"] == "PlaySongIntent"
+    assert out[0]["slots"] == {}
+    assert out[1]["status"] is RowStatus.OK
+    assert out[1]["selected_intent"] == "PlaySongIntent"
+
+
+def test_battery_rows_non_dict_selected_intent_is_a_no_selection_row():
+    """JF-936 parser hardening: a truthy NON-dict selectedIntent raised
+    AttributeError inside the parser and aborted the whole battery (a failed
+    run with results=[]); it now rides the no-selection SmapiError as ONE
+    row with its considered evidence."""
+    def fake(utterance):
+        if utterance == "weird":
+            return {"selectedIntent": "PlaySongIntent",
+                    "consideredIntents": [{"name": "FallbackIntent"}]}
+        return _ok_response(utterance)
+
+    out = run_battery_rows(fake, _rows("weird", "good"), 0)
+    assert out[0]["status"] is RowStatus.NO_SELECTION
+    assert out[0]["selected_intent"] is None
+    assert out[0]["considered_intents"] == ["FallbackIntent"]
+    assert out[1]["status"] is RowStatus.OK
+
+
+def test_battery_rows_unknown_parser_shape_costs_one_error_row(monkeypatch):
+    """JF-936 belt and braces: a parser failure that is NOT SmapiError (an
+    unknown future shape) maps to ONE ERROR row carrying the diagnostics
+    instead of aborting the battery."""
+    def broken(response):
+        raise ValueError("future shape: scores are booleans now")
+
+    monkeypatch.setattr(smapi_ops.SmapiClient, "parse_profile_nlu_result",
+                        staticmethod(broken))
+    out = run_battery_rows(lambda u: _ok_response(u), _rows("a", "b"), 0)
+    assert [r["status"] for r in out] == [RowStatus.ERROR] * 2
+    assert all(r["error"] == "parser ValueError: future shape: scores are booleans now"
+               for r in out)
+    assert all(r["selected_intent"] is None and r["slots"] == {} for r in out)
+
+
+def test_battery_rows_persistent_failure_keeps_error_text():
+    """JF-936 finding (b): the JF-406 retry no longer discards the exception
+    text; the ERROR row keeps it, and the ask CLI's stderr rides the message
+    (expired-auth class), so N error rows carry N diagnostic texts."""
+    def fake(utterance):
+        raise SmapiError(
+            "ask smapi profile-nlu exited 1: Token has expired, please re-login")
+
+    out = run_battery_rows(fake, _rows("a"), 0)
+    assert out[0]["status"] is RowStatus.ERROR
+    assert out[0]["error"] == (
+        "SmapiError: ask smapi profile-nlu exited 1: Token has expired, please re-login")
+
+
+def test_battery_rows_non_dict_response_error_names_the_shape():
+    def fake(utterance):
+        return None  # non-dict on BOTH attempts
+
+    out = run_battery_rows(fake, _rows("a"), 0)
+    assert out[0]["status"] is RowStatus.ERROR
+    assert out[0]["error"] == "non-dict profile response: NoneType"
+
+
+def test_battery_rows_recovered_retry_carries_no_stale_error():
+    """A row that recovers on the JF-406 retry is OK and must NOT carry the
+    first attempt's failure text (the field is ERROR-row diagnostics)."""
+    state = {"failed": False}
+
+    def fake(utterance):
+        if not state["failed"]:
+            state["failed"] = True
+            raise SmapiError("single transient 500")
+        return _ok_response(utterance)
+
+    out = run_battery_rows(fake, _rows("once"), 0)
+    assert out[0]["status"] is RowStatus.OK
+    assert out[0]["error"] is None
+
+
+def test_battery_rows_ok_and_no_selection_rows_carry_null_error():
+    def fake(utterance):
+        if utterance == "empty":
+            return {"consideredIntents": []}
+        return _ok_response(utterance)
+
+    out = run_battery_rows(fake, _rows("que salte", "empty"), 0)
+    assert [r["error"] for r in out] == [None, None]

@@ -412,6 +412,29 @@ def test_keyboard_interrupt_mid_battery_saves_partial_run(tmp_path, monkeypatch,
     assert "interrupted" in captured.err
 
 
+def test_persistent_profile_failure_yields_error_rows_with_text(tmp_path, monkeypatch, capsys):
+    """JF-936 end to end: a persistently failing profile-nlu (expired-auth
+    class) no longer fails the whole run; the battery completes, the run is
+    ok, and each ERROR RowResult carries the failure text through
+    _to_row_result into the saved run file."""
+    monkeypatch.setenv("SMAPI_DELAY", "0")
+    lab = _lab_dir(tmp_path)
+    fx = _fixtures(tmp_path, [FX_ROW_A, FX_ROW_B])
+
+    def profile(sid, loc, utterance):
+        raise SmapiError(
+            f"ask smapi profile-nlu exited 1: Token has expired ({utterance})")
+    _happy_smapi(monkeypatch, profile=profile)
+    rc = _cmd(lab, fx, _model_file(tmp_path, _valid_model()), label="expired")
+    assert rc == 0
+    run = _single_run(tmp_path)
+    assert run.status == "ok"
+    assert [r.status.value for r in run.results] == ["error", "error"]
+    assert all("Token has expired" in r.error for r in run.results)
+    assert f"({FX_ROW_A['utterance']})" in run.results[0].error  # per-row text
+    assert "run ok" in capsys.readouterr().out
+
+
 # --- entry point ---
 
 def test_main_missing_lab_json_refuses(tmp_path, monkeypatch, capsys):

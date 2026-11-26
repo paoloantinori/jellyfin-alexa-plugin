@@ -405,6 +405,7 @@ def _to_row_result(row, row_dict: dict, raws: dict) -> RowResult:
         considered_intents=row_dict["considered_intents"],
         raw=raws.get(row.utterance) or {},
         considered_hypotheses=row_dict["considered_hypotheses"],
+        error=row_dict.get("error"),
     )
 
 

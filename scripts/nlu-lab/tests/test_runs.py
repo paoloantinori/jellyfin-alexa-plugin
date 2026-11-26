@@ -142,3 +142,55 @@ def test_old_run_file_without_catalog_blocks_loads(tmp_path):
     p.write_text(json.dumps(old), encoding="utf-8")
     back = load_run(p)
     assert back.catalog_start is None and back.catalog_end is None
+
+
+# --- JF-936: row-level error diagnostics (write + backward-compatible load) ---
+
+def test_row_error_roundtrip(tmp_path):
+    """The ERROR row's failure text rides the run file and loads back."""
+    run = RunRecord(id="err", timestamp="t", locale="it-IT", label="x",
+                    model_source="m", model_sha256="0" * 64, skill_id="s",
+                    status="ok", intent_roster=[],
+                    results=[make_row(status=RowStatus.ERROR, selected_intent=None,
+                                      expected_intent=None,
+                                      error="SmapiError: ask smapi profile-nlu exited 1: "
+                                            "Token has expired, please re-login")])
+    back = load_run(save_run(tmp_path, run))
+    assert back.results[0].error == (
+        "SmapiError: ask smapi profile-nlu exited 1: Token has expired, please re-login")
+    # the JSON file itself carries the field
+    saved = json.loads((tmp_path / "err.json").read_text())
+    assert "Token has expired" in saved["results"][0]["error"]
+
+
+def test_old_run_file_without_row_error_loads_and_compares(tmp_path):
+    """A pre-JF-936 run file (rows carry no error key) loads with error=None,
+    and diff_against judges old-shape against new-shape rows: judgment keys
+    on (utterance, source) and selected_intent/status only, so the new field
+    existing on ONE side changes nothing."""
+    old = {"id": "old", "timestamp": "t", "locale": "it-IT", "label": "l",
+           "model_source": "m", "model_sha256": "0" * 64, "skill_id": "s",
+           "status": "ok",
+           "results": [
+               {"utterance": "same-row", "source": "fixture", "status": "ok",
+                "expected_intent": "PlaySongIntent",
+                "selected_intent": "PlaySongIntent",
+                "slots": {}, "considered_intents": ["PlaySongIntent"], "raw": {}},
+               {"utterance": "err-old", "source": "fixture", "status": "error",
+                "expected_intent": None, "selected_intent": None,
+                "slots": {}, "considered_intents": [], "raw": {}}]}
+    p = tmp_path / "old.json"
+    p.write_text(json.dumps(old), encoding="utf-8")
+    old_run = load_run(p)
+    assert all(r.error is None for r in old_run.results)  # missing key reads None
+
+    new_run = RunRecord(id="new", timestamp="t", locale="it-IT", label="n",
+                        model_source="m", model_sha256="0" * 64, skill_id="s",
+                        status="ok", intent_roster=[], results=[
+        make_row(utterance="same-row", error=None),
+        make_row(utterance="err-old", status=RowStatus.ERROR, selected_intent=None,
+                 expected_intent=None, error="parser ValueError: future shape")])
+    diff = {d.utterance: d for d in new_run.diff_against(old_run)}
+    assert diff["same-row"].kind == "same"      # new-side field absent on the old side
+    assert diff["err-old"].kind == "error"      # ERROR either way, text or no text
+    assert new_run.expectation_failure_count == 0
