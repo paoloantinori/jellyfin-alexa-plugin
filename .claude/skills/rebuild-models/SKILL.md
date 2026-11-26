@@ -31,11 +31,14 @@ or no `locale` to fall back to the saved `CustomModelLocale` (single locale, NOT
 ```bash
 SSH_OPTS="-F /dev/null -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa"
 USER_ID=$(ssh $SSH_OPTS pantinor@minix "curl -sf 'http://localhost:8096/Plugins/c5df7de087774b3ca70d5c3dae359c9e/Configuration' \
-  -H 'X-Emby-Token: $JELLYFIN_API_KEY'" | python3 -c "import json,sys; print(json.load(sys.stdin)['Users'][0]['Id'])")
+  -H 'Authorization: MediaBrowser Token=\"$JELLYFIN_API_KEY\"'" | python3 -c "import json,sys; print(json.load(sys.stdin)['Users'][0]['Id'])")
 ssh $SSH_OPTS pantinor@minix "curl -s -X POST 'http://localhost:8096/alexaskill/api/custom-model/rebuild' \
-  -H 'X-Emby-Token: $JELLYFIN_API_KEY' -H 'Content-Type: application/json' \
+  -H 'Authorization: MediaBrowser Token=\"$JELLYFIN_API_KEY\"' -H 'Content-Type: application/json' \
   -d '{\"userId\":\"$USER_ID\",\"locale\":\"*\"}'"
 ```
+
+On Jellyfin 12.x use `Authorization: MediaBrowser Token="<key>"` (or `?ApiKey=`):
+the `X-Emby-Token` header is rejected with 401 on the general API surface.
 
 ### 2. Verify Response
 
@@ -57,6 +60,15 @@ If `success` is `false`, check the per-locale `error` fields for details.
 If error `"User has no SMAPI device token"`: the user needs to re-authorize via the config UI.
 If error `"Plugin manifest not loaded"`: restart Jellyfin first.
 
+**SUCCEEDED is not proof the rebuild ran** (incident 2026-11-26): both this
+response and `ask smapi get-skill-status` report the LAST submitted update,
+which can be an earlier one (a reaped or interrupted script that never sent
+the rebuild still shows SUCCEEDED). After every rebuild, verify by probing
+one NEW row against the live skill (`nlu-lab run --live` or `profile-nlu`):
+the row routing to its new intent is the only proof. A killed deploy script
+must be reconciled against server-side state (per-locale results plus that
+probe), never resumed blind and never assumed half-done.
+
 ### 3. Verify with Simulator
 
 Test that the new slot values are recognized:
@@ -64,7 +76,7 @@ Test that the new slot values are recognized:
 ```bash
 SSH_OPTS="-F /dev/null -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa"
 ssh $SSH_OPTS pantinor@minix "curl -sf -X POST 'http://localhost:8096/Plugins/AlexaSkill/Simulator/Intent' \
-  -H 'X-Emby-Token: $JELLYFIN_API_KEY' -H 'Content-Type: application/json' \
+  -H 'Authorization: MediaBrowser Token=\"$JELLYFIN_API_KEY\"' -H 'Content-Type: application/json' \
   -d '{\"intentName\":\"<IntentName>\",\"slots\":{\"<slot_name>\":\"<new_value>\"},\"locale\":\"it-IT\"}'"
 ```
 

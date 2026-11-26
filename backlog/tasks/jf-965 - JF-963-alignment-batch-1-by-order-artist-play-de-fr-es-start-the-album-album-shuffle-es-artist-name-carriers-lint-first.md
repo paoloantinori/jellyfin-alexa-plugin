@@ -3,10 +3,10 @@ id: JF-965
 title: >-
   JF-963 alignment batch 1: by-order artist play (de/fr/es), start-the-album,
   album-shuffle, es artist name-carriers (lint-first)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-11-25 14:55'
-updated_date: '2026-11-26 09:14'
+updated_date: '2026-11-26 13:02'
 labels:
   - nlu
   - alignment
@@ -60,4 +60,6 @@ MERGED to main (0c15c0cf, pushed; branch jf-965-alignment-batch-1) after simplif
 DEPLOY EXECUTED 2026-11-26 morning (the maintainer's vai): config backed up (1 user), DLL hot-swapped into AlexaSkill_1.1.2.0 (md5 cd52da6c local==pushed==active), server up, config survived; per-locale rebuilds fr/de/en SUCCEEDED; the es rebuild initially appeared done via a STALE get-skill-status SUCCEEDED (the reaped script never ran it) - caught by probing the candidate row (still None), rebuilt for real, then verified. POST-DEPLOY COMPARES vs the A/A'd baseline: fr 4/131 changed (exactly the candidates, green; failures 6->2, both pre-existing), de 0/146 (failures 0), en 2 'error'-class transients only (both named, one pre-excluded at A/A; failures 3, pre-existing trio), es 6/129 (exactly the candidates, green; failures 8->2, Reproduce jazz x2 pre-existing). No sentinel moved.
 
 WRAPPER ROUND (the nlu-verify FAIL loop, triggered because the simulate outage hid fr/it from the wrapper battery): live profile-nlu probes found the one-shot compositions falling to Fallback (fr/en/es) and one fr form STOLEN by AddToQueueIntent. Fix: six wrapper twins (fr 'De jouer des chansons de'/'De jouer de la musique de', en 'to start the album', es 'que reproduzca canciones del artista/cantante/grupo'); the en RECORD twin was DROPPED after the lab showed 'to start the record {album}' losing arbitration to PlayByGenre's 'listen to {genre}' family (stable 2/2, genre=album-name; a genre-misrouting one-shot is worse than dead air). LAB LIMITATION DISCOVERED: invocation-headed one-shot phrases cannot be tested on the lab skill (its invocation name differs; headed probes read Fallback there regardless) - bare tails are the lab-testable form; all six twins verified picked up via bare tails (runs jf965-twins-lab-*). de needed no twins (both one-shot forms already route live). Fixtures pin the headed one-shots; the record-noun one-shot stays uncovered (noted for the JF-963 stream).
+
+FINAL DEPLOY STATE 2026-11-26 ~14:00 (second vai): twin DLL rebuilt (md5 9a67397d local==active, config 1 user survived), fr/en/es models rebuilt one-at-a-time with the new post-rebuild probe guard. ALL SIX twin tails verified routing on the live skill (fr de-jouer pair, en to-start-the-album, es que-reproduzca triplet). HEADED one-shot compositions read Fallback in profile-nlu across all three locales DESPITE trained tails: measured as match-strength-dependent head absorption (multi-slot episode tails absorb, weak single-slot tails do not; short vs full invocation head made no difference). Per the JF-298 doctrine this is the profile-nlu divergence class: the device consumes the invocation natively, so headed confirmation is a DEVICE TEST for the maintainer: 'Alexa, demande à mon serveur de jouer des chansons de Queen' / 'Alexa, pide a mi colección que reproduzca canciones del artista Queen' / 'Alexa, ask jellyfin player to start the album Thriller'. The fr play-artist headed family additionally carries the pre-existing JF-907 stolen-shape issue. PROCESS HARDENING delivered per the maintainer directive: rebuild-models skill (stale-SUCCEEDED probe guard, killed-script reconciliation, MediaBrowser Token header fixes) and nlu-verify skill (simulate-outage fallback rules, headed-probe caveat, lab-invocation limitation, the twin rule for new samples).
 <!-- SECTION:NOTES:END -->

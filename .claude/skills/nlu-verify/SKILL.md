@@ -54,6 +54,21 @@ Model-side prose rules do not catch these; only probing the SAVED model does.
    regenerate, redeploy, re-run. Do NOT hand-edit model JSON and do NOT weaken
    the battery expectation to make it pass.
 
+   **Simulate-outage fallback** (measured 2026-11-26): the battery has a
+   simulate half that goes down environment-wide; when it does, verify the
+   one-shot forms with recorded profile-nlu probes instead, and read them by
+   these rules. The BARE TAIL (the infinitive/subjunctive row itself, no
+   invocation head) is the profile-nlu-verifiable form: it routes or the
+   trainer never picked the row up. The HEADED composition is NOT reliably
+   readable in profile-nlu: head absorption is match-strength dependent, so a
+   weak single-slot tail reads Fallback even when trained and working
+   on-device (measured identically across fr/en/es while multi-slot episode
+   tails absorbed their heads). Never re-add rows or reword a twin because a
+   headed probe read Fallback; confirm headed forms on a real device.
+   The nlu-lab skill CANNOT test headed forms at all (its invocation name
+   differs, so every headed phrase reads Fallback there regardless of the
+   model).
+
 5. **New phrases**: when a new wrapper gap is found, ADD it to
    `BATTERY` in `scripts/nlu_wrapper_battery.py` AND as a fixture row in
    `tests/integration/fixtures/<locale>.yaml` in the same change, so the live
@@ -63,6 +78,17 @@ Model-side prose rules do not catch these; only probing the SAVED model does.
    `scripts/generate_voice_reference.py`, never hand-edit) and may touch
    `docs/playback-lifecycle-<locale>.md` edges (run
    `python3 docs-site/parse_mermaid.py`; a no-op regen is the health check).
+
+7. **Twin rule for new samples** (lesson of 2026-11-26): when a template edit
+   adds samples to an intent in a locale with a wrapper family (fr
+   `De + infinitive`, es `que + subjunctive`, en/de `to`/`zu + infinitive`),
+   run the carriers check on the wrapper-twin form in the SAME sitting and
+   land the twin in the same change as the base row. Shipping the imperative
+   row alone leaves the one-shot composition dead or stolen (one fr form was
+   stolen by AddToQueueIntent). A twin that loses arbitration to another
+   intent (the en record twin lost to PlayByGenre `listen to {genre}`, stable
+   2/2) is DROPPED, not shipped: a misrouting one-shot is worse than dead
+   air; document the residual in the task notes.
 
 ## Rules
 
