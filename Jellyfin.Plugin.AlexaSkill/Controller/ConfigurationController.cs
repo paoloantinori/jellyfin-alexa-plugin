@@ -9,13 +9,16 @@ using System.Web;
 using Alexa.NET.Management;
 using Alexa.NET.Management.Api;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Catalog;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Alexa.ModelDeployment;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Controller.Handler;
 using Jellyfin.Plugin.AlexaSkill.Entities;
+using Jellyfin.Plugin.AlexaSkill.EntryPoints;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
+using MediaBrowser.Model.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -40,6 +43,8 @@ public class ConfigurationController : ControllerBase
     private readonly ILogger<ConfigurationController> _logger;
     private readonly ModelDeploymentManager _modelDeploymentManager;
     private readonly IInteractionModelRedeployer _redeployer;
+    private readonly CatalogLivenessChecker _livenessChecker;
+    private readonly ITaskManager _taskManager;
     private LwaAuthorizationRequestHandler lwaAuthorizationRequestHandler;
 
     /// <summary>
@@ -51,18 +56,24 @@ public class ConfigurationController : ControllerBase
     /// <param name="loggerFactory">Instance of the <see cref="ILogger{RequestController}"/> interface.</param>
     /// <param name="modelDeploymentManager">Instance of the <see cref="ModelDeploymentManager"/> class.</param>
     /// <param name="redeployer">Redeploys interaction models to Amazon when a published-skill setting changes.</param>
+    /// <param name="livenessChecker">Owns the stored-catalog map and the JF-967 recovery action.</param>
+    /// <param name="taskManager">Jellyfin's scheduled-task queue, used to trigger the catalog sync after a recovery.</param>
     public ConfigurationController(
         IUserManager userManager,
         ISessionManager sessionManager,
         ILibraryManager libraryManager,
         ILoggerFactory loggerFactory,
         ModelDeploymentManager modelDeploymentManager,
-        IInteractionModelRedeployer redeployer)
+        IInteractionModelRedeployer redeployer,
+        CatalogLivenessChecker livenessChecker,
+        ITaskManager taskManager)
     {
         _userManager = userManager;
         _logger = loggerFactory.CreateLogger<ConfigurationController>();
         _modelDeploymentManager = modelDeploymentManager;
         _redeployer = redeployer;
+        _livenessChecker = livenessChecker;
+        _taskManager = taskManager;
 
         lwaAuthorizationRequestHandler = Plugin.Instance!.LwaAuthorizationRequestHandler;
     }
@@ -1051,6 +1062,134 @@ public class ConfigurationController : ControllerBase
         }
 
         return requestedLocale;
+    }
+
+    /// <summary>
+    /// Recreates the user's SMAPI interaction-model catalogs (JF-967, the
+    /// 2026-11-25 catalog-deletion incident's one-click recovery). Nulls all
+    /// six stored catalog ids, clears LastCatalogSync (the force-next-sync
+    /// null), writes the recovery audit into the locale ledger and strips the
+    /// dead-catalog caveat, all in one locked persist, then queues
+    /// CatalogSyncTask so the recreate runs on the next pass. Idempotent: a
+    /// user with nothing to clear still succeeds and reports nothingCleared.
+    /// </summary>
+    /// <param name="json">JSON with userId.</param>
+    /// <returns>A JSON object describing what was cleared and whether the sync was queued.</returns>
+    [HttpPost("catalog/recreate")]
+    [Authorize(Policy = "RequiresElevation")]
+    public ActionResult RecreateCatalogs([FromBody] dynamic json)
+    {
+        JObject req = JObject.Parse(json.ToString());
+
+        if (!req.TryGetValue("userId", out var userIdToken) || string.IsNullOrWhiteSpace(userIdToken.Value<string>()))
+        {
+            return new JsonResult(new { error = "userId is required" }) { StatusCode = 400 };
+        }
+
+        if (!TryResolvePluginUser(userIdToken.Value<string>()!, out var pluginUser, out var error))
+        {
+            return error!;
+        }
+
+        CatalogLivenessChecker.CatalogRecoveryOutcome outcome =
+            _livenessChecker.RecreateStoredCatalogs(pluginUser!);
+
+        // ITaskManager decision (JF-967): MediaBrowser.Model.Tasks.ITaskManager
+        // ships in the Jellyfin.Model package both Condition'd references carry
+        // (verified by reflection against the 10.11.8 and 12.0.0 assemblies),
+        // with QueueScheduledTask<T>, the same queue the dashboard's Run button
+        // uses. Jellyfin registers plugin IScheduledTask singletons with it, so
+        // the CatalogSyncTask singleton from Registrator is queueable by type
+        // from here. QueueScheduledTask, NOT QueueIfNotRunning: the click must
+        // GUARANTEE a pass AFTER the ids were nulled, so a sync already in
+        // flight does not swallow the recovery; the queued pass runs when the
+        // in-flight one completes. A queue failure (task not yet registered,
+        // e.g. mid-startup) degrades to the documented next-scheduled-pass
+        // fallback, the auto-heal arm's contract, and is reported as such.
+        bool syncQueued = false;
+        try
+        {
+            _taskManager.QueueScheduledTask<CatalogSyncTask>();
+            syncQueued = true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Failed to queue the catalog sync task after the catalog recovery for user {UserId} (JF-967); the next scheduled pass (startup trigger or weekly interval) recreates the catalogs instead",
+                pluginUser!.Id);
+        }
+
+        // JF-967 code review: the queued sync only helps a user the task will
+        // not skip. CatalogSyncTask gates every user on SMAPI credentials and
+        // a skill id BEFORE the 12h window our LastCatalogSync clear re-opens,
+        // so reporting "the next pass recreates the catalogs" for a
+        // credential-less user would be a permanently green dashboard over a
+        // broken one (the liveness piggyback sits behind the same gate and
+        // cannot re-flag it).
+        bool userSyncable = pluginUser!.SmapiDeviceToken != null
+            && !string.IsNullOrEmpty(pluginUser.UserSkill?.SkillId);
+        if (!userSyncable)
+        {
+            _logger.LogWarning(
+                "Catalog recovery for user {UserId}: the user has no SMAPI device token or skill id, so every catalog sync pass skips them; the nulled ids stay cleared and the first sync after Alexa authorization recreates the catalogs (JF-967)",
+                pluginUser.Id);
+        }
+
+        // JF-967 code review: the ledger caveat strip is global while this
+        // endpoint heals ONE user, so a multi-user household must be told the
+        // other linked users still carry their (possibly dead) stored ids.
+        // The id reads go through the checker's shared map: the stored-id
+        // accessors are IL-pinned to the map's single reader.
+        int otherUsersWithStoredIds = Plugin.Instance!.Configuration.Users
+            .Count(u => !ReferenceEquals(u, pluginUser) && CatalogLivenessChecker.HasStoredCatalogIds(u));
+        if (otherUsersWithStoredIds > 0)
+        {
+            _logger.LogWarning(
+                "Catalog recovery for user {UserId}: {OtherCount} other configured user(s) still carry stored catalog ids; the config-page button targets the first configured user only, so repeat the recovery for them (the endpoint accepts their userId) (JF-967)",
+                pluginUser.Id,
+                otherUsersWithStoredIds);
+        }
+
+        string syncClause = !userSyncable
+            ? "the catalog sync task was queued but will SKIP this user until Alexa authorization is completed (no SMAPI credentials or skill yet); the first sync after linking recreates the catalogs"
+            : syncQueued
+                ? "the catalog sync task was queued and its next pass recreates the catalogs"
+                : "the catalog sync task could NOT be queued; the next scheduled pass (a restart's startup trigger or the weekly interval) recreates the catalogs instead";
+        string othersClause = otherUsersWithStoredIds > 0
+            ? $" Note: {otherUsersWithStoredIds} other configured user(s) still carry stored catalog ids (this button targets the first configured user); repeat the recovery for them via the API with their userId."
+            : string.Empty;
+        var changes = new List<string>(3);
+        if (outcome.NulledIds.Count > 0)
+        {
+            changes.Add($"nulled {outcome.NulledIds.Count} stored catalog id(s)");
+        }
+
+        if (outcome.LastCatalogSyncCleared)
+        {
+            changes.Add("cleared the last-sync timestamp");
+        }
+
+        if (outcome.CaveatRowsCleared > 0)
+        {
+            changes.Add($"stripped the dead-catalog caveat from {outcome.CaveatRowsCleared} ledger row(s)");
+        }
+
+        string message = outcome.AnythingCleared
+            ? $"{string.Join(", ", changes)}; {syncClause}.{othersClause}"
+            : $"Nothing to clear: this user has no stored catalog ids, no last-sync timestamp and no dead-catalog caveat. {syncClause}.{othersClause}";
+
+        return new JsonResult(new
+        {
+            success = true,
+            nulledCatalogIds = outcome.NulledIds,
+            lastCatalogSyncCleared = outcome.LastCatalogSyncCleared,
+            ledgerRowsClearedOfDeadCaveat = outcome.CaveatRowsCleared,
+            nothingCleared = !outcome.AnythingCleared,
+            syncQueued,
+            userSyncable,
+            otherUsersWithStoredIds,
+            message
+        });
     }
 
     /// <summary>

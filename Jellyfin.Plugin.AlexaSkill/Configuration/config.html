@@ -404,6 +404,13 @@
                                 <input type="text" id="CatalogSyncLocales" name="CatalogSyncLocales" is="emby-input" placeholder="e.g. de-DE,en-US (* = all, empty = it-IT only)" />
                                 <div class="fieldDescription">Comma-separated locale codes to include in catalog sync in addition to it-IT (always synced). Adds phonetic synonyms for non-English names so Alexa recognizes accented speech. Default * syncs every active locale except ar-SA (whose Amazon-side model build rejects catalog data); an explicit list adds those locales on top of it-IT, and an empty value syncs it-IT only. Each locale adds roughly one to two minutes to the sync run.</div>
                             </div>
+
+                            <div style="display:flex;gap:0.5em;margin-bottom:0.6em;">
+                                <button id="recreateCatalogsButton" is="emby-button" type="button" class="raised button-alt emby-button" title="Null the stored Amazon catalog ids and force a catalog sync so the catalogs are recreated from the library (recovery for catalogs deleted on Amazon's side)">
+                                    <span>Recreate Catalogs</span>
+                                </button>
+                            </div>
+                            <div class="fieldDescription" style="color:#888;margin-bottom:1em;">"Recreate Catalogs" is the recovery action for catalogs deleted on Amazon's side (the signature: a whole slot family stops matching in every locale at once). It nulls the stored catalog ids of the first configured user, forces the next catalog sync, and records the recovery in the locale status above. After a recreate, large catalogs can take hours before entity resolution picks every value back up; wait before escalating.</div>
                     </details>
 
                     <details>
@@ -2149,7 +2156,10 @@
                 }).then(function(res) {
                     res.json().then(function(data) {
                         showCustomModelMessage(successMsg + " — " + (data.buildStatus || "complete"), "success");
-                        if (onSuccess) { onSuccess(); }
+                        // JF-967: the callback receives the parsed response so a
+                        // caller can re-render the endpoint's own message over the
+                        // generic success line (existing callbacks ignore it).
+                        if (onSuccess) { onSuccess(data); }
                         loadCustomModelStatus();
                     });
                 }, function(res) {
@@ -2214,6 +2224,37 @@
                     "alexaskill/api/custom-model/rebuild",
                     { userId: getFirstConfiguredUserId(), locale: "*" },
                     "#rebuildAllModelsButton", "Rebuilding ALL locales (one build per locale, this takes a few minutes)...", "All locales rebuilt"
+                );
+            });
+
+            // JF-967: the one-click catalog recovery. confirm() gates the POST
+            // (the action nulls the stored ids); the shared callModelApi shell
+            // carries the button disable, progress, error rendering and status
+            // refresh, and the onSuccess override re-renders the endpoint's own
+            // honest message (nulled ids, queue outcome, or the
+            // nothing-to-clear no-op) over the generic success line.
+            document.querySelector("#recreateCatalogsButton").addEventListener("click", function() {
+                // The pre-confirm gate is deliberate: callModelApi re-checks the
+                // userId inside, but only this outer check keeps the destructive
+                // confirm() dialog from popping on a userless install.
+                var userId = getFirstConfiguredUserId();
+                if (!userId) {
+                    showCustomModelMessage("No configured users found. Add and save a user skill first.", "error");
+                    return;
+                }
+                var ok = confirm("Recreate the Alexa skill catalogs?\n\nThis nulls the stored Amazon catalog ids for the first configured user and forces a catalog sync, so every catalog is rebuilt from your library with fresh ids. Use it when the catalogs were deleted on Amazon's side (a whole slot family stops matching in every locale at once).");
+                if (!ok) { return; }
+                callModelApi(
+                    "alexaskill/api/catalog/recreate",
+                    { userId: userId },
+                    "#recreateCatalogsButton",
+                    "Recreating catalogs (nulling stored ids, forcing the next sync)...",
+                    "Recovery recorded",
+                    function(data) {
+                        if (data && data.message) {
+                            showCustomModelMessage(data.message, data.nothingCleared ? "progress" : "success");
+                        }
+                    }
                 );
             });
         </script>

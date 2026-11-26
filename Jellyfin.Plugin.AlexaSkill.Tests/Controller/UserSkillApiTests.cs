@@ -4,6 +4,7 @@ using System.Linq;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Catalog;
 using Jellyfin.Plugin.AlexaSkill.Alexa.ModelDeployment;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Controller;
@@ -61,7 +62,9 @@ public class UserSkillApiTests : PluginTestBase, IDisposable
             new ModelDeploymentManager(
                 Mock.Of<IHttpClientFactory>(),
                 _loggerFactory.CreateLogger<ModelDeploymentManager>()),
-            _redeployerMock.Object);
+            _redeployerMock.Object,
+            new CatalogLivenessChecker(_loggerFactory.CreateLogger<CatalogLivenessChecker>()),
+            Mock.Of<MediaBrowser.Model.Tasks.ITaskManager>());
     }
 
     public void Dispose()

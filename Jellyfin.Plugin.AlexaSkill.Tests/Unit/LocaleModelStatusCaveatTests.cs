@@ -57,7 +57,9 @@ public class LocaleModelStatusCaveatTests : PluginTestBase, IDisposable
             new ModelDeploymentManager(
                 Mock.Of<IHttpClientFactory>(),
                 _loggerFactory.CreateLogger<ModelDeploymentManager>()),
-            Mock.Of<IInteractionModelRedeployer>());
+            Mock.Of<IInteractionModelRedeployer>(),
+            new CatalogLivenessChecker(_loggerFactory.CreateLogger<CatalogLivenessChecker>()),
+            Mock.Of<MediaBrowser.Model.Tasks.ITaskManager>());
     }
 
     public void Dispose()
