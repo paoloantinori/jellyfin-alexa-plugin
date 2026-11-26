@@ -7,7 +7,7 @@ title: >-
 status: In Progress
 assignee: []
 created_date: '2026-11-25 18:22'
-updated_date: '2026-11-26 19:48'
+updated_date: '2026-11-26 21:35'
 labels:
   - nlu
   - alignment
@@ -66,4 +66,18 @@ Decision map: H1 -> ship both rows, fixtures pin BARE TAILS only; H2 -> ship bas
 OPEN DECISION RESOLVED by orchestrator: the multi-match album shape REUSES PlayAlbum's disambiguation machinery (HandleFuzzyMiss path) rather than shipping single-match-only; consistency over a silent not-found for ambiguous names, and the machinery is shared.
 
 PROTOCOL SPLIT: the worker implements code/templates/fixtures/static validation only; the lab round, wrapper-twin probes, and any live verification are the orchestrator's (this card governs them).
+
+LAB ROUND RESULTS (2026-11-26 22:00-22:35, per the Gate-5 card; the orchestrator's protocol half):
+
+Control (old model, run 20261126-220103): 180 rows ok; BOTH new rows baseline to PlayAlbumIntent (trainer generalization over 'play the album {album}').
+
+Treatment (new model, run 20261126-221255): 180 rows ok; 'shuffle the album thriller' AND the twin 'to shuffle the album thriller' route to ShufflePlayIntent with album="Thriller", expectations satisfied.
+
+A/A (treatment re-probe, run 20261126-222439, --skip-deploy): compare --expect-zero-changes PASSED, 0 changed of 180 rows: every verdict row is stable, the noise floor is clean.
+
+Effect compare (control vs treatment): exactly 4 changed rows, ALL green: the two new rows (PlayAlbum -> ShufflePlay) plus two PRE-EXISTING fixture failures resolved as stable side effects ('give me music by coldplay' -> PlayArtistSongs as expected; 'play dinner music' -> PlayMoodMusic as expected; both green in A/A too). No sentinel moved (PlayAlbum/PlayByGenre/playlist carriers byte-stable). The build/sha warnings are the expected cross-model arms.
+
+VERDICT: H1 CONFIRMED. Both rows ship (already in the merge); the twin survives arbitration; fixtures pin bare tails. The Gate-2 shape of the lab (dedicated lab skill, fresh deploys, JF-975's error surfacing reporting zero error rows) held throughout.
+
+RESIDUAL (maintainer-gated, the standing JF-965 rule): LIVE deploy of the model row (DLL deploy + custom-model/rebuild for en-US) awaits the explicit go; e2e simulate rows and on-device verification belong to that round. Seek-mode caveat documented in-code: on a VideoApp-delegating device the shuffled queue does not auto-advance (the playlist shuffle arm's own limitation class).
 <!-- SECTION:NOTES:END -->
