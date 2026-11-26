@@ -4,11 +4,11 @@ title: >-
   One-click catalog recovery (admin action + incident report/runbook): the
   manual XML-surgery path from the deletion incident must not be the recovery of
   record
-status: In Progress
+status: Done
 assignee:
   - orchestrator
 created_date: '2026-11-25 15:13'
-updated_date: '2026-11-26 17:44'
+updated_date: '2026-11-26 18:35'
 labels:
   - catalog
   - reliability
@@ -48,16 +48,22 @@ APPLIED: (1) sync-eligibility predicates unified on LibrarySyncService: HasSyncC
 SKIPPED (reasons): FindAll double-alloc on the probe skip path (efficiency angle) - the simplification angle's counter-analysis holds (the filtered-list early exit is load-bearing, folding needs a flag, not simpler; one list per 12h pass is noise); dead-caveat single-pass count fold - the sweep gate precedes the loop by construction, two cheap passes over <=17 rows on a click path; confirm() to modal - the task spec mandates confirm(); pre-existing third carry copy in LibrarySyncService + JObject.Parse conventions - outside this diff.
 <!-- SECTION:NOTES:END -->
 
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+DONE, merged and pushed (commits 68bedde3 via merge 80af6f14 + gate round 00d0f403). Delivered: (1) POST /alexaskill/api/catalog/recreate (RequiresElevation, custom-model/* pattern) resolving the plugin user, capturing the six old ids for audit, nulling ALL SIX unconditionally through the ONE shared StoredCatalogs map (internal since this task; probe null-filter moved to CheckUserAsync call site so ids-free users still cost zero SMAPI calls), clearing LastCatalogSync, writing the CatalogRecovery audit row into every locale-ledger row with the dead-caveat strip, ONE locked persist; idempotent no-op persists nothing. (2) ITaskManager queue of CatalogSyncTask (verified against the actual Jellyfin 10.11.8/12.0.0 assemblies): QueueScheduledTask (not QueueIfNotRunning) so a pass is guaranteed AFTER the nulling; the code-review round hardened this after verifying Jellyfin's no-throw unregistered path (log-and-return) with a registration pre-check through the worker enumerable, both degradation shapes reporting the next-scheduled-pass fallback. (3) config.html Recreate Catalogs button (confirm-gated, callModelApi shell, inline styles; embedded verified in both TFM DLLs). (4) Honesty surfaces from two review rounds: CanSyncUser reporting aggregate (credentials + vendor), engine-owned other-users count, unsyncable-user audit clause, persist-failure JSON 500 with restart guidance, consecutive-recovery rows replace wholesale (Source-stamped own-shape in the ONE shared CarryForeignDiagnostic). (5) 21 tests across CatalogRecoveryTests + ConfigurationControllerRecreateTests incl. the registration-fallback, persist-failure, no-nesting, and unsyncable-audit pins; scaffolding consolidated onto the widened liveness-suite helpers. (6) Runbook claudedocs/incident_2026-11-25_catalog-deletion.md (timeline, ruled-out deleter candidates, liveness-first triage rule, manual XML fallback path with propagation-time expectations, forensic gap). Gates: /simplify 4-agent round applied with justified skips; /code-review high 5/5 findings applied; build 0 warnings both TFMs; 6403/6403 tests both TFMs. RESIDUAL: not yet exercised on the live minix page (needs a deploy; the button flow is verified via the embedded markup + unit tests only), and the ITaskManager queue path is exercised against mocks.
+<!-- SECTION:FINAL_SUMMARY:END -->
+
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 dotnet build passes with 0 errors
-- [ ] #2 dotnet test passes
-- [ ] #3 No new compiler warnings introduced
-- [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
-- [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
-- [ ] #6 NLU test fixtures updated if interaction model changed
-- [ ] #7 E2E test added for new intent or handler logic
-- [ ] #8 Locale response strings added to all 17 locales
-- [ ] #9 /simplify passed (no blocking cleanups remaining)
-- [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
+- [x] #1 dotnet build passes with 0 errors
+- [x] #2 dotnet test passes
+- [x] #3 No new compiler warnings introduced
+- [x] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
+- [x] #5 HttpClient instances are not shared across calls that modify BaseAddress
+- [x] #6 NLU test fixtures updated if interaction model changed
+- [x] #7 E2E test added for new intent or handler logic
+- [x] #8 Locale response strings added to all 17 locales
+- [x] #9 /simplify passed (no blocking cleanups remaining)
+- [x] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
