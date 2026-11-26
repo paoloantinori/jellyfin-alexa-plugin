@@ -4494,7 +4494,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (778 phrases across 71 commands):
+Complete phrase list (779 phrases across 71 commands):
 
 #### Play music
 
@@ -4900,6 +4900,7 @@ Complete phrase list (778 phrases across 71 commands):
 - `play the record <album title> by <artist name>`
 - `start the album <album title>`
 - `start the record <album title>`
+- `to start the album <album title>`
 - `an album by <artist name>`
 - `play an album by <artist name>`
 - `listen to an album by <artist name>`
@@ -6269,7 +6270,7 @@ Placeholder legend:
 | `<mots du titre de la chanson>` | `{titleKeywords}` |
 | `<nom d'utilisateur>` | `{username}` |
 
-Complete phrase list (495 phrases across 74 commands):
+Complete phrase list (497 phrases across 74 commands):
 
 #### Play music
 
@@ -6338,6 +6339,8 @@ Complete phrase list (495 phrases across 74 commands):
 - `De lancer les <nom de l'artiste>`
 - `De diffuser les <nom de l'artiste>`
 - `De lire les chansons de <nom de l'artiste>`
+- `De jouer des chansons de <nom de l'artiste>`
+- `De jouer de la musique de <nom de l'artiste>`
 - `Lis la musique des <nom de l'artiste>`
 - `Lis les chansons des <nom de l'artiste>`
 - `J'écoute la musique de <nom de l'artiste>`
@@ -11839,7 +11842,7 @@ Placeholder legend:
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (486 phrases across 70 commands):
+Complete phrase list (489 phrases across 70 commands):
 
 #### Play music
 
@@ -11873,6 +11876,9 @@ Complete phrase list (486 phrases across 70 commands):
 - `Reproduce canciones del artista <nombre del artista>`
 - `Reproduce canciones del cantante <nombre del artista>`
 - `Reproduce canciones del grupo <nombre del artista>`
+- `que reproduzca canciones del artista <nombre del artista>`
+- `que reproduzca canciones del cantante <nombre del artista>`
+- `que reproduzca canciones del grupo <nombre del artista>`
 - `Reproduce música de <nombre del artista>`
 - `Reproduce temas de <nombre del artista>`
 - `Reproduce <nombre del artista>`

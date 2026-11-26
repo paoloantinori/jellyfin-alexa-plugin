@@ -126,6 +126,9 @@ intents:
   - Reproduce canciones del artista {musician}
   - Reproduce canciones del cantante {musician}
   - Reproduce canciones del grupo {musician}
+  - que reproduzca canciones del artista {musician}
+  - que reproduzca canciones del cantante {musician}
+  - que reproduzca canciones del grupo {musician}
   - Reproduce música de {musician}
   - Reproduce temas de {musician}
   - Reproduce {musician}

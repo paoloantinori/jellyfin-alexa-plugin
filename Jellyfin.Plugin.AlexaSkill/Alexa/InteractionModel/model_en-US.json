@@ -222,6 +222,7 @@
           "play the record {album} by {musician}",
           "start the album {album}",
           "start the record {album}",
+          "to start the album {album}",
           "an album by {musician}",
           "play an album by {musician}",
           "listen to an album by {musician}",
