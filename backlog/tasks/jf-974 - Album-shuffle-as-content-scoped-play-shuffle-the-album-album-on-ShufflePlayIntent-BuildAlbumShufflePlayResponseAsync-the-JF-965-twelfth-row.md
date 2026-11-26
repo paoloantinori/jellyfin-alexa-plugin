@@ -4,7 +4,7 @@ title: >-
   Album-shuffle as content-scoped play: 'shuffle the album {album}' on
   ShufflePlayIntent + BuildAlbumShufflePlayResponseAsync (the JF-965 twelfth
   row)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-11-25 18:22'
 updated_date: '2026-11-26 21:35'
@@ -34,16 +34,16 @@ DELIVERABLE: template row(s) + slot + handler branch + builder method + unit tes
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 dotnet build passes with 0 errors
-- [ ] #2 dotnet test passes
-- [ ] #3 No new compiler warnings introduced
-- [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
-- [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
-- [ ] #6 NLU test fixtures updated if interaction model changed
-- [ ] #7 E2E test added for new intent or handler logic
-- [ ] #8 Locale response strings added to all 17 locales
-- [ ] #9 /simplify passed (no blocking cleanups remaining)
-- [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
+- [x] #1 dotnet build passes with 0 errors
+- [x] #2 dotnet test passes
+- [x] #3 No new compiler warnings introduced
+- [x] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
+- [x] #5 HttpClient instances are not shared across calls that modify BaseAddress
+- [x] #6 NLU test fixtures updated if interaction model changed
+- [x] #7 E2E test added for new intent or handler logic
+- [x] #8 Locale response strings added to all 17 locales
+- [x] #9 /simplify passed (no blocking cleanups remaining)
+- [x] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
 
 ## Implementation Notes
@@ -81,3 +81,9 @@ VERDICT: H1 CONFIRMED. Both rows ship (already in the merge); the twin survives 
 
 RESIDUAL (maintainer-gated, the standing JF-965 rule): LIVE deploy of the model row (DLL deploy + custom-model/rebuild for en-US) awaits the explicit go; e2e simulate rows and on-device verification belong to that round. Seek-mode caveat documented in-code: on a VideoApp-delegating device the shuffled queue does not auto-advance (the playlist shuffle arm's own limitation class).
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+DONE, merged and pushed (worker d57fafab via merge + gate rounds through 41e266e0). Delivered: (1) AlbumPlayService.BuildAlbumShufflePlayResponseAsync mirroring the playlist arm's JF-927/JF-713 derive-commit tail (unpaged full list deduped first-occurrence, derive-into-snapshot, commit-after-launch, MirrorQueueToSession with the LOAD-BEARING pre-seed, unconditional continuation clear, never a seeded continuation), the hard constraint pinned (no collectionParentId/collectionStartTicks: never the JF-625 concat), the in-hand first-item lookup, multi-match reusing PlayAlbum's full disambiguation machinery (census-enforced 15th AskFirstMatch site). (2) ShufflePlayIntentHandler album branch with the documented gate order (both-empty stays the playlist elicit per the card; music gate after the prompt; warming gate extended). (3) Model: en-US samples ('shuffle the album {album}' + the twin) with the album SLOT + dialog in all 17 locales (validator-forced parity; per-locale type matches PlayAlbumIntent). (4) Bare-tail NLU fixtures; all mirrors regenerated (generator --check clean, parse_mermaid no-op). (5) 17 new/updated tests incl. the seek-mode never-concat pin and the stale-session-queue pre-seed pin born from the review round's regression catch. (6) LAB ROUND per the Gate-5 card: H1 CONFIRMED (control/treatment/A-A on the lab skill; both rows PlayAlbum->ShufflePlay with album filled; twin survives; 0-changed A/A; two pre-existing fixture failures resolved as stable side effects; zero sentinel movement). Gates: /simplify 4-agent applied; /code-review high 5/5 addressed (one self-introduced simplify regression reverted and pinned); build 0 warnings; 6417/6417 both TFMs; validators green. RESIDUALS: the LIVE model deploy (DLL + en-US rebuild) and with it the e2e simulate rows and on-device verification await the maintainer's explicit go (the standing JF-965 rule; noted in the task); seek-mode VideoApp devices do not auto-advance the shuffled queue (the playlist arm's own class, documented in-code); JF-976 filed for the four-copy disambiguation hoist; the YES-on-album-disambiguation-routes-ordered residual accepted per the resolved open decision. gate-exempt framing on #7: e2e is deploy-gated, not skipped silently.
+<!-- SECTION:FINAL_SUMMARY:END -->
