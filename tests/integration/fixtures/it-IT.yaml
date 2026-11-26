@@ -603,17 +603,17 @@ tests:
   # the profiler and the plain-audiolibro wrapper ("di mettere l'audiolibro X")
   # is a per-build trainer race (green on the live build, flipped across
   # identical scratch rebuilds), so neither is pinned.
-  - utterance: "chiedi a mia collezione di leggere il libro il gattopardo"
+  # Wrapper tails, not headed forms (Fable's Gate-3 rule, 2026-11-26): the
+  # head is outside profile-nlu's domain and flips with no model change; the
+  # headed one-shots are verified on device. "riprodurre il libro il
+  # gattopardo" is already pinned above, so its headed row is deleted rather
+  # than converted.
+  - utterance: "leggere il libro il gattopardo"
     expected_intent: PlayBookIntent
     expected_slots:
       book: {}
 
-  - utterance: "chiedi a mia collezione di mettere il libro il gattopardo"
-    expected_intent: PlayBookIntent
-    expected_slots:
-      book: {}
-
-  - utterance: "chiedi a mia collezione di riprodurre il libro il gattopardo"
+  - utterance: "mettere il libro il gattopardo"
     expected_intent: PlayBookIntent
     expected_slots:
       book: {}
@@ -1289,9 +1289,9 @@ tests:
     expected_slots:
       song: {}
 
-  # JF-940 wrapper tail: the composed one-shot form anchors on the new
-  # intent's infinitive carrier row
-  - utterance: "chiedi a mia collezione di suonare il brano rapsodia"
+  # JF-940 wrapper tail (bare, per Fable's Gate-3 rule 2026-11-26): the
+  # composed one-shot form anchors on the new intent's infinitive carrier row
+  - utterance: "suonare il brano rapsodia"
     expected_intent: PlayLibrarySongIntent
     expected_slots:
       librarySong: {}
