@@ -3,9 +3,10 @@ id: JF-977
 title: >-
   Per-locale PlayLibrarySong twin fixture pins (15 locales uncovered): one
   carrier row + famous sentinel each, expectation live-verified before commit
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-11-27 05:57'
+updated_date: '2026-11-27 06:24'
 labels:
   - nlu
   - fixtures
@@ -33,3 +34,9 @@ Filed from the JF-940 closure round (2026-11-27): the twin-intent fold (PlaySong
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+CLOSED not-applicable (2026-11-27, premise corrected against the generated models): PlayLibrarySongIntent + the SongTitle slot exist ONLY in de-DE and it-IT, BY DESIGN (commit 5abc965c: 'carrier-noun song slots for it-IT + de-DE, the JF-874 twin-intent shape, issue #46 phase 1'; templates carry it in exactly those two files). The 15 other locales never had the twin, so there is nothing to pin. THE CORRECT PER-LOCALE MECHANISM there is the stock free-text PlaySongIntent path, which is live-verified healthy: fr-FR (run 20261127-065633: every carrier incl. the colliding 'lis le titre' routes PlaySongIntent with the slot filled; the fr fixture pin landed yesterday in that shape) and en-US (the JF-964 battery: healthy free-text song slots, no conjunction disease). RECOMMENDATION RECORDED against rolling the twin out to the healthy 15: the twin is the CURE for the de-class MediaInfoType-collision disease; in healthy locales a catalog-backed SongTitle slot would INTRODUCE the JF-684 selection-gating risk (titles outside the user's catalog can stop selecting at all - the exact class the JF-965-era es evidence and the JF-964 gate exist to guard), for zero verified gain. If a future locale develops a real reporter-grade steal, the de recipe applies to THAT locale (narrowing first, twin only if the collision is live there). The JF-940 closure note's claim '(6) the twin slot in all 17 locale templates' is corrected by this record: the handler fold claims both intent NAMES everywhere, the MODEL layer ships the twin in de+it only. gate-exempt: no code changed; this round corrected a task premise with tool evidence (the generated models) and closed a filed task whose work does not exist.
+<!-- SECTION:FINAL_SUMMARY:END -->
