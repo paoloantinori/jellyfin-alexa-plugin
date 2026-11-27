@@ -6,7 +6,7 @@ title: >-
 status: Done
 assignee: []
 created_date: '2026-10-18 22:22'
-updated_date: '2026-11-27 22:17'
+updated_date: '2026-11-27 22:23'
 labels: []
 dependencies: []
 priority: low
@@ -36,6 +36,8 @@ From the JF-907 worker residuals (could not file from its worktree). THREE same-
 
 <!-- SECTION:NOTES:BEGIN -->
 GOAL PROGRESS 2026-10-19 01:40: the HANDLER-layer fr battery ran green 6/6 via the built-in simulator on minix (artist/favorites/random/film/album/playlist: real pipelines, correct directives, French speech; the playlist not-found is correct behavior for absent data). Combined with the model layer (11/11 bare forms green, live profile-nlu), the fr commands are verified on every layer under our control. Still Amazon-gated: the simulate-skill e2e battery (router 0/3 all night, per-call class, opened 09:45 yesterday) and the wrapper composed forms (trainer bad basin, 6 builds, catalog hypothesis refuted). Retry cadence: every heartbeat.
+
+LIVE PROOF (2026-11-27 23:22, after the DLL-from-HEAD deploy + fr-FR/fr-CA rebuilds): 'de regarder barbie' routes PlayVideoIntent with title=barbie on the REAL skill in BOTH locales (runs 20261127-232244/232252, 0 exp failures). The composed one-shot 'demande a <inv> de regarder barbie' is now both grammatical and routable end to end: composer strip (code) + De regarder twin (model) + live rebuild. The DLL deploy used the correct sequence (build from HEAD with strings-verified twin, swap, rebuild) per the stale-DLL lesson.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
