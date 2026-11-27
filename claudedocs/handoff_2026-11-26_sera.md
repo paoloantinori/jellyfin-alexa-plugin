@@ -2,30 +2,27 @@
 
 Read this first on resume, then `git log --oneline -8` and `backlog.task_list` for the live state. Everything decided here is settled; do not re-litigate.
 
-## Where we are (updated end-of-run: FIVE tasks closed)
+## Where we are (updated 2026-11-27 morning: EIGHT tasks closed across the run)
 
-The /pa:backlog-orchestrator run closed FIVE tasks through the full discipline (worker in worktree, merge, /simplify, code-review high, findings applied, push; CI green on every code push):
+- JF-964 CLOSED (no code): en-US HEALTHY, no conjunction disease. Run 20261126-175416-jf964-en-conjunction-r2.
+- JF-967 DONE + DEPLOYED LIVE (verified on-page).
+- JF-936 DONE: nlu-lab battery resilience.
+- JF-975 DONE: ERROR-row diagnostics on all five human surfaces.
+- JF-974 DONE + DEPLOYED LIVE on the maintainer's 'Vai' (2026-11-27 06:25-06:40): DLL + all-17-locale rebuild; live proof run 20261127-063304 (both album-shuffle rows route, sentinels stable); handler live via simulator; catalog wiring intact.
+- JF-933 CLOSED live-verified (2026-11-27): the issue-46 steal is CURED (baseline run 20260627... 20261127-064247); fresh audit reduced the collision class to de 'titel' (benign) + fr 'titre'.
+- JF-940 CLOSED: the architectural fix (twin fold + JF-946 catalog) confirmed delivered and live; corroborated by the JF-933 baseline.
+- JF-955 CLOSED verified-benign (2026-11-27): fr baseline run 20261127-065633 shows the 'titre' collision routing all carriers to PlaySongIntent with the slot filled; the phrase-valued conversion recommendation RETIRED as over-engineering; fr-CA covered by family evidence (strict sample subset).
+- FILED: JF-976 (disambiguation hoist), JF-977 (15-locale twin pins, live-verify-before-commit discipline).
 
-- JF-964 CLOSED (no code): en-US HEALTHY (H2), no conjunction disease; en alignment unblocked. Run 20261126-175416-jf964-en-conjunction-r2.
-- JF-967 DONE + DEPLOYED LIVE to minix (20:45, verified: served button, guards 400/404, active-dll md5 match, tokens survived; happy path deliberately unfired). POST /alexaskill/api/catalog/recreate + config-page button + runbook.
-- JF-936 DONE: nlu-lab battery resilience (MalformedResponseError -> marked ERROR rows; RowResult.error; all-ERROR fails rc 1).
-- JF-975 DONE: the diagnostics surfaced on ALL FIVE human surfaces (webapp projection, badge tooltip, detail line, run-ok summary + first-error stderr, compare output via RowDiff.error, run-picker warning badge).
-- JF-974 DONE through the full Gate-5 lab round (H1 CONFIRMED: control/treatment/A-A runs 20261126-220103/221255/222439; both rows PlayAlbum->ShufflePlay with album filled; twin survives; zero-noise A/A; two pre-existing fixture failures resolved as side effects). BuildAlbumShufflePlayResponseAsync + handler branch + en-US samples + all-17-locale album slot. 6417/6417 both TFMs.
-- JF-976 FILED (low): hoist the four album-disambiguation copies into one helper.
+## In flight at handoff time
 
-PUSH-GATE RITUAL LEARNED: the deploy-gate hook keys on the EXACT command string (30-min window). A compound command with anything appended is a NEW command and blocks again; replay the identical string after stating the gate answer in the record.
+- JF-970 post-rebuild probe: recorded live hi-IN run (label jf970-postrebuild-probe) testing whether the 2026-11-27 all-locale rebuild moved the lost film anchor. Check scripts/nlu-lab/runs/ for it; the verdict feeds JF-970's investigation (the task's last state: exact sample present, does not route, identical-content rebuild does not recover).
 
-PROCESS LESSON (memory reviewer-equivalence-claims-need-artifact-read): a /simplify finding claiming "equivalent, safe to remove" still needs the named code opened before applying; JF-974's removed session pre-seed regressed the mirror's preserve loop and the code-review round caught it (now pinned by a regression test).
+## Queue (voice-model next)
 
-## Awaiting the maintainer
-
-- JF-974's LIVE model deploy (DLL deploy + custom-model/rebuild en-US) + e2e simulate rows + on-device verification: needs the explicit vai (the standing JF-965 rule). The lab round is done; only the live step remains.
-
-## Queue (not started, next up)
-
-- JF-976 (low): the disambiguation hoist (its own change + gate round).
-- JF-972 (low): consolidate the five synthetic-model test builders into tests/scripts/conftest.py.
-- JF-973 (low): the --live deploy fall-through double-run (the reason full live batteries take ~40 min; see memory nlu-lab-live-full-battery-runtime).
+- JF-970 (HIGH, In Progress): the hi-IN qualified-anchor mystery; needs the full nlu-debug-protocol arc (considered-intents reading, stock counterfactual, possibly a Fable consult per the 2026-11-25 pattern).
+- JF-963 (MEDIUM): the alignment meta-task (its twelfth row JF-974 is done; the remaining probe-first list stays out per the handoff's settled decisions).
+- JF-976/JF-972/JF-973 (low) and JF-977 (fixture maintenance).
 - Older device-test checklist items (JF-405 HIGH, JF-595 HIGH) predate the incident era; reassess before working them.
 
 ## Operational notes for resume
