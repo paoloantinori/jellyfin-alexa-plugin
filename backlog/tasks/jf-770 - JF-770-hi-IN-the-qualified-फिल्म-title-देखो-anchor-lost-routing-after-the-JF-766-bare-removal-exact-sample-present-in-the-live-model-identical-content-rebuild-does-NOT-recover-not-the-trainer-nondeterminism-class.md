@@ -7,7 +7,7 @@ title: >-
 status: In Progress
 assignee: []
 created_date: '2026-10-05'
-updated_date: '2026-11-27 06:14'
+updated_date: '2026-11-27 06:16'
 labels:
   - interaction-model
   - nlu
@@ -269,6 +269,8 @@ The anchor is NO LONGER dead air: 'फिल्म तीन इडियट्�
 KEY PATTERN: फिल्म-headed utterances NEVER list PlayVideoIntent in their considered sets ('फिल्म इंसेप्शन देखो' considered [PlaySong, PlayEpisode, PlayArtistSongs]; 'फिल्म चलाओ' considered [PlayByGenre, PlayRadio, PlayArtistSongs, PlayMoodMusic]) while the वीडियो carrier family is FULLY HEALTHY ('वीडियो इंसेप्शन देखो/खोजो/चलाओ/दिखाओ' all -> PlayVideoIntent with title filled). The trainer has buried the फिल्म anchor under the PlayEpisode competition despite the exact sample being in the model (consistent with this task's identical-content-rebuild finding).
 
 NEXT INVESTIGATION MOVE: Gate-5 card with ablation arms on the LAB skill - (a) drop/reword the PlayEpisode samples carrying फिल्म/देखो-family tokens, (b) densify the फिल्म-headed PlayVideo anchor family, (c) both; sentinels = the वीडियो family + PlayEpisode's own healthy rows. A Fable consult on the considered-set burial pattern is indicated (the 2026-11-25 pattern).
+
+MAINTAINER DIRECTION (2026-11-27): the lab ablation arc opens FIRST (next session's first move); the hassio device round stays available as the fallback path, not fired. The ablation runs on the LAB skill per the Gate-5 card outlined above (arms: PlayEpisode-sample drop/reword, film-anchor densification, both; sentinels: the video family + PlayEpisode healthy rows; A/A per Gate 4).
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary

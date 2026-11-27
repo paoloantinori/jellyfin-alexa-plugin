@@ -16,13 +16,13 @@ Read this first on resume, then `git log --oneline -8` and `backlog.task_list` f
 
 ## In flight at handoff time
 
-- JF-970 post-rebuild probe: recorded live hi-IN run (label jf970-postrebuild-probe) testing whether the 2026-11-27 all-locale rebuild moved the lost film anchor. Check scripts/nlu-lab/runs/ for it; the verdict feeds JF-970's investigation (the task's last state: exact sample present, does not route, identical-content rebuild does not recover).
+- JF-770 (HIGH, In Progress) is the NEXT SESSION'S FIRST MOVE, by the maintainer's explicit choice (2026-11-27, "la seconda"): open the LAB ABLATION ARC, not the device round. The eighth-rebuild data point (run 20261127-070921) changed the failure's shape for the first time: the anchor misroutes to PlayEpisodeIntent with an unfilled slot (not Fallback), and फिल्म-headed rows never consider PlayVideoIntent while the वीडियो family is fully healthy. The Gate-5 card is outlined in the task notes: arms = (a) drop/reword the PlayEpisode samples carrying फिल्म/देखो-family tokens, (b) densify the फिल्म-headed PlayVideo anchor family, (c) both; sentinels = the वीडियो family + PlayEpisode's healthy rows; A/A per Gate 4; a Fable consult on the considered-set burial pattern is indicated (the 2026-11-25 pattern). The terminal condition (no third LIVE template patch) stands: the lab arc is an experiment, any live change it motivates is a NEW decision with the maintainer. The hassio device round stays the fallback path, unfired.
 
 ## Queue (voice-model next)
 
-- JF-970 (HIGH, In Progress): the hi-IN qualified-anchor mystery; needs the full nlu-debug-protocol arc (considered-intents reading, stock counterfactual, possibly a Fable consult per the 2026-11-25 pattern).
-- JF-963 (MEDIUM): the alignment meta-task (its twelfth row JF-974 is done; the remaining probe-first list stays out per the handoff's settled decisions).
-- JF-976/JF-972/JF-973 (low) and JF-977 (fixture maintenance).
+- JF-770 ablation arc (above) FIRST.
+- JF-963 (MEDIUM): the alignment meta-task (its twelfth row JF-974 is done; the remaining probe-first list stays out per the settled decisions).
+- JF-976/JF-972/JF-973 (low) and JF-977 (fixture maintenance, batch onto future locale batteries).
 - Older device-test checklist items (JF-405 HIGH, JF-595 HIGH) predate the incident era; reassess before working them.
 
 ## Operational notes for resume
