@@ -292,3 +292,24 @@ tests:
   - utterance: "lee la letra"
     expected_intent: ShowLyricsIntent
     expected_slots: {}
+
+  # JF-963 sibling alignment (es-ES JF-965 rows mirrored): the carrier-noun
+  # artist form with its que-subjunctive twin, pinned as BARE TAILS.
+  # RED-UNTIL-DEPLOY (the JF-766 convention): green on the live suite only
+  # after the rebuilt model deploys. CAVEAT: this locale's trainer carries
+  # the JF-406 divergence class (imperative carriers have diverged from
+  # es-ES/es-MX with byte-identical models); if the live roll shows the
+  # imperative row diverging (e.g. glued into PlaySong's slot), apply this
+  # file's imperative-not-pinned convention with the probe evidence rather
+  # than weakening the twin pin. "artista" is a MediaInfoType entry (the
+  # issue #46 class): the MediaInfo question shapes must keep routing to
+  # MediaInfoIntent.
+  - utterance: "Reproduce canciones del artista queen"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+
+  - utterance: "que reproduzca canciones del artista queen"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}

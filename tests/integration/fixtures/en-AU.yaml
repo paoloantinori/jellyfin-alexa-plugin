@@ -67,6 +67,20 @@ tests:
       album: {}
       musician: {}
 
+  # JF-963 sibling alignment (en-US JF-965 rows mirrored): the start-carriers
+  # join play/put on. The twin pin is the BARE TAIL; the record twin is
+  # deliberately excluded everywhere (it loses arbitration to PlayByGenre
+  # "listen to {genre}", JF-965 measured).
+  - utterance: "start the album thriller"
+    expected_intent: PlayAlbumIntent
+    expected_slots:
+      album: {}
+
+  - utterance: "to start the album thriller"
+    expected_intent: PlayAlbumIntent
+    expected_slots:
+      album: {}
+
   # -------------------------------------------------------------------------
   # 5. PlayVideoIntent (title)
   # -------------------------------------------------------------------------
