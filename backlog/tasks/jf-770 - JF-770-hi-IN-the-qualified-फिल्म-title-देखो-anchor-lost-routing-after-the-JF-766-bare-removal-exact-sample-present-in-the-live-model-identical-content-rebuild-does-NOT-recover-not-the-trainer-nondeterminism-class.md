@@ -7,7 +7,7 @@ title: >-
 status: In Progress
 assignee: []
 created_date: '2026-10-05'
-updated_date: '2026-11-09 19:41'
+updated_date: '2026-11-27 06:14'
 labels:
   - interaction-model
   - nlu
@@ -261,6 +261,14 @@ with no row dropped.
 ROUND 2 EXECUTED + ACCEPTED 2026-10-17 ~22:4x: branch jf770 (45002877), merged 56c00771, DLL deployed (md5 1e515b73), hi-IN rebuild SUCCEEDED, acceptance matrix run: anchor/nukta/postpos ALL still Fallback (the film-initial anomaly survives even NEW rows; the worker's predicted split confirmed) BUT 'वीडियो इंसेप्शन दिखाओ' -> PlayVideoIntent title filled = the strong-carrier qualified video-watch form WORKS, hi-IN has a working watch entry again. Nukta row verified SURVIVED in the live model (benign composition fold, precomposed return). TERMINAL CONDITION MET: two failed fixes, no third template patch per the armed rule; the anchor pin stays red as the tracker and the task PARKS on Paolo's device round (verify whether the film-initial Fallback reproduces on a real device or is simulator-trainer-only; JF-769 ja precedent).
 
 SEVENTH-REBUILD DATA POINT (2026-11-09, orchestrator): the JF-926 deploy (b6070c22) rode a full 17/17 model rebuild (all SUCCEEDED) whose hi-IN model carries REAL unrelated content change (ShowLyricsIntent rows + 2 samples). The anchor 'फिल्म इंसेप्शन देखो' re-probed 4x on the fresh model: AMAZON.FallbackIntent 4/4. The anomaly now persists across SEVEN rebuilds, FOUR DLL generations, and one more real-content roll. Guards re-confirmed on the same model: the JF-766 steal guard routes PlayEpisodeIntent (episode_number filled) and the working carrier 'वीडियो इंसेप्शन देखो' routes PlayVideoIntent with title='इंसेप्शन'. Terminal condition unchanged: parked on Paolo's device round (does the film-initial Fallback reproduce on a real device, or is it simulator-trainer-only?).
+
+POST-REBUILD PROBE (2026-11-27, recorded live run 20261127-070921-jf970-postrebuild-probe - run label typo aside, THIS task's evidence; after the 2026-11-27 all-locale rebuild; template HEAD == live model):
+
+The anchor is NO LONGER dead air: 'फिल्म तीन इडियट्स देखो' -> PlayEpisodeIntent with an UNFILLED episode_number slot (misroute, not Fallback); 'फिल्म देखो तीन इडियट्स' -> Fallback; bare 'तीन इडियट्स देखो' -> no_selection.
+
+KEY PATTERN: फिल्म-headed utterances NEVER list PlayVideoIntent in their considered sets ('फिल्म इंसेप्शन देखो' considered [PlaySong, PlayEpisode, PlayArtistSongs]; 'फिल्म चलाओ' considered [PlayByGenre, PlayRadio, PlayArtistSongs, PlayMoodMusic]) while the वीडियो carrier family is FULLY HEALTHY ('वीडियो इंसेप्शन देखो/खोजो/चलाओ/दिखाओ' all -> PlayVideoIntent with title filled). The trainer has buried the फिल्म anchor under the PlayEpisode competition despite the exact sample being in the model (consistent with this task's identical-content-rebuild finding).
+
+NEXT INVESTIGATION MOVE: Gate-5 card with ablation arms on the LAB skill - (a) drop/reword the PlayEpisode samples carrying फिल्म/देखो-family tokens, (b) densify the फिल्म-headed PlayVideo anchor family, (c) both; sentinels = the वीडियो family + PlayEpisode's own healthy rows. A Fable consult on the considered-set burial pattern is indicated (the 2026-11-25 pattern).
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
