@@ -7,7 +7,7 @@ title: >-
 status: In Progress
 assignee: []
 created_date: '2026-10-05'
-updated_date: '2026-11-27 06:16'
+updated_date: '2026-11-27 19:35'
 labels:
   - interaction-model
   - nlu
@@ -271,6 +271,30 @@ KEY PATTERN: फिल्म-headed utterances NEVER list PlayVideoIntent in the
 NEXT INVESTIGATION MOVE: Gate-5 card with ablation arms on the LAB skill - (a) drop/reword the PlayEpisode samples carrying फिल्म/देखो-family tokens, (b) densify the फिल्म-headed PlayVideo anchor family, (c) both; sentinels = the वीडियो family + PlayEpisode's own healthy rows. A Fable consult on the considered-set burial pattern is indicated (the 2026-11-25 pattern).
 
 MAINTAINER DIRECTION (2026-11-27): the lab ablation arc opens FIRST (next session's first move); the hassio device round stays available as the fallback path, not fired. The ablation runs on the LAB skill per the Gate-5 card outlined above (arms: PlayEpisode-sample drop/reword, film-anchor densification, both; sentinels: the video family + PlayEpisode healthy rows; A/A per Gate 4).
+
+ABLATION CARD v2 (2026-11-27, written BEFORE any lab run; supersedes the outlined card after the Gate-1 inventory):
+
+GATE-1 FACTS: PlayEpisodeIntent hi-IN carries ZERO film-token samples; its dekho-tailed rows are the JF-766 steal-fix ADDRESS forms ('{series} sezon N episod M dekho', '{series} ka episod M dekho') which must survive every arm. PlayVideoIntent carries 7 film-headed samples (chalao/dekho/dekho-wordorder/main.../khojo/dikhaao/postpos) + the nukta twin. The planned 'drop PlayEpisode film/dekho samples' arm is DEAD (nothing to drop without regressing the steal fix).
+
+REVISED DISCRIMINATING SEQUENCE (cheapest first): STEP 1 - LAB CONTROL with identical content (never run: rounds 1-2 were live-only): if the anchor ROUTES on the lab skill with the same samples, the anomaly is LIVE-skill-trainer-specific (content-unreachable in the strongest sense) and template ablations are moot (the remediation space becomes skill-recreation or wait). If it FAILS identically on the lab, the burial is content-reproducible and arms matter. STEP 2 (only if content-reproducible): ARM B densification (+4 film-headed PlayVideo rows with varied tails/preambles). STEP 3: combined variants per findings.
+
+BATTERY (same for every arm): the anchor 'film teen idiyots dekho' + 'film inception dekho' + word-order 'film dekho teen idiyots'; sentinels: the video family ('video inception dekho/chalao/dikhaao'), the PlayEpisode address rows ('game of thrones sezon 1 episod 3 dekho', 'breaking bad ka episod 5 dekho'), the bare guard ('inception dekho'), PlaySong control ('video chalao').
+
+DECISION MAP: lab-control PASS -> the anomaly is live-trainer-state; no template arm; document and park on skill-recreation-vs-wait with the maintainer (recreation has the JF-965-era catalog-orphaning cost). lab-control FAIL -> proceed to Arm B; if Arm B also fails, the two-failed-fixes bar extends to the lab too and the task parks on the device round with the new evidence.
+
+GATE-4 A/A: control run twice (deploy once, --skip-deploy second) before reading any arm.
+
+ABLATION ARC EXECUTED (2026-11-27 20:25-20:40, per the card v2; runs on the LAB skill, battery identical across arms, A/A clean):
+
+STEP 1 LAB CONTROL (run 20261127-202250, template content == live): THE ANOMALY IS CONTENT-REPRODUCIBLE. The lab skill, freshly deployed with the identical model, fails the same way: 'film teen idiyots dekho' -> PlayEpisodeIntent with UNFILLED episode_number (the EXACT misroute shape of yesterday's live probe); 'film inception dekho' x3 + nukta + dikhaao + postpos all no_selection; word-order 'film dekho teen idiyots' -> Fallback; bare -> no_selection (accepted cost). Sentinels ALL GREEN (video family -> PlayVideo title filled; both steal-fix address rows -> PlayEpisode with all slots filled). The original 'live-skill trainer anomaly' framing is REFUTED: two independent trainer instances (live + lab) produce the same routing from the same content. This is a systematic NLU behavior of the sample mix, not trainer state.
+
+GATE-4 A/A (run 20261127-202728, --skip-deploy): 0 changed of 43 rows; zero noise floor; sha/etag equal to control.
+
+ARM B DENSIFICATION (run 20261127-203011, +4 film-headed PlayVideo rows: lagaao, shuru karo, chalo...dekhte hain, kya tum...dikha sakte ho; 22 -> 26 samples; sha b11741497590 DIFFERENT from control 3922e8860505, eTag different - the variant provably deployed): ZERO CHANGE. Every anchor reading identical to control; every sentinel identical. Family weight does not lift the film-initial shape.
+
+VERDICT per the card's decision map: the two-failed-fixes bar now extends to the LAB (live rounds 1-2 + lab Arm B all fail against identical symptom). No further template arm. The task PARKS on the device round (the un-fired fallback: does the film-initial failure reproduce with real ASR on the Echo?) with materially sharpened evidence: the burial is a DETERMINISTIC, content-level property (the [film][X][dekho] shape loses to the PlayEpisode address competition regardless of PlayVideo family density, on every trainer instance tested). The working carriers (video/movie, live+lab proven) remain the user-facing path; the anchor pin stays red as the tracker.
+
+ARTIFACTS: /tmp/jf770_armB_model.json (the variant, experimental only - the template was NEVER touched); run files 20261127-2022*/2027*/2030*; battery workingset /tmp/jf770_lab_battery_hi-IN.yaml.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
