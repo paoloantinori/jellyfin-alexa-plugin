@@ -650,6 +650,12 @@ tests:
     expected_slots:
       mood: {}
 
+  # JF-962 (4): TRAINER-MARGINAL row, annotated not chased. 'dinner' IS in the
+  # Mood vocabulary but the winner varies by build (the JF-959 census; the
+  # JF-974 lab round saw it steal to PlayNext on the old model and resolve
+  # green on the alignment batch). If this row flips red on a rebuild, check
+  # the run's considered intents before assuming a regression: a build
+  # variance flip is expected here, a persistent steal is a real finding.
   - utterance: "play dinner music"
     expected_intent: PlayMoodMusicIntent
     expected_slots:
