@@ -7049,7 +7049,7 @@ Placeholder legend:
 | `<Wörter aus dem Songtitel>` | `{titleKeywords}` |
 | `<Benutzername>` | `{username}` |
 
-Complete phrase list (500 phrases across 75 commands):
+Complete phrase list (502 phrases across 75 commands):
 
 #### Play music
 
@@ -7092,6 +7092,8 @@ Complete phrase list (500 phrases across 75 commands):
 - `Spiele Musik von der Gruppe <Name des Künstlers>`
 - `Spiele Musik vom Künstler <Name des Künstlers>`
 - `Spiele Lieder vom Künstler <Name des Künstlers>`
+- `Zu spielen Musik vom Künstler <Name des Künstlers>`
+- `Zu spielen Lieder vom Künstler <Name des Künstlers>`
 - `Spiele <Name des Künstlers>`
 - `Spiele etwas von <Name des Künstlers>`
 - `Höre <Name des Künstlers>`

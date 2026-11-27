@@ -160,6 +160,11 @@ intents:
   - Spiele Musik von der Gruppe {musician}
   - Spiele Musik vom Künstler {musician}
   - Spiele Lieder vom Künstler {musician}
+  # JF-963 zu-wrapper twins for the vom contraction family (anti-pattern 12):
+  # lab-verified surviving arbitration (run 20261127-221549-align-de-zu2, both
+  # twins -> PlayArtistSongsIntent with musician filled, zero competition).
+  - Zu spielen Musik vom Künstler {musician}
+  - Zu spielen Lieder vom Künstler {musician}
   - Spiele {musician}
   - Spiele etwas von {musician}
   - Höre {musician}

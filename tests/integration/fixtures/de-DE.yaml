@@ -207,6 +207,18 @@ tests:
     expected_slots:
       musician: {}
 
+  # JF-963 zu-wrapper twin tails for the vom family (anti-pattern 12;
+  # lab-verified run 20261127-221549-align-de-zu2: both route with the
+  # musician slot filled, zero competition).
+  - utterance: "zu spielen musik vom künstler queen"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+  - utterance: "zu spielen lieder vom künstler queen"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+
   # -------------------------------------------------------------------------
   # 9. PlayLastAddedIntent (media_type, time_period)
   # -------------------------------------------------------------------------
