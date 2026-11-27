@@ -1,0 +1,9 @@
+# Rare-title recognition: proactive verification across all locales (2026-11-27)
+
+Maintainer-directed program, run after the 1.2.0.0 release: verify the rare-track mechanism proactively in every locale, not only where a report lands. Question: on each locale's natural noun song carrier, does a title Amazon cannot know still route to a play intent with the slot filled?
+
+Method (nlu-debug-protocol compliant): per locale, a recorded live run (label verif-<locale>, run files 20261127-*verif-*.json) probing two readings of the locale's noun carrier with the synthetic title "zzqx blikiflu", chosen because it exists in no catalog and no knowledge graph. Famous-title sentinels are already pinned per locale in the NLU fixtures and verified by the suites. The probe ran on the live skill's current models, template HEAD == live (the 2026-11-27 all-locale rebuild), catalogs alive (JellyfinArtist ER verified the same morning).
+
+Result: HEALTHY in all 15 probed locales (en-AU/CA/GB/IN/US, es-ES/MX/US, fr-CA/FR, hi-IN, ja-JP, nl-NL, pt-BR, ar-SA), each with the carrier selecting PlaySongIntent and the song slot filled on both readings. German and Italian were already verified through the JF-933/JF-940 closures and the reporter-facing evidence. Conclusion: the rare-title recognition mechanism is solid in all 17 locales as of 1.2.0.0; the de+it twin exists because those locales manifested the disease (de through an active MediaInfoType collision, it through maintainer daily exposure), not because the others are immune by a different mechanism, and no hidden disease surfaced anywhere else.
+
+The carriers probed per locale (from the generated models, Gate 1 tool output): en "play the song", es "Reproduce la canción", fr "Lis la chanson", pt "tocar a música", nl "speel het nummer", hi "गाना चलाओ", ja "曲を再生して", ar "شغل الأغنية".
