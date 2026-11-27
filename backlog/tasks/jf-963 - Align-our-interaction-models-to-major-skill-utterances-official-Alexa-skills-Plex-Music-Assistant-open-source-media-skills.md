@@ -6,7 +6,7 @@ title: >-
 status: Done
 assignee: []
 created_date: '2026-11-25 14:21'
-updated_date: '2026-11-27 21:18'
+updated_date: '2026-11-27 21:45'
 labels:
   - nlu
   - research
@@ -41,6 +41,12 @@ Maintainer directive (2026-11-25): align our interaction models to the utterance
 FOLLOW-UPS from the JF-965 review round (2026-11-25 sera, filed same-turn per discipline): (1) SIBLING LOCALES: the batch-1 eleven rows landed in en-US/es-ES/fr-FR/de-DE only; the same-language siblings (en-GB/en-AU/en-CA/en-IN, es-MX/es-US, fr-CA) carry the identical base carrier families and keep the gap - each trains its own model, so en-US rows do not generalize cross-locale. The next batch must START with a carriers delta per sibling locale (the JF-970 tool makes this a minutes-long check) before any row lands. (2) DE CONTRACTION FAMILY: the new de carrier-noun row pins only the uncontracted 'von dem Kunstler' form; spoken German contracts to 'vom Kunstler', which is in neither model, fixtures, nor the lab battery. Candidates for the next batch: 'Spiele Musik vom Kunstler {musician}', 'Spiele Lieder vom Kunstler {musician}' (same carriers-check + lab discipline first; the corpus research doc's askplex de grid is the source to re-read for the exact measured forms).
 
 TWIN RULE for the sibling batch (from the JF-965 wrapper round, 2026-11-26): every carrier row landed for a sibling locale must land WITH its one-shot wrapper twin in the same change (fr-CA 'De ...' infinitives, es-MX/es-US 'que + subjunctive', en-GB/AU/CA/IN 'to + infinitive'), or the sibling keeps dead-air one-shot compositions the base rows cannot fix (each locale trains its own model). Known residual from JF-965: the en RECORD-noun one-shot twin is uncovered by design (loses arbitration to PlayByGenre 'listen to {genre}', stable 2/2 on the lab; revisit only with a probe-backed wording). LAB LIMITATION for all future batches: invocation-headed one-shot phrases CANNOT be tested on the nlu-lab skill (foreign invocation name reads Fallback there); verify bare tails on the lab and headed forms on the live skill post-deploy.
+
+LIVE DEPLOY ROUND (2026-11-27 22:2x, maintainer's 'vai e continua'): custom-model/rebuild locale='*' on the live skill: 17/17 SUCCEEDED. Live proof probes launched (one per language family: en-GB, es-MX, fr-CA, de-DE; the remaining siblings share identical per-family row content and are covered by the fixture suites). Results recorded in this task when the probes land.
+
+LIVE PROOF COMPLETE (2026-11-27 23:0x, after the DLL-from-HEAD deploy + full rebuild): ALL 8 sibling locales + de verified live. en-GB/AU/CA/IN: base + album twin -> PlayAlbumIntent, slot filled (en-CA resolves via the AmazonEntities graph, the benign shape). es-MX/es-US: base + que-twins -> PlayArtistSongsIntent, musician filled (the earlier no_selection readings were the STALE-DLL artifact, see below). fr-CA: base -> PlayArtistSongsIntent AND the De-twin tail 'de jouer des chansons de queen' now routes PlayArtistSongsIntent (the earlier QueryArtistLibrary misroute was also stale-DLL). de-DE: vom rows + both zu twins route with musician filled; MediaInfo sentinel intact.
+
+STALE-DLL LESSON (recorded in memory template_fixes_not_live_until_rebuild): the FIRST rebuild after the maintainer's go ran against the 1.2.0.0 RELEASE DLL, whose embedded models predate the sibling batch - it 'succeeded' 17/17 while pushing pre-batch content; locales with a generalization hop (en/fr/de) looked green by luck, es (no hop) read no_selection, and the fr-CA twin misrouted through the old model's patterns. Correct sequence executed: Release build from HEAD (strings-verified: 3 es rows + zu rows embedded), hot-swap (md5 156fc3bc... match, config survived 1 user), restart, THEN rebuild 17/17, THEN re-probe - all green.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
