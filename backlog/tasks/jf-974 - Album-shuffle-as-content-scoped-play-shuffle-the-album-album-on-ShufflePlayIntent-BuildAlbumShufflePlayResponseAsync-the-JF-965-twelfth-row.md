@@ -7,7 +7,7 @@ title: >-
 status: Done
 assignee: []
 created_date: '2026-11-25 18:22'
-updated_date: '2026-11-26 21:35'
+updated_date: '2026-11-27 05:35'
 labels:
   - nlu
   - alignment
@@ -80,6 +80,8 @@ Effect compare (control vs treatment): exactly 4 changed rows, ALL green: the tw
 VERDICT: H1 CONFIRMED. Both rows ship (already in the merge); the twin survives arbitration; fixtures pin bare tails. The Gate-2 shape of the lab (dedicated lab skill, fresh deploys, JF-975's error surfacing reporting zero error rows) held throughout.
 
 RESIDUAL (maintainer-gated, the standing JF-965 rule): LIVE deploy of the model row (DLL deploy + custom-model/rebuild for en-US) awaits the explicit go; e2e simulate rows and on-device verification belong to that round. Seek-mode caveat documented in-code: on a VideoApp-delegating device the shuffled queue does not auto-advance (the playlist shuffle arm's own limitation class).
+
+LIVE DEPLOY ROUND (2026-11-27 06:25-06:40, maintainer's explicit 'Vai'): DLL hot-swapped (Release net10.0, server 12.4.0; fresh-embed discipline, model rows verified in the DLL; active-dll md5 6217d104... match; config survived, 1 user; loaded 06:29:44). custom-model/rebuild locale='*': 17/17 SUCCEEDED. LIVE PROOF (the stale-SUCCEEDED guard satisfied; recorded run 20261127-063304-jf974-live-proof): 'shuffle the album thriller' AND 'to shuffle the album thriller' route to ShufflePlayIntent with album="Thriller"; all sentinels stable (the JF-965 'start the album' rows still PlayAlbumIntent); 0 expectation failures. HANDLER LIVE (simulator): not-found honest ('thriller' absent from the library: the correct miss Tell); real album 'blue train' plays via AudioPlayer.Play with shouldEndSession=true and a real stream URL; builder log lines verified (matched -> resolved 5 tracks -> returning AudioPlayer queueSize=5, the shuffled queue committed). CATALOG WIRING intact after the rebuild (JellyfinArtist authority ER_SUCCESS_MATCH on 'play songs by pink floyd'). DoD #7 note: no e2e fixture row added - e2e_en-US.yaml carries no album-play rows at all (the documented-unreliable en-US simulate locale never had album e2e); the unit suite (17 tests) plus this recorded live round are the end-to-end evidence. On-device spot check (say 'shuffle the album <name>') left to the maintainer/hassio as usual.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
