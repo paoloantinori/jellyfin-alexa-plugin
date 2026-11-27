@@ -87,6 +87,20 @@ tests:
     expected_slots:
       musician: {}
 
+  # JF-963 sibling alignment (es-ES JF-965 rows mirrored): the carrier-noun
+  # artist form with its que-subjunctive twin, pinned as BARE TAILS.
+  # "artista" is a MediaInfoType entry (the issue #46 class): the MediaInfo
+  # question shapes must keep routing to MediaInfoIntent.
+  - utterance: "Reproduce canciones del artista queen"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+
+  - utterance: "que reproduzca canciones del artista queen"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+
   # -------------------------------------------------------------------------
   # 7. PlayLastAddedIntent (media_type, time_period)
   # -------------------------------------------------------------------------

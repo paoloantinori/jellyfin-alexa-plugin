@@ -253,6 +253,8 @@
           "Spiele Lieder von dem Künstler {musician}",
           "Spiele Musik von der Band {musician}",
           "Spiele Musik von der Gruppe {musician}",
+          "Spiele Musik vom Künstler {musician}",
+          "Spiele Lieder vom Künstler {musician}",
           "Spiele {musician}",
           "Spiele etwas von {musician}",
           "Höre {musician}",

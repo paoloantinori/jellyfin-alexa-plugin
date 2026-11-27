@@ -199,6 +199,14 @@ tests:
     expected_slots:
       musician: {}
 
+  # JF-963 German contraction family: the spoken contracted form of the
+  # carrier-noun row above ("von dem Künstler" -> "vom Künstler"); same
+  # MediaInfoType caveat as the D3 rows (the MediaInfo sentinels below).
+  - utterance: "Spiele Musik vom Künstler queen"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+
   # -------------------------------------------------------------------------
   # 9. PlayLastAddedIntent (media_type, time_period)
   # -------------------------------------------------------------------------

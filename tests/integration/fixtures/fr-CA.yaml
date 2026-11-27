@@ -169,6 +169,21 @@ tests:
     expected_slots:
       musician: {}
 
+  # JF-963 sibling alignment (fr-FR JF-965 rows mirrored): the partitive
+  # Joue form with its De-infinitive twin, pinned as BARE TAILS (the
+  # profile-nlu domain rule). "Joue de la musique de X" sits one "de" from
+  # PlayByGenre's "Joue de la musique {genre}" (the fr family's SWALLOW
+  # edge measured on fr-FR), so the genre shapes stay the tripwire.
+  - utterance: "Joue des chansons de queen"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+
+  - utterance: "de jouer des chansons de queen"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+
   # -------------------------------------------------------------------------
   # 9. PlayLastAddedIntent (media_type)
   # -------------------------------------------------------------------------

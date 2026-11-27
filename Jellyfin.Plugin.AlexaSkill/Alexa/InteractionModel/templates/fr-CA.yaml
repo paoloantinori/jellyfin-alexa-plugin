@@ -160,6 +160,8 @@ intents:
   - Passe les chansons de {musician}
   - Commence {musician}
   - Joue les {musician}
+  - Joue des chansons de {musician}
+  - Joue de la musique de {musician}
   - Mets les {musician}
   - Passe les {musician}
   - Écoute les {musician}
@@ -172,6 +174,8 @@ intents:
   - De lancer les {musician}
   - De diffuser les {musician}
   - De lire les chansons de {musician}
+  - De jouer des chansons de {musician}
+  - De jouer de la musique de {musician}
   slots:
   - name: musician
     type: AMAZON.Musician
