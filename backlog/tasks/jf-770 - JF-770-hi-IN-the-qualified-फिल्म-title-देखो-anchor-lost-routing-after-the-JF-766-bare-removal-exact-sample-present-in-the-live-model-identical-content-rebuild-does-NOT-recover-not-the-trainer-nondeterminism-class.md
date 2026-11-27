@@ -7,7 +7,7 @@ title: >-
 status: In Progress
 assignee: []
 created_date: '2026-10-05'
-updated_date: '2026-11-27 19:35'
+updated_date: '2026-11-27 20:13'
 labels:
   - interaction-model
   - nlu
@@ -295,6 +295,10 @@ ARM B DENSIFICATION (run 20261127-203011, +4 film-headed PlayVideo rows: lagaao,
 VERDICT per the card's decision map: the two-failed-fixes bar now extends to the LAB (live rounds 1-2 + lab Arm B all fail against identical symptom). No further template arm. The task PARKS on the device round (the un-fired fallback: does the film-initial failure reproduce with real ASR on the Echo?) with materially sharpened evidence: the burial is a DETERMINISTIC, content-level property (the [film][X][dekho] shape loses to the PlayEpisode address competition regardless of PlayVideo family density, on every trainer instance tested). The working carriers (video/movie, live+lab proven) remain the user-facing path; the anchor pin stays red as the tracker.
 
 ARTIFACTS: /tmp/jf770_armB_model.json (the variant, experimental only - the template was NEVER touched); run files 20261127-2022*/2027*/2030*; battery workingset /tmp/jf770_lab_battery_hi-IN.yaml.
+
+SIMULATE RUNG ATTEMPTED (2026-11-27 21:00-22:00): simulate-skill on the live skill 33dfacd5 returned 409 for hi-IN while the it-IT evergreen control recovered and answered normally on the same window (recovery watcher: it-IT green at attempt 1, hi-IN anchor AND control both 409) - the exact per-locale outage signature (the known recurring non-it/en simulate outage class, memory simulate_outage_per_locale). The full-pipeline rung for hi-IN is therefore UNAVAILABLE today; retry opportunistically when a future window opens (a natural opening check for any session touching hi-IN).
+
+ARC CLOSED with the disposition standing: deterministic, content-level loss of the film-initial video-watch shape (content-reproducible on two independent trainer instances; family densification provably ineffective); workaround video/movie (live+lab proven); the anchor pin stays red as the standing tracker; the only untried discriminators are a hi-IN-locale physical device (marketplace-constrained: the household Echos are it/en; an it-IT device speaking Hindi would make ASR the confound, defeating the test's purpose) and a future simulate-service window for hi-IN.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
