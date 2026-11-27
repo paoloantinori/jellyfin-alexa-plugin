@@ -1,7 +1,7 @@
 ---
 name: Alexa Skill
 guid: c5df7de0-8777-4b3c-a70d-5c3dae359c9e
-version: 1.1.2.0
+version: 1.2.0.0
 targetAbi: 10.11.0.0
 framework: net9.0
 overview: Alexa skill plugin for Jellyfin
@@ -20,4 +20,4 @@ artifacts:
   - Amazon.Lambda.Serialization.Json.dll
   - Jellyfin.Plugin.AlexaSkill.dll
   - Refit.dll
-changelog: "SECURITY: requests to the skill endpoint are now verified against the skill they belong to. Previously, a technically skilled attacker with their own Amazon developer account could interact with another user's plugin endpoint if they knew that user's Jellyfin ID. All users of public installations should update. NEW: optional song-title recognition. When enabled per user in the plugin settings, the plugin uploads your song titles to Amazon's catalog so 'play the song <title>' works for titles Alexa does not know, including personal recordings. Off by default for now (it can be enabled in the plugin settings); libraries larger than Amazon's catalog limit keep the most-played titles. FIXED: the plugin's internal search indexes now refresh immediately when you edit track or album metadata, so renamed or re-tagged items are found without restarting Jellyfin. Also fixed: the Italian one-shot phrase for starting a song search regressed in some conditions and now works again. KNOWN ISSUES: in Spanish and French, some episode and skip phrasings may not be recognized after a catalog sync; alternative phrasings work. A small number of generic music requests can match a song title that exists literally in your library."
+changelog: "NEW: you can now shuffle an album by name (English: 'shuffle the album <name>'); the whole album plays in random order. NEW: a 'Recreate Catalogs' button in the plugin settings fixes the case where Alexa suddenly stops matching any artist, album, series or song name across the board (Amazon-side catalog loss): one click clears the stale references and rebuilds them from your library. The plugin now also detects that condition on its own and reports it in the locale status panel. NEW: more natural one-shot phrasings in English, French and Spanish ('ask Jellyfin to ...'). FIXED: German song requests like 'Spiele das Lied <title>' now reliably reach the right intent even when Alexa does not know the title (children's audio plays, personal recordings); unknown titles route to a play intent instead of media-info or radio. IMPROVED: when a voice-model test run hits errors, every erroring phrase now reports why (expired login, malformed response) instead of failing silently. KNOWN ISSUES: in Spanish and French, some episode and skip phrasings may not be recognized after a catalog sync; alternative phrasings work. On Echo Show devices with seek-mode enabled, shuffling an album or playlist plays one random track and stops instead of continuing (a platform limitation of that playback mode). A small number of generic music requests can match a song title that exists literally in your library."
