@@ -3,10 +3,10 @@ id: JF-933
 title: >-
   de-DE PlaySong steal by MediaInfoType vocabulary collision: Lied/Song/Titel
   are MediaInfoType synonyms, non-famous titles route elsewhere (issue #46)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-11-21 05:17'
-updated_date: '2026-11-21 18:43'
+updated_date: '2026-11-27 05:56'
 labels: []
 dependencies: []
 references:
@@ -30,6 +30,20 @@ Issue #46 (Nschmiederer, 2026-11-20, gold-quality report with Utterance Profiler
 - [ ] #6 All stale-mirror rules honored when samples change: VOICE_COMMANDS regen, docs graph labels, fixtures
 - [ ] #7 Full suite green both TFMs; validators pass
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+EVIDENCE DETAIL (from the closure round): baseline run 20261127-064247-jf933-baseline rows: 'spiele das lied das kleine blaue monster' x2 / 'spiele den titel ...' / 'spiele den song ...' -> PlayLibrarySongIntent(librarySong filled); 'spiele das lied hotel california' -> PlaySongIntent; 'was ist der titel' -> MediaInfoIntent(media_info_type=titel); 'wie heisst das lied' -> MediaInfoIntent; zero MediaInfo/PlayRadio steals.
+
+AUDIT TABLE (this sitting, all 17 generated models): collisions de-DE ['titel'], fr-FR ['titre'], fr-CA ['titre']; all others none; it-IT structurally immune (phrase values). AC dispositions in the final summary.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+CLOSED live-verified (2026-11-27): the reporter's steal (issue #46) is CURED on the current live model - recorded baseline run 20261127-064247-jf933-baseline shows ALL article carriers ('das Lied'/'den Titel'/'den Song' + non-famous synthetic title) selecting a play intent with the title filled, zero MediaInfo/PlayRadio steals, MediaInfo sentinels intact. The cure was the 2026-11-21 MediaInfoType narrowing (Lied/Song dropped) plus the JF-940 PlayLibrarySong re-anchoring, both now live; this round supplied the missing live re-verification, the fresh 17-locale audit (collision class reduced to de 'titel' BENIGN + the fr twins 'titre'), the den-Song carrier DECLINE rationale (already covered by PlayLibrarySong, pinned in fixtures; a duplicate carrier would re-tilt sibling arbitration), and the den-titel fixture pin completing the non-famous carrier matrix. Evidence trail: baseline run id, audit table, and AC dispositions in the task notes; residual handed to JF-955 (fr twins unverified). gate-exempt: fixture-row-only change (one NLU fixture pin + comment; no production code, templates, or models changed); validators and classify-fixtures green; /simplify and /code-review do not apply to a test-data addition of this size, per the trivial-fix exemption.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->

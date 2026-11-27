@@ -129,6 +129,15 @@ tests:
     expected_slots:
       librarySong: {}
 
+  # JF-933 closure round (2026-11-27): the den-Titel carrier completes the
+  # non-famous matrix. Live-verified on the current model (run
+  # 20261127-064247-jf933-baseline: all three article carriers select a play
+  # intent with the title filled; no MediaInfo/PlayRadio steal anywhere).
+  - utterance: "spiele den titel die streithörnchen"
+    expected_intent: PlayLibrarySongIntent
+    expected_slots:
+      librarySong: {}
+
   # -------------------------------------------------------------------------
   # 6. PlayAlbumIntent (album, musician)
   # -------------------------------------------------------------------------
