@@ -71,12 +71,44 @@ def test_met_variant_maps_to_mettre():
 
 
 def test_unknown_leading_verb_passes_through():
-    # Safe default: "je veux regarder barbie" leads with a word the map
-    # does not know; the fallback composes it unchanged rather than
-    # guessing a rewrite.
+    # Safe default: an unknown head composes unchanged rather than guessing.
+    assert (
+        SmapiClient.compose_fallback_one_shot("regarde le film barbie", "fr-FR")
+        == "regarde le film barbie"
+    )
+
+
+def test_je_veux_head_is_stripped_to_the_natural_tail():
+    # JF-908 (1): "de je veux regarder ..." is ungrammatical and no model
+    # row can catch it; the composer strips the head so the payload
+    # composes as "de regarder barbie" (already an infinitive).
     assert (
         SmapiClient.compose_fallback_one_shot("je veux regarder barbie", "fr-FR")
+        == "regarder barbie"
+    )
+
+
+def test_je_veux_head_before_a_known_imperative_maps_both():
+    # "je veux lis ..." is doubly ungrammatical (polarity head + imperative);
+    # strip then map: the composed tail carries the infinitive.
+    assert (
+        SmapiClient.compose_fallback_one_shot("je veux lis mes favoris", "fr-FR")
+        == "lire mes favoris"
+    )
+
+
+def test_je_veux_strip_is_fr_only_and_word_boundaried():
+    # Non-fr locales: the head passes through even when the utterance
+    # carries the same leading words (the strip is fr-gated).
+    assert (
+        SmapiClient.compose_fallback_one_shot("je veux regarder barbie", "en-US")
         == "je veux regarder barbie"
+    )
+    # Word boundary: a title STARTING with the letters ("je veuxfilm")
+    # must not lose its head.
+    assert (
+        SmapiClient.compose_fallback_one_shot("je veuxfilm barbie", "fr-FR")
+        == "je veuxfilm barbie"
     )
 
 

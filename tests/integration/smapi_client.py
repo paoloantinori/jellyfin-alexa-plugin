@@ -292,9 +292,22 @@ class SmapiClient:
         simulate(): a full-chain fixture row's own utterance is authored
         and must pass through byte-identical.  Unknown leading verbs and
         non-fr locales pass through unchanged (safe default).
+
+        JF-908 (1), the je-veux head: "de je veux regarder ..." is
+        ungrammatical and no model row can catch it (the smoke battery's
+        unchanged-head row read Fallback at the model layer).  A leading
+        "je veux " is stripped FIRST so the payload that follows composes
+        naturally ("je veux regarder barbie" -> "regarder barbie", already
+        an infinitive, composing as "de regarder barbie" - grammatical and
+        the shape the live payload routes on).
         """
         if locale not in SmapiClient.FR_FALLBACK_INFINITIVE_LOCALES:
             return utterance
+        # JF-908: strip one leading "je veux " head (case-insensitive,
+        # word-boundaried by the space) before the imperative lookup.
+        lowered = utterance.lower()
+        if lowered.startswith("je veux "):
+            utterance = utterance[len("je veux "):]
         head, sep, tail = utterance.partition(" ")
         infinitive = SmapiClient.FR_FALLBACK_INFINITIVE.get(head.lower())
         if infinitive is None:
