@@ -51,6 +51,18 @@ def load_models() -> dict[str, dict]:
 
 # --- Slot type consistency (error level) ---
 
+# Cross-locale parity slots (JF-974 class): slots that MUST be declared in
+# every locale's model because the ElicitSlots/dialog lockstep chains
+# cross-locale (table == every locale's dialog == every locale's LM slots),
+# while their SAMPLES are deliberately single-locale wording (the JF-963
+# rule: per-locale wording lands only as measured ABSENT rows). The audit's
+# dead-slot check exists for ACCIDENTAL dead slots; these are deliberate.
+# Entry shape: intent -> {slot: the one locale whose samples reference it}.
+PARITY_SLOT_EXCEPTIONS: dict[str, dict[str, str]] = {
+    "ShufflePlayIntent": {"album": "en-US"},
+}
+
+
 def audit_slot_types(models: dict[str, dict]) -> list[str]:
     errors: list[str] = []
     for locale, lm in sorted(models.items()):
@@ -72,6 +84,19 @@ def audit_slot_types(models: dict[str, dict]) -> list[str]:
             for sname in declared:
                 samples = intent.get("samples", [])
                 if not any(f"{{{sname}}}" in s for s in samples):
+                    home = PARITY_SLOT_EXCEPTIONS.get(name, {}).get(sname)
+                    if home:
+                        # Deliberate cross-locale parity slot: silent outside
+                        # its home locale BY DESIGN (the JF-974 pattern). The
+                        # home locale MUST still reference it in samples; a
+                        # parity slot with no home anywhere is a real error.
+                        home_lm = models.get(home, {})
+                        home_intent = next(
+                            (it for it in home_lm.get("intents", [])
+                             if it.get("name") == name), None)
+                        home_samples = (home_intent or {}).get("samples", [])
+                        if any(f"{{{sname}}}" in smp for smp in home_samples):
+                            continue
                     errors.append(
                         f"[{locale}] Intent '{name}': slot '{sname}' declared "
                         f"but never referenced in samples")
