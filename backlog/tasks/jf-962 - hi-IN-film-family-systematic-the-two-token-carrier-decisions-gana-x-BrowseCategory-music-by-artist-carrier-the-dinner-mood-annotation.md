@@ -3,9 +3,10 @@ id: JF-962
 title: >-
   hi-IN film family (systematic) + the two token/carrier decisions (gana x
   BrowseCategory, music-by artist carrier) + the dinner-mood annotation
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-11-25 10:56'
+updated_date: '2026-11-27 21:53'
 labels:
   - nlu
   - carrier-decision
@@ -34,3 +35,9 @@ From the JF-959 re-verification census (2026-11-25): the hi-IN and en-US carrier
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+CLOSED all-four-resolved (2026-11-27): (1) hi-IN films: the systematic-fallback investigation IS the JF-770 arc, now executed to its terminal finding (content-reproducible deterministic burial, template-unreachable, parked on the device round with the workaround video/movie). No separate action remains. (2) gana x BrowseCategory: the collision is GONE - HEAD's hi-IN model carries NO gana value in BrowseCategory (removed in the interim; the JF-963 audit's baseline prune also dropped the stale identities); gana remains a pure carrier word across the song intents with no token-ownership conflict to decide. (3) en-US 'give me music by coldplay': the premise is stale - PlayArtistSongsIntent now carries a 14-row music-by family INCLUDING 'give me music by {musician}'; live-verified 2026-11-27 (run 20261127-225137): the utterance routes PlayArtistSongsIntent with musician=Coldplay (ER-resolved), 3/3 stable readings, 'play music by pink floyd' and the fixture-family rows green alongside. No hallucination reproduces. (4) 'play dinner music': the fixture row now carries the trainer-marginal annotation (winner varies by build; the JF-959 census + the JF-974 lab round's steal-then-resolve history recorded inline) - annotated, not chased, per the task's own disposition. gate-exempt: the only change this round is one fixture COMMENT (zero rows, zero code, zero model bytes); the closure evidence is tool output (carriers, model dumps) plus the recorded live run.
+<!-- SECTION:FINAL_SUMMARY:END -->
