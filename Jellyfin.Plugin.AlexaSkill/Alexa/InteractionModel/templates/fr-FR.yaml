@@ -132,6 +132,12 @@ intents:
   - diffuse le film {title}
   - De jouer le film {title}
   - De mettre le film {title}
+  # JF-908 (1): the regarder De-twin. Reverted once in abd36fa3 (it flipped the
+  # artist/favorites composed rows red and fixed nothing); re-landed 2026-11-27
+  # after the lab arm (run 20261127-230534) showed the trainer landscape changed:
+  # the twin routes its form AND the artist/favorites/film sentinels all stay green
+  # in the same build. Companion of the smoke composer's je-veux strip.
+  - De regarder {title}
   - Je veux regarder le film {title}
   - Cherche le film {title}
   slots:

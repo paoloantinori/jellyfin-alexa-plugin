@@ -282,6 +282,17 @@ class SmapiClient:
         "ouvre": "ouvrir",
     }
 
+    # JF-908 review round: the strippable polarity-head SET and the
+    # infinitive whitelist. A head strips ONLY when the next word is a
+    # known infinitive, so noun-phrase remainders (the partitive shapes
+    # the full-chain fixtures carry: "je veux de la musique relaxante")
+    # never strip into a doubled-preposition composition.
+    FR_STRIPPABLE_HEADS = ("je veux ", "je voudrais ", "j'aimerais ")
+    FR_HEAD_INFINITIVES = frozenset({
+        "regarder", "voir", "écouter", "ecouter", "lire", "jouer",
+        "mettre", "fermer", "arrêter", "arreter", "ouvrir", "trouver",
+    })
+
     @staticmethod
     def compose_fallback_one_shot(utterance: str, locale: str) -> str:
         """Rewrite a leading imperative to its infinitive for a fr one-shot.
@@ -290,24 +301,34 @@ class SmapiClient:
         the live evidence routed on.  Applied ONLY at the smoke
         open-fallback construction site (test_e2e.py), never inside
         simulate(): a full-chain fixture row's own utterance is authored
-        and must pass through byte-identical.  Unknown leading verbs and
-        non-fr locales pass through unchanged (safe default).
+        and must pass through byte-identical.
 
-        JF-908 (1), the je-veux head: "de je veux regarder ..." is
-        ungrammatical and no model row can catch it (the smoke battery's
-        unchanged-head row read Fallback at the model layer).  A leading
-        "je veux " is stripped FIRST so the payload that follows composes
-        naturally ("je veux regarder barbie" -> "regarder barbie", already
-        an infinitive, composing as "de regarder barbie" - grammatical and
-        the shape the live payload routes on).
+        JF-908 (1), the polarity heads: "de je veux regarder ..." is
+        ungrammatical and no model row can catch it.  A leading head from
+        FR_STRIPPABLE_HEADS strips when the next word is a known
+        infinitive (FR_HEAD_INFINITIVES), yielding the grammatical
+        composition "de regarder barbie".  NOTE (JF-908 review round,
+        live-probed 20261127-230350): the grammatical composed tail does
+        NOT route on the fr model at HEAD; PlayVideoIntent carries no
+        regarder-leading row and the De regarder twin was reverted in
+        abd36fa3 with live evidence.  The strip converts a
+        guaranteed-ungrammatical composition into a grammatical one; the
+        routing gap is a model-row question tracked in the JF-908 record,
+        not something this composer can fix.  Heads followed by anything
+        else (noun phrases, partitives, unknown verbs) and non-fr locales
+        pass through unchanged (safe default).
         """
         if locale not in SmapiClient.FR_FALLBACK_INFINITIVE_LOCALES:
             return utterance
-        # JF-908: strip one leading "je veux " head (case-insensitive,
-        # word-boundaried by the space) before the imperative lookup.
         lowered = utterance.lower()
-        if lowered.startswith("je veux "):
-            utterance = utterance[len("je veux "):]
+        for head_str in SmapiClient.FR_STRIPPABLE_HEADS:
+            if lowered.startswith(head_str):
+                remainder = utterance[len(head_str):]
+                first_word = remainder.split(" ", 1)[0].lower()
+                if (first_word in SmapiClient.FR_HEAD_INFINITIVES
+                        or first_word in SmapiClient.FR_FALLBACK_INFINITIVE):
+                    utterance = remainder
+                break
         head, sep, tail = utterance.partition(" ")
         infinitive = SmapiClient.FR_FALLBACK_INFINITIVE.get(head.lower())
         if infinitive is None:

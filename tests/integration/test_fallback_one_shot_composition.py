@@ -81,7 +81,9 @@ def test_unknown_leading_verb_passes_through():
 def test_je_veux_head_is_stripped_to_the_natural_tail():
     # JF-908 (1): "de je veux regarder ..." is ungrammatical and no model
     # row can catch it; the composer strips the head so the payload
-    # composes as "de regarder barbie" (already an infinitive).
+    # composes as "de regarder barbie" (already an infinitive). The
+    # ROUTING of that grammatical tail is a model-row question (the
+    # De regarder twin was reverted in abd36fa3); see the task record.
     assert (
         SmapiClient.compose_fallback_one_shot("je veux regarder barbie", "fr-FR")
         == "regarder barbie"
@@ -94,6 +96,40 @@ def test_je_veux_head_before_a_known_imperative_maps_both():
     assert (
         SmapiClient.compose_fallback_one_shot("je veux lis mes favoris", "fr-FR")
         == "lire mes favoris"
+    )
+
+
+def test_polarity_head_set_covers_voudrais_and_aimerais():
+    # JF-908 review: the strippable set covers the sibling modal heads,
+    # not just je-veux.
+    assert (
+        SmapiClient.compose_fallback_one_shot("je voudrais voir barbie", "fr-FR")
+        == "voir barbie"
+    )
+    assert (
+        SmapiClient.compose_fallback_one_shot("j'aimerais écouter queen", "fr-FR")
+        == "écouter queen"
+    )
+
+
+def test_partitive_noun_phrase_head_does_not_strip():
+    # JF-908 review F3: the full-chain fixtures' partitive rows
+    # ("je veux de la musique relaxante") must not strip into a doubled
+    # "de de la ..." composition; the next word is not a known infinitive
+    # so the head passes through untouched.
+    assert (
+        SmapiClient.compose_fallback_one_shot(
+            "je veux de la musique relaxante", "fr-FR")
+        == "je veux de la musique relaxante"
+    )
+
+
+def test_head_before_unknown_verb_does_not_strip():
+    # A head followed by a word outside the infinitive whitelist passes
+    # through: the composer never guesses a rewrite for unknown verbs.
+    assert (
+        SmapiClient.compose_fallback_one_shot("je veux zorbler barbie", "fr-FR")
+        == "je veux zorbler barbie"
     )
 
 

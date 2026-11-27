@@ -144,6 +144,14 @@ tests:
     expected_slots:
       title: {}
 
+  # JF-908 (1) twin tail: the composer's je-veux strip composes 'de regarder
+  # barbie' from the smoke row 'je veux regarder barbie'; this pin holds once
+  # the De regarder twin deploys (lab-verified run 20261127-230534). RED-UNTIL-DEPLOY.
+  - utterance: "de regarder barbie"
+    expected_intent: PlayVideoIntent
+    expected_slots:
+      title: {}
+
   # -------------------------------------------------------------------------
   # 8. PlayArtistSongsIntent (musician)
   # -------------------------------------------------------------------------

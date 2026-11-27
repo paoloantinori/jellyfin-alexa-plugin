@@ -5541,7 +5541,7 @@ Placeholder legend:
 | `<mots du titre de la chanson>` | `{titleKeywords}` |
 | `<nom d'utilisateur>` | `{username}` |
 
-Complete phrase list (484 phrases across 74 commands):
+Complete phrase list (485 phrases across 74 commands):
 
 #### Play music
 
@@ -5708,6 +5708,7 @@ Complete phrase list (484 phrases across 74 commands):
 - `diffuse le film <titre de la vidéo ou du film>`
 - `De jouer le film <titre de la vidéo ou du film>`
 - `De mettre le film <titre de la vidéo ou du film>`
+- `De regarder <titre de la vidéo ou du film>`
 - `Je veux regarder le film <titre de la vidéo ou du film>`
 - `Cherche le film <titre de la vidéo ou du film>`
 
@@ -6288,7 +6289,7 @@ Placeholder legend:
 | `<mots du titre de la chanson>` | `{titleKeywords}` |
 | `<nom d'utilisateur>` | `{username}` |
 
-Complete phrase list (497 phrases across 74 commands):
+Complete phrase list (498 phrases across 74 commands):
 
 #### Play music
 
@@ -6464,6 +6465,7 @@ Complete phrase list (497 phrases across 74 commands):
 - `diffuse le film <titre de la vidéo ou du film>`
 - `De jouer le film <titre de la vidéo ou du film>`
 - `De mettre le film <titre de la vidéo ou du film>`
+- `De regarder <titre de la vidéo ou du film>`
 - `Je veux regarder le film <titre de la vidéo ou du film>`
 - `Cherche le film <titre de la vidéo ou du film>`
 
