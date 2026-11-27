@@ -99,6 +99,16 @@ tests:
       song: {}
       musician: {}
 
+  # JF-955 closure pin (2026-11-27, live-verified run 20261127-065633-jf955-fr-baseline):
+  # the 'titre' MediaInfoType collision is BENIGN - the non-famous title on the
+  # colliding carrier ('lis le titre {song}') selects PlaySongIntent with the
+  # free-text slot filled; MediaInfo sentinels ('quel est le titre') stay on
+  # MediaInfoIntent. Same class as de's benign 'titel' (JF-933 closure).
+  - utterance: "lis le titre le petit monstre bleu"
+    expected_intent: PlaySongIntent
+    expected_slots:
+      song: {}
+
   # JF-933 (issue #46): non-famous-title pin. MediaInfoType's title entry
   # carried chanson/morceau as synonyms, so unanchorable free-text titles
   # slid to MediaInfoIntent's static tokens. The synonyms are removed from

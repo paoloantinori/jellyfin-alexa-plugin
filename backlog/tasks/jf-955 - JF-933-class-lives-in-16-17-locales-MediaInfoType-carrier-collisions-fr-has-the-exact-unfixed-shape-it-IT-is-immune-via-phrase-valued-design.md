@@ -3,9 +3,10 @@ id: JF-955
 title: >-
   JF-933 class lives in 16/17 locales: MediaInfoType carrier collisions (fr has
   the exact unfixed shape, it-IT is immune via phrase-valued design)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-11-24 09:16'
+updated_date: '2026-11-27 06:08'
 labels:
   - nlu
   - jF-933-followup
@@ -48,3 +49,9 @@ RECOMMENDED APPROACH: follow the it-IT pattern (phrase-valued MediaInfoType) for
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+CLOSED verified-benign (2026-11-27): the JF-933 collision class is fully adjudicated live and has NO remaining defect. FRESH AUDIT (this sitting, all 17 generated models): the class shrank from the 2026-11-24 '16/17 locales' reading (which described the pre-partial-fix era) to exactly three locales - de-DE ['titel'], fr-FR/fr-CA ['titre']; it-IT structurally immune (phrase values); the other 13 clean. LIVE VERDICTS on the current model (post the 2026-11-27 all-locale rebuild): de-DE benign (JF-933 closure baseline, run 20261127-064247: all three article carriers select play intents, slot filled); fr-FR benign (run 20261127-065633-jf955-fr-baseline: 'lis le titre / lis la chanson / joue la chanson' + non-famous synthetic title ALL select PlaySongIntent with the free-text song slot filled - the ideal outcome, not even a twin absorption; MediaInfo sentinels 'quel est le titre'/'quelle est la chanson' stay MediaInfoIntent); fr-CA covered by family evidence (its PlaySong sample set is a strict subset of fr-FR's, 21 of 22 rows, no unique carriers). RECOMMENDATION RETIRED: the phrase-valued MediaInfoType conversion for 16 locales is over-engineering - there is no live defect to fix, and the conversion would risk MediaInfoIntent recall across every locale for zero verified gain; the JF-946 SongTitle-anchor collision subfamily noted in this task rides the armed song catalog and the JF-977 pin rollout. DELIVERED this round: the fr-FR fixture pin for the colliding carrier (expectation live-verified by the baseline run itself, the phantom-red rule satisfied; same advisory NO_SAMPLE_MATCH class as the de siblings) and the closure evidence. gate-exempt: fixture-row-only change plus task records; no production code, templates, or models changed; validators and classify-fixtures green.
+<!-- SECTION:FINAL_SUMMARY:END -->
