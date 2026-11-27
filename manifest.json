@@ -506,17 +506,19 @@
             },
             {
                 "version": "1.2.0.0",
-                "changelog": "placeholder",
+                "checksum": "f70857685ead1a1b5ee82b4c9a3dccf5",
+                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/1.2.0.0/AlexaSkill_1.2.0.0.net10.zip",
+                "changelog": "NEW: you can now shuffle an album by name (English: 'shuffle the album <name>'); the whole album plays in random order. NEW: a 'Recreate Catalogs' button in the plugin settings fixes the case where Alexa suddenly stops matching any artist, album, series or song name across the board (Amazon-side catalog loss): one click clears the stale references and rebuilds them from your library. The plugin now also detects that condition on its own and reports it in the locale status panel. NEW: more natural one-shot phrasings in English, French and Spanish ('ask Jellyfin to ...'). FIXED: German song requests like 'Spiele das Lied <title>' now reliably reach the right intent even when Alexa does not know the title (children's audio plays, personal recordings); unknown titles route to a play intent instead of media-info or radio. IMPROVED: when a voice-model test run hits errors, every erroring phrase now reports why (expired login, malformed response) instead of failing silently. KNOWN ISSUES: in Spanish and French, some episode and skip phrasings may not be recognized after a catalog sync; alternative phrasings work. On Echo Show devices with seek-mode enabled, shuffling an album or playlist plays one random track and stops instead of continuing (a platform limitation of that playback mode). A small number of generic music requests can match a song title that exists literally in your library.",
                 "targetAbi": "12.0.0.0",
-                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/1.2.0.0/jellyfin-plugin-alexa-skill_1.2.0.0_net10.0.zip",
-                "checksum": "placeholder"
+                "timestamp": "2026-11-27 07:58:47"
             },
             {
                 "version": "1.2.0.0",
-                "changelog": "placeholder",
+                "checksum": "93c004fe4bc90d4f1353c75f0ea469da",
+                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/1.2.0.0/AlexaSkill_1.2.0.0.zip",
+                "changelog": "NEW: you can now shuffle an album by name (English: 'shuffle the album <name>'); the whole album plays in random order. NEW: a 'Recreate Catalogs' button in the plugin settings fixes the case where Alexa suddenly stops matching any artist, album, series or song name across the board (Amazon-side catalog loss): one click clears the stale references and rebuilds them from your library. The plugin now also detects that condition on its own and reports it in the locale status panel. NEW: more natural one-shot phrasings in English, French and Spanish ('ask Jellyfin to ...'). FIXED: German song requests like 'Spiele das Lied <title>' now reliably reach the right intent even when Alexa does not know the title (children's audio plays, personal recordings); unknown titles route to a play intent instead of media-info or radio. IMPROVED: when a voice-model test run hits errors, every erroring phrase now reports why (expired login, malformed response) instead of failing silently. KNOWN ISSUES: in Spanish and French, some episode and skip phrasings may not be recognized after a catalog sync; alternative phrasings work. On Echo Show devices with seek-mode enabled, shuffling an album or playlist plays one random track and stops instead of continuing (a platform limitation of that playback mode). A small number of generic music requests can match a song title that exists literally in your library.",
                 "targetAbi": "10.11.0.0",
-                "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/1.2.0.0/jellyfin-plugin-alexa-skill_1.2.0.0_net9.0.zip",
-                "checksum": "placeholder"
+                "timestamp": "2026-11-27 07:58:47"
             }
         ]
     }
