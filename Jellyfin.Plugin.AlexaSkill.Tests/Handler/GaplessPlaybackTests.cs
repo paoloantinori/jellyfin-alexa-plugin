@@ -44,7 +44,7 @@ public class GaplessPlaybackTests : PluginTestBase, IDisposable
     public GaplessPlaybackTests()
     {
         _sessionManagerMock = new Mock<ISessionManager>();
-        _config = new PluginConfiguration { ServerAddress = "http://localhost:8096" };
+        _config = new PluginConfiguration { ServerAddress = "http://localhost:8096", StreamProxyEnabled = false };
         _loggerFactory = LoggerFactory.Create(b => { });
         _libraryManagerMock = new Mock<ILibraryManager>();
         _userManagerMock = new Mock<IUserManager>();

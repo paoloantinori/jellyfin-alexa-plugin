@@ -145,6 +145,8 @@ public class GetRecentlyPlayedItemsTests
     [Fact]
     public void ItemsHaveArtUrl()
     {
+        // JF-950 item 2, flag-on half (the fixture default): the carousel's art URL is
+        // the signed-token image-proxy URL; the Jellyfin session token never appears.
         var audio = new Audio { Name = "Song", Id = Guid.NewGuid() };
         audio.Artists = new List<string> { "Artist" };
         var user = CreatePluginUser();
@@ -157,8 +159,36 @@ public class GetRecentlyPlayedItemsTests
 
         Assert.Single(result);
         Assert.NotNull(result[0].ArtUrl);
-        Assert.Contains(audio.Id.ToString(), result[0].ArtUrl);
-        Assert.Contains(user.JellyfinToken, result[0].ArtUrl);
+        Assert.StartsWith(
+            $"https://test.example.com/alexaskill/api/stream/image/{audio.Id}?token=",
+            result[0].ArtUrl,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(user.JellyfinToken, result[0].ArtUrl, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ItemsHaveArtUrl_ProxyDisabled_LegacyApiKeyUrl()
+    {
+        // JF-950 item 2, rollback half: with StreamProxyEnabled=false the carousel's art
+        // URL is the legacy api_key Items image URL (byte-identical to the pre-JF-950
+        // shape).
+        var audio = new Audio { Name = "Song", Id = Guid.NewGuid() };
+        audio.Artists = new List<string> { "Artist" };
+        var user = CreatePluginUser();
+        var config = new PluginConfiguration();
+        TestHelpers.SetServerAddress(config, "https://test.example.com");
+        config.StreamProxyEnabled = false;
+
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem> { audio });
+
+        var result = LaunchRequestHandler.GetRecentlyPlayedItems(
+            TestHelpers.CreateJellyfinUser(), user, _libraryManagerMock.Object, config);
+
+        Assert.Single(result);
+        Assert.Equal(
+            $"https://test.example.com/Items/{audio.Id}/Images/Primary?api_key={user.JellyfinToken}",
+            result[0].ArtUrl);
     }
 
     [Fact]

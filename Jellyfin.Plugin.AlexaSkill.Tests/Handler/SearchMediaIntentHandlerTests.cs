@@ -31,7 +31,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 [Collection("Plugin")]
 public class SearchMediaIntentHandlerTests : PluginTestBase
 {
-    private readonly HandlerTestFixture _fx = new HandlerTestFixture(configure: c => c.AsrCompoundWordFixEnabled = false);
+    private readonly HandlerTestFixture _fx = new HandlerTestFixture(configure: c => { c.AsrCompoundWordFixEnabled = false; c.StreamProxyEnabled = false; });
 
     /// <summary>
     /// JF-501/JF-538 test seam (the PlayVideoIntentHandlerTests shape): subclasses the

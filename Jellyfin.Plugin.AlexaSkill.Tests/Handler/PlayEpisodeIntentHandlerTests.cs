@@ -45,7 +45,7 @@ public class PlayEpisodeIntentHandlerTests : PluginTestBase
         _userManagerMock = new Mock<IUserManager>();
         _userDataManagerMock = new Mock<IUserDataManager>();
         _tvSeriesManagerMock = new Mock<ITVSeriesManager>();
-        _config = new PluginConfiguration();
+        _config = new PluginConfiguration { StreamProxyEnabled = false };
         TestHelpers.SetServerAddress(_config, "https://test.example.com");
         _loggerFactory = LoggerFactory.Create(b => { });
     }

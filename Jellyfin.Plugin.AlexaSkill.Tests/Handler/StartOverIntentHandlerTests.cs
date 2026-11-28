@@ -35,7 +35,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 [Collection("Plugin")]
 public class StartOverIntentHandlerTests : PluginTestBase, IDisposable
 {
-    private readonly HandlerTestFixture _fx = new HandlerTestFixture("http://localhost:8096");
+    private readonly HandlerTestFixture _fx = new HandlerTestFixture("http://localhost:8096", configure: c => c.StreamProxyEnabled = false);
     private readonly JellyfinUser _jellyfinUser;
     private readonly Guid _sessionUserId;
     private readonly Mock<global::Jellyfin.Plugin.AlexaSkill.Alexa.Util.ILiveTvStreamResolver> _resolverMock;

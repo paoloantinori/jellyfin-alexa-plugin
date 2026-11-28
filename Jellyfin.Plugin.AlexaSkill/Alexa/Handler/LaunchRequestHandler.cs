@@ -662,6 +662,14 @@ public class LaunchRequestHandler : BaseHandler
         var results = new List<Apl.ListDisplayItem>();
         var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
+        // JF-950 item 2: the carousel's art URLs ride the SAME flag-gated image-URL
+        // builder as every other device-facing art URL (the ONE construction path; the
+        // former hand-built api_key copy was a straggler the JF-950 survey missed). The
+        // builder is stateless by construction, so a local instance over the passed
+        // config is safe; the delegate is inert because GetImageUrl sends no progressive
+        // response.
+        var launch = new PlaybackLaunchBuilder(config, Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance, static (_, _, _) => Task.FromResult(true));
+
         foreach (BaseItem item in recentItems)
         {
             if (results.Count >= 10)
@@ -681,7 +689,7 @@ public class LaunchRequestHandler : BaseHandler
             }
 
             string subtitle = Apl.AplHelper.GetSubtitle(item);
-            string artUrl = new Uri(new Uri(config.ServerAddress), "Items/" + item.Id + "/Images/Primary?api_key=" + user.JellyfinToken).ToString();
+            string artUrl = launch.GetImageUrl(item.Id.ToString(), user);
 
             results.Add(new Apl.ListDisplayItem(
                 item.Name,

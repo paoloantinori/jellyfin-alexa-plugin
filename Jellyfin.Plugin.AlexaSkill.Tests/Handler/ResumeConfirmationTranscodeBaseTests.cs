@@ -44,7 +44,7 @@ public class ResumeConfirmationTranscodeBaseTests : PluginTestBase, IDisposable
 {
     private const string DeviceId = "test-device";
 
-    private readonly HandlerTestFixture _fx = new();
+    private readonly HandlerTestFixture _fx = new(configure: c => c.StreamProxyEnabled = false);
     private readonly DeviceQueueManager _queueManager;
     private readonly string _tempDir;
     private readonly IDisposable _pluginQueueSwap;

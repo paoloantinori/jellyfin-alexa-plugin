@@ -757,6 +757,7 @@ public class TvNextUpServiceTests : PluginTestBase
     private TvNextUpService CreateService()
     {
         var config = new PluginConfiguration();
+        config.StreamProxyEnabled = false;
         TestHelpers.SetServerAddress(config, "https://test.example.com");
         return new TvNextUpService(
             _loggerFactory.CreateLogger<TvNextUpServiceTests>(),

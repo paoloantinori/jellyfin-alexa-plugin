@@ -52,7 +52,7 @@ public class YesIntentHandlerTests : PluginTestBase
         _userManagerMock
             .Setup(um => um.GetUserById(It.IsAny<Guid>()))
             .Returns(TestHelpers.CreateJellyfinUser());
-        _config = new PluginConfiguration();
+        _config = new PluginConfiguration { StreamProxyEnabled = false };
         TestHelpers.SetServerAddress(_config, "http://localhost:8096");
         _loggerFactory = LoggerFactory.Create(b => { });
 
