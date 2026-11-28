@@ -74,6 +74,7 @@ public class AlbumPlayServiceAlbumShuffleTests : PluginTestBase
     private static PluginConfiguration WorkingConfig()
     {
         var config = new PluginConfiguration();
+        config.StreamProxyEnabled = false;
         TestHelpers.SetServerAddress(config, "https://test.example.com");
         return config;
     }

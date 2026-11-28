@@ -50,7 +50,7 @@ public class CoverArtTests : PluginTestBase
     public CoverArtTests()
     {
         _sessionManagerMock = new Mock<ISessionManager>();
-        _config = new PluginConfiguration();
+        _config = new PluginConfiguration { StreamProxyEnabled = false };
         TestHelpers.SetServerAddress(_config, "http://localhost:8096");
         _loggerFactory = LoggerFactory.Create(b => { });
     }

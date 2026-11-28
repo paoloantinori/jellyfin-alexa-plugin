@@ -49,7 +49,7 @@ public class ShufflePlayIntentHandlerTests : PluginTestBase
         _sessionManagerMock = new Mock<ISessionManager>();
         _libraryManagerMock = new Mock<ILibraryManager>();
         _userManagerMock = new Mock<IUserManager>();
-        _config = new PluginConfiguration();
+        _config = new PluginConfiguration { StreamProxyEnabled = false };
         TestHelpers.SetServerAddress(_config, "http://localhost:8096");
         _loggerFactory = LoggerFactory.Create(b => { });
     }

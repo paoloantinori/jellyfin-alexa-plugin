@@ -83,6 +83,9 @@ public class PlaybackLaunchBuilderTests : PluginTestBase
     [Fact]
     public void NowPlaying_AttachedArtUrl_UsesConfigServerAddressAndUserToken()
     {
+        // JF-950 item 2: with the stream proxy on (the default), the attached art URL is
+        // the image-proxy URL carrying the item-scoped token + u selector, never the
+        // Jellyfin session token.
         var song = TestHelpers.CreateSong();
         var user = CreateUser(token: "my-api-key");
         var context = TestHelpers.CreateContextWithApl();
@@ -90,6 +93,31 @@ public class PlaybackLaunchBuilderTests : PluginTestBase
 
         var apl = Assert.IsType<AplRenderDocumentDirective>(response.Response.Directives[1]);
         Assert.NotNull(apl.DataSources);
+        string? artUrl = apl.DataSources["jellyfinData"]?["properties"]?["artUrl"]?.ToString();
+        Assert.StartsWith(
+            $"http://localhost:8096/alexaskill/api/stream/image/{itemId}?token=",
+            artUrl,
+            StringComparison.Ordinal);
+        Assert.EndsWith($"&u={user.Id}", artUrl, StringComparison.Ordinal);
+        Assert.DoesNotContain("my-api-key", artUrl, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void NowPlaying_AttachedArtUrl_ProxyDisabled_LegacyApiKeyUrl()
+    {
+        // The rollback switch: StreamProxyEnabled=false restores the pre-JF-950 art URL.
+        var config = new PluginConfiguration();
+        TestHelpers.SetServerAddress(config, "http://localhost:8096");
+        config.StreamProxyEnabled = false;
+        var launch = TestHelpers.CreateLaunchBuilder(config);
+        var song = TestHelpers.CreateSong();
+        var user = CreateUser(token: "my-api-key");
+        string itemId = song.Id.ToString();
+
+        var response = launch.BuildAudioPlayerResponse(
+            PlayBehavior.ReplaceAll, "http://x/stream", itemId, song, user, TestHelpers.CreateContextWithApl());
+
+        var apl = Assert.IsType<AplRenderDocumentDirective>(response.Response.Directives[1]);
         string? artUrl = apl.DataSources["jellyfinData"]?["properties"]?["artUrl"]?.ToString();
         Assert.Equal(
             $"http://localhost:8096/Items/{itemId}/Images/Primary?api_key=my-api-key",
@@ -202,5 +230,117 @@ public class PlaybackLaunchBuilderTests : PluginTestBase
 
         var playDirective = Assert.Single(response.Response.Directives);
         Assert.IsType<AudioPlayerPlayDirective>(playDirective);
+    }
+
+    // ---- JF-950 item 2: the stream/image proxy URL flag ----
+
+    /// <summary>Extracts one raw query parameter value from a URL (no encoding).</summary>
+    private static string QueryParam(string url, string name)
+    {
+        string query = url[(url.IndexOf('?') + 1)..];
+        foreach (string part in query.Split('&'))
+        {
+            if (part.StartsWith(name + "=", StringComparison.Ordinal))
+            {
+                return part[(name.Length + 1)..];
+            }
+        }
+
+        Assert.Fail($"no query parameter {name} in {url}");
+        return string.Empty;
+    }
+
+    [Fact]
+    public void StreamUrl_ProxyEnabled_EmitsProxyUrlWithTokenAndU()
+    {
+        // The default (flag on): the audio stream URL is the signed-token proxy URL;
+        // the long-lived Jellyfin session token never appears in it.
+        var song = TestHelpers.CreateSong();
+        var user = CreateUser(token: "session-token");
+        string itemId = song.Id.ToString();
+        string url = _launch.GetStreamUrl(itemId, user);
+
+        Assert.StartsWith(
+            $"http://localhost:8096/alexaskill/api/stream/{itemId}?token=",
+            url,
+            StringComparison.Ordinal);
+        Assert.Equal(user.Id.ToString(), QueryParam(url, "u"));
+        Assert.DoesNotContain("api_key=", url, StringComparison.Ordinal);
+        Assert.DoesNotContain("session-token", url, StringComparison.Ordinal);
+        Assert.True(StreamTokenHelper.TryValidate(QueryParam(url, "token"), itemId, _config.StreamTokenSecret));
+    }
+
+    [Fact]
+    public void VideoStreamUrl_ProxyEnabled_EmitsTheSameProxyUrlAsAudio()
+    {
+        // The endpoint derives Audio-vs-Videos from the item's media kind, so both
+        // builders emit the SAME proxy URL for the same item; the path segment is a
+        // legacy-only concern (the single-BuildStreamUrl contract).
+        var user = CreateUser();
+        string itemId = Guid.NewGuid().ToString();
+
+        Assert.Equal(_launch.GetStreamUrl(itemId, user), _launch.GetVideoStreamUrl(itemId, user));
+    }
+
+    [Fact]
+    public void StreamUrl_ProxyDisabled_IsByteIdenticalLegacyUrl()
+    {
+        var config = new PluginConfiguration();
+        TestHelpers.SetServerAddress(config, "http://localhost:8096");
+        config.StreamProxyEnabled = false;
+        var launch = TestHelpers.CreateLaunchBuilder(config);
+        var user = CreateUser(token: "test-token");
+        string itemId = Guid.NewGuid().ToString();
+
+        Assert.Equal(
+            $"http://localhost:8096/Audio/{itemId}/stream?static=true&api_key=test-token",
+            launch.GetStreamUrl(itemId, user));
+    }
+
+    [Fact]
+    public void VideoStreamUrl_ProxyDisabled_IsByteIdenticalLegacyUrl()
+    {
+        var config = new PluginConfiguration();
+        TestHelpers.SetServerAddress(config, "http://localhost:8096");
+        config.StreamProxyEnabled = false;
+        var launch = TestHelpers.CreateLaunchBuilder(config);
+        var user = CreateUser(token: "test-token");
+        string itemId = Guid.NewGuid().ToString();
+
+        Assert.Equal(
+            $"http://localhost:8096/Videos/{itemId}/stream?static=true&api_key=test-token",
+            launch.GetVideoStreamUrl(itemId, user));
+    }
+
+    [Fact]
+    public void ImageUrl_ProxyEnabled_EmitsImageProxyUrlWithTokenAndU()
+    {
+        var song = TestHelpers.CreateSong();
+        var user = CreateUser(token: "session-token");
+        string itemId = song.Id.ToString();
+        string url = _launch.GetImageUrl(itemId, user);
+
+        Assert.StartsWith(
+            $"http://localhost:8096/alexaskill/api/stream/image/{itemId}?token=",
+            url,
+            StringComparison.Ordinal);
+        Assert.Equal(user.Id.ToString(), QueryParam(url, "u"));
+        Assert.DoesNotContain("api_key=", url, StringComparison.Ordinal);
+        Assert.True(StreamTokenHelper.TryValidate(QueryParam(url, "token"), itemId, _config.StreamTokenSecret));
+    }
+
+    [Fact]
+    public void ImageUrl_ProxyDisabled_IsByteIdenticalLegacyUrl()
+    {
+        var config = new PluginConfiguration();
+        TestHelpers.SetServerAddress(config, "http://localhost:8096");
+        config.StreamProxyEnabled = false;
+        var launch = TestHelpers.CreateLaunchBuilder(config);
+        var user = CreateUser(token: "test-token");
+        string itemId = Guid.NewGuid().ToString();
+
+        Assert.Equal(
+            $"http://localhost:8096/Items/{itemId}/Images/Primary?api_key=test-token",
+            launch.GetImageUrl(itemId, user));
     }
 }

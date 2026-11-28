@@ -41,7 +41,7 @@ public class SetPlaybackSpeedIntentHandlerTests : PluginTestBase, IDisposable
     private readonly Mock<ILibraryManager> _libraryManagerMock = new();
     private readonly Mock<MediaBrowser.Controller.Library.IUserManager> _userManagerMock = new();
     private readonly Mock<MediaBrowser.Controller.Library.IUserDataManager> _userDataManagerMock = new();
-    private readonly PluginConfiguration _config = new();
+    private readonly PluginConfiguration _config = new() { StreamProxyEnabled = false };
     private readonly ILoggerFactory _loggerFactory = LoggerFactory.Create(b => { });
     private readonly DeviceQueueManager _queueManager;
 

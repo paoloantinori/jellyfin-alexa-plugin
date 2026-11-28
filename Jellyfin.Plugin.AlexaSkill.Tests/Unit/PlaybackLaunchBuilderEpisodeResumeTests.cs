@@ -20,7 +20,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 [Collection("Plugin")]
 public class PlaybackLaunchBuilderEpisodeResumeTests : PluginTestBase
 {
-    private readonly PluginConfiguration _config = new();
+    private readonly PluginConfiguration _config = new() { StreamProxyEnabled = false };
     private readonly PlaybackLaunchBuilder _builder;
 
     public PlaybackLaunchBuilderEpisodeResumeTests()

@@ -99,6 +99,27 @@ public class PluginConfiguration : BasePluginConfiguration
     public string StreamTokenSecret { get; set; } = string.Empty;
 
     /// <summary>
+    /// Gets or sets a value indicating whether playback stream and image URLs route through
+    /// the plugin's signed-token stream proxy (JF-950 item 2) instead of embedding the user's
+    /// long-lived Jellyfin session token (api_key) in URLs that transit Amazon's servers and
+    /// reverse-proxy access logs. Default true; set false to fall back to the legacy
+    /// api_key-bearing URLs byte-identical to the pre-JF-950 shapes (the rollback switch).
+    /// The proxy URLs carry the same JF-309 HMAC token the video-audio endpoints use, so an
+    /// empty <see cref="StreamTokenSecret"/> refuses playback through the existing
+    /// EnsureStreamTokenDeliverable gate instead of playing.
+    /// </summary>
+    public bool StreamProxyEnabled { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets the base URL the stream proxy uses for its SERVER-SIDE fetches from
+    /// Jellyfin (JF-950 item 2). Must point at the loopback/interface address of the
+    /// Jellyfin process the plugin runs inside (default http://localhost:8096), NOT
+    /// through the public reverse proxy: a proxy hop would re-leak the ApiKey into the
+    /// proxy's access logs, which is exactly the exposure JF-950 removes.
+    /// </summary>
+    public string InternalServerUrl { get; set; } = "http://localhost:8096";
+
+    /// <summary>
     /// Gets or sets the additional locales (beyond it-IT) to include in catalog sync, as a
     /// comma-separated string of locale codes (e.g. "de-DE,en-US"). it-IT is always synced.
     /// Only locales with phonetic synonym generators (de/es/fr/pt/ja/nl) get phonetic variants;

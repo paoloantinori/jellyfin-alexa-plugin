@@ -39,7 +39,11 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 ///   pins that the progressive announce is never sent for a refused launch).
 /// The no-overblock pins hold the other half of the contract: static Jellyfin stream
 /// URLs and live-TV resolver URLs carry NO plugin token, keep playing with an empty
-/// secret, and must never be refused. RED PROOF: disable the shared
+/// secret, and must never be refused. JF-950 item 2 scopes the static-stream half to
+/// StreamProxyEnabled=false: with the proxy ON (the default) the builder-minted static
+/// route is itself a token-gated proxy URL, so the screenless-audiobook degrade REFUSES
+/// on an empty secret like every other token-gated family (its pin pair lives at the
+/// resume-builder family below). RED PROOF: disable the shared
 /// EnsureStreamTokenDeliverable guard in PlaybackLaunchBuilder; every Throws pin
 /// flips (the dead-URL directive is returned instead) while the no-overblock and
 /// control pins stay green.
@@ -172,14 +176,35 @@ public class PlaybackLaunchBuilderStreamTokenSecretTests : PluginTestBase
     }
 
     [Fact]
-    public void AudiobookResume_Screenless_EmptySecret_StillDegradesToAudioPlayer()
+    public void AudiobookResume_Screenless_EmptySecret_ProxyOn_Refuses()
     {
-        // The no-overblock half on the resume builder: the screenless degrade plays the
-        // chapter on the STATIC audio URL, which no token gates.
+        // JF-950 item 2: with the stream proxy ON (the default) the screenless degrade's
+        // audio URL is the token-gated proxy URL, so the empty-secret refusal fires from
+        // the BuildAudioPlayerResponse chokepoint exactly like the other token-gated
+        // families (the JF-699 doctrine: a token-gated URL is dead at birth with an empty
+        // secret, and the builder throws instead of shipping it).
         var chapter = new MediaBrowser.Controller.Entities.AudioBook { Name = "Chapter 1", Id = Guid.NewGuid() };
         var user = CreateUser();
 
-        SkillResponse response = _launch.BuildAudiobookResumeResponse(
+        AssertRefused(() => _launch.BuildAudiobookResumeResponse(
+            chapter, TimeSpan.FromMinutes(5).Ticks, user, TestHelpers.CreateScreenlessContext()));
+    }
+
+    [Fact]
+    public void AudiobookResume_Screenless_EmptySecret_LegacyStaticUrl_StillPlays()
+    {
+        // The no-overblock half, now flag-scoped (JF-950): with StreamProxyEnabled=false
+        // the degrade plays the chapter on the legacy STATIC audio URL, which carries the
+        // user's api_key and no plugin token, so it still plays with an empty secret.
+        var config = new PluginConfiguration();
+        TestHelpers.SetServerAddress(config, "https://test.example.com");
+        config.StreamTokenSecret = string.Empty;
+        config.StreamProxyEnabled = false;
+        var launch = TestHelpers.CreateLaunchBuilder(config);
+        var chapter = new MediaBrowser.Controller.Entities.AudioBook { Name = "Chapter 1", Id = Guid.NewGuid() };
+        var user = CreateUser();
+
+        SkillResponse response = launch.BuildAudiobookResumeResponse(
             chapter, TimeSpan.FromMinutes(5).Ticks, user, TestHelpers.CreateScreenlessContext());
 
         var directive = Assert.Single(response.Response.Directives);

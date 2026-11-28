@@ -36,7 +36,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 [Collection("Plugin")]
 public class ResumeIntentAudioVariantOffsetTests : PluginTestBase, IDisposable
 {
-    private readonly HandlerTestFixture _fx = new HandlerTestFixture();
+    private readonly HandlerTestFixture _fx = new HandlerTestFixture(configure: c => c.StreamProxyEnabled = false);
     private readonly DeviceQueueManager _queueManager;
     private readonly string _tempDir;
 

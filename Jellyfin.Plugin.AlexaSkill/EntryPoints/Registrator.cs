@@ -110,6 +110,14 @@ public class Registrator : IPluginServiceRegistrator
         serviceCollection.AddHttpClient("AlexaSkillProgressive")
             .ConfigureHttpClient(c => c.Timeout = TimeSpan.FromSeconds(2));
 
+        // JF-950 item 2: the stream-proxy client. NO timeout: the proxy relays media at the
+        // device's read pace and a movie easily outlives any fixed budget (HttpClient.Timeout
+        // aborts mid-body, killing playback). Downstream abandonment is bounded by the device
+        // request's own lifetime instead: StreamProxyController threads
+        // HttpContext.RequestAborted into the upstream fetch.
+        serviceCollection.AddHttpClient("AlexaSkillStreamProxy")
+            .ConfigureHttpClient(c => c.Timeout = System.Threading.Timeout.InfiniteTimeSpan);
+
         // Live TV stream resolver (PlaybackInfo -> direct-remote vs dynamic HLS master)
         serviceCollection.AddSingleton<ILiveTvStreamResolver, LiveTvStreamResolver>();
 

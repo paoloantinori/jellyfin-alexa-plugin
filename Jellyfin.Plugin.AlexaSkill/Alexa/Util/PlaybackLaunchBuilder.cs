@@ -359,7 +359,9 @@ public sealed class PlaybackLaunchBuilder
     }
 
     /// <summary>
-    /// Get a stream url for the given item.
+    /// Get a stream url for the given item: the signed-token proxy URL by default, the
+    /// legacy api_key static URL when <see cref="PluginConfiguration.StreamProxyEnabled"/> is
+    /// off (JF-950 item 2; see <see cref="BuildStreamUrl"/>).
     /// </summary>
     /// <param name="itemId">Id of the item to stream.</param>
     /// <param name="user">The user for which the item should be played.</param>
@@ -368,7 +370,11 @@ public sealed class PlaybackLaunchBuilder
         => BuildStreamUrl("Audio/", itemId, user);
 
     /// <summary>
-    /// Get a video stream URL for the given item.
+    /// Get a video stream URL for the given item: the signed-token proxy URL by default
+    /// (the endpoint derives Audio-vs-Video from the item, so this and
+    /// <see cref="GetStreamUrl"/> share one builder), the legacy api_key static URL when
+    /// <see cref="PluginConfiguration.StreamProxyEnabled"/> is off (JF-950 item 2; see
+    /// <see cref="BuildStreamUrl"/>).
     /// </summary>
     /// <param name="itemId">Id of the item to stream.</param>
     /// <param name="user">The user for which the item should be played.</param>
@@ -2232,17 +2238,49 @@ public sealed class PlaybackLaunchBuilder
         return EnsureLaunchResponse(response);
     }
 
+    /// <summary>
+    /// The ONE stream-URL builder behind <see cref="GetStreamUrl"/> and
+    /// <see cref="GetVideoStreamUrl"/> (JF-950 item 2): with
+    /// <see cref="PluginConfiguration.StreamProxyEnabled"/> (default) it emits the
+    /// signed-token proxy URL, whose item kind the endpoint derives from the item itself
+    /// (so the Audio/Videos path segment is a LEGACY-only concern); with the flag off it
+    /// emits the legacy api_key-bearing static URL byte-identical to the pre-JF-950
+    /// shape (the rollback switch). The proxy URL carries the JF-309 item-scoped token,
+    /// so it flows through the same <see cref="EnsureStreamTokenDeliverable"/> gate as
+    /// the other token-gated URLs and is refused loudly when the secret is empty.
+    /// </summary>
+    /// <param name="pathSegment">Legacy-only Audio/ or Videos/ path segment (ignored
+    /// when the proxy is enabled).</param>
+    /// <param name="itemId">Id of the item to stream.</param>
+    /// <param name="user">The user: the legacy URL carries its Jellyfin token, the proxy
+    /// URL carries its plugin user id as the fetch selector (<c>&amp;u=</c>).</param>
+    /// <returns>Streamable url of the requested item.</returns>
     private string BuildStreamUrl(string pathSegment, string itemId, Entities.User user)
-        => new Uri(new Uri(_config.ServerAddress), $"{pathSegment}{itemId}/stream?static=true&api_key={user.JellyfinToken}").ToString();
+    {
+        if (_config.StreamProxyEnabled)
+        {
+            return new Uri(new Uri(_config.ServerAddress), $"{Controller.AlexaSkillController.ApiBaseUri}stream/{itemId}?token={StreamTokenHelper.Mint(itemId, _config.StreamTokenSecret)}&u={user.Id}").ToString();
+        }
+
+        return new Uri(new Uri(_config.ServerAddress), $"{pathSegment}{itemId}/stream?static=true&api_key={user.JellyfinToken}").ToString();
+    }
 
     /// <summary>
-    /// Get a cover art image URL for the given item.
+    /// Get a cover art image URL for the given item (JF-950 item 2): the signed-token
+    /// image-proxy URL when <see cref="PluginConfiguration.StreamProxyEnabled"/> (default),
+    /// the legacy api_key-bearing Items image URL otherwise (byte-identical rollback).
     /// </summary>
     /// <param name="itemId">Id of the item.</param>
-    /// <param name="user">The user for authentication.</param>
+    /// <param name="user">The user: the legacy URL carries its Jellyfin token, the proxy
+    /// URL carries its plugin user id as the fetch selector (<c>&amp;u=</c>).</param>
     /// <returns>URL of the item's primary image.</returns>
     public string GetImageUrl(string itemId, Entities.User user)
     {
+        if (_config.StreamProxyEnabled)
+        {
+            return new Uri(new Uri(_config.ServerAddress), $"{Controller.AlexaSkillController.ApiBaseUri}stream/image/{itemId}?token={StreamTokenHelper.Mint(itemId, _config.StreamTokenSecret)}&u={user.Id}").ToString();
+        }
+
         return new Uri(new Uri(_config.ServerAddress), "Items/" + itemId + "/Images/Primary?api_key=" + user.JellyfinToken).ToString();
     }
 

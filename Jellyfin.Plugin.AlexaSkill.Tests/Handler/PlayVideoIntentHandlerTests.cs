@@ -30,7 +30,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 [Collection("Plugin")]
 public class PlayVideoIntentHandlerTests : PluginTestBase
 {
-    private readonly HandlerTestFixture _fx = new HandlerTestFixture("http://localhost:8096");
+    private readonly HandlerTestFixture _fx = new HandlerTestFixture("http://localhost:8096", configure: c => c.StreamProxyEnabled = false);
 
     public PlayVideoIntentHandlerTests()
     {

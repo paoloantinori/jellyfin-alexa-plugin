@@ -200,7 +200,7 @@ public class VideoAppCapabilityGateTests : PluginTestBase
     [Fact]
     public async Task BuildEpisodeLaunchResponse_AudioOnlyEpisodeOnCapableDevice_RoutesAudioPlayer()
     {
-        var config = new PluginConfiguration { ServerAddress = "http://localhost:8096/" };
+        var config = new PluginConfiguration { ServerAddress = "http://localhost:8096/", StreamProxyEnabled = false };
         var handler = CreateBuilderProbe(config, LoggerFactory.Create(b => { }));
         var user = new Entities.User { Id = Guid.NewGuid(), JellyfinToken = "tok" };
         var episodeId = Guid.NewGuid();
@@ -362,7 +362,7 @@ public class VideoAppCapabilityGateTests : PluginTestBase
     [Fact]
     public void BuildVideoAppAudioResponse_ScreenlessDevice_DegradesToAudioPlayer()
     {
-        var config = new PluginConfiguration { ServerAddress = "http://localhost:8096/" };
+        var config = new PluginConfiguration { ServerAddress = "http://localhost:8096/", StreamProxyEnabled = false };
         var loggerFactory = LoggerFactory.Create(b => { });
         TestHelpers.EnsurePluginInstance(config, loggerFactory, _ => { }, "jf505-gate-tests");
         var handler = CreateBuilderProbe(config, loggerFactory);
