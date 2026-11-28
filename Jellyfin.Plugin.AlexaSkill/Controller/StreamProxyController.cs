@@ -43,6 +43,14 @@ namespace Jellyfin.Plugin.AlexaSkill.Controller;
 /// why the user rides the query string instead of the token.
 /// </para>
 /// <para>
+/// HEAD SUPPORT (live device round, 2026-11-28): the Echo's AudioPlayer
+/// fetcher HEAD-probes the stream URL before fetching (the legacy Jellyfin
+/// static endpoints answer HEAD with 200 + full headers; our GET-only routes
+/// answered 405 and the device aborted with MEDIA_ERROR_SERVICE_UNAVAILABLE
+/// ~15s later with zero action logs - the routing layer rejects HEAD before
+/// any controller code runs). Every proxy route accepts HEAD alongside GET;
+/// Kestrel discards the body on HEAD responses, so the upstream fetch cost
+/// is the same as the headers-only answer the native endpoints give.
 /// NO <c>[Authorize]</c>: the Echo fetches these URLs with no Jellyfin credentials; the
 /// HMAC token is the gate (same convention as <see cref="VideoAudioController"/>, whose
 /// rejection shapes this controller mirrors: 400 non-GUID id, 401 bad/expired token,
@@ -87,6 +95,7 @@ public class StreamProxyController : ControllerBase
     /// <returns>The proxied stream (200/206 with Range headers copied), or the rejection
     /// shapes documented on the class (400/401/404/503).</returns>
     [HttpGet("audio/{itemId}")]
+    [HttpHead("audio/{itemId}")]
     public Task<ActionResult> ProxyAudio(string itemId)
         => ProxyStream(itemId, "Audio");
 
@@ -98,6 +107,7 @@ public class StreamProxyController : ControllerBase
     /// <returns>The proxied stream (200/206 with Range headers copied), or the rejection
     /// shapes documented on the class (400/401/404/503).</returns>
     [HttpGet("video/{itemId}")]
+    [HttpHead("video/{itemId}")]
     public Task<ActionResult> ProxyVideo(string itemId)
         => ProxyStream(itemId, "Videos");
 
@@ -136,6 +146,7 @@ public class StreamProxyController : ControllerBase
     /// <returns>The proxied image bytes with Content-Type and cache headers copied, or the
     /// rejection shapes documented on the class (400/401/404/503).</returns>
     [HttpGet("image/{itemId}")]
+    [HttpHead("image/{itemId}")]
     public async Task<ActionResult> ProxyImage(string itemId)
     {
         ActionResult? error = ValidateTokenGate(itemId);
