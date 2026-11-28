@@ -120,7 +120,7 @@ public class StreamProxyControllerTests : PluginTestBase, IDisposable
     {
         var controller = CreateController();
 
-        ActionResult result = await controller.ProxyStream("not-a-guid");
+        ActionResult result = await controller.ProxyAudio("not-a-guid");
 
         var badRequest = Assert.IsType<BadRequestObjectResult>(result);
         Assert.NotNull(badRequest.Value);
@@ -132,7 +132,7 @@ public class StreamProxyControllerTests : PluginTestBase, IDisposable
         AddUser("tok");
         var controller = CreateController(); // no token in query
 
-        ActionResult result = await controller.ProxyStream(Guid.NewGuid().ToString());
+        ActionResult result = await controller.ProxyAudio(Guid.NewGuid().ToString());
 
         Assert.IsType<UnauthorizedObjectResult>(result);
         Assert.Empty(_upstream.Requests);
@@ -145,7 +145,7 @@ public class StreamProxyControllerTests : PluginTestBase, IDisposable
         string itemId = Guid.NewGuid().ToString();
         var controller = CreateController(itemIdForToken: itemId, tokenTtl: TimeSpan.FromHours(-1));
 
-        ActionResult result = await controller.ProxyStream(itemId);
+        ActionResult result = await controller.ProxyAudio(itemId);
 
         Assert.IsType<UnauthorizedObjectResult>(result);
         Assert.Empty(_upstream.Requests);
@@ -157,7 +157,7 @@ public class StreamProxyControllerTests : PluginTestBase, IDisposable
         AddUser("tok");
         var controller = CreateController(itemIdForToken: Guid.NewGuid().ToString()); // token for OTHER item
 
-        ActionResult result = await controller.ProxyStream(Guid.NewGuid().ToString());
+        ActionResult result = await controller.ProxyAudio(Guid.NewGuid().ToString());
 
         Assert.IsType<UnauthorizedObjectResult>(result);
         Assert.Empty(_upstream.Requests);
@@ -171,28 +171,13 @@ public class StreamProxyControllerTests : PluginTestBase, IDisposable
         string itemId = Guid.NewGuid().ToString();
         var controller = CreateController(itemIdForToken: itemId);
 
-        ActionResult result = await controller.ProxyStream(itemId);
+        ActionResult result = await controller.ProxyAudio(itemId);
 
         var notFound = Assert.IsType<NotFoundObjectResult>(result);
         Assert.NotNull(notFound.Value);
         Assert.Empty(_upstream.Requests);
     }
 
-    [Fact]
-    public async Task ProxyStream_NonStreamableItem_Returns404()
-    {
-        AddUser("tok");
-        var folder = new Folder { Id = Guid.NewGuid(), Name = "Book folder" };
-        _libraryManagerMock.Setup(m => m.GetItemById(folder.Id)).Returns(folder);
-        string itemId = folder.Id.ToString();
-        var controller = CreateController(itemIdForToken: itemId);
-
-        ActionResult result = await controller.ProxyStream(itemId);
-
-        var notFound = Assert.IsType<NotFoundObjectResult>(result);
-        Assert.NotNull(notFound.Value);
-        Assert.Empty(_upstream.Requests);
-    }
 
     // ========== The proxy path: audio ==========
 
@@ -205,7 +190,7 @@ public class StreamProxyControllerTests : PluginTestBase, IDisposable
         string itemId = song.Id.ToString();
         var controller = CreateController(itemIdForToken: itemId, u: user.Id.ToString(), range: "bytes=0-99");
 
-        ActionResult result = await controller.ProxyStream(itemId);
+        ActionResult result = await controller.ProxyAudio(itemId);
 
         // The upstream fetch: loopback base, Audio path, static=true, CAPITAL ApiKey
         // (JF-575: lowercase api_key 401s on Jellyfin 12.0), and the Range copied.
@@ -233,7 +218,7 @@ public class StreamProxyControllerTests : PluginTestBase, IDisposable
         _upstream.ContentType = "video/mp4";
         var controller = CreateController(itemIdForToken: itemId);
 
-        ActionResult result = await controller.ProxyStream(itemId);
+        ActionResult result = await controller.ProxyVideo(itemId);
 
         var (url, range) = Assert.Single(_upstream.Requests);
         Assert.Equal($"{InternalUrl}/Videos/{itemId}/stream?static=true&ApiKey=tok", url);
@@ -251,7 +236,7 @@ public class StreamProxyControllerTests : PluginTestBase, IDisposable
         string itemId = song.Id.ToString();
         var controller = CreateController(itemIdForToken: itemId); // config.Users is empty
 
-        ActionResult result = await controller.ProxyStream(itemId);
+        ActionResult result = await controller.ProxyAudio(itemId);
 
         var unavailable = Assert.IsType<ObjectResult>(result);
         Assert.Equal(503, unavailable.StatusCode);
@@ -270,7 +255,7 @@ public class StreamProxyControllerTests : PluginTestBase, IDisposable
         string itemId = song.Id.ToString();
         var controller = CreateController(itemIdForToken: itemId); // no u
 
-        await controller.ProxyStream(itemId);
+        await controller.ProxyAudio(itemId);
 
         var (url, _) = Assert.Single(_upstream.Requests);
         Assert.EndsWith("ApiKey=first-token", url, StringComparison.Ordinal);
@@ -285,7 +270,7 @@ public class StreamProxyControllerTests : PluginTestBase, IDisposable
         string itemId = song.Id.ToString();
         var controller = CreateController(itemIdForToken: itemId, u: Guid.NewGuid().ToString());
 
-        await controller.ProxyStream(itemId);
+        await controller.ProxyAudio(itemId);
 
         var (url, _) = Assert.Single(_upstream.Requests);
         Assert.EndsWith("ApiKey=first-token", url, StringComparison.Ordinal);
@@ -301,7 +286,7 @@ public class StreamProxyControllerTests : PluginTestBase, IDisposable
         string itemId = song.Id.ToString();
         var controller = CreateController(itemIdForToken: itemId, u: second.Id.ToString());
 
-        await controller.ProxyStream(itemId);
+        await controller.ProxyAudio(itemId);
 
         var (url, _) = Assert.Single(_upstream.Requests);
         Assert.EndsWith("ApiKey=second-token", url, StringComparison.Ordinal);
@@ -318,7 +303,7 @@ public class StreamProxyControllerTests : PluginTestBase, IDisposable
         string itemId = song.Id.ToString();
         var controller = CreateController(itemIdForToken: itemId, u: tokenless.Id.ToString());
 
-        await controller.ProxyStream(itemId);
+        await controller.ProxyAudio(itemId);
 
         var (url, _) = Assert.Single(_upstream.Requests);
         Assert.EndsWith("ApiKey=first-token", url, StringComparison.Ordinal);

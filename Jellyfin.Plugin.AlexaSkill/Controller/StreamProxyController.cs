@@ -76,14 +76,37 @@ public class StreamProxyController : ControllerBase
     }
 
     /// <summary>
-    /// Proxy a media stream for the item: audio items via Jellyfin's static
-    /// <c>/Audio/{id}/stream</c> endpoint, video items via <c>/Videos/{id}/stream</c>.
+    /// Proxy an AUDIO-KIND stream via Jellyfin's static <c>/Audio/{id}/stream</c>
+    /// endpoint. The stream KIND is caller-declared by the route (JF-950 review
+    /// round: deriving it from BaseItem.MediaType broke audio-launched video items
+    /// - podcast Episodes are MediaType=Video but must fetch /Audio, the shape the
+    /// repo live-verified; the legacy builder's pathSegment carried exactly this
+    /// intent, so the proxy URL carries it the same way).
     /// </summary>
     /// <param name="itemId">The Jellyfin item GUID.</param>
     /// <returns>The proxied stream (200/206 with Range headers copied), or the rejection
     /// shapes documented on the class (400/401/404/503).</returns>
-    [HttpGet("{itemId}")]
-    public async Task<ActionResult> ProxyStream(string itemId)
+    [HttpGet("audio/{itemId}")]
+    public Task<ActionResult> ProxyAudio(string itemId)
+        => ProxyStream(itemId, "Audio");
+
+    /// <summary>
+    /// Proxy a VIDEO-KIND stream via Jellyfin's static <c>/Videos/{id}/stream</c>
+    /// endpoint (see <see cref="ProxyAudio"/> for why the kind is caller-declared).
+    /// </summary>
+    /// <param name="itemId">The Jellyfin item GUID.</param>
+    /// <returns>The proxied stream (200/206 with Range headers copied), or the rejection
+    /// shapes documented on the class (400/401/404/503).</returns>
+    [HttpGet("video/{itemId}")]
+    public Task<ActionResult> ProxyVideo(string itemId)
+        => ProxyStream(itemId, "Videos");
+
+    /// <summary>
+    /// The shared stream proxy tail behind the kind-declared routes: validate the
+    /// token gate, resolve the item (existence check only; the KIND comes from the
+    /// route, never from metadata), and proxy Jellyfin's static stream endpoint.
+    /// </summary>
+    private async Task<ActionResult> ProxyStream(string itemId, string streamSegment)
     {
         ActionResult? error = ValidateTokenGate(itemId);
         if (error != null)
@@ -98,21 +121,9 @@ public class StreamProxyController : ControllerBase
             return NotFound(new { error = "Item not found" });
         }
 
-        // JF-575: capital ApiKey is the only query shape Jellyfin 12.0's general API
-        // accepts (lowercase api_key 401s there; 10.11 accepts both). The static stream
-        // endpoints are themselves auth-open (jellyfin#13984), so the key is belt here,
-        // but the capital shape is safe on both server lines.
-        string streamSegment = item.MediaType switch
-        {
-            MediaType.Audio => "Audio",
-            MediaType.Video => "Videos",
-            _ => string.Empty
-        };
-        if (streamSegment.Length == 0)
-        {
-            _logger.LogWarning("StreamProxy: item {ItemId} ({ItemType}) is not an audio or video item", itemId, item.GetType().Name);
-            return NotFound(new { error = "Item is not a streamable media type" });
-        }
+        _logger.LogDebug(
+            "StreamProxy: proxying item {ItemId} ({ItemName}, {ItemType}) via the {Segment} static endpoint",
+            itemId, item.Name, item.GetType().Name, streamSegment);
 
         return await ProxyCore(itemId, $"/{streamSegment}/{itemId}/stream?static=true").ConfigureAwait(false);
     }
@@ -137,10 +148,12 @@ public class StreamProxyController : ControllerBase
     }
 
     /// <summary>
-    /// The shared signed-route preamble (mirrors VideoAudioController's
-    /// ValidateSignedRoute ordering): reject a non-GUID route id with 400 BEFORE the token
-    /// check (the token binds to the GUID), then validate the signed item-scoped stream
-    /// token. Returns null when the request may proceed.
+    /// The shared signed-route preamble: delegates to the ONE gate definition
+    /// on VideoAudioController (the JF-950 simplify round collapsed this
+    /// controller's near-verbatim copy so the two gates cannot drift):
+    /// reject a non-GUID route id with 400 BEFORE the token check (the token
+    /// binds to the GUID), then validate the signed item-scoped stream token.
+    /// Returns null when the request may proceed.
     /// </summary>
     private ActionResult? ValidateTokenGate(string itemId)
     {
@@ -156,14 +169,8 @@ public class StreamProxyController : ControllerBase
             return StatusCode(503, new { error = "Stream token secret not configured" });
         }
 
-        string? token = HttpContext.Request.Query["token"];
-        if (!StreamTokenHelper.TryValidate(token, itemId, secret))
-        {
-            _logger.LogWarning("StreamProxy: rejected stream request for {ItemId} (missing/invalid/expired token)", itemId);
-            return Unauthorized(new { error = "Invalid or expired stream token" });
-        }
-
-        return null;
+        return VideoAudioController.ValidateSignedRouteStatic(
+            itemId, HttpContext.Request.Query["token"], secret, _logger, "StreamProxy");
     }
 
     /// <summary>
@@ -216,48 +223,68 @@ public class StreamProxyController : ControllerBase
 
             upstream = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, HttpContext.RequestAborted).ConfigureAwait(false);
         }
-        catch (Exception ex) when (ex is OperationCanceledException or HttpRequestException or InvalidOperationException)
+        catch (OperationCanceledException) when (HttpContext.RequestAborted.IsCancellationRequested)
+        {
+            // JF-950 review round: the DEVICE went away mid-seek (the healthy
+            // seek-race abort), not an upstream failure; debug-level, no 502.
+            _logger.LogDebug("StreamProxy: device aborted the {ItemId} fetch mid-request", itemId);
+            return StatusCode(499);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
         {
             _logger.LogWarning(ex, "StreamProxy: upstream fetch failed for {ItemId}", itemId);
             return StatusCode(502, new { error = "Upstream stream fetch failed" });
         }
 
-        string contentType = upstream.Content.Headers.ContentType?.ToString() ?? "application/octet-stream";
-
-        Response.StatusCode = (int)upstream.StatusCode;
-
-        if (upstream.Content.Headers.ContentRange != null)
+        // JF-950 review round: anything failing between SendAsync completing and the
+        // File() handoff must dispose the upstream response, or the pooled loopback
+        // connection leaks until GC. The success path does NOT dispose: FileStreamResult
+        // owns the content stream and returning the connection is the stream's disposal.
+        try
         {
-            Response.Headers["Content-Range"] = upstream.Content.Headers.ContentRange.ToString();
-        }
+            string contentType = upstream.Content.Headers.ContentType?.ToString() ?? "application/octet-stream";
 
-        if (upstream.Headers.AcceptRanges.Count > 0)
+            Response.StatusCode = (int)upstream.StatusCode;
+
+            if (upstream.Content.Headers.ContentRange != null)
+            {
+                Response.Headers["Content-Range"] = upstream.Content.Headers.ContentRange.ToString();
+            }
+
+            if (upstream.Headers.AcceptRanges.Count > 0)
+            {
+                Response.Headers["Accept-Ranges"] = string.Join(", ", upstream.Headers.AcceptRanges);
+            }
+
+            if (upstream.Content.Headers.ContentLength.HasValue)
+            {
+                Response.Headers["Content-Length"] = upstream.Content.Headers.ContentLength.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            }
+
+            // Image caching (the image variant): Jellyfin sends Cache-Control/ETag for image
+            // responses; copying them lets the Echo cache cover art like it does today.
+            // (Cache-Control and ETag are response headers, not content headers, in the
+            // HttpResponseMessage model.)
+            if (upstream.Headers.CacheControl != null)
+            {
+                Response.Headers["Cache-Control"] = upstream.Headers.CacheControl.ToString();
+            }
+
+            var etag = upstream.Headers.ETag;
+            if (etag != null)
+            {
+                Response.Headers["ETag"] = etag.ToString();
+            }
+
+            System.IO.Stream body = await upstream.Content.ReadAsStreamAsync(HttpContext.RequestAborted).ConfigureAwait(false);
+            return File(body, contentType);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            Response.Headers["Accept-Ranges"] = string.Join(", ", upstream.Headers.AcceptRanges);
+            upstream.Dispose();
+            _logger.LogWarning(ex, "StreamProxy: failed relaying the {ItemId} upstream response", itemId);
+            return StatusCode(502, new { error = "Upstream stream relay failed" });
         }
-
-        if (upstream.Content.Headers.ContentLength.HasValue)
-        {
-            Response.Headers["Content-Length"] = upstream.Content.Headers.ContentLength.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        }
-
-        // Image caching (the image variant): Jellyfin sends Cache-Control/ETag for image
-        // responses; copying them lets the Echo cache cover art like it does today.
-        // (Cache-Control and ETag are response headers, not content headers, in the
-        // HttpResponseMessage model.)
-        if (upstream.Headers.CacheControl != null)
-        {
-            Response.Headers["Cache-Control"] = upstream.Headers.CacheControl.ToString();
-        }
-
-        var etag = upstream.Headers.ETag;
-        if (etag != null)
-        {
-            Response.Headers["ETag"] = etag.ToString();
-        }
-
-        System.IO.Stream body = await upstream.Content.ReadAsStreamAsync(HttpContext.RequestAborted).ConfigureAwait(false);
-        return File(body, contentType);
     }
 
     /// <summary>

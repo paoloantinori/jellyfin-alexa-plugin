@@ -261,7 +261,7 @@ public class PlaybackLaunchBuilderTests : PluginTestBase
         string url = _launch.GetStreamUrl(itemId, user);
 
         Assert.StartsWith(
-            $"http://localhost:8096/alexaskill/api/stream/{itemId}?token=",
+            $"http://localhost:8096/alexaskill/api/stream/audio/{itemId}?token=",
             url,
             StringComparison.Ordinal);
         Assert.Equal(user.Id.ToString(), QueryParam(url, "u"));
@@ -271,15 +271,22 @@ public class PlaybackLaunchBuilderTests : PluginTestBase
     }
 
     [Fact]
-    public void VideoStreamUrl_ProxyEnabled_EmitsTheSameProxyUrlAsAudio()
+    public void VideoStreamUrl_ProxyEnabled_EmitsTheVideoKindRoute()
     {
-        // The endpoint derives Audio-vs-Videos from the item's media kind, so both
-        // builders emit the SAME proxy URL for the same item; the path segment is a
-        // legacy-only concern (the single-BuildStreamUrl contract).
+        // JF-950 review round: the proxy route is CALLER-DECLARED (audio/ vs video/,
+        // threaded from the same pathSegment the legacy URL used; deriving it from
+        // item metadata broke audio-launched video items like podcast Episodes).
+        // The two builders now emit DIFFERENT kind routes for the same item; the
+        // token must still validate against the item.
         var user = CreateUser();
         string itemId = Guid.NewGuid().ToString();
 
-        Assert.Equal(_launch.GetStreamUrl(itemId, user), _launch.GetVideoStreamUrl(itemId, user));
+        string audioUrl = _launch.GetStreamUrl(itemId, user);
+        string videoUrl = _launch.GetVideoStreamUrl(itemId, user);
+
+        Assert.Contains($"/stream/audio/{itemId}?token=", audioUrl, StringComparison.Ordinal);
+        Assert.Contains($"/stream/video/{itemId}?token=", videoUrl, StringComparison.Ordinal);
+        Assert.NotEqual(audioUrl, videoUrl);
     }
 
     [Fact]

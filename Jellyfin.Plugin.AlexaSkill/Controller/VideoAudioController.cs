@@ -6327,13 +6327,48 @@ public class VideoAudioController : ControllerBase
     /// check (the token binds to the GUID); each migrated route's
     /// InvalidItemId_Returns400 + NoToken_Returns401 test pair pins that ordering.
     /// </summary>
-    private ActionResult? ValidateSignedRoute(string itemId)
+    /// <summary>The static entry point other signed-token controllers share (the ONE
+    /// definition; the JF-950 simplify round): the 400-then-token ordering and the
+    /// error bodies stay identical across every consumer. The instance method keeps
+    /// its scoped overloads' callers; this shape serves callers with no VAC instance.</summary>
+    internal static ActionResult? ValidateSignedRouteStatic(string itemId, string? tokenQuery, string secret, ILogger logger, string logPrefix)
     {
         if (string.IsNullOrWhiteSpace(itemId) || !Guid.TryParse(itemId, out _))
         {
-            return BadRequest(new { error = "Invalid itemId format" });
+            return new BadRequestObjectResult(new { error = "Invalid itemId format" });
         }
 
+        if (!StreamTokenHelper.TryValidate(tokenQuery, itemId, secret))
+        {
+            logger.LogWarning("{Prefix}: rejected stream request for {ItemId} (missing/invalid/expired token)", logPrefix, itemId);
+            return new UnauthorizedObjectResult(new { error = "Invalid or expired stream token" });
+        }
+
+        return null;
+    }
+
+    internal ActionResult? ValidateSignedRoute(string itemId)
+    {
+        // JF-950 review round: the instance gate delegates to the ONE static
+        // definition for its shape (400-then-token), keeping only the scoped
+        // secret/503 handling the instance paths need (the static helper is
+        // secret-in, so the empty-secret answer stays in ONE place per caller
+        // family). The two bodies can no longer drift on the 400/401 shapes.
+        string? secret = Plugin.Instance?.Configuration?.StreamTokenSecret;
+        if (string.IsNullOrEmpty(secret))
+        {
+            return StreamTokenSecretNotConfigured();
+        }
+
+        ActionResult? staticError = ValidateSignedRouteStatic(
+            itemId, HttpContext.Request.Query["token"], secret, _logger, "VideoAudio");
+        if (staticError != null)
+        {
+            return staticError;
+        }
+
+        // The scoped overload re-validates to extract the library scope (the
+        // legacy two-field token validates identically here).
         return ValidateStreamToken(itemId, out _);
     }
 

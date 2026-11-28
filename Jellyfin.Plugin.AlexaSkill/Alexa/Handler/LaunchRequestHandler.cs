@@ -622,6 +622,18 @@ public class LaunchRequestHandler : BaseHandler
         Entities.User user,
         ILibraryManager libraryManager,
         PluginConfiguration config)
+        => GetRecentlyPlayedItems(jellyfinUser, user, libraryManager, config, new PlaybackLaunchBuilder(config, Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance, static (_, _, _) => Task.FromResult(true)));
+
+    /// <summary>The full overload: the builder arrives as a parameter (the JF-950
+    /// simplify round collapsed the local NullLogger construction; production
+    /// passes the handler's own Launch instance, the static test seam
+    /// constructs a stateless one).</summary>
+    internal static List<Apl.ListDisplayItem> GetRecentlyPlayedItems(
+        Jellyfin.Database.Implementations.Entities.User jellyfinUser,
+        Entities.User user,
+        ILibraryManager libraryManager,
+        PluginConfiguration config,
+        PlaybackLaunchBuilder launch)
     {
         var itemTypes = new List<BaseItemKind>();
         if (config.MusicEnabled)
@@ -668,8 +680,6 @@ public class LaunchRequestHandler : BaseHandler
         // builder is stateless by construction, so a local instance over the passed
         // config is safe; the delegate is inert because GetImageUrl sends no progressive
         // response.
-        var launch = new PlaybackLaunchBuilder(config, Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance, static (_, _, _) => Task.FromResult(true));
-
         foreach (BaseItem item in recentItems)
         {
             if (results.Count >= 10)
@@ -730,7 +740,7 @@ public class LaunchRequestHandler : BaseHandler
         var (jellyfinUser, _) = ResolveJellyfinUser(_userManager, session.UserId, locale);
         if (jellyfinUser != null)
         {
-            items = GetRecentlyPlayedItems(jellyfinUser, user, _libraryManager, _config);
+            items = GetRecentlyPlayedItems(jellyfinUser, user, _libraryManager, _config, Launch);
         }
 
         var directive = Apl.AplHelper.BuildWelcomeDirective(visualGreeting, prompt, recentlyPlayedLabel, items, context);

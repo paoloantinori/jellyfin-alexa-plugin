@@ -3,9 +3,10 @@ id: JF-950
 title: >-
   Account-linking and stream-URL hardening followups: random revocable linking
   tokens, stream URLs off the session token
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-11-23 13:54'
+updated_date: '2026-11-28 05:34'
 labels:
   - security
   - hardening
@@ -32,3 +33,9 @@ Defense-in-depth followups to the account-linking hardening (details intentional
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+ITEM (2) IN PROGRESS (2026-11-27 sera): worker dispatched with the proxy design (StreamProxyController with HMAC gate + Range passthrough + loopback fetch via InternalServerUrl config, default http://localhost:8096; StreamProxyEnabled flag DEFAULT TRUE as the rollback switch; BuildStreamUrl + GetImageUrl migrated; LiveTV fallback OUT of scope - the dynamic-HLS master playlist embeds api_key segment URLs and needs playlist rewriting, its own change; PlaybackInfo call is server-side; IPTV direct-remote carries no session token). Maintainer constraint: NON ROMPERE NULLA - playback hot path; verification plan: full suite + gates + live device play after deploy.
+<!-- SECTION:NOTES:END -->

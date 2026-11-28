@@ -2259,7 +2259,12 @@ public sealed class PlaybackLaunchBuilder
     {
         if (_config.StreamProxyEnabled)
         {
-            return new Uri(new Uri(_config.ServerAddress), $"{Controller.AlexaSkillController.ApiBaseUri}stream/{itemId}?token={StreamTokenHelper.Mint(itemId, _config.StreamTokenSecret)}&u={user.Id}").ToString();
+            // JF-950 review round: the proxy route carries the CALLER-DECLARED kind
+            // (audio/video, derived from the same pathSegment the legacy URL used),
+            // never re-derived from item metadata (podcast Episodes are
+            // MediaType=Video but launch through the audio route).
+            string kind = pathSegment == "Videos/" ? "video" : "audio";
+            return new Uri(new Uri(_config.ServerAddress), $"{Controller.AlexaSkillController.ApiBaseUri}stream/{kind}/{itemId}?token={StreamTokenHelper.Mint(itemId, _config.StreamTokenSecret)}&u={user.Id}").ToString();
         }
 
         return new Uri(new Uri(_config.ServerAddress), $"{pathSegment}{itemId}/stream?static=true&api_key={user.JellyfinToken}").ToString();
@@ -2276,9 +2281,19 @@ public sealed class PlaybackLaunchBuilder
     /// <returns>URL of the item's primary image.</returns>
     public string GetImageUrl(string itemId, Entities.User user)
     {
-        if (_config.StreamProxyEnabled)
+        // JF-950 review findings 2+6: images mint ONLY against a real secret (an
+        // empty one falls back to the legacy api_key URL, so a broken-config
+        // install keeps its screens instead of shipping dead-at-birth art URLs;
+        // the play path still refuses loudly through EnsureStreamTokenDeliverable),
+        // and the token expiry is quantized to the UTC day so the URL is STABLE
+        // within the day: the Echo's URL-keyed art cache keeps hitting instead
+        // of re-downloading cover art on every screen render.
+        if (_config.StreamProxyEnabled && !string.IsNullOrEmpty(_config.StreamTokenSecret))
         {
-            return new Uri(new Uri(_config.ServerAddress), $"{Controller.AlexaSkillController.ApiBaseUri}stream/image/{itemId}?token={StreamTokenHelper.Mint(itemId, _config.StreamTokenSecret)}&u={user.Id}").ToString();
+            long unixNow = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            long dayStart = unixNow - (unixNow % 86400);
+            string token = StreamTokenHelper.MintAt(itemId, _config.StreamTokenSecret, dayStart + 86400 + 3600);
+            return new Uri(new Uri(_config.ServerAddress), $"{Controller.AlexaSkillController.ApiBaseUri}stream/image/{itemId}?token={token}&u={user.Id}").ToString();
         }
 
         return new Uri(new Uri(_config.ServerAddress), "Items/" + itemId + "/Images/Primary?api_key=" + user.JellyfinToken).ToString();
